@@ -1,6 +1,7 @@
 package network.columba.app.ui.components
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.service.ConversationLinkManager
 
@@ -43,8 +44,8 @@ fun ImageQualitySelectionDialog(
         presets.map { preset ->
             QualityOption(
                 value = preset,
-                displayName = preset.displayName,
-                description = preset.description,
+                displayName = stringResource(preset.displayNameRes),
+                description = stringResource(preset.descriptionRes),
             )
         }
 

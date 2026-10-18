@@ -8,8 +8,11 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
+import network.columba.app.R
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -163,18 +166,18 @@ class LocationPermissionManagerTest {
     // ========== getPermissionRationale Tests ==========
 
     @Test
-    fun `getPermissionRationale returns non-empty string`() {
+    fun `getPermissionRationale returns localized resource`() {
         val rationale = LocationPermissionManager.getPermissionRationale()
 
-        assertTrue(rationale.isNotEmpty())
-        assertTrue(rationale.contains("location"))
+        assertEquals(R.string.location_permission_rationale, rationale)
     }
 
     @Test
-    fun `getPermissionRationale mentions peer-to-peer sharing`() {
-        val rationale = LocationPermissionManager.getPermissionRationale()
-
-        assertTrue(rationale.contains("peer-to-peer"))
+    fun `getPermissionRationale differs from precise rationale`() {
+        assertNotEquals(
+            LocationPermissionManager.getPermissionRationale(),
+            LocationPermissionManager.getPreciseLocationRationale(),
+        )
     }
 
     // ========== needsPreciseLocationUpgrade Tests (issues #855, #991) ==========
@@ -245,12 +248,10 @@ class LocationPermissionManagerTest {
     // ========== getPreciseLocationRationale Tests ==========
 
     @Test
-    fun `getPreciseLocationRationale mentions precise and approximate`() {
+    fun `getPreciseLocationRationale returns localized resource`() {
         val rationale = LocationPermissionManager.getPreciseLocationRationale()
 
-        assertTrue(rationale.isNotEmpty())
-        assertTrue(rationale.contains("Precise"))
-        assertTrue(rationale.contains("approximate"))
+        assertEquals(R.string.location_precise_rationale, rationale)
     }
 
     // ========== isLocationSupported Tests ==========

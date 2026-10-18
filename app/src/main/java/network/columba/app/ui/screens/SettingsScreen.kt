@@ -54,6 +54,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
+import network.columba.app.R
 import network.columba.app.ui.components.BackgroundLocationPermissionBottomSheet
 import network.columba.app.ui.components.LocationPermissionBottomSheet
 import network.columba.app.ui.components.ServiceRestartBanner
@@ -753,10 +754,7 @@ fun SettingsScreen(
                     )
                 },
                 sheetState = telemetryPermissionSheetState,
-                rationale =
-                    "Group Tracker shares your location with a group host " +
-                        "so everyone can see where each other is.\n\n" +
-                        "Your location is encrypted and only readable by the group host you configure.",
+                rationale = R.string.location_group_tracker_rationale,
                 primaryActionLabel = "Grant Location Access",
             )
         }

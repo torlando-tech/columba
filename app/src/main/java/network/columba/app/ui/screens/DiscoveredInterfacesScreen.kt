@@ -864,7 +864,7 @@ internal fun DiscoveredInterfaceSearchAndFilter(
                     FilterChip(
                         selected = filter in typeFilters,
                         onClick = { onToggleTypeFilter(filter) },
-                        label = { Text(filter.label) },
+                        label = { Text(stringResource(filter.labelRes)) },
                     )
                 }
                 FilterChip(

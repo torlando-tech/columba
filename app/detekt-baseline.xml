@@ -506,8 +506,6 @@
     <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"interface, you need the Yggdrasil app installed and running on your device. "</ID>
     <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"to this interface, you need an I2P daemon running on your device. Install the "</ID>
     <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"transport: ${transportId.take(12)}..."</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesViewModel.kt$DiscoveredInterfaceTypeFilter.OTHER$"Other"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesViewModel.kt$DiscoveredInterfaceTypeFilter.RADIO$"Radio"</ID>
     <ID>NoHardcodedUiString:FileAttachmentCard.kt$"File type: ${attachment.mimeType}"</ID>
     <ID>NoHardcodedUiString:FileAttachmentOptionsSheet.kt$"Open in another app"</ID>
     <ID>NoHardcodedUiString:FileAttachmentOptionsSheet.kt$"Open with..."</ID>
@@ -720,7 +718,7 @@
     <ID>NoHardcodedUiString:IdentityScreen.kt$"Dismiss"</ID>
     <ID>NoHardcodedUiString:IdentityScreen.kt$"Display Name"</ID>
     <ID>NoHardcodedUiString:IdentityScreen.kt$"Error sending announce"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Error: $error"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Error: ${error.resolve(context)}"</ID>
     <ID>NoHardcodedUiString:IdentityScreen.kt$"Error: ${uiState.detail ?: stringResource(uiState.reason.messageResource())}"</ID>
     <ID>NoHardcodedUiString:IdentityScreen.kt$"Hash: ${testResult.hexHash}"</ID>
     <ID>NoHardcodedUiString:IdentityScreen.kt$"Identity Hash"</ID>

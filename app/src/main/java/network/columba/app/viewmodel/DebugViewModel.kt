@@ -3,6 +3,7 @@ package network.columba.app.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import network.columba.app.R
 import network.columba.app.di.IoDispatcher
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsCore
@@ -31,10 +32,10 @@ data class DebugInfo(
     val storagePath: String = "",
     val interfaceCount: Int = 0,
     val interfaces: List<InterfaceInfo> = emptyList(),
+    val error: UiMessage? = null,
     val transportEnabled: Boolean = false,
     val multicastLockHeld: Boolean = false,
     val wakeLockHeld: Boolean = false,
-    val error: String? = null,
     // Process persistence debug info
     val heartbeatAgeSeconds: Long = -1,
     val healthCheckRunning: Boolean = false,
@@ -60,9 +61,10 @@ data class InterfaceInfo(
 internal fun InterfaceInfo.isClickable(): Boolean = !online || error != null
 
 /**
- * Determines the dialog title for an interface based on its state.
+ * Determines the dialog title resource for an interface based on its state.
  */
-internal fun InterfaceInfo.getDialogTitle(): String = if (error != null) "Interface Failed" else "Interface Offline"
+internal fun InterfaceInfo.getDialogTitleRes(): Int =
+    if (error != null) R.string.debug_dialog_interface_failed else R.string.debug_dialog_interface_offline
 
 /**
  * Represents the icon type for interface status display.
@@ -120,7 +122,10 @@ class DebugViewModel
         private val _testAnnounceResult = MutableStateFlow<TestAnnounceResult?>(null)
         val testAnnounceResult: StateFlow<TestAnnounceResult?> = _testAnnounceResult.asStateFlow()
 
-        private val _networkStatus = MutableStateFlow<String>("Unknown")
+        // Raw network-status token ("READY", "CONNECTING", …); the UI maps
+        // tokens to display text and shows `debug_network_status_unknown`
+        // while this is still empty (no status received yet).
+        private val _networkStatus = MutableStateFlow<String>("")
         val networkStatus: StateFlow<String> = _networkStatus.asStateFlow()
 
         // Identity data for QR code sharing
@@ -226,8 +231,8 @@ class DebugViewModel
                         multicastLockHeld = json.optBoolean("multicast_lock_held", false),
                         wakeLockHeld = json.optBoolean("wake_lock_held", false),
                         error =
-                            json.optString("error", null)
-                                ?: if (status is network.columba.app.rns.api.model.NetworkStatus.ERROR) status.message else null,
+                            json.optString("error", null)?.let { UiMessage.Raw(it) }
+                                ?: if (status is network.columba.app.rns.api.model.NetworkStatus.ERROR) UiMessage.Raw(status.message) else null,
                         // Process persistence debug info
                         heartbeatAgeSeconds = json.optLong("heartbeat_age_seconds", -1),
                         healthCheckRunning = json.optBoolean("health_check_running", false),
@@ -333,8 +338,8 @@ class DebugViewModel
                             multicastLockHeld = pythonDebugInfo["multicast_lock_held"] as? Boolean ?: false,
                             wakeLockHeld = wakeLockHeld,
                             error =
-                                pythonDebugInfo["error"] as? String
-                                    ?: if (status is network.columba.app.rns.api.model.NetworkStatus.ERROR) status.message else null,
+                                (pythonDebugInfo["error"] as? String)?.let { UiMessage.Raw(it) }
+                                    ?: if (status is network.columba.app.rns.api.model.NetworkStatus.ERROR) UiMessage.Raw(status.message) else null,
                             heartbeatAgeSeconds = (pythonDebugInfo["heartbeat_age_seconds"] as? Number)?.toLong() ?: -1,
                             healthCheckRunning = pythonDebugInfo["health_check_running"] as? Boolean ?: false,
                             networkMonitorRunning = pythonDebugInfo["network_monitor_running"] as? Boolean ?: false,
@@ -347,7 +352,7 @@ class DebugViewModel
                         _debugInfo.value = DebugInfo(isLoading = false)
                     } else {
                         Log.e(TAG, "Error fetching debug info", e)
-                        _debugInfo.value = _debugInfo.value.copy(isLoading = false, error = e.message ?: "Service unavailable")
+                        _debugInfo.value = _debugInfo.value.copy(isLoading = false, error = e.toUiMessage(R.string.debug_service_unavailable))
                     }
                 }
             }

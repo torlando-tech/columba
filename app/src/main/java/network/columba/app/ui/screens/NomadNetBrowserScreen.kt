@@ -183,7 +183,7 @@ fun NomadNetBrowserScreen(
     // Show identify errors via snackbar
     LaunchedEffect(identifyError) {
         identifyError?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showSnackbar(it.resolve(context))
             viewModel.clearIdentifyError()
         }
     }
@@ -710,7 +710,7 @@ fun NomadNetBrowserScreen(
                     CircularProgressIndicator()
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = state.statusMessage,
+                        text = state.statusMessage.resolve(context),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -886,7 +886,7 @@ fun NomadNetBrowserScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = state.message,
+                        text = state.message.resolve(context),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -910,6 +910,7 @@ private fun NomadNetDownloadDialog(
     onOpen: (String) -> Unit,
     onShare: (String) -> Unit,
 ) {
+    val context = LocalContext.current
     androidx.compose.material3.AlertDialog(
         onDismissRequest = { if (!downloadState.isActive) onDismiss() },
         title = {
@@ -940,7 +941,7 @@ private fun NomadNetDownloadDialog(
                     )
                 } else if (downloadState.error != null) {
                     Text(
-                        downloadState.error,
+                        downloadState.error.resolve(context),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
                     )

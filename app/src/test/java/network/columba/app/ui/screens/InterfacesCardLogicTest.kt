@@ -1,8 +1,9 @@
 package network.columba.app.ui.screens
 
+import network.columba.app.R
 import network.columba.app.viewmodel.InterfaceIconType
 import network.columba.app.viewmodel.InterfaceInfo
-import network.columba.app.viewmodel.getDialogTitle
+import network.columba.app.viewmodel.getDialogTitleRes
 import network.columba.app.viewmodel.getIconType
 import network.columba.app.viewmodel.isClickable
 import org.junit.Assert.assertEquals
@@ -84,7 +85,7 @@ class InterfacesCardLogicTest {
                 online = false,
                 error = null,
             )
-        assertEquals("Interface Offline", iface.getDialogTitle())
+        assertEquals(R.string.debug_dialog_interface_offline, iface.getDialogTitleRes())
     }
 
     // ==========================================
@@ -124,7 +125,7 @@ class InterfacesCardLogicTest {
                 online = false,
                 error = "Port 29716 already in use",
             )
-        assertEquals("Interface Failed", iface.getDialogTitle())
+        assertEquals(R.string.debug_dialog_interface_failed, iface.getDialogTitleRes())
     }
 
     @Test

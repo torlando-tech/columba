@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.ContactMarker
 import network.columba.app.viewmodel.MarkerState
+import network.columba.app.viewmodel.UiMessage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -468,7 +469,7 @@ class ContactLocationBottomSheetTest {
     ): ContactMarker =
         ContactMarker(
             destinationHash = "hash_$name",
-            displayName = name,
+            displayName = UiMessage.Raw(name),
             latitude = 37.7749,
             longitude = -122.4194,
             timestamp = timestamp,

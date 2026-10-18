@@ -177,7 +177,7 @@ class MapViewModelAppearanceTest {
     fun `ContactMarker uses telemetry appearance when available`() {
         val marker = ContactMarker(
             destinationHash = "abc123",
-            displayName = "Alice",
+            displayName = UiMessage.Raw("Alice"),
             latitude = 37.7749,
             longitude = -122.4194,
             iconName = "person",           // from telemetryAppearance?.first
@@ -194,7 +194,7 @@ class MapViewModelAppearanceTest {
     fun `ContactMarker defaults icon fields to null`() {
         val marker = ContactMarker(
             destinationHash = "abc123",
-            displayName = "Alice",
+            displayName = UiMessage.Raw("Alice"),
             latitude = 37.7749,
             longitude = -122.4194,
         )

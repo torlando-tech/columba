@@ -34,6 +34,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -53,6 +54,7 @@ fun WelcomeScreen(
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
 
     Surface(
@@ -157,7 +159,7 @@ fun WelcomeScreen(
                             isError = state.error != null,
                             supportingText =
                                 state.error?.let {
-                                    { Text(it, color = MaterialTheme.colorScheme.error) }
+                                    { Text(it.resolve(context), color = MaterialTheme.colorScheme.error) }
                                 },
                         )
                     }

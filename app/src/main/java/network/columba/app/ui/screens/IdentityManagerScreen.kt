@@ -164,11 +164,11 @@ fun IdentityManagerScreen(
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is IdentityManagerUiState.Success -> {
-                snackbarHostState.showSnackbar(state.message)
+                snackbarHostState.showSnackbar(state.message.resolve(context))
                 viewModel.resetUiState()
             }
             is IdentityManagerUiState.Error -> {
-                snackbarHostState.showSnackbar(state.message)
+                snackbarHostState.showSnackbar(state.message.resolve(context))
                 viewModel.resetUiState()
             }
             is IdentityManagerUiState.RequiresRestart -> {
@@ -271,7 +271,7 @@ fun IdentityManagerScreen(
 
     // Show blocking dialog when loading (similar to interface changes dialog)
     if (uiState is IdentityManagerUiState.Loading) {
-        ApplyingChangesDialog((uiState as IdentityManagerUiState.Loading).message)
+        ApplyingChangesDialog((uiState as IdentityManagerUiState.Loading).message.resolve(context))
     }
 
     // Dialogs

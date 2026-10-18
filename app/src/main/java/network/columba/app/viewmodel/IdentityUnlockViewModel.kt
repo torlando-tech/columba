@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import network.columba.app.R
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.SettingsRepository
@@ -56,11 +57,11 @@ class IdentityUnlockViewModel
          */
         fun importIdentityFile(fileUri: Uri) {
             viewModelScope.launch {
-                _uiState.value = IdentityUnlockUiState.Loading("Reading identity file...")
+                _uiState.value = IdentityUnlockUiState.Loading(UiMessage.Text(R.string.identity_unlock_reading))
 
                 val active = identityRepository.getActiveIdentitySync()
                 if (active == null) {
-                    _uiState.value = IdentityUnlockUiState.Error("No active identity to restore into")
+                    _uiState.value = IdentityUnlockUiState.Error(UiMessage.Text(R.string.identity_unlock_no_active))
                     return@launch
                 }
 
@@ -68,10 +69,15 @@ class IdentityUnlockViewModel
                     withContext(Dispatchers.IO) {
                         context.contentResolver.openInputStream(fileUri)?.use(IdentityFileReader::read)
                     }?.getOrElse { e ->
-                        _uiState.value = IdentityUnlockUiState.Error(e.message ?: "Couldn't read file")
+                        _uiState.value =
+                            IdentityUnlockUiState.Error(
+                                (e as? IdentityFileInvalidException)?.uiMessage
+                                    ?: e.toUiMessage(R.string.identity_unlock_couldnt_read_file),
+                            )
                         return@launch
                     } ?: run {
-                        _uiState.value = IdentityUnlockUiState.Error("Couldn't open file")
+                        _uiState.value =
+                            IdentityUnlockUiState.Error(UiMessage.Text(R.string.identity_unlock_couldnt_open_file))
                         return@launch
                     }
 
@@ -79,20 +85,21 @@ class IdentityUnlockViewModel
                 if (parse["success"] != true) {
                     _uiState.value =
                         IdentityUnlockUiState.Error(
-                            parse["error"] as? String ?: "File is not a valid identity",
+                            (parse["error"] as? String)?.let { UiMessage.Raw(it) }
+                                ?: UiMessage.Text(R.string.identity_unlock_invalid_file),
                         )
                     return@launch
                 }
                 val importedHash =
                     parse["identity_hash"] as? String
                         ?: run {
-                            _uiState.value = IdentityUnlockUiState.Error("No hash in parse result")
+                            _uiState.value = IdentityUnlockUiState.Error(UiMessage.Text(R.string.identity_unlock_no_hash))
                             return@launch
                         }
                 val keyData =
                     parse["key_data"] as? ByteArray
                         ?: run {
-                            _uiState.value = IdentityUnlockUiState.Error("No key material in file")
+                            _uiState.value = IdentityUnlockUiState.Error(UiMessage.Text(R.string.identity_unlock_no_key))
                             return@launch
                         }
 
@@ -151,7 +158,7 @@ class IdentityUnlockViewModel
          */
         fun startFresh() {
             viewModelScope.launch {
-                _uiState.value = IdentityUnlockUiState.Loading("Starting fresh...")
+                _uiState.value = IdentityUnlockUiState.Loading(UiMessage.Text(R.string.identity_unlock_starting_fresh))
                 val active = identityRepository.getActiveIdentitySync()
                 if (active != null) {
                     identityRepository
@@ -163,7 +170,7 @@ class IdentityUnlockViewModel
                             // screen — a silent infinite loop for the user.
                             _uiState.value =
                                 IdentityUnlockUiState.Error(
-                                    "Couldn't remove old identity: ${e.message}",
+                                    UiMessage.Text(R.string.identity_unlock_remove_old_failed, listOf(e.message ?: "null")),
                                 )
                             return@launch
                         }
@@ -198,7 +205,7 @@ class IdentityUnlockViewModel
             identityHash: String,
             keyData: ByteArray,
         ) {
-            _uiState.value = IdentityUnlockUiState.Loading("Unlocking identity...")
+            _uiState.value = IdentityUnlockUiState.Loading(UiMessage.Text(R.string.identity_unlock_unlocking))
             identityRepository
                 .rewrapKeyWithDeviceKey(identityHash, keyData)
                 .onSuccess {
@@ -206,7 +213,9 @@ class IdentityUnlockViewModel
                     _uiState.value = IdentityUnlockUiState.Restored
                 }.onFailure { e ->
                     _uiState.value =
-                        IdentityUnlockUiState.Error("Couldn't save identity key: ${e.message}")
+                        IdentityUnlockUiState.Error(
+                            UiMessage.Text(R.string.identity_unlock_save_key_failed, listOf(e.message ?: "null")),
+                        )
                 }
         }
     }
@@ -215,11 +224,11 @@ sealed class IdentityUnlockUiState {
     object Idle : IdentityUnlockUiState()
 
     data class Loading(
-        val message: String,
+        val message: UiMessage,
     ) : IdentityUnlockUiState()
 
     data class Error(
-        val message: String,
+        val message: UiMessage,
     ) : IdentityUnlockUiState()
 
     data class HashMismatch(

@@ -391,18 +391,4 @@ class CallViewModel
             return String.format(Locale.US, "%02d:%02d", mins, secs)
         }
 
-        /**
-         * Get call status text for UI display.
-         */
-        fun getStatusText(state: CallState): String =
-            when (state) {
-                is CallState.Idle -> ""
-                is CallState.Connecting -> "Connecting..."
-                is CallState.Ringing -> "Ringing..."
-                is CallState.Incoming -> "Incoming Call"
-                is CallState.Active -> "Connected"
-                is CallState.Busy -> "Line Busy"
-                is CallState.Rejected -> "Call Rejected"
-                is CallState.Ended -> "Call Ended"
-            }
     }

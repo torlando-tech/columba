@@ -25,10 +25,6 @@
     <ID>LoopWithTooManyJumpStatements:SettingsViewModel.kt$SettingsViewModel$while</ID>
     <ID>MaxLineLength:BleTestFixtures.kt$BleTestFixtures$"""{"identityHash":"${connection.identityHash}","peerName":"${connection.peerName}","currentMac":"${connection.currentMac}","hasCentralConnection":$hasCentral,"hasPeripheralConnection":$hasPeripheral,"mtu":${connection.mtu},"connectedAt":${connection.connectedAt},"firstSeen":${connection.firstSeen},"lastSeen":${connection.lastSeen},"rssi":${connection.rssi}}"""</ID>
     <ID>NestedBlockDepth:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
-    <ID>NoHardcodedUiString:MainActivity.kt$MainActivity$"Janky frame: ${durationMs}ms"</ID>
-    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"flasher_step"</ID>
-    <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"wizard_step"</ID>
-    <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"tcp_wizard_step"</ID>
     <ID>ReturnCount:BatteryOptimizationManager.kt$BatteryOptimizationManager$fun shouldPromptForExemption(context: Context): Boolean</ID>
     <ID>ReturnCount:DebugViewModel.kt$DebugViewModel$fun generateShareText(displayName: String): String?</ID>
     <ID>ReturnCount:IdentityQrCodeUtils.kt$IdentityQrCodeUtils$fun decodeFromQrString(qrString: String): IdentityData?</ID>

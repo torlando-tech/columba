@@ -874,7 +874,7 @@ internal fun PasswordDialog(
                         else PasswordVisualTransformation(),
                     trailingIcon = {
                         TextButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Text(if (passwordVisible) "Hide" else "Show")
+                            Text(if (passwordVisible) stringResource(R.string.migration_hide) else stringResource(R.string.migration_show))
                         }
                     },
                     isError = errorMessage != null,
@@ -917,7 +917,7 @@ internal fun PasswordDialog(
                 },
                 enabled = password.isNotEmpty(),
             ) {
-                Text(if (isConfirmMode) "Export" else "Unlock")
+                Text(if (isConfirmMode) stringResource(R.string.migration_export_action) else stringResource(R.string.migration_unlock_action))
             }
         },
         dismissButton = {

@@ -525,7 +525,7 @@ fun OfflineMapRegionCard(
                     ) {
                         Icon(
                             imageVector = if (region.isDefault) Icons.Default.Star else Icons.Default.StarBorder,
-                            contentDescription = if (region.isDefault) "Remove as default" else "Set as default",
+                            contentDescription = if (region.isDefault) stringResource(R.string.offline_map_remove_default) else stringResource(R.string.offline_map_set_default),
                             tint =
                                 if (region.isDefault) {
                                     MaterialTheme.colorScheme.primary

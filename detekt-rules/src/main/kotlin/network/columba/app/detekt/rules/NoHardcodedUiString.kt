@@ -2,6 +2,7 @@ package network.columba.app.detekt.rules
 
 import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.api.config
 import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
 import io.gitlab.arturbosch.detekt.api.Issue
@@ -16,11 +17,14 @@ import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
 import org.jetbrains.kotlin.psi.KtEnumEntry
 import org.jetbrains.kotlin.psi.KtEscapeStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtExpression
+import org.jetbrains.kotlin.psi.KtIfExpression
 import org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
+import org.jetbrains.kotlin.psi.KtSuperTypeCallEntry
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 import org.jetbrains.kotlin.psi.KtValueArgumentList
+import org.jetbrains.kotlin.psi.KtWhenExpression
 import org.jetbrains.kotlin.psi.psiUtil.parents
 
 /**
@@ -31,12 +35,18 @@ import org.jetbrains.kotlin.psi.psiUtil.parents
  * be translated.
  *
  * Detection is syntactic (the CI `detekt` task has no type resolution):
- * callee-name + argument-name matching against [UiSinkTable]. Known gaps,
- * covered by the migration inventory sweeps rather than this rule:
- *  - `when`-branch result strings (`-> "Online"`) — not sink arguments;
- *  - string comparisons (`== "pending"`) are intentionally NOT sinks (wire keys);
- *  - `if`/`elvis` expressions in sink position are not descended into;
- *  - `@Preview` sample data is exempt.
+ * callee-name + argument-name matching against [UiSinkTable]. Sink arguments are
+ * descended through `+`-chains, `if`/`else` branches, `?:` (elvis) branches, and
+ * `when`-branch results — but only when the `if`/`when` expression is itself the
+ * sink argument, so comparisons (`== "pending"`) in conditions and `when`
+ * conditions remain non-sinks (wire keys). String comparisons are intentionally
+ * NOT sinks. `@Preview` sample data is exempt.
+ *
+ * Ratified DO-NOT-TRANSLATE literals (telemetry breadcrumbs, animation labels,
+ * wire/persisted display names, hardware product names) are listed in the
+ * `doNotTranslateLiterals` config option (exact source text of the literal) in
+ * `detekt-config.yml` — the config-level allowlist keeps the rule at zero
+ * baseline without `@Suppress` (which CI ratchets to zero).
  *
  * False positives on same-named functions (e.g. a non-UI `message =` on a
  * telemetry constructor) take `@Suppress("NoHardcodedUiString")` with a
@@ -55,6 +65,15 @@ class NoHardcodedUiString(config: Config = Config.empty) : Rule(config) {
         )
 
     private val wordRegex = Regex("\\p{L}{3,}")
+
+    /**
+     * Ratified DO-NOT-TRANSLATE literals (see `detekt-config.yml`
+     * `columba.NoHardcodedUiString.doNotTranslateLiterals`): exact source text
+     * of each literal, e.g. `"flasher_step"` including quotes. Config-level
+     * allowlist so the rule keeps a zero detekt baseline and a zero `@Suppress`
+     * count (both ratcheted by CI).
+     */
+    private val doNotTranslateLiterals: List<String> by config(emptyList<String>())
 
     override fun visitCallExpression(expression: KtCallExpression) {
         super.visitCallExpression(expression)
@@ -111,13 +130,38 @@ class NoHardcodedUiString(config: Config = Config.empty) : Rule(config) {
         }
     }
 
-    /** Report string literals (and `+`-chains of them) that contain English prose. */
+    /**
+     * Sealed-class `object Foo : Base(displayName = "…")` supertype constructor
+     * calls are display-field sinks too (e.g. `FirmwareSource`), same as enum
+     * entries — the arguments are not `KtCallExpression` args, so they need
+     * their own visit.
+     */
+    override fun visitSuperTypeCallEntry(superTypeCallEntry: KtSuperTypeCallEntry) {
+        super.visitSuperTypeCallEntry(superTypeCallEntry)
+        if (isInPreview(superTypeCallEntry)) return
+        val callee = superTypeCallEntry.calleeExpression?.text ?: return
+        if (callee.firstOrNull()?.isUpperCase() != true) return
+        superTypeCallEntry.valueArguments.forEach { arg ->
+            val name = arg.getArgumentName()?.asName?.identifier ?: return@forEach
+            if (name in UiSinkTable.namedSinks) {
+                checkSink(arg.getArgumentExpression(), "$callee.$name")
+            }
+        }
+    }
+
+    /**
+     * Report string literals that contain English prose, descending through
+     * `+`-chains, `if`/`else` branches, `?:` (elvis) branches, and `when`-branch
+     * results. Conditions are never descended into, so wire-key comparisons such
+     * as `state == "pending"` stay non-sinks.
+     */
     private fun checkSink(
         expression: KtExpression?,
         sink: String,
     ) {
         when (expression) {
             is KtStringTemplateExpression -> {
+                if (expression.text in doNotTranslateLiterals) return
                 val staticText =
                     expression.entries.joinToString("") { entry ->
                         when (entry) {
@@ -139,11 +183,19 @@ class NoHardcodedUiString(config: Config = Config.empty) : Rule(config) {
                 }
             }
             is KtBinaryExpression ->
-                if (expression.operationToken == KtTokens.PLUS) {
-                    checkSink(expression.left, sink)
-                    checkSink(expression.right, sink)
+                when (expression.operationToken) {
+                    KtTokens.PLUS, KtTokens.ELVIS -> {
+                        checkSink(expression.left, sink)
+                        checkSink(expression.right, sink)
+                    }
+                    else -> Unit
                 }
-            else -> Unit
+            is KtIfExpression -> {
+                checkSink(expression.then, sink)
+                checkSink(expression.`else`, sink)
+            }
+            is KtWhenExpression ->
+                expression.entries.forEach { entry -> checkSink(entry.expression, sink) }
         }
     }
 

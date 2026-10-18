@@ -191,7 +191,7 @@ fun QrScannerScreen(
                         IconButton(onClick = { torchEnabled = !torchEnabled }) {
                             Icon(
                                 imageVector = if (torchEnabled) Icons.Default.FlashOn else Icons.Default.FlashOff,
-                                contentDescription = if (torchEnabled) "Turn off flash" else "Turn on flash",
+                                contentDescription = if (torchEnabled) stringResource(R.string.qr_scanner_turn_off_flash) else stringResource(R.string.qr_scanner_turn_on_flash),
                             )
                         }
                     }
@@ -407,7 +407,7 @@ private fun PermissionRequiredContent(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = if (showDenied) "Camera Permission Denied" else "Camera Permission Required",
+            text = if (showDenied) stringResource(R.string.qr_scanner_camera_permission_denied) else stringResource(R.string.qr_scanner_camera_permission_required),
             style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center,
         )

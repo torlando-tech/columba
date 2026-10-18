@@ -257,7 +257,7 @@ class TileDownloadManager(
                 MBTilesWriter(
                     file = params.outputFile,
                     name = params.name,
-                    description = "Offline map for ${params.name}",
+                    description = context.getString(R.string.offline_maps_mbtiles_description, params.name),
                     minZoom = params.minZoom,
                     maxZoom = params.maxZoom,
                     bounds = bounds,
@@ -463,7 +463,7 @@ class TileDownloadManager(
             MBTilesWriter(
                 file = params.outputFile,
                 name = params.name,
-                description = "Offline map from RMSP: ${params.name}",
+                description = context.getString(R.string.offline_maps_rmsp_description, params.name),
                 minZoom = params.minZoom,
                 maxZoom = params.maxZoom,
                 bounds = bounds,

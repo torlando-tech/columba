@@ -8,6 +8,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.test.core.app.ApplicationProvider
+import network.columba.app.R
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.MigrationUiState
 import network.columba.app.viewmodel.MigrationViewModel
@@ -17,7 +19,6 @@ import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -38,6 +39,9 @@ class MigrationScreenPasswordDialogTest {
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
     val composeTestRule get() = composeRule
+
+    private fun resText(id: Int): String =
+        ApplicationProvider.getApplicationContext<Application>().getString(id)
 
     // ========== PasswordDialog Direct Tests (export mode) ==========
 
@@ -71,8 +75,8 @@ class MigrationScreenPasswordDialogTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Password").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Confirm password").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.migration_password_label)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.migration_confirm_password_label)).assertIsDisplayed()
     }
 
     @Test
@@ -120,8 +124,8 @@ class MigrationScreenPasswordDialogTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Password").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Confirm password").assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.migration_password_label)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.migration_confirm_password_label)).assertDoesNotExist()
     }
 
     @Test
@@ -154,7 +158,7 @@ class MigrationScreenPasswordDialogTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.onNodeWithText(resText(R.string.cancel)).performClick()
         assertTrue(dismissed)
     }
 
@@ -187,7 +191,7 @@ class MigrationScreenPasswordDialogTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Password").performTextInput("short")
+        composeTestRule.onNodeWithText(resText(R.string.migration_password_label)).performTextInput("short")
         composeTestRule.onNodeWithText("Unlock").performClick()
 
         composeTestRule.onNodeWithText("Password must be at least 8 characters").assertIsDisplayed()
@@ -206,8 +210,8 @@ class MigrationScreenPasswordDialogTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Password").performTextInput("validpassword1")
-        composeTestRule.onNodeWithText("Confirm password").performTextInput("differentpass")
+        composeTestRule.onNodeWithText(resText(R.string.migration_password_label)).performTextInput("validpassword1")
+        composeTestRule.onNodeWithText(resText(R.string.migration_confirm_password_label)).performTextInput("differentpass")
         composeTestRule.onNodeWithText("Export").performClick()
 
         composeTestRule.onNodeWithText("Passwords do not match").assertIsDisplayed()
@@ -227,7 +231,7 @@ class MigrationScreenPasswordDialogTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Password").performTextInput("validpassword1")
+        composeTestRule.onNodeWithText(resText(R.string.migration_password_label)).performTextInput("validpassword1")
         composeTestRule.onNodeWithText("Unlock").performClick()
 
         assertEquals("validpassword1", confirmedPassword)
@@ -247,8 +251,8 @@ class MigrationScreenPasswordDialogTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Password").performTextInput("validpassword1")
-        composeTestRule.onNodeWithText("Confirm password").performTextInput("validpassword1")
+        composeTestRule.onNodeWithText(resText(R.string.migration_password_label)).performTextInput("validpassword1")
+        composeTestRule.onNodeWithText(resText(R.string.migration_confirm_password_label)).performTextInput("validpassword1")
         composeTestRule.onNodeWithText("Export").performClick()
 
         assertEquals("validpassword1", confirmedPassword)
@@ -290,10 +294,10 @@ class MigrationScreenPasswordDialogTest {
         }
 
         // Click export button
-        composeTestRule.onNodeWithText("Export All Data").performClick()
+        composeTestRule.onNodeWithText(resText(R.string.migration_export_all_data)).performClick()
 
         // Password dialog should appear
-        composeTestRule.onNodeWithText("Encrypt Export").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.migration_encrypt_export_title)).assertIsDisplayed()
     }
 
     @Suppress("NoRelaxedMocks")
@@ -314,7 +318,7 @@ class MigrationScreenPasswordDialogTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Encrypted Backup").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.migration_encrypted_backup_title)).assertIsDisplayed()
         composeTestRule.onNodeWithText("Unlock").assertIsDisplayed()
     }
 
@@ -336,7 +340,7 @@ class MigrationScreenPasswordDialogTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Encrypted Backup").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.migration_encrypted_backup_title)).assertIsDisplayed()
         composeTestRule.onNodeWithText("Incorrect password").assertIsDisplayed()
     }
 }

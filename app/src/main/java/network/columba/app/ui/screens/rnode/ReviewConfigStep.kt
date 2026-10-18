@@ -158,7 +158,12 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
-                                "${region.frequency / 1_000_000.0} MHz • ${region.maxTxPower} dBm max • ${region.dutyCycleDisplay}",
+                                stringResource(
+                                    R.string.rnode_wizard_review_region_specs,
+                                    region.frequency / 1_000_000.0,
+                                    region.maxTxPower,
+                                    region.dutyCycleDisplay,
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -271,7 +276,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Text(
-                                "Slot ${state.selectedSlot}",
+                                stringResource(R.string.rnode_wizard_slot_value, state.selectedSlot),
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(

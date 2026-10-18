@@ -91,100 +91,7 @@
     <ID>NoHardcodedUiString:CrashReportingPage.kt$"You can change this anytime in Settings → Advanced"</ID>
     <ID>NoHardcodedUiString:CrashReportingPage.kt$"developer find and fix bugs. No message content, contacts, or "</ID>
     <ID>NoHardcodedUiString:CrashReportingPage.kt$"identity information is ever included."</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Board type unknown (EEPROM may be wiped)"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Board"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Continue with Manual Selection"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Detection Failed"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Device Detected"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Device Detection"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Device Information"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Firmware"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Frequency Band"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Identifying your RNode device"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"If your device wasn't detected automatically, you can manually select the board type in the next step."</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"MCU"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Manual Selection"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Platform"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Select Board Type"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Serial"</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Since the board type couldn't be determined automatically, please select it manually in the next step."</ID>
-    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Status"</ID>
-    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Connect an RNode device via USB and tap refresh"</ID>
-    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Connect your RNode device via USB"</ID>
-    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"No USB devices found"</ID>
-    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Refresh devices"</ID>
-    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Select USB Device"</ID>
-    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Selected"</ID>
     <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"VID: ${formatHex(device.vendorId)} | PID: ${formatHex(device.productId)}"</ID>
-    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Waiting for USB permission..."</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"(Required)"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"About microReticulum"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"After flashing, you will be prompted to configure the radio parameters for transport mode."</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Already Flashed?"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Available for download:"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Band: ${selectedFirmware.frequencyBand.displayName} | Platform: ${selectedFirmware.platform.name}"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Board Type"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Cached firmware:"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Choose the firmware to flash"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Custom Firmware"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Download from URL:"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Downloading firmware..."</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"File selected: ${customFirmwareUri.lastPathSegment ?: "custom firmware"}"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Firmware .zip URL"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Firmware Selection"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Firmware Source"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Firmware Version"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Firmware will be downloaded when you proceed"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Frequency Band"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"If you've already flashed the firmware externally, you can skip to provisioning the EEPROM."</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"It operates as a standalone transport node and will not pair with Columba as a radio interface.\n\n"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"No firmware available. Connect to the internet to download."</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Or pick a local file:"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Pick .zip file"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Provision Only (Skip Flashing)"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Select a board type first"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Select a firmware version above to continue"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Selected: ${selectedFirmware.board.displayName} v${selectedFirmware.version}"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Will download when flashing starts"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Will download: v$selectedVersion"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"https://example.com/firmware.zip"</ID>
-    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"microReticulum runs an embedded Reticulum transport stack on the device itself. "</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"1. Try disconnecting and reconnecting the device\n"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"2. Ensure the USB cable supports data transfer\n"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"3. Put the device into bootloader mode manually\n"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"4. Try using a different USB port"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Band"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Board"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Configure RNode"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Consider reflashing to ensure proper operation."</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Device Information"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Done"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Error Details"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Firmware"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Flash Another Device"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Flash Cancelled"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Flash Failed"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Flash Successful!"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Recovery Tips"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"The flash operation was cancelled before completion"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Try Again"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Unknown state"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Your RNode has been updated successfully"</ID>
-    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Your device may be in an inconsistent state. "</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Cancel Flash"</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Cancel Flashing?"</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Continue Flashing"</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Do not disconnect the device while flashing is in progress."</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Flashing Firmware"</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Flashing complete!"</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"I've Reset the Device"</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Interrupting the flash process may leave your device in an unusable state. "</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Press the RESET (RST) button on your device, then tap the button below to continue with provisioning."</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Provisioning Device"</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Reset Required"</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Setting up device identity and firmware verification. This may take a moment."</ID>
-    <ID>NoHardcodedUiString:FlashProgressStep.kt$"You may need to use the bootloader to recover."</ID>
     <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot $slot"</ID>
     <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot ${slot.slot}"</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"Anonymous Peer"</ID>
@@ -368,13 +275,6 @@
     <ID>NoHardcodedUiString:QrScannerScreen.kt$"Open Settings"</ID>
     <ID>NoHardcodedUiString:QrScannerScreen.kt$"Point camera at QR code\nIt will scan automatically"</ID>
     <ID>NoHardcodedUiString:QrScannerScreen.kt$"Scan QR Code"</ID>
-    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Are you sure you want to exit? Any unsaved progress will be lost."</ID>
-    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Close"</ID>
-    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Error"</ID>
-    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Exit Flasher?"</ID>
-    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Exit"</ID>
     <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"flasher_step"</ID>
     <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"wizard_step"</ID>
     <ID>NoHardcodedUiString:RegionSelectionStep.kt$"${region.dutyCycle}% duty"</ID>
@@ -383,22 +283,6 @@
     <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"tcp_wizard_step"</ID>
     <ID>NoHardcodedUiString:TileDownloadManager.kt$TileDownloadManager$"Offline map for ${params.name}"</ID>
     <ID>NoHardcodedUiString:TileDownloadManager.kt$TileDownloadManager$"Offline map from RMSP: ${params.name}"</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Advanced Settings"</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Apply Configuration"</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Configure transport mode"</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Configuring..."</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Frequency (MHz)"</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Modem Preset"</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Recommended"</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Region"</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Select your region and modem preset below. "</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Selected"</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Show all regions"</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Show fewer"</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"TX Power (dBm)"</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"TX: ${selectedRegion.defaultTxPower} dBm (max ${selectedRegion.maxTxPower})"</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"These settings are saved to the device."</ID>
-    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"microReticulum operates as a standalone transport node. "</ID>
     <ID>NoHardcodedUiString:VoiceCallScreen.kt$"End Call"</ID>
     <ID>NoHardcodedUiString:VoiceCallScreen.kt$"End call"</ID>
     <ID>NoHardcodedUiString:WelcomePage.kt$"A private messenger that requires:"</ID>

@@ -189,10 +189,21 @@ class LocationShareTextGoldenTest {
         /** Now minus 2.5 hours -> stably renders "Updated 2h ago". */
         const val MARKER_AGE_MILLIS = 150 * 60_000L
 
+        /**
+         * Pinned equal addedTimestamp: the sheet sorts by recency
+         * (lastMessageTimestamp, then addedTimestamp desc) and the factory's
+         * live-clock value made the Alice/Bob order non-deterministic.
+         */
+        const val FIXED_ADDED_TIMESTAMP = 1_700_000_000_000L
+
         val CONTACTS: List<EnrichedContact> =
             listOf(
-                TestFactories.createEnrichedContact(destinationHash = "hash_alice", displayName = "Alice"),
-                TestFactories.createEnrichedContact(destinationHash = "hash_bob", displayName = "Bob"),
+                TestFactories
+                    .createEnrichedContact(destinationHash = "hash_alice", displayName = "Alice")
+                    .copy(addedTimestamp = FIXED_ADDED_TIMESTAMP),
+                TestFactories
+                    .createEnrichedContact(destinationHash = "hash_bob", displayName = "Bob")
+                    .copy(addedTimestamp = FIXED_ADDED_TIMESTAMP),
             )
     }
 }

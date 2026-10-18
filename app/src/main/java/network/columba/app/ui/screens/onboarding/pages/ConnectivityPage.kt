@@ -32,9 +32,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.ui.screens.onboarding.OnboardingInterfaceType
 
 /**
@@ -72,7 +74,7 @@ fun ConnectivityPage(
 
         // Title
         Text(
-            text = "How will you connect?",
+            text = stringResource(R.string.onboarding_connect_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -83,7 +85,7 @@ fun ConnectivityPage(
 
         // Subtitle
         Text(
-            text = "Select the networks you'd like to use:",
+            text = stringResource(R.string.onboarding_connect_subtitle),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -108,8 +110,8 @@ fun ConnectivityPage(
             icon = Icons.Default.Bluetooth,
             statusText =
                 when {
-                    blePermissionsDenied -> "Permissions denied"
-                    blePermissionsGranted -> "Permissions granted"
+                    blePermissionsDenied -> stringResource(R.string.onboarding_connect_perm_denied)
+                    blePermissionsGranted -> stringResource(R.string.onboarding_connect_perm_granted)
                     else -> null
                 },
             statusIsError = blePermissionsDenied,
@@ -137,7 +139,7 @@ fun ConnectivityPage(
 
         // Helper text
         Text(
-            text = "You can configure these later in Settings",
+            text = stringResource(R.string.onboarding_connect_helper),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -158,7 +160,7 @@ fun ConnectivityPage(
                         .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
-                Text("Back")
+                Text(stringResource(R.string.onboarding_back))
             }
 
             Button(
@@ -169,7 +171,7 @@ fun ConnectivityPage(
                         .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
-                Text("Continue")
+                Text(stringResource(R.string.onboarding_continue))
             }
         }
 
@@ -251,7 +253,7 @@ private fun InterfaceCard(
                 modifier = Modifier.weight(1f),
             ) {
                 Text(
-                    text = interfaceType.displayName,
+                    text = stringResource(interfaceType.displayNameRes),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                     color =
@@ -262,7 +264,7 @@ private fun InterfaceCard(
                         },
                 )
                 Text(
-                    text = interfaceType.description,
+                    text = stringResource(interfaceType.descriptionRes),
                     style = MaterialTheme.typography.bodyMedium,
                     color =
                         if (enabled) {
@@ -271,9 +273,9 @@ private fun InterfaceCard(
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         },
                 )
-                interfaceType.secondaryDescription?.let { secondary ->
+                interfaceType.secondaryDescriptionRes?.let { secondaryRes ->
                     Text(
-                        text = secondary,
+                        text = stringResource(secondaryRes),
                         style = MaterialTheme.typography.bodySmall,
                         color =
                             if (enabled) {

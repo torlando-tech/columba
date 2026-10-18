@@ -610,6 +610,8 @@ class SettingsViewModel
                             blockUnknownSenders = _state.value.blockUnknownSenders,
                             allowCallsFromContactsOnly = _state.value.allowCallsFromContactsOnly,
                             allowVoiceCalls = _state.value.allowVoiceCalls,
+                            // Preserve wake-lock state from loadAdvancedSettings()
+                            persistentWakeLockEnabled = _state.value.persistentWakeLockEnabled,
                             // Preserve message size limit from loadLocationSharingSettings()
                             incomingMessageSizeLimitKb = _state.value.incomingMessageSizeLimitKb,
                             // Preserve message sorting from loadLocationSharingSettings()

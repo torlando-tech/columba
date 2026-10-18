@@ -222,29 +222,6 @@
     <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Move ${stringResource(tab.labelRes)} up"</ID>
     <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Pinned"</ID>
     <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Remove ${stringResource(tab.labelRes)} from bottom bar"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Also blackhole (don't relay their announces)"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Also delete conversation and messages"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Are you sure you want to delete your conversation with $peerName? This will permanently delete all messages."</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Block $peerName?"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Block User"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Block"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Blocked ${conversationToBlock.displayName}"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Delete Conversation"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Delete Conversation?"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Delete"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Deleted conversation with $deletedName"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Loading conversations..."</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Mark as Unread"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Marked as unread"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Messages from peers will appear here"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"No conversations yet"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"QR Code"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Saved contact"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Sync messages"</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"They won't be able to send you messages. Their conversation will be hidden from the chat list."</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"Transport is currently disabled. This identity will be blackholed whenever transport is later enabled."</ID>
-    <ID>NoHardcodedUiString:ChatsScreen.kt$"View Peer Details"</ID>
     <ID>NoHardcodedUiString:CompletePage.kt$"Battery"</ID>
     <ID>NoHardcodedUiString:CompletePage.kt$"Identity"</ID>
     <ID>NoHardcodedUiString:CompletePage.kt$"Networks"</ID>
@@ -961,89 +938,6 @@
     <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Uses your preferred list by transport; falls back to the nearest relay."</ID>
     <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"View all discovered relays"</ID>
     <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"e.g., My Home Relay"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"$hops hops"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"1 hop"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Delivered via relay node for offline recipients"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Delivered"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Delivery Method"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Direct"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Error Details"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Failed"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Hop Count"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Hop count unavailable"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Link-based delivery with retries, supports large messages"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Loading..."</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message Details"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message delivery failed"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message has been sent"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message received directly from sender"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message traveled through $hops relays"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message traveled through 1 relay"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message was successfully delivered to recipient"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Opportunistic"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Pending"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Propagated"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Received Via"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Received"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Sent Via"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Sent by Sender"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Sent"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Signal Quality"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Signal Strength"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Single packet delivery for small messages, no link required"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Status"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Unknown delivery method"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Unknown"</ID>
-    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Waiting for delivery confirmation"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"$remaining characters remaining"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"+${pendingFileInfo.fileCount - 1} more file${if (pendingFileInfo.fileCount &gt; 2) "s" else ""}"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Active link"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Allow Location"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Animated GIF"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Animated image attachment"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Block User"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Blocked $peerName"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Copy"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Delete message"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Delete"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Failed to attach file: ${result.message.resolve(context)}"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Failed to load file"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Failed to load image"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"File too large (${actualSizeKb}KB). Max size is ${maxSizeKb}KB."</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Fullscreen animated image"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Fullscreen image"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Image Not Available"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Image attachment"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Image unavailable"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"More options"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"No app found to open this file"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"No app found to share"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"No messages yet"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Not available"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Preview message text"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Remove image"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Reply"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Retry"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Selected animated image"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Selected image"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Send a message to start the conversation"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Send message"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Sending message"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Share location"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Stop Sharing Location?"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Stop Sharing"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Stop sharing your location with $peerName?"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Text size"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"The original image could not be found. This can happen when "</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"This message will be permanently deleted from this device."</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Type a message..."</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Unable to open link"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"View Details"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Voice call"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"importing data without attachments included."</ID>
     <ID>NoHardcodedUiString:MigrationScreen.kt$"${exportPreview.announceCount} announces"</ID>
     <ID>NoHardcodedUiString:MigrationScreen.kt$"${exportPreview.contactCount} contacts"</ID>
     <ID>NoHardcodedUiString:MigrationScreen.kt$"${exportPreview.customThemeCount} custom themes"</ID>

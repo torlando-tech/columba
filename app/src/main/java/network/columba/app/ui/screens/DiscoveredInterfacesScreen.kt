@@ -2,6 +2,7 @@
 
 package network.columba.app.ui.screens
 
+import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -73,6 +74,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.contentDescription
@@ -169,15 +171,15 @@ fun DiscoveredInterfacesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Discovered Interfaces") },
+                title = { Text(stringResource(R.string.iface_disc_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { viewModel.loadDiscoveredInterfaces() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.iface_refresh))
                     }
                 },
                 colors =
@@ -299,7 +301,7 @@ fun DiscoveredInterfacesScreen(
                                             Toast
                                                 .makeText(
                                                     context,
-                                                    "Only TCP interfaces can be added currently",
+                                                    context.getString(R.string.iface_disc_tcp_only),
                                                     Toast.LENGTH_SHORT,
                                                 ).show()
                                         }
@@ -329,12 +331,12 @@ fun DiscoveredInterfacesScreen(
                                         onNavigateToMapWithInterface(details)
                                     },
                                     onCopyLoraParams = {
-                                        val params = formatLoraParamsForClipboard(iface)
+                                        val params = formatLoraParamsForClipboard(context, iface)
                                         clipboardManager.setText(AnnotatedString(params))
                                         Toast
                                             .makeText(
                                                 context,
-                                                "LoRa parameters copied",
+                                                context.getString(R.string.iface_disc_lora_copied),
                                                 Toast.LENGTH_SHORT,
                                             ).show()
                                     },
@@ -420,7 +422,7 @@ internal fun DiscoverySettingsCard(
                     ) {}
                     Column {
                         Text(
-                            text = "Interface Discovery",
+                            text = stringResource(R.string.iface_discovery_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color =
@@ -433,11 +435,11 @@ internal fun DiscoverySettingsCard(
                         Text(
                             text =
                                 if (isRestarting) {
-                                    "Restarting..."
+                                    stringResource(R.string.iface_restarting)
                                 } else if (isRuntimeEnabled) {
-                                    "Active - discovering interfaces"
+                                    stringResource(R.string.iface_disc_active)
                                 } else {
-                                    "Disabled"
+                                    stringResource(R.string.iface_disabled)
                                 },
                             style = MaterialTheme.typography.bodySmall,
                             color =
@@ -484,12 +486,12 @@ internal fun DiscoverySettingsCard(
                     text =
                         if (isSettingEnabled) {
                             if (autoconnectCount > 0) {
-                                "RNS will discover and auto-connect up to $autoconnectCount interfaces from the network."
+                                stringResource(R.string.iface_disc_autoconnect_info, autoconnectCount)
                             } else {
-                                "Discovery is active but auto-connect is disabled. Useful for debugging."
+                                stringResource(R.string.iface_disc_autoconnect_off)
                             }
                         } else {
-                            "Enable to automatically discover and connect to interfaces announced by other RNS nodes."
+                            stringResource(R.string.iface_disc_enable_info)
                         },
                     style = MaterialTheme.typography.bodySmall,
                     color =
@@ -511,13 +513,13 @@ internal fun DiscoverySettingsCard(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "Auto-connect limit",
+                            text = stringResource(R.string.iface_disc_autoconnect_limit),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                         Text(
-                            text = if (autoconnectCount == 0) "Off" else "$autoconnectCount",
+                            text = if (autoconnectCount == 0) stringResource(R.string.iface_off) else "$autoconnectCount",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -589,14 +591,14 @@ internal fun DiscoverySettingsCard(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "IFAC-protected interfaces only",
+                                        text = stringResource(R.string.iface_disc_ifac_only_title),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     )
                                 }
                                 Text(
-                                    text = "Skip auto-connect for public interfaces; only join networks that announced IFAC credentials.",
+                                    text = stringResource(R.string.iface_disc_ifac_only_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                                 )
@@ -615,7 +617,7 @@ internal fun DiscoverySettingsCard(
             if (bootstrapInterfaceNames.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Bootstrap Interfaces",
+                    text = stringResource(R.string.iface_disc_bootstrap),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color =
@@ -655,7 +657,7 @@ internal fun DiscoverySettingsCard(
                     }
                 }
                 Text(
-                    text = "These interfaces will auto-detach once discovered interfaces connect.",
+                    text = stringResource(R.string.iface_disc_bootstrap_note),
                     style = MaterialTheme.typography.bodySmall,
                     color =
                         if (isEnabled) {
@@ -783,19 +785,19 @@ internal fun NoFilterMatchesCard(onClearFilters: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "No matches",
+                text = stringResource(R.string.iface_disc_no_matches),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "No discovered interfaces match the current search or filters.",
+                text = stringResource(R.string.iface_disc_no_matches_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             )
             Spacer(modifier = Modifier.height(12.dp))
             TextButton(onClick = onClearFilters) {
-                Text("Clear filters")
+                Text(stringResource(R.string.iface_disc_clear_filters))
             }
         }
     }
@@ -836,7 +838,7 @@ internal fun DiscoveredInterfaceSearchAndFilter(
                 onValueChange = onSearchQueryChange,
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                placeholder = { Text("Search by name, type, host, or IFAC network") },
+                placeholder = { Text(stringResource(R.string.iface_disc_search_placeholder)) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
@@ -848,7 +850,7 @@ internal fun DiscoveredInterfaceSearchAndFilter(
                         IconButton(onClick = { onSearchQueryChange("") }) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Clear search",
+                                contentDescription = stringResource(R.string.iface_disc_clear_search),
                             )
                         }
                     }
@@ -870,7 +872,7 @@ internal fun DiscoveredInterfaceSearchAndFilter(
                 FilterChip(
                     selected = ifacOnly,
                     onClick = onToggleIfacOnly,
-                    label = { Text("IFAC only") },
+                    label = { Text(stringResource(R.string.iface_disc_ifac_only_chip)) },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Lock,
@@ -894,7 +896,7 @@ internal fun DiscoveredInterfaceSearchAndFilter(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     TextButton(onClick = onClearFilters) {
-                        Text("Clear")
+                        Text(stringResource(R.string.iface_clear))
                     }
                 }
             }
@@ -926,13 +928,13 @@ internal fun EmptyDiscoveredCard() {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "No Discovered Interfaces",
+                text = stringResource(R.string.iface_disc_empty_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Interfaces announced by other nodes will appear here once discovery is active.",
+                text = stringResource(R.string.iface_disc_empty_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             )
@@ -971,7 +973,7 @@ internal fun DiscoveryStatusSummary(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "Total",
+                    text = stringResource(R.string.iface_total),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -983,7 +985,7 @@ internal fun DiscoveryStatusSummary(
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
-                    text = "Available",
+                    text = stringResource(R.string.iface_disc_available),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -995,7 +997,7 @@ internal fun DiscoveryStatusSummary(
                     color = MaterialTheme.colorScheme.tertiary,
                 )
                 Text(
-                    text = "Unknown",
+                    text = stringResource(R.string.iface_disc_unknown),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -1007,7 +1009,7 @@ internal fun DiscoveryStatusSummary(
                     color = MaterialTheme.colorScheme.outline,
                 )
                 Text(
-                    text = "Stale",
+                    text = stringResource(R.string.iface_disc_stale),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -1028,6 +1030,7 @@ internal fun DiscoveredInterfaceCard(
     onCopyLoraParams: () -> Unit,
     onUseForNewRNode: () -> Unit,
 ) {
+    val context = LocalContext.current
     val statusColor =
         when (iface.status) {
             "available" -> MaterialTheme.colorScheme.primary
@@ -1046,17 +1049,13 @@ internal fun DiscoveredInterfaceCard(
             isYggdrasil -> {
                 AlertDialog(
                     onDismissRequest = { showNetworkInfoDialog = false },
-                    title = { Text("Yggdrasil Network") },
+                    title = { Text(stringResource(R.string.iface_disc_yggdrasil_title)) },
                     text = {
-                        Text(
-                            "Yggdrasil is an encrypted IPv6 mesh network. To connect to this " +
-                                "interface, you need the Yggdrasil app installed and running on your device. " +
-                                "It's available on F-Droid and Google Play.",
-                        )
+                        Text(stringResource(R.string.iface_disc_yggdrasil_body))
                     },
                     confirmButton = {
                         TextButton(onClick = { showNetworkInfoDialog = false }) {
-                            Text("OK")
+                            Text(stringResource(R.string.iface_ok))
                         }
                     },
                 )
@@ -1064,17 +1063,13 @@ internal fun DiscoveredInterfaceCard(
             isI2p -> {
                 AlertDialog(
                     onDismissRequest = { showNetworkInfoDialog = false },
-                    title = { Text("I2P Network") },
+                    title = { Text(stringResource(R.string.iface_disc_i2p_title)) },
                     text = {
-                        Text(
-                            "I2P (Invisible Internet Project) is an anonymous overlay network. To connect " +
-                                "to this interface, you need an I2P daemon running on your device. Install the " +
-                                "I2P or i2pd app from F-Droid and start it before connecting.",
-                        )
+                        Text(stringResource(R.string.iface_disc_i2p_body))
                     },
                     confirmButton = {
                         TextButton(onClick = { showNetworkInfoDialog = false }) {
-                            Text("OK")
+                            Text(stringResource(R.string.iface_ok))
                         }
                     },
                 )
@@ -1123,7 +1118,7 @@ internal fun DiscoveredInterfaceCard(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             Text(
-                                text = if (isYggdrasil) "Yggdrasil" else formatInterfaceType(iface.type),
+                                text = if (isYggdrasil) stringResource(R.string.iface_disc_type_yggdrasil) else formatInterfaceType(context, iface.type),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -1131,7 +1126,7 @@ internal fun DiscoveredInterfaceCard(
                             if (isYggdrasil || isI2p) {
                                 Icon(
                                     imageVector = Icons.Default.Info,
-                                    contentDescription = "Network info",
+                                    contentDescription = stringResource(R.string.iface_disc_network_info),
                                     modifier =
                                         Modifier
                                             .size(14.dp)
@@ -1165,7 +1160,7 @@ internal fun DiscoveredInterfaceCard(
                                     color = connectedColor,
                                 ) {}
                                 Text(
-                                    text = "Connected",
+                                    text = stringResource(R.string.iface_disc_connected),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = connectedColor,
                                 )
@@ -1200,7 +1195,7 @@ internal fun DiscoveredInterfaceCard(
             // Transport ID (truncated)
             iface.transportId?.let { transportId ->
                 Text(
-                    text = "transport: ${transportId.take(12)}...",
+                    text = stringResource(R.string.iface_disc_transport_id, transportId.take(12)),
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1232,7 +1227,7 @@ internal fun DiscoveredInterfaceCard(
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "IFAC: ",
+                        text = stringResource(R.string.iface_disc_ifac_prefix),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1272,13 +1267,13 @@ internal fun DiscoveredInterfaceCard(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
-                    text = "Last heard: ${formatLastHeard(iface.lastHeard)}",
+                    text = stringResource(R.string.iface_disc_last_heard, formatLastHeard(context, iface.lastHeard)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (iface.hops > 0) {
                     Text(
-                        text = "${iface.hops} ${if (iface.hops == 1) "hop" else "hops"}",
+                        text = pluralStringResource(R.plurals.iface_disc_hops, iface.hops, iface.hops),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1306,7 +1301,7 @@ internal fun DiscoveredInterfaceCard(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Add to Config")
+                    Text(stringResource(R.string.iface_disc_add_to_config))
                 }
             }
 
@@ -1328,7 +1323,7 @@ internal fun DiscoveredInterfaceCard(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Copy Params")
+                        Text(stringResource(R.string.iface_disc_copy_params))
                     }
                     // Use for New RNode button
                     Button(
@@ -1345,7 +1340,7 @@ internal fun DiscoveredInterfaceCard(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Use for RNode")
+                        Text(stringResource(R.string.iface_disc_use_for_rnode))
                     }
                 }
             }
@@ -1377,12 +1372,12 @@ internal fun DiscoveredInterfaceAllFieldsSection(iface: DiscoveredInterface) {
                     } else {
                         Icons.Default.KeyboardArrowDown
                     },
-                contentDescription = if (expanded) "Collapse details" else "Expand details",
+                contentDescription = stringResource(if (expanded) R.string.iface_disc_collapse_details else R.string.iface_disc_expand_details),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = if (expanded) "Hide announced fields" else "Show all announced fields",
+                text = stringResource(if (expanded) R.string.iface_disc_hide_fields else R.string.iface_disc_show_fields),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1398,43 +1393,45 @@ internal fun DiscoveredInterfaceAllFieldsSection(iface: DiscoveredInterface) {
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
+                    val transportYes = stringResource(R.string.iface_yes)
+                    val transportNo = stringResource(R.string.iface_no)
                     val rows =
-                        buildList<Pair<String, String?>> {
-                            add("name" to iface.name)
-                            add("type" to iface.type)
-                            add("status" to iface.status)
-                            add("transport node" to if (iface.transport) "yes" else "no")
-                            add("hops" to iface.hops.toString())
-                            add("heard count" to iface.heardCount.toString())
-                            add("stamp value" to iface.stampValue.toString())
-                            add("network id" to iface.networkId)
-                            add("transport id" to iface.transportId)
-                            add("discovery hash" to iface.discoveryHash)
-                            add("reachable on" to iface.reachableOn)
-                            add("port" to iface.port?.toString())
-                            add("frequency" to iface.frequency?.let { "$it Hz" })
-                            add("bandwidth" to iface.bandwidth?.let { "$it Hz" })
-                            add("spreading factor" to iface.spreadingFactor?.toString())
-                            add("coding rate" to iface.codingRate?.toString())
-                            add("modulation" to iface.modulation)
-                            add("channel" to iface.channel?.toString())
-                            add("latitude" to iface.latitude?.toString())
-                            add("longitude" to iface.longitude?.toString())
-                            add("height" to iface.height?.let { "$it m" })
-                            add("ifac network name" to iface.ifacNetname)
+                        buildList<Pair<Int, String?>> {
+                            add(R.string.iface_field_name to iface.name)
+                            add(R.string.iface_field_type to iface.type)
+                            add(R.string.iface_field_status to iface.status)
+                            add(R.string.iface_field_transport_node to if (iface.transport) transportYes else transportNo)
+                            add(R.string.iface_field_hops to iface.hops.toString())
+                            add(R.string.iface_field_heard_count to iface.heardCount.toString())
+                            add(R.string.iface_field_stamp_value to iface.stampValue.toString())
+                            add(R.string.iface_field_network_id to iface.networkId)
+                            add(R.string.iface_field_transport_id to iface.transportId)
+                            add(R.string.iface_field_discovery_hash to iface.discoveryHash)
+                            add(R.string.iface_field_reachable_on to iface.reachableOn)
+                            add(R.string.iface_field_port to iface.port?.toString())
+                            add(R.string.iface_field_frequency to iface.frequency?.let { "$it Hz" })
+                            add(R.string.iface_field_bandwidth to iface.bandwidth?.let { "$it Hz" })
+                            add(R.string.iface_field_spreading_factor to iface.spreadingFactor?.toString())
+                            add(R.string.iface_field_coding_rate to iface.codingRate?.toString())
+                            add(R.string.iface_field_modulation to iface.modulation)
+                            add(R.string.iface_field_channel to iface.channel?.toString())
+                            add(R.string.iface_field_latitude to iface.latitude?.toString())
+                            add(R.string.iface_field_longitude to iface.longitude?.toString())
+                            add(R.string.iface_field_height to iface.height?.let { "$it m" })
+                            add(R.string.iface_field_ifac_network_name to iface.ifacNetname)
                             // The passphrase was sent in the cleartext announce — anyone on
                             // the discovery network already has it — so there's nothing to
                             // obfuscate here and showing the value is useful for diagnostics.
-                            add("ifac passphrase" to iface.ifacNetkey?.takeIf { it.isNotBlank() })
-                            add("received at" to iface.receivedAt.takeIf { it > 0 }?.let { formatUnixSeconds(it) })
-                            add("discovered at" to iface.discoveredAt.takeIf { it > 0 }?.let { formatUnixSeconds(it) })
-                            add("last heard" to iface.lastHeard.takeIf { it > 0 }?.let { formatUnixSeconds(it) })
+                            add(R.string.iface_field_ifac_passphrase to iface.ifacNetkey?.takeIf { it.isNotBlank() })
+                            add(R.string.iface_field_received_at to iface.receivedAt.takeIf { it > 0 }?.let { formatUnixSeconds(it) })
+                            add(R.string.iface_field_discovered_at to iface.discoveredAt.takeIf { it > 0 }?.let { formatUnixSeconds(it) })
+                            add(R.string.iface_field_last_heard to iface.lastHeard.takeIf { it > 0 }?.let { formatUnixSeconds(it) })
                         }
                     rows.forEach { (key, value) ->
                         if (value.isNullOrBlank()) return@forEach
                         Row(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = key,
+                                text = stringResource(key),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.width(120.dp),
@@ -1464,11 +1461,12 @@ private fun formatUnixSeconds(seconds: Long): String {
  */
 @Composable
 internal fun TcpInterfaceDetails(iface: DiscoveredInterface) {
+    val context = LocalContext.current
     val hostPort =
         buildString {
             iface.reachableOn?.let { append(it) }
             iface.port?.let { port ->
-                if (isNotEmpty()) append(":$port") else append("port $port")
+                if (isNotEmpty()) append(":$port") else append(context.getString(R.string.iface_disc_port, port))
             }
         }
     if (hostPort.isNotEmpty()) {
@@ -1548,10 +1546,11 @@ internal fun LocationDetails(
     ) {
         Icon(
             imageVector = Icons.Default.LocationOn,
-            contentDescription = "Open in maps",
+            contentDescription = stringResource(R.string.iface_disc_open_in_maps),
             modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
+        val context = LocalContext.current
         val locationText =
             buildString {
                 append("%.4f, %.4f".format(latitude, longitude))
@@ -1559,9 +1558,9 @@ internal fun LocationDetails(
                 distanceKm?.let { dist ->
                     append(" - ")
                     if (dist < 1.0) {
-                        append("${(dist * 1000).toInt()}m away")
+                        append(context.getString(R.string.iface_disc_distance_meters, (dist * 1000).toInt()))
                     } else {
-                        append("%.1f km away".format(dist))
+                        append(context.getString(R.string.iface_disc_distance_km, dist))
                     }
                 }
             }
@@ -1617,14 +1616,14 @@ internal fun InterfaceTypeIcon(
                 // Use TreePine for Yggdrasil network addresses
                 Icon(
                     imageVector = ImageVector.vectorResource(com.composables.icons.lucide.R.drawable.lucide_ic_tree_pine),
-                    contentDescription = "Yggdrasil network",
+                    contentDescription = stringResource(R.string.iface_disc_icon_yggdrasil),
                     modifier = modifier.size(size),
                     tint = tint,
                 )
             } else {
                 Icon(
                     imageVector = Icons.Default.Public,
-                    contentDescription = "TCP network",
+                    contentDescription = stringResource(R.string.iface_disc_icon_tcp),
                     modifier = modifier.size(size),
                     tint = tint,
                 )
@@ -1632,6 +1631,7 @@ internal fun InterfaceTypeIcon(
         }
         "I2PInterface" -> {
             // Use MDI incognito icon for I2P (anonymity network)
+            val i2pDescription = stringResource(R.string.iface_disc_icon_i2p)
             val codepoint = MaterialDesignIcons.getCodepointOrNull("incognito")
             if (codepoint != null) {
                 Text(
@@ -1639,12 +1639,12 @@ internal fun InterfaceTypeIcon(
                     fontFamily = MdiFont,
                     fontSize = (size.value * 1.2f).sp, // MDI icons render slightly smaller
                     color = tint,
-                    modifier = modifier.semantics { contentDescription = "I2P network" },
+                    modifier = modifier.semantics { contentDescription = i2pDescription },
                 )
             } else {
                 Icon(
                     imageVector = Icons.Default.Settings,
-                    contentDescription = "I2P network",
+                    contentDescription = stringResource(R.string.iface_disc_icon_i2p),
                     modifier = modifier.size(size),
                     tint = tint,
                 )
@@ -1654,7 +1654,7 @@ internal fun InterfaceTypeIcon(
             // Use Lucide Antenna for radio interfaces (matches PeerCard)
             Icon(
                 imageVector = ImageVector.vectorResource(com.composables.icons.lucide.R.drawable.lucide_ic_antenna),
-                contentDescription = "Radio interface",
+                contentDescription = stringResource(R.string.iface_disc_icon_radio),
                 modifier = modifier.size(size),
                 tint = tint,
             )
@@ -1662,7 +1662,7 @@ internal fun InterfaceTypeIcon(
         else -> {
             Icon(
                 imageVector = Icons.Default.Settings,
-                contentDescription = "Unknown interface",
+                contentDescription = stringResource(R.string.iface_disc_icon_unknown),
                 modifier = modifier.size(size),
                 tint = tint,
             )
@@ -1673,32 +1673,32 @@ internal fun InterfaceTypeIcon(
 /**
  * Format interface type for display.
  */
-internal fun formatInterfaceType(type: String): String =
+internal fun formatInterfaceType(context: Context, type: String): String =
     when (type) {
-        "TCPServerInterface" -> "TCP Server"
-        "TCPClientInterface" -> "TCP Client"
-        "BackboneInterface" -> "Backbone (TCP)"
-        "I2PInterface" -> "I2P"
-        "RNodeInterface" -> "RNode (LoRa)"
-        "WeaveInterface" -> "Weave (LoRa)"
-        "KISSInterface" -> "KISS"
+        "TCPServerInterface" -> context.getString(R.string.iface_cfg_type_tcp_server)
+        "TCPClientInterface" -> context.getString(R.string.iface_cfg_type_tcp_client)
+        "BackboneInterface" -> context.getString(R.string.iface_disc_type_backbone)
+        "I2PInterface" -> context.getString(R.string.discovered_filter_i2p)
+        "RNodeInterface" -> context.getString(R.string.iface_disc_type_rnode)
+        "WeaveInterface" -> context.getString(R.string.iface_disc_type_weave)
+        "KISSInterface" -> context.getString(R.string.iface_disc_type_kiss)
         else -> type
     }
 
 /**
  * Format last heard timestamp as relative time.
  */
-internal fun formatLastHeard(timestamp: Long): String {
-    if (timestamp == 0L) return "Never"
+internal fun formatLastHeard(context: Context, timestamp: Long): String {
+    if (timestamp == 0L) return context.getString(R.string.iface_never)
 
     val now = System.currentTimeMillis() / 1000
     val diff = now - timestamp
 
     return when {
-        diff < 60 -> "just now"
-        diff < 3600 -> "${diff / 60} min ago"
-        diff < 86400 -> "${diff / 3600} hours ago"
-        diff < 604800 -> "${diff / 86400} days ago"
+        diff < 60 -> context.getString(R.string.iface_just_now)
+        diff < 3600 -> context.getString(R.string.iface_min_ago, diff / 60)
+        diff < 86400 -> context.getString(R.string.iface_hours_ago, diff / 3600)
+        diff < 604800 -> context.getString(R.string.iface_days_ago, diff / 86400)
         else -> {
             val sdf = SimpleDateFormat("MMM d", Locale.getDefault())
             sdf.format(Date(timestamp * 1000))
@@ -1709,23 +1709,23 @@ internal fun formatLastHeard(timestamp: Long): String {
 /**
  * Format LoRa parameters for clipboard.
  */
-internal fun formatLoraParamsForClipboard(iface: DiscoveredInterface): String =
+internal fun formatLoraParamsForClipboard(context: Context, iface: DiscoveredInterface): String =
     buildString {
-        appendLine("LoRa Parameters from: ${iface.name}")
+        appendLine(context.getString(R.string.iface_clip_lora_header, iface.name))
         appendLine("---")
         iface.frequency?.let { freq ->
-            appendLine("Frequency: ${freq / 1_000_000.0} MHz")
+            appendLine(context.getString(R.string.iface_clip_frequency, freq / 1_000_000.0))
         }
         iface.bandwidth?.let { bw ->
-            appendLine("Bandwidth: ${bw / 1000} kHz")
+            appendLine(context.getString(R.string.iface_clip_bandwidth, bw / 1000))
         }
         iface.spreadingFactor?.let { sf ->
-            appendLine("Spreading Factor: SF$sf")
+            appendLine(context.getString(R.string.iface_clip_spreading_factor, sf))
         }
         iface.codingRate?.let { cr ->
-            appendLine("Coding Rate: 4/$cr")
+            appendLine(context.getString(R.string.iface_clip_coding_rate, cr))
         }
         iface.modulation?.let { mod ->
-            appendLine("Modulation: $mod")
+            appendLine(context.getString(R.string.iface_clip_modulation, mod))
         }
     }.trim()

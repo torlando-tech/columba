@@ -35,6 +35,7 @@ import network.columba.app.rns.host.manager.filterByTransport
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.util.validation.InputValidator
+import network.columba.app.util.validation.messageResource
 import network.columba.app.util.validation.ValidationResult
 import org.json.JSONObject
 import javax.inject.Inject
@@ -156,12 +157,12 @@ data class InterfaceConfigState(
     // while edit state and explicit selector choices remain non-null.
     val networkRestriction: String? = null,
     // Validation
-    val nameError: String? = null,
-    val targetHostError: String? = null,
-    val targetPortError: String? = null,
-    val discoveryPortError: String? = null,
-    val dataPortError: String? = null,
-    val deviceNameError: String? = null,
+    val nameError: UiMessage? = null,
+    val targetHostError: UiMessage? = null,
+    val targetPortError: UiMessage? = null,
+    val discoveryPortError: UiMessage? = null,
+    val dataPortError: UiMessage? = null,
+    val deviceNameError: UiMessage? = null,
     val maxConnectionsError: UiMessage? = null,
     val targetDeviceNameError: String? = null,
     val frequencyError: String? = null,
@@ -169,10 +170,10 @@ data class InterfaceConfigState(
     val txPowerError: String? = null,
     val spreadingFactorError: String? = null,
     val codingRateError: String? = null,
-    val listenIpError: String? = null,
-    val listenPortError: String? = null,
-    val socksProxyHostError: String? = null,
-    val socksProxyPortError: String? = null,
+    val listenIpError: UiMessage? = null,
+    val listenPortError: UiMessage? = null,
+    val socksProxyHostError: UiMessage? = null,
+    val socksProxyPortError: UiMessage? = null,
 ) {
     /**
      * Whether the network-restriction selector should render for this state's interface
@@ -837,7 +838,7 @@ class InterfaceManagementViewModel
             // VALIDATION: Validate interface name with InputValidator
             when (val nameResult = InputValidator.validateInterfaceName(config.name)) {
                 is ValidationResult.Error -> {
-                    _configState.value = config.copy(nameError = nameResult.message)
+                    _configState.value = config.copy(nameError = nameResult.toUiMessage())
                     isValid = false
                 }
                 is ValidationResult.Success -> {
@@ -859,7 +860,7 @@ class InterfaceManagementViewModel
                         )
                 ) {
                     is ValidationResult.Error -> {
-                        _configState.value = _configState.value.copy(nameError = uniqueResult.message)
+                        _configState.value = _configState.value.copy(nameError = uniqueResult.toUiMessage())
                         isValid = false
                     }
                     is ValidationResult.Success -> {
@@ -874,7 +875,7 @@ class InterfaceManagementViewModel
                     // VALIDATION: Validate target host with proper hostname/IP validation
                     when (val hostResult = InputValidator.validateHostname(config.targetHost)) {
                         is ValidationResult.Error -> {
-                            _configState.value = _configState.value.copy(targetHostError = hostResult.message)
+                            _configState.value = _configState.value.copy(targetHostError = hostResult.toUiMessage())
                             isValid = false
                         }
                         is ValidationResult.Success -> {
@@ -890,7 +891,7 @@ class InterfaceManagementViewModel
                     // VALIDATION: Validate target port with proper range checking
                     when (val portResult = InputValidator.validatePort(config.targetPort)) {
                         is ValidationResult.Error -> {
-                            _configState.value = _configState.value.copy(targetPortError = portResult.message)
+                            _configState.value = _configState.value.copy(targetPortError = portResult.toUiMessage())
                             isValid = false
                         }
                         is ValidationResult.Success -> {
@@ -902,7 +903,7 @@ class InterfaceManagementViewModel
                     if (config.socksProxyEnabled) {
                         when (val proxyHostResult = InputValidator.validateHostname(config.socksProxyHost)) {
                             is ValidationResult.Error -> {
-                                _configState.value = _configState.value.copy(socksProxyHostError = proxyHostResult.message)
+                                _configState.value = _configState.value.copy(socksProxyHostError = proxyHostResult.toUiMessage())
                                 isValid = false
                             }
                             is ValidationResult.Success -> {
@@ -912,7 +913,7 @@ class InterfaceManagementViewModel
 
                         when (val proxyPortResult = InputValidator.validatePort(config.socksProxyPort)) {
                             is ValidationResult.Error -> {
-                                _configState.value = _configState.value.copy(socksProxyPortError = proxyPortResult.message)
+                                _configState.value = _configState.value.copy(socksProxyPortError = proxyPortResult.toUiMessage())
                                 isValid = false
                             }
                             is ValidationResult.Success -> {
@@ -929,7 +930,7 @@ class InterfaceManagementViewModel
                     if (config.discoveryPort.isNotBlank()) {
                         when (val portResult = InputValidator.validatePort(config.discoveryPort)) {
                             is ValidationResult.Error -> {
-                                _configState.value = _configState.value.copy(discoveryPortError = portResult.message)
+                                _configState.value = _configState.value.copy(discoveryPortError = portResult.toUiMessage())
                                 isValid = false
                             }
                             is ValidationResult.Success -> {
@@ -944,7 +945,7 @@ class InterfaceManagementViewModel
                     if (config.dataPort.isNotBlank()) {
                         when (val portResult = InputValidator.validatePort(config.dataPort)) {
                             is ValidationResult.Error -> {
-                                _configState.value = _configState.value.copy(dataPortError = portResult.message)
+                                _configState.value = _configState.value.copy(dataPortError = portResult.toUiMessage())
                                 isValid = false
                             }
                             is ValidationResult.Success -> {
@@ -961,7 +962,7 @@ class InterfaceManagementViewModel
                     if (config.deviceName.isNotBlank()) {
                         when (val deviceNameResult = InputValidator.validateDeviceName(config.deviceName)) {
                             is ValidationResult.Error -> {
-                                _configState.value = _configState.value.copy(deviceNameError = deviceNameResult.message)
+                                _configState.value = _configState.value.copy(deviceNameError = deviceNameResult.toUiMessage())
                                 isValid = false
                             }
                             is ValidationResult.Success -> {
@@ -986,7 +987,7 @@ class InterfaceManagementViewModel
                     // VALIDATION: Validate listen IP (0.0.0.0 or valid IP/hostname)
                     when (val ipResult = InputValidator.validateHostname(config.listenIp)) {
                         is ValidationResult.Error -> {
-                            _configState.value = _configState.value.copy(listenIpError = ipResult.message)
+                            _configState.value = _configState.value.copy(listenIpError = ipResult.toUiMessage())
                             isValid = false
                         }
                         is ValidationResult.Success -> {
@@ -1001,7 +1002,7 @@ class InterfaceManagementViewModel
                     // VALIDATION: Validate listen port
                     when (val portResult = InputValidator.validatePort(config.listenPort)) {
                         is ValidationResult.Error -> {
-                            _configState.value = _configState.value.copy(listenPortError = portResult.message)
+                            _configState.value = _configState.value.copy(listenPortError = portResult.toUiMessage())
                             isValid = false
                         }
                         is ValidationResult.Success -> {
@@ -1402,3 +1403,7 @@ class InterfaceManagementViewModel
             }
         }
     }
+
+/** Maps a validation failure to its localized message for UI state. */
+private fun ValidationResult.Error.toUiMessage(): UiMessage =
+    UiMessage.Text(reason.messageResource(), args)

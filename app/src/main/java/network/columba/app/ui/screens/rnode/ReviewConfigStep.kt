@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import network.columba.app.data.model.FrequencySlotCalculator
 import network.columba.app.ui.components.IfacConfigCard
@@ -218,7 +219,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
-                            if (preset.displayName.startsWith("Short")) {
+                            if (preset.name.startsWith("SHORT")) {
                                 Icons.Default.Speed
                             } else {
                                 Icons.Default.Radio
@@ -234,7 +235,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Text(
-                                preset.displayName,
+                                stringResource(preset.displayNameRes),
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(

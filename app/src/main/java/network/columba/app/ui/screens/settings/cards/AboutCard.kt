@@ -244,7 +244,7 @@ fun AboutCard(
                         }
                     is AppUpdateResult.Error ->
                         Text(
-                            text = result.message,
+                            text = result.message.resolve(context),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )

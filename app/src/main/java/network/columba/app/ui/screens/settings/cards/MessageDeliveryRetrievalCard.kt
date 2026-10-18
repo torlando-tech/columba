@@ -53,6 +53,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import network.columba.app.ui.components.CollapsibleSettingsCard
+import network.columba.app.ui.components.localizedHashErrorText
 import network.columba.app.ui.util.rememberLifecycleTickerMillis
 import network.columba.app.util.DestinationHashValidator
 
@@ -865,7 +866,7 @@ private fun ManualRelayInput(
 ) {
     val validationResult = DestinationHashValidator.validate(hashInput)
     val isValid = validationResult is DestinationHashValidator.ValidationResult.Valid
-    val errorMessage = (validationResult as? DestinationHashValidator.ValidationResult.Error)?.message
+    val hashError = (validationResult as? DestinationHashValidator.ValidationResult.Error)
 
     Column(
         modifier =
@@ -896,8 +897,8 @@ private fun ManualRelayInput(
             supportingText = {
                 if (hashInput.isEmpty()) {
                     Text(DestinationHashValidator.getCharacterCount(hashInput))
-                } else if (!isValid && errorMessage != null) {
-                    Text(errorMessage)
+                } else if (!isValid && hashError != null) {
+                    Text(localizedHashErrorText(hashError.reason, hashError.args))
                 } else {
                     Text(DestinationHashValidator.getCharacterCount(hashInput))
                 }

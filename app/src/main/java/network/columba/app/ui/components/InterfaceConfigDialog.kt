@@ -94,7 +94,7 @@ fun InterfaceConfigDialog(
                     supportingText = {
                         val nameError = configState.nameError
                         if (nameError != null) {
-                            Text(nameError)
+                            Text(nameError.resolve(LocalContext.current))
                         } else {
                             Text("${configState.name.length}/${ValidationConstants.MAX_INTERFACE_NAME_LENGTH}")
                         }
@@ -127,7 +127,7 @@ fun InterfaceConfigDialog(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         isError = configState.targetHostError != null,
-                        supportingText = configState.targetHostError?.let { { Text(it) } },
+                        supportingText = configState.targetHostError?.let { { Text(it.resolve(LocalContext.current)) } },
                     )
                 }
 
@@ -295,7 +295,7 @@ fun AutoInterfaceFields(
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         isError = configState.discoveryPortError != null,
-        supportingText = configState.discoveryPortError?.let { { Text(it) } },
+        supportingText = configState.discoveryPortError?.let { { Text(it.resolve(LocalContext.current)) } },
     )
 
     OutlinedTextField(
@@ -306,7 +306,7 @@ fun AutoInterfaceFields(
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         isError = configState.dataPortError != null,
-        supportingText = configState.dataPortError?.let { { Text(it) } },
+        supportingText = configState.dataPortError?.let { { Text(it.resolve(LocalContext.current)) } },
     )
 }
 
@@ -329,7 +329,7 @@ fun TCPClientFields(
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         isError = configState.targetPortError != null,
-        supportingText = configState.targetPortError?.let { { Text(it) } },
+        supportingText = configState.targetPortError?.let { { Text(it.resolve(LocalContext.current)) } },
     )
 
     IfacConfigCard(
@@ -382,7 +382,7 @@ fun TCPClientFields(
                 supportingText = {
                     val error = configState.socksProxyHostError
                     if (error != null) {
-                        Text(error)
+                        Text(error.resolve(LocalContext.current))
                     } else {
                         Text(
                             "SOCKS5 proxy address. Use 127.0.0.1 for Orbot running on this device.",
@@ -404,7 +404,7 @@ fun TCPClientFields(
                 supportingText = {
                     val error = configState.socksProxyPortError
                     if (error != null) {
-                        Text(error)
+                        Text(error.resolve(LocalContext.current))
                     } else {
                         Text(
                             "Orbot default: 9050.",
@@ -613,7 +613,7 @@ fun AndroidBLEFields(
         isError = configState.deviceNameError != null,
         supportingText = {
             Column {
-                configState.deviceNameError?.let { Text(it) }
+                configState.deviceNameError?.let { Text(it.resolve(LocalContext.current)) }
                 if (configState.deviceName.isNotEmpty()) {
                     Text(
                         "${configState.deviceName.length}/${ValidationConstants.MAX_DEVICE_NAME_LENGTH} characters",
@@ -873,7 +873,7 @@ fun TCPServerFields(
         isError = configState.listenIpError != null,
         supportingText = {
             Column {
-                configState.listenIpError?.let { Text(it) }
+                configState.listenIpError?.let { Text(it.resolve(LocalContext.current)) }
                 Text(
                     "IP address to bind to. Use 0.0.0.0 to listen on all interfaces.",
                     style = MaterialTheme.typography.bodySmall,
@@ -893,7 +893,7 @@ fun TCPServerFields(
         isError = configState.listenPortError != null,
         supportingText = {
             Column {
-                configState.listenPortError?.let { Text(it) }
+                configState.listenPortError?.let { Text(it.resolve(LocalContext.current)) }
                 Text(
                     "TCP port to listen on for incoming connections.",
                     style = MaterialTheme.typography.bodySmall,

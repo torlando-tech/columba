@@ -229,7 +229,7 @@ class InterfaceRepository
                         val targetHost =
                             when (val hostResult = InputValidator.validateHostname(rawHost)) {
                                 is ValidationResult.Error -> {
-                                    Log.e(TAG, "Invalid target host in database: $rawHost - ${hostResult.message}")
+                                    Log.e(TAG, "Invalid target host in database: $rawHost - ${hostResult.reason}")
                                     error("Invalid target host: $rawHost")
                                 }
                                 is ValidationResult.Success -> hostResult.value
@@ -280,7 +280,7 @@ class InterfaceRepository
                                 tcpHost =
                                     when (val result = InputValidator.validateHostname(tcpHost)) {
                                         is ValidationResult.Error -> {
-                                            Log.e(TAG, "Invalid RNode TCP host: $tcpHost - ${result.message}")
+                                            Log.e(TAG, "Invalid RNode TCP host: $tcpHost - ${result.reason}")
                                             error("Invalid RNode TCP host: $tcpHost")
                                         }
                                         is ValidationResult.Success -> result.value
@@ -343,7 +343,7 @@ class InterfaceRepository
                         val listenIp =
                             when (val listenIpResult = InputValidator.validateHostname(rawListenIp)) {
                                 is ValidationResult.Error -> {
-                                    Log.e(TAG, "Invalid listen IP in database: $rawListenIp - ${listenIpResult.message}")
+                                    Log.e(TAG, "Invalid listen IP in database: $rawListenIp - ${listenIpResult.reason}")
                                     error("Invalid listen IP: $rawListenIp")
                                 }
                                 is ValidationResult.Success -> listenIpResult.value
@@ -352,7 +352,7 @@ class InterfaceRepository
                         val forwardIp =
                             when (val forwardIpResult = InputValidator.validateHostname(rawForwardIp)) {
                                 is ValidationResult.Error -> {
-                                    Log.e(TAG, "Invalid forward IP in database: $rawForwardIp - ${forwardIpResult.message}")
+                                    Log.e(TAG, "Invalid forward IP in database: $rawForwardIp - ${forwardIpResult.reason}")
                                     error("Invalid forward IP: $rawForwardIp")
                                 }
                                 is ValidationResult.Success -> forwardIpResult.value
@@ -389,7 +389,7 @@ class InterfaceRepository
                         if (deviceName.isNotBlank()) {
                             when (val nameResult = InputValidator.validateDeviceName(deviceName)) {
                                 is ValidationResult.Error -> {
-                                    Log.e(TAG, "Invalid device name in database: $deviceName - ${nameResult.message}")
+                                    Log.e(TAG, "Invalid device name in database: $deviceName - ${nameResult.reason}")
                                     error("Invalid device name: $deviceName")
                                 }
                                 else -> {}
@@ -419,7 +419,7 @@ class InterfaceRepository
                         val listenIp =
                             when (val listenIpResult = InputValidator.validateHostname(rawListenIp)) {
                                 is ValidationResult.Error -> {
-                                    Log.e(TAG, "Invalid listen IP in database: $rawListenIp - ${listenIpResult.message}")
+                                    Log.e(TAG, "Invalid listen IP in database: $rawListenIp - ${listenIpResult.reason}")
                                     error("Invalid listen IP: $rawListenIp")
                                 }
                                 is ValidationResult.Success -> listenIpResult.value

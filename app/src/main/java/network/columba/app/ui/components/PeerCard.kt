@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -67,6 +68,7 @@ fun PeerCard(
     onLongPress: () -> Unit = {},
     badgeContent: @Composable () -> Unit = { NodeTypeBadge(nodeType = announce.nodeType) },
 ) {
+    val context = LocalContext.current
     val hapticFeedback = LocalHapticFeedback.current
 
     Card(
@@ -135,11 +137,11 @@ fun PeerCard(
                     )
 
                     // Time since last seen - update adaptively based on how recent it is
-                    var timeSinceText by remember { mutableStateOf(formatTimeSince(announce.lastSeenTimestamp)) }
+                    var timeSinceText by remember { mutableStateOf(formatTimeSince(context, announce.lastSeenTimestamp)) }
 
                     LaunchedEffect(announce.lastSeenTimestamp) {
                         // Update immediately when timestamp changes
-                        timeSinceText = formatTimeSince(announce.lastSeenTimestamp)
+                        timeSinceText = formatTimeSince(context, announce.lastSeenTimestamp)
 
                         // Adaptive update frequency: more frequent for recent times, less for old ones
                         while (true) {
@@ -160,7 +162,7 @@ fun PeerCard(
                                 }
 
                             delay(delayMs)
-                            timeSinceText = formatTimeSince(announce.lastSeenTimestamp)
+                            timeSinceText = formatTimeSince(context, announce.lastSeenTimestamp)
                         }
                     }
                     Row(

@@ -1,6 +1,8 @@
 package network.columba.app.ui.screens.onboarding
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
+import network.columba.app.R
 import network.columba.app.viewmodel.UiMessage
 
 /**
@@ -28,29 +30,29 @@ data class OnboardingState(
  * Simplified version of the full InterfaceConfig for user selection.
  */
 enum class OnboardingInterfaceType(
-    val displayName: String,
-    val description: String,
-    val secondaryDescription: String? = null,
+    @param:StringRes val displayNameRes: Int,
+    @param:StringRes val descriptionRes: Int,
+    @param:StringRes val secondaryDescriptionRes: Int? = null,
 ) {
     AUTO(
-        displayName = "Local WiFi",
-        description = "Discover peers on your local network",
-        secondaryDescription = "No internet required",
+        displayNameRes = R.string.onboarding_iface_wifi_name,
+        descriptionRes = R.string.onboarding_iface_wifi_desc,
+        secondaryDescriptionRes = R.string.onboarding_iface_wifi_secondary,
     ),
     BLE(
-        displayName = "Bluetooth LE",
-        description = "Connect directly to nearby devices",
-        secondaryDescription = "Requires Bluetooth permissions",
+        displayNameRes = R.string.onboarding_iface_ble_name,
+        descriptionRes = R.string.onboarding_iface_ble_desc,
+        secondaryDescriptionRes = R.string.onboarding_iface_ble_secondary,
     ),
     TCP(
-        displayName = "Internet (TCP)",
-        description = "Connect to the global Reticulum network",
-        secondaryDescription = "Requires internet connection",
+        displayNameRes = R.string.onboarding_iface_tcp_name,
+        descriptionRes = R.string.onboarding_iface_tcp_desc,
+        secondaryDescriptionRes = R.string.onboarding_iface_tcp_secondary,
     ),
     RNODE(
-        displayName = "LoRa Radio",
-        description = "Long-range mesh via RNode hardware",
-        secondaryDescription = "Requires external hardware - configure in Settings",
+        displayNameRes = R.string.onboarding_iface_lora_name,
+        descriptionRes = R.string.onboarding_iface_lora_desc,
+        secondaryDescriptionRes = R.string.onboarding_iface_lora_secondary,
     ),
 }
 

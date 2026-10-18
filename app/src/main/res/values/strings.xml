@@ -1220,4 +1220,166 @@
     <string name="loc_perm_enable_location">Enable Location</string>
     <string name="color_picker_title">Pick a Color</string>
     <string name="ifac_card_description">Leave blank unless the remote interface requires an IFAC network name and passphrase. Auto-filled when adding from a discovered interface.</string>
+    <!-- MessagingScreen: sync result toasts (shared with ChatsScreen) -->
+    <string name="messaging_sync_complete">Sync complete</string>
+    <string name="messaging_sync_complete_count">Sync complete: %1$d new messages</string>
+    <string name="messaging_sync_failed">Sync failed: %1$s</string>
+    <string name="messaging_sync_no_relay">No relay configured</string>
+    <string name="messaging_sync_timeout">Sync timed out</string>
+    <string name="messaging_sync_messages">Sync messages</string>
+    <string name="messaging_syncing">Syncing…</string>
+    <!-- MessagingScreen: contact toggle + block toasts -->
+    <string name="messaging_saved_to_contacts">Saved %1$s to Contacts</string>
+    <string name="messaging_removed_from_contacts">Removed %1$s from Contacts</string>
+    <string name="messaging_blocked_user">Blocked %1$s</string>
+    <!-- MessagingScreen: attachment toasts -->
+    <string name="messaging_file_too_large">File too large (%1$dKB). Max size is %2$dKB.</string>
+    <string name="messaging_attach_failed">Failed to attach file: %1$s</string>
+    <string name="messaging_file_saved">File saved</string>
+    <string name="messaging_file_save_failed">Failed to save file</string>
+    <string name="messaging_image_saved">Image saved</string>
+    <string name="messaging_image_save_failed">Failed to save image</string>
+    <string name="messaging_no_app_open_file">No app found to open this file</string>
+    <string name="messaging_failed_to_load_file">Failed to load file</string>
+    <string name="messaging_share_image">Share image</string>
+    <string name="messaging_no_app_to_share">No app found to share</string>
+    <string name="messaging_failed_to_load_image">Failed to load image</string>
+    <string name="messaging_unable_to_open_link">Unable to open link</string>
+    <!-- MessagingScreen: top bar presence/status -->
+    <string name="messaging_status_connecting">Connecting</string>
+    <string name="messaging_status_online_link_active">Online — link active</string>
+    <string name="messaging_status_last_seen_recently">Last seen recently</string>
+    <string name="messaging_status_offline">Offline</string>
+    <string name="messaging_status_connecting_long">Connecting...</string>
+    <string name="messaging_status_online">Online</string>
+    <string name="messaging_status_last_seen">Last seen %1$s</string>
+    <string name="messaging_active_link">Active link</string>
+    <string name="messaging_voice_call">Voice call</string>
+    <string name="messaging_share_location">Share location</string>
+    <string name="messaging_more_options">More options</string>
+    <string name="messaging_text_size">Text size</string>
+    <string name="messaging_block_user">Block User</string>
+    <!-- MessagingScreen: delete-message dialog -->
+    <string name="messaging_delete_message">Delete message</string>
+    <string name="messaging_delete_message_body">This message will be permanently deleted from this device.</string>
+    <!-- MessagingScreen: location sharing -->
+    <string name="messaging_allow_location">Allow Location</string>
+    <string name="messaging_stop_sharing_title">Stop Sharing Location?</string>
+    <string name="messaging_stop_sharing_body">Stop sharing your location with %1$s?</string>
+    <string name="messaging_stop_sharing">Stop Sharing</string>
+    <!-- MessagingScreen: image bubbles/dialog -->
+    <string name="messaging_animated_gif">Animated GIF</string>
+    <string name="messaging_animated_image_attachment">Animated image attachment</string>
+    <string name="messaging_image_attachment">Image attachment</string>
+    <string name="messaging_image_unavailable">Image unavailable</string>
+    <string name="messaging_not_available">Not available</string>
+    <string name="messaging_image_not_available_title">Image Not Available</string>
+    <string name="messaging_image_not_available_body">The original image could not be found. This can happen when importing data without attachments included.</string>
+    <string name="messaging_ok">OK</string>
+    <string name="messaging_fullscreen_image">Fullscreen image</string>
+    <string name="messaging_fullscreen_animated_image">Fullscreen animated image</string>
+    <!-- MessagingScreen: message context menu -->
+    <string name="messaging_retry">Retry</string>
+    <string name="messaging_reply">Reply</string>
+    <string name="messaging_copy">Copy</string>
+    <string name="messaging_view_details">View Details</string>
+    <!-- MessagingScreen: composer -->
+    <string name="messaging_selected_animated_image">Selected animated image</string>
+    <string name="messaging_selected_image">Selected image</string>
+    <string name="messaging_gif_attached">GIF attached (%1$d KB)</string>
+    <string name="messaging_image_attached">Image attached (%1$d KB)</string>
+    <string name="messaging_remove_image">Remove image</string>
+    <string name="messaging_characters_remaining">%1$d characters remaining</string>
+    <string name="messaging_type_a_message">Type a message...</string>
+    <string name="messaging_close_attachments">Close attachments</string>
+    <string name="messaging_attach">Attach</string>
+    <string name="messaging_send_message">Send message</string>
+    <string name="messaging_sending_message">Sending message</string>
+    <string name="messaging_preview_message_text">Preview message text</string>
+    <!-- MessagingScreen: empty state + timestamps -->
+    <string name="messaging_no_messages_yet">No messages yet</string>
+    <string name="messaging_start_conversation">Send a message to start the conversation</string>
+    <string name="messaging_minutes_ago">%1$d min ago</string>
+    <!-- MessagingScreen: pending file notification bubble -->
+    <string name="messaging_fetching_file">Fetching file...</string>
+    <string name="messaging_peer_sent_large_file">%1$s sent a large file</string>
+    <plurals name="messaging_more_files">
+        <item quantity="one">+%1$d more file</item>
+        <item quantity="other">+%1$d more files</item>
+    </plurals>
+    <string name="messaging_sync_tap_to_fetch">Tap to fetch from relay</string>
+    <string name="messaging_sync_connecting_relay">Connecting to relay...</string>
+    <string name="messaging_sync_discovering_path">Discovering network path...</string>
+    <string name="messaging_sync_establishing">Establishing connection...</string>
+    <string name="messaging_sync_connected">Connected, preparing...</string>
+    <string name="messaging_sync_requesting">Requesting messages...</string>
+    <string name="messaging_sync_downloading_pct">Downloading: %1$d%%</string>
+    <string name="messaging_sync_downloading">Downloading...</string>
+    <string name="messaging_sync_processing">Processing...</string>
+    <string name="messaging_sync_download_complete">Download complete</string>
+    <!-- MessageDetailScreen -->
+    <string name="message_detail_title">Message Details</string>
+    <string name="message_detail_loading">Loading...</string>
+    <string name="message_detail_sent">Sent</string>
+    <string name="message_detail_received">Received</string>
+    <string name="message_detail_sent_by_sender">Sent by Sender</string>
+    <string name="message_detail_sender_local_time_note">Sender\'s local time (may differ from yours)</string>
+    <string name="message_detail_status">Status</string>
+    <string name="message_detail_delivery_method">Delivery Method</string>
+    <string name="message_detail_sent_via">Sent Via</string>
+    <string name="message_detail_error_details">Error Details</string>
+    <string name="message_detail_received_via">Received Via</string>
+    <string name="message_detail_signal_strength">Signal Strength</string>
+    <string name="message_detail_signal_quality">Signal Quality</string>
+    <string name="message_detail_status_delivered">Delivered</string>
+    <string name="message_detail_status_delivered_sub">Message was successfully delivered to recipient</string>
+    <string name="message_detail_status_failed">Failed</string>
+    <string name="message_detail_status_failed_sub">Message delivery failed</string>
+    <string name="message_detail_status_pending">Pending</string>
+    <string name="message_detail_status_pending_sub">Waiting for delivery confirmation</string>
+    <string name="message_detail_status_sent_sub">Message has been sent</string>
+    <string name="message_detail_method_opportunistic">Opportunistic</string>
+    <string name="message_detail_method_opportunistic_sub">Single packet delivery for small messages, no link required</string>
+    <string name="message_detail_direct">Direct</string>
+    <string name="message_detail_method_direct_sub">Link-based delivery with retries, supports large messages</string>
+    <string name="message_detail_method_propagated">Propagated</string>
+    <string name="message_detail_method_propagated_sub">Delivered via relay node for offline recipients</string>
+    <string name="message_detail_method_unknown">Unknown delivery method</string>
+    <string name="message_detail_hop_count">Hop Count</string>
+    <string name="message_detail_hops_unknown">Unknown</string>
+    <string name="message_detail_hops_unavailable">Hop count unavailable</string>
+    <string name="message_detail_hops_direct_sub">Message received directly from sender</string>
+    <plurals name="message_detail_hops">
+        <item quantity="one">%1$d hop</item>
+        <item quantity="other">%1$d hops</item>
+    </plurals>
+    <plurals name="message_detail_hops_subtitle">
+        <item quantity="one">Message traveled through %1$d relay</item>
+        <item quantity="other">Message traveled through %1$d relays</item>
+    </plurals>
+    <!-- ChatsScreen -->
+    <string name="chats_saved_contact">Saved contact</string>
+    <string name="chats_removed_contact">Removed contact</string>
+    <string name="chats_qr_code">QR Code</string>
+    <string name="chats_marked_unread">Marked as unread</string>
+    <string name="chats_deleted_conversation">Deleted conversation with %1$s</string>
+    <string name="chats_share_identity">Share Identity</string>
+    <string name="chats_draft_prefix">"Draft: "</string>
+    <string name="chats_remove_from_contacts">Remove from Contacts</string>
+    <string name="chats_save_to_contacts">Save to Contacts</string>
+    <string name="chats_mark_unread">Mark as Unread</string>
+    <string name="chats_view_peer_details">View Peer Details</string>
+    <string name="chats_delete_conversation">Delete Conversation</string>
+    <string name="chats_delete_conversation_confirm">Delete Conversation?</string>
+    <string name="chats_delete_conversation_body">Are you sure you want to delete your conversation with %1$s? This will permanently delete all messages.</string>
+    <string name="chats_block_title">Block %1$s?</string>
+    <string name="chats_block_body">They won\'t be able to send you messages. Their conversation will be hidden from the chat list.</string>
+    <string name="chats_block_delete_messages">Also delete conversation and messages</string>
+    <string name="chats_block_blackhole">Also blackhole (don\'t relay their announces)</string>
+    <string name="chats_block_transport_disabled">Transport is currently disabled. This identity will be blackholed whenever transport is later enabled.</string>
+    <string name="chats_block_confirm">Block</string>
+    <string name="chats_loading_conversations">Loading conversations...</string>
+    <string name="chats_empty_title">No conversations yet</string>
+    <string name="chats_empty_body">Messages from peers will appear here</string>
+    <string name="chats_now">Now</string>
 </resources>

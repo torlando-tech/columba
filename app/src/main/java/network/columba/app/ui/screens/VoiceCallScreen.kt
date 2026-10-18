@@ -310,7 +310,7 @@ fun VoiceCallScreen(
                     // Mute button (disabled in half duplex since PTT controls transmit)
                     CallControlButton(
                         icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                        label = if (isMuted) "Unmute" else "Mute",
+                        label = if (isMuted) stringResource(R.string.call_unmute) else stringResource(R.string.call_mute),
                         isActive = isMuted,
                         onClick = { viewModel.toggleMute() },
                         enabled = callState is CallState.Active && !isHalfDuplex,
@@ -335,7 +335,7 @@ fun VoiceCallScreen(
                     // Speaker button
                     CallControlButton(
                         icon = if (isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeDown,
-                        label = if (isSpeakerOn) "Earpiece" else "Speaker",
+                        label = if (isSpeakerOn) stringResource(R.string.call_earpiece) else stringResource(R.string.call_speaker),
                         isActive = isSpeakerOn,
                         onClick = { viewModel.toggleSpeaker() },
                         enabled = callState is CallState.Active,
@@ -454,13 +454,13 @@ private fun PttButton(
         ) {
             Icon(
                 imageVector = Icons.Default.Mic,
-                contentDescription = if (isActive) "Transmitting" else "Hold to talk",
+                contentDescription = if (isActive) stringResource(R.string.call_status_transmitting) else stringResource(R.string.call_hold_to_talk),
                 modifier = Modifier.size(48.dp),
                 tint = contentColor,
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = if (isActive) "TALKING" else "HOLD\nTO TALK",
+                text = if (isActive) stringResource(R.string.call_talking) else stringResource(R.string.call_hold_talk_multiline),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = contentColor,

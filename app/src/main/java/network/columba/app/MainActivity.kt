@@ -2647,7 +2647,7 @@ fun ColumbaNavigation(
                             }
                         },
                         sheetState = sheetState,
-                        primaryActionLabel = if (useAppSettings) "Open Settings" else "Grant Permissions",
+                        primaryActionLabel = if (useAppSettings) stringResource(R.string.ble_ctrl_open_settings) else stringResource(R.string.ble_ctrl_grant_permissions),
                     )
                 }
 

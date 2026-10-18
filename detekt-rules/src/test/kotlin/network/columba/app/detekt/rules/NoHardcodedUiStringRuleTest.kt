@@ -5,6 +5,7 @@ import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Issue
 import io.gitlab.arturbosch.detekt.api.Rule
 import io.gitlab.arturbosch.detekt.api.Severity
+import io.gitlab.arturbosch.detekt.test.TestConfig
 import io.gitlab.arturbosch.detekt.test.lint
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -255,5 +256,157 @@ class NoHardcodedUiStringRuleTest {
                 """.trimIndent(),
             )
         assertEquals(0, findings.size)
+    }
+
+    @Test
+    fun `if-expression in sink position reports both branches`() {
+        val findings =
+            rule.lint(
+                """
+                fun screen() {
+                    CallControlButton(label = if (isMuted) "Unmute" else "Mute")
+                }
+                """.trimIndent(),
+            )
+        assertEquals(2, findings.size)
+    }
+
+    @Test
+    fun `nested if-else chain in sink position reports every literal branch`() {
+        val findings =
+            rule.lint(
+                """
+                fun screen() {
+                    Text(text = if (a) "One" else if (b) "Two" else "Three")
+                }
+                """.trimIndent(),
+            )
+        assertEquals(3, findings.size)
+    }
+
+    @Test
+    fun `elvis fallback in sink position reports the literal branch`() {
+        val findings =
+            rule.lint(
+                """
+                fun screen() {
+                    Text(text = peerName ?: "Unknown Peer")
+                }
+                """.trimIndent(),
+            )
+        assertEquals(1, findings.size)
+    }
+
+    @Test
+    fun `when-result in sink position reports branch literals`() {
+        val findings =
+            rule.lint(
+                """
+                fun screen() {
+                    Text(
+                        when (state) {
+                            State.ONLINE -> "Online"
+                            else -> "Offline"
+                        }
+                    )
+                }
+                """.trimIndent(),
+            )
+        assertEquals(2, findings.size)
+    }
+
+    @Test
+    fun `when as statement is not a sink`() {
+        val findings =
+            rule.lint(
+                """
+                fun label(state: State): String =
+                    when (state) {
+                        State.ONLINE -> "online"
+                        else -> "pending"
+                    }
+                """.trimIndent(),
+            )
+        assertEquals(0, findings.size)
+    }
+
+    @Test
+    fun `comparisons inside sink if-conditions are not flagged`() {
+        val findings =
+            rule.lint(
+                """
+                fun screen() {
+                    Text(if (state == "pending") stringResource(R.string.waiting) else "Done")
+                }
+                """.trimIndent(),
+            )
+        assertEquals(1, findings.size) // only "Done" fires; "pending" is a wire key
+    }
+
+    @Test
+    fun `doNotTranslateLiterals config exempts listed literals`() {
+        val code =
+            """
+            fun screen() {
+                AnimatedContent(transitionSpec, label = "flasher_step") { }
+            }
+            """.trimIndent()
+        assertEquals(1, rule.lint(code).size) // without the allowlist it fires
+        val configured =
+            NoHardcodedUiString(
+                TestConfig(mapOf("doNotTranslateLiterals" to listOf("\"flasher_step\""))),
+            )
+        assertEquals(0, configured.lint(code).size)
+    }
+
+    @Test
+    fun `sealed object supertype constructor display args are flagged`() {
+        val findings =
+            rule.lint(
+                """
+                sealed class FirmwareSource(val id: String, val displayName: String) {
+                    object Official : FirmwareSource(id = "official", displayName = "RNode Official")
+                    object Custom : FirmwareSource(id = "custom", displayName = "Custom")
+                }
+                """.trimIndent(),
+            )
+        assertEquals(2, findings.size)
+    }
+
+    @Test
+    fun `supertype args that are not display sinks are not flagged`() {
+        val findings =
+            rule.lint(
+                """
+                sealed class Source(val id: String, val repo: String) {
+                    object Official : Source(id = "official", repo = "RNode_Firmware")
+                }
+                """.trimIndent(),
+            )
+        assertEquals(0, findings.size)
+    }
+
+    @Test
+    fun `when result inside a sink is flagged but when statement is not`() {
+        val sink =
+            """
+            fun screen() {
+                Text(when (mode) {
+                    Mode.A -> "Start"
+                    Mode.B -> "Stop"
+                })
+            }
+            """.trimIndent()
+        assertEquals(2, rule.lint(sink).size)
+        val statement =
+            """
+            fun apply(mode: Mode) {
+                when (mode) {
+                    Mode.A -> status = "pending"
+                    Mode.B -> status = "done"
+                }
+            }
+            """.trimIndent()
+        assertEquals(0, rule.lint(statement).size)
     }
 }

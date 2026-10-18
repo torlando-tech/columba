@@ -7,6 +7,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
+import network.columba.app.R
 import network.columba.app.test.RegisterComponentActivityRule
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -27,6 +29,9 @@ class NomadNetBrowserScreenTest {
 
     private val composeTestRule get() = composeRule
 
+    private fun resText(id: Int): String =
+        ApplicationProvider.getApplicationContext<Application>().getString(id)
+
     @Test
     fun browserCloseSiteMenuItem_displaysCloseSiteText() {
         composeTestRule.setContent {
@@ -39,7 +44,7 @@ class NomadNetBrowserScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Close site").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.nomadnet_close_site)).assertIsDisplayed()
     }
 
     @Test
@@ -56,7 +61,7 @@ class NomadNetBrowserScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Close site").performClick()
+        composeTestRule.onNodeWithText(resText(R.string.nomadnet_close_site)).performClick()
 
         assertEquals(1, calls)
     }

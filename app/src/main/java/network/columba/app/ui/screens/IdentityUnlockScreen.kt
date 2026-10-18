@@ -65,6 +65,7 @@ fun IdentityUnlockScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val activeIdentity by viewModel.activeIdentity.collectAsState()
+    val context = LocalContext.current
 
     val importLauncher =
         rememberLauncherForActivityResult(
@@ -144,10 +145,10 @@ fun IdentityUnlockScreen(
 
             when (val state = uiState) {
                 is IdentityUnlockUiState.Loading -> {
-                    LoadingBlock(state.message)
+                    LoadingBlock(state.message.resolve(context))
                 }
                 is IdentityUnlockUiState.Error -> {
-                    ErrorBlock(state.message) {
+                    ErrorBlock(state.message.resolve(context)) {
                         viewModel.dismissError()
                     }
                 }

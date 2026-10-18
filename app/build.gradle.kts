@@ -333,9 +333,15 @@ android {
                 // JAVA_TOOL_OPTIONS: AGP's Robolectric fork ignores Test.systemProperty and
                 // Test.jvmArgs, but reads this environment variable at JVM bootstrap.
                 val coroutinePoolFloor = maxOf(16, Runtime.getRuntime().availableProcessors())
+                // Text-goldens record mode (issue #24): -PrecordTexts rewrites
+                // app/src/test/resources/goldens/*.json instead of asserting. It must ride
+                // JAVA_TOOL_OPTIONS because the Robolectric fork drops Test.systemProperty.
+                val recordTextsArg =
+                    if (project.findProperty("recordTexts") != null) "-DrecordTexts=true " else ""
                 it.environment(
                     "JAVA_TOOL_OPTIONS",
-                    "-Dkotlinx.coroutines.scheduler.core.pool.size=$coroutinePoolFloor " +
+                    recordTextsArg +
+                        "-Dkotlinx.coroutines.scheduler.core.pool.size=$coroutinePoolFloor " +
                         "-Dkotlinx.coroutines.scheduler.max.pool.size=${maxOf(32, coroutinePoolFloor * 2)}",
                 )
                 // Expose the test task's full runtime classpath so tests that

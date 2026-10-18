@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -90,6 +91,7 @@ import network.columba.app.viewmodel.DebugViewModel
 import network.columba.app.viewmodel.SettingsCardId
 import network.columba.app.viewmodel.SettingsViewModel
 import network.columba.app.viewmodel.SharedInstanceAccessEvent
+import network.columba.app.viewmodel.messageResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -202,7 +204,7 @@ fun SettingsScreen(
     // belt-and-suspenders for any other path that hits the gate.
     LaunchedEffect(Unit) {
         viewModel.telemetryCollectorMessage.collect { message ->
-            snackbarHostState.showSnackbar(message)
+            snackbarHostState.showSnackbar(message.resolve(context))
         }
     }
 
@@ -362,7 +364,8 @@ fun SettingsScreen(
                     nextAnnounceTime = state.nextAutoAnnounceTime,
                     isManualAnnouncing = state.isManualAnnouncing,
                     showManualAnnounceSuccess = state.showManualAnnounceSuccess,
-                    manualAnnounceError = state.manualAnnounceError,
+                    manualAnnounceError =
+                        state.manualAnnounceError?.let { it.detail ?: stringResource(it.reason.messageResource()) },
                     onToggle = { viewModel.toggleAutoAnnounce(it) },
                     onIntervalChange = { viewModel.setAnnounceInterval(it) },
                     onManualAnnounce = { viewModel.triggerManualAnnounce() },

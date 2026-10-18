@@ -1,6 +1,7 @@
 package network.columba.app.viewmodel
 
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.columba.app.BuildConfig
+import network.columba.app.R
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.repository.ContactRepository
@@ -97,7 +99,7 @@ data class SettingsState(
     val nextAutoAnnounceTime: Long? = null,
     val isManualAnnouncing: Boolean = false,
     val showManualAnnounceSuccess: Boolean = false,
-    val manualAnnounceError: String? = null,
+    val manualAnnounceError: AnnounceError? = null,
     val identityHash: String? = null,
     val destinationHash: String? = null,
     val showQrDialog: Boolean = false,
@@ -984,13 +986,17 @@ class SettingsViewModel
                         delay(3000)
                         clearManualAnnounceStatus()
                     } else {
-                        val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                        val error =
+                            AnnounceError(
+                                AnnounceErrorReason.UNKNOWN,
+                                result.exceptionOrNull()?.message,
+                            )
                         _state.value =
                             _state.value.copy(
                                 isManualAnnouncing = false,
                                 manualAnnounceError = error,
                             )
-                        Log.e(TAG, "Manual announce failed: $error")
+                        Log.e(TAG, "Manual announce failed: ${error.detail}")
 
                         // Auto-dismiss error message after 5 seconds
                         delay(5000)
@@ -1000,7 +1006,7 @@ class SettingsViewModel
                     _state.value =
                         _state.value.copy(
                             isManualAnnouncing = false,
-                            manualAnnounceError = e.message ?: "Error triggering announce",
+                            manualAnnounceError = AnnounceError(AnnounceErrorReason.TRIGGER_FAILED, e.message),
                         )
                     Log.e(TAG, "Error triggering manual announce", e)
 
@@ -2441,7 +2447,7 @@ class SettingsViewModel
             viewModelScope.launch {
                 telemetryCollectorManager.setEnabledRefused.collect {
                     _telemetryCollectorMessage.emit(
-                        "Location sharing is off. Enable it above (master toggle) to share with a group.",
+                        UiMessage.Text(R.string.location_sharing_off_group_hint),
                     )
                 }
             }
@@ -2452,8 +2458,8 @@ class SettingsViewModel
         // subscribes and renders a Toast. Belt-and-suspenders alongside
         // the preemptive UI disable in LocationSharingCard's
         // TelemetryCollectorSection.
-        private val _telemetryCollectorMessage = MutableSharedFlow<String>(extraBufferCapacity = 4)
-        val telemetryCollectorMessage: SharedFlow<String> = _telemetryCollectorMessage.asSharedFlow()
+        private val _telemetryCollectorMessage = MutableSharedFlow<UiMessage>(extraBufferCapacity = 4)
+        val telemetryCollectorMessage: SharedFlow<UiMessage> = _telemetryCollectorMessage.asSharedFlow()
 
         /**
          * Set the telemetry collector enabled state.

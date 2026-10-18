@@ -365,7 +365,7 @@ class ChatsViewModel
                     if (publicKey == null) {
                         Log.e(TAG, "Cannot save to contacts: Public key not available for ${conversation.peerHash}")
                         _contactToggleResult.emit(
-                            ContactToggleResult.Error("Identity not available - peer hasn't announced"),
+                            ContactToggleResult.Error(ContactToggleErrorReason.IDENTITY_NOT_AVAILABLE),
                         )
                         return@launch
                     }
@@ -387,14 +387,14 @@ class ChatsViewModel
                         onFailure = { error ->
                             Log.e(TAG, "Failed to save ${conversation.peerHash.take(16)} to contacts", error)
                             _contactToggleResult.emit(
-                                ContactToggleResult.Error(error.message ?: "Failed to save contact"),
+                                ContactToggleResult.Error(ContactToggleErrorReason.SAVE_FAILED, error.message),
                             )
                         },
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Error saving to contacts", e)
                     _contactToggleResult.emit(
-                        ContactToggleResult.Error(e.message ?: "Failed to save contact"),
+                        ContactToggleResult.Error(ContactToggleErrorReason.SAVE_FAILED, e.message),
                     )
                 }
             }
@@ -412,7 +412,7 @@ class ChatsViewModel
                 } catch (e: Exception) {
                     Log.e(TAG, "Error removing from contacts", e)
                     _contactToggleResult.emit(
-                        ContactToggleResult.Error(e.message ?: "Failed to remove contact"),
+                        ContactToggleResult.Error(ContactToggleErrorReason.REMOVE_FAILED, e.message),
                     )
                 }
             }

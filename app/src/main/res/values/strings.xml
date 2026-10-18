@@ -376,4 +376,25 @@
     <string name="flasher_ready_to_provision">Ready to provision %1$s</string>
     <string name="flasher_custom_read_failed">Failed to read custom firmware</string>
     <string name="flasher_custom_save_failed">Failed to save custom firmware</string>
+    <!-- ViewModels: messaging, contacts, chats, settings, announce (i18n ticket 06) -->
+    <string name="error_unknown">Unknown error</string>
+    <string name="announce_error_trigger_failed">Error triggering announce</string>
+    <string name="contact_toggle_identity_not_available">Identity not available - peer hasn\'t announced</string>
+    <string name="contact_toggle_update_failed">Failed to update contact</string>
+    <string name="contact_toggle_save_failed">Failed to save contact</string>
+    <string name="contact_toggle_remove_failed">Failed to remove contact</string>
+    <string name="contacts_unexpected_error">Unexpected error</string>
+    <string name="ble_failed_to_refresh">Failed to refresh</string>
+    <string name="location_sharing_off_settings_hint">Location sharing is off. Enable it in Settings → Location Sharing.</string>
+    <string name="location_sharing_off_group_hint">Location sharing is off. Enable it above (master toggle) to share with a group.</string>
+    <string name="attachment_too_large_to_send">Attachment too large to send (%1$s). Maximum is %2$s.</string>
+    <string name="message_deleted">Message deleted</string>
+    <plurals name="images_all_failed_to_compress">
+        <item quantity="one">All %1$d images failed to compress</item>
+        <item quantity="other">All %1$d images failed to compress</item>
+    </plurals>
+    <plurals name="images_some_failed_to_compress">
+        <item quantity="one">%1$d of %2$d images failed to compress</item>
+        <item quantity="other">%1$d of %2$d images failed to compress</item>
+    </plurals>
 </resources>

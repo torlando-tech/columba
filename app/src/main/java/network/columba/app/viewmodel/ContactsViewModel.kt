@@ -1,8 +1,10 @@
 package network.columba.app.viewmodel
 
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import network.columba.app.R
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
@@ -24,6 +26,23 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/**
+ * Fallback classification for add-contact failures. The UI shows
+ * [AddContactResult.Error.detail] verbatim when present (validator or
+ * exception text), otherwise the localized string for the reason.
+ */
+enum class AddContactErrorReason {
+    UNKNOWN,
+    UNEXPECTED,
+}
+
+@StringRes
+fun AddContactErrorReason.messageResource(): Int =
+    when (this) {
+        AddContactErrorReason.UNKNOWN -> R.string.error_unknown
+        AddContactErrorReason.UNEXPECTED -> R.string.contacts_unexpected_error
+    }
 
 /**
  * Result of adding a contact via the new unified input method.
@@ -48,10 +67,13 @@ sealed class AddContactResult {
     ) : AddContactResult()
 
     /**
-     * An error occurred while adding the contact.
+     * An error occurred while adding the contact. [detail] (validator or
+     * exception text) is rendered verbatim when present; otherwise the UI
+     * resolves [reason] to a string resource.
      */
     data class Error(
-        val message: String,
+        val reason: AddContactErrorReason,
+        val detail: String? = null,
     ) : AddContactResult()
 }
 
@@ -439,7 +461,7 @@ class ContactsViewModel
                 val parsed = InputValidator.parseIdentityInput(input)
                 if (parsed is ValidationResult.Error) {
                     Log.w(TAG, "Input validation failed: ${parsed.message}")
-                    return AddContactResult.Error(parsed.message)
+                    return AddContactResult.Error(AddContactErrorReason.UNKNOWN, parsed.message)
                 }
 
                 val identityInput = (parsed as ValidationResult.Success).value
@@ -475,9 +497,9 @@ class ContactsViewModel
                             }
                             AddContactResult.Success
                         } else {
-                            val error = result.exceptionOrNull()?.message ?: "Unknown error"
-                            Log.e(TAG, "Failed to add contact: $error")
-                            AddContactResult.Error(error)
+                            val error = result.exceptionOrNull()?.message
+                            Log.e(TAG, "Failed to add contact: ${error ?: "unknown"}")
+                            AddContactResult.Error(AddContactErrorReason.UNKNOWN, error)
                         }
                     }
 
@@ -506,19 +528,19 @@ class ContactsViewModel
                                 }
                                 null -> {
                                     Log.e(TAG, "Unexpected null result from addPendingContact")
-                                    AddContactResult.Error("Unexpected error")
+                                    AddContactResult.Error(AddContactErrorReason.UNEXPECTED)
                                 }
                             }
                         } else {
-                            val error = result.exceptionOrNull()?.message ?: "Unknown error"
-                            Log.e(TAG, "Failed to add pending contact: $error")
-                            AddContactResult.Error(error)
+                            val error = result.exceptionOrNull()?.message
+                            Log.e(TAG, "Failed to add pending contact: ${error ?: "unknown"}")
+                            AddContactResult.Error(AddContactErrorReason.UNKNOWN, error)
                         }
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error adding contact from input", e)
-                AddContactResult.Error(e.message ?: "Unknown error")
+                AddContactResult.Error(AddContactErrorReason.UNKNOWN, e.message)
             }
         }
 

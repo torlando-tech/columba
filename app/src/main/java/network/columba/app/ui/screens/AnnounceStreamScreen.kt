@@ -75,6 +75,7 @@ import network.columba.app.ui.components.PeerCard
 import network.columba.app.ui.components.SearchableTopAppBar
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.viewmodel.AnnounceStreamViewModel
+import network.columba.app.viewmodel.messageResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -159,7 +160,8 @@ fun AnnounceStreamScreen(
     }
     LaunchedEffect(announceError) {
         announceError?.let { error ->
-            Toast.makeText(context, "Error: $error", Toast.LENGTH_LONG).show()
+            val detail = error.detail ?: context.getString(error.reason.messageResource())
+            Toast.makeText(context, "Error: $detail", Toast.LENGTH_LONG).show()
         }
     }
 

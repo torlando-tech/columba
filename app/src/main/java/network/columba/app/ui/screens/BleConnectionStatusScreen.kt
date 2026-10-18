@@ -60,6 +60,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -72,6 +73,7 @@ import network.columba.app.ui.components.PermissionDeniedCard
 import network.columba.app.ui.components.rememberBluetoothPermissionController
 import network.columba.app.viewmodel.BleConnectionsUiState
 import network.columba.app.viewmodel.BleConnectionsViewModel
+import network.columba.app.viewmodel.messageResource
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -340,7 +342,7 @@ fun BleConnectionStatusScreen(
                             color = MaterialTheme.colorScheme.error,
                         )
                         Text(
-                            text = state.message,
+                            text = state.detail ?: stringResource(state.reason.messageResource()),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

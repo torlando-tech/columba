@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.data.model.ModemPreset
 import network.columba.app.viewmodel.RNodeWizardViewModel
 
@@ -54,7 +55,7 @@ fun ModemPresetStep(viewModel: RNodeWizardViewModel) {
     ) {
         // Header
         Text(
-            text = "Select Modem Preset",
+            text = stringResource(R.string.rnode_wizard_modem_preset_title),
             style = MaterialTheme.typography.headlineSmall,
         )
 
@@ -62,8 +63,7 @@ fun ModemPresetStep(viewModel: RNodeWizardViewModel) {
 
         Text(
             text =
-                "Choose a preset that matches your range and speed needs. " +
-                    "These are compatible with Meshtastic naming conventions.",
+                stringResource(R.string.rnode_wizard_modem_desc),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -149,7 +149,7 @@ private fun ModemPresetCard(
                             onClick = {},
                             label = {
                                 Text(
-                                    text = "Recommended",
+                                    text = stringResource(R.string.rnode_wizard_recommended),
                                     style = MaterialTheme.typography.labelSmall,
                                 )
                             },
@@ -183,7 +183,7 @@ private fun ModemPresetCard(
             if (isSelected) {
                 Icon(
                     imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
+                    contentDescription = stringResource(R.string.rnode_wizard_selected),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }

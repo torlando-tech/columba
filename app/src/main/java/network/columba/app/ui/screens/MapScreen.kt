@@ -254,7 +254,7 @@ fun MapScreen(
     // LocationSharingManager; this is purely user feedback.
     LaunchedEffect(Unit) {
         viewModel.locationSharingMessage.collect { message ->
-            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(context, message.resolve(context), android.widget.Toast.LENGTH_LONG).show()
         }
     }
 
@@ -342,7 +342,7 @@ fun MapScreen(
                     .fromGeometry(
                         Point.fromLngLat(displayLng, displayLat),
                     ).apply {
-                        addStringProperty("name", marker.displayName)
+                        addStringProperty("name", marker.displayName.resolve(context))
                         addStringProperty("hash", marker.destinationHash)
                         addStringProperty("imageId", imageId)
                         addStringProperty("state", marker.state.name)
@@ -1017,7 +1017,7 @@ fun MapScreen(
                                 iconName = marker.iconName,
                                 foregroundColor = marker.iconForegroundColor,
                                 backgroundColor = marker.iconBackgroundColor,
-                                displayName = marker.displayName,
+                                displayName = marker.displayName.resolve(context),
                                 density = screenDensity,
                                 context = context,
                             )
@@ -1025,11 +1025,11 @@ fun MapScreen(
                             null
                         } ?: run {
                             // Fallback to initials marker
-                            val initial = marker.displayName.firstOrNull() ?: '?'
+                            val initial = marker.displayName.resolve(context).firstOrNull() ?: '?'
                             val color = MarkerBitmapFactory.hashToColor(marker.destinationHash)
                             MarkerBitmapFactory.createInitialMarker(
                                 initial = initial,
-                                displayName = marker.displayName,
+                                displayName = marker.displayName.resolve(context),
                                 backgroundColor = color,
                                 density = screenDensity,
                             )
@@ -1051,7 +1051,7 @@ fun MapScreen(
                         .fromGeometry(
                             Point.fromLngLat(marker.longitude, marker.latitude),
                         ).apply {
-                            addStringProperty("name", marker.displayName)
+                            addStringProperty("name", marker.displayName.resolve(context))
                             addStringProperty("hash", marker.destinationHash)
                             addStringProperty("imageId", imageId)
                             addStringProperty("state", marker.state.name)

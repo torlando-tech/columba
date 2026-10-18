@@ -785,7 +785,7 @@ class OnboardingViewModelTest {
 
             viewModel.state.test {
                 val state = awaitItem()
-                assertEquals("Test error", state.error)
+                assertEquals(UiMessage.Raw("Test error"), state.error)
                 assertFalse(state.isSaving)
             }
         }
@@ -802,7 +802,7 @@ class OnboardingViewModelTest {
 
             viewModel.state.test {
                 val state = awaitItem()
-                assertEquals("Skip error", state.error)
+                assertEquals(UiMessage.Raw("Skip error"), state.error)
                 assertFalse(state.isSaving)
             }
         }

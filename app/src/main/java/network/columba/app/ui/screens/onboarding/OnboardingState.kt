@@ -1,6 +1,7 @@
 package network.columba.app.ui.screens.onboarding
 
 import androidx.compose.runtime.Immutable
+import network.columba.app.viewmodel.UiMessage
 
 /**
  * State for the paged onboarding flow.
@@ -17,7 +18,7 @@ data class OnboardingState(
     val isSaving: Boolean = false,
     val isLoading: Boolean = true,
     val hasCompletedOnboarding: Boolean = false,
-    val error: String? = null,
+    val error: UiMessage? = null,
     val blePermissionsGranted: Boolean = false,
     val blePermissionsDenied: Boolean = false,
 )

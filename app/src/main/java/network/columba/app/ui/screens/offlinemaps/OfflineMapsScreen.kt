@@ -56,6 +56,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -76,6 +77,7 @@ fun OfflineMapsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     // File picker launcher for MBTiles import
     val importLauncher =
@@ -88,7 +90,7 @@ fun OfflineMapsScreen(
     // Show error in snackbar
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { error ->
-            snackbarHostState.showSnackbar(error)
+            snackbarHostState.showSnackbar(error.resolve(context))
             viewModel.clearError()
         }
     }
@@ -96,7 +98,7 @@ fun OfflineMapsScreen(
     // Show import success in snackbar
     LaunchedEffect(state.importSuccessMessage) {
         state.importSuccessMessage?.let { message ->
-            snackbarHostState.showSnackbar(message)
+            snackbarHostState.showSnackbar(message.resolve(context))
             viewModel.clearImportSuccess()
         }
     }
@@ -277,6 +279,7 @@ fun OfflineMapRegionCard(
     onToggleDefault: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showUpdateDialog by remember { mutableStateOf(false) }
 
@@ -457,7 +460,7 @@ fun OfflineMapRegionCard(
                                         tint = MaterialTheme.colorScheme.error,
                                     )
                                     Text(
-                                        text = updateCheckResult.error,
+                                        text = updateCheckResult.error.resolve(context),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.error,
                                     )

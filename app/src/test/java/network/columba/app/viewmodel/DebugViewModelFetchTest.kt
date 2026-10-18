@@ -164,12 +164,12 @@ class DebugViewModelFetchTest {
             DebugInfo(
                 initialized = true,
                 reticulumAvailable = false,
-                error = errorMessage,
+                error = errorMessage?.let { UiMessage.Raw(it) },
             )
 
         assertTrue(debugInfo.initialized)
         assertEquals(false, debugInfo.reticulumAvailable)
-        assertEquals("Connection timeout", debugInfo.error)
+        assertEquals(UiMessage.Raw("Connection timeout"), debugInfo.error)
     }
 
     @Test
@@ -319,7 +319,7 @@ class DebugViewModelFetchTest {
                 transportEnabled = true,
             )
 
-        val updatedInfo = originalInfo.copy(error = "New error occurred")
+        val updatedInfo = originalInfo.copy(error = UiMessage.Raw("New error occurred"))
 
         // Original fields preserved
         assertTrue(updatedInfo.initialized)
@@ -328,7 +328,7 @@ class DebugViewModelFetchTest {
         assertEquals(2, updatedInfo.interfaceCount)
         assertTrue(updatedInfo.transportEnabled)
         // New error set
-        assertEquals("New error occurred", updatedInfo.error)
+        assertEquals(UiMessage.Raw("New error occurred"), updatedInfo.error)
     }
 
     @Test
@@ -454,8 +454,8 @@ class DebugViewModelFetchTest {
                 multicastLockHeld = pythonDebugInfo["multicast_lock_held"] as? Boolean ?: false,
                 wakeLockHeld = wakeLockHeld,
                 error =
-                    pythonDebugInfo["error"] as? String
-                        ?: if (status is NetworkStatus.ERROR) status.message else null,
+                    (pythonDebugInfo["error"] as? String)?.let { UiMessage.Raw(it) }
+                        ?: if (status is NetworkStatus.ERROR) UiMessage.Raw(status.message) else null,
             )
 
         // Verify the complete result
@@ -595,9 +595,9 @@ class DebugViewModelFetchTest {
                 error = null,
             )
 
-        val updated = original.copy(error = "Test error")
+        val updated = original.copy(error = UiMessage.Raw("Test error"))
 
-        assertEquals("Test error", updated.error)
+        assertEquals(UiMessage.Raw("Test error"), updated.error)
         assertTrue(updated.initialized)
         assertEquals(3, updated.interfaceCount)
         assertEquals(1, updated.interfaces.size)

@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.ApkSharingState
 import network.columba.app.viewmodel.ApkSharingViewModel
+import network.columba.app.viewmodel.UiMessage
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,7 +105,7 @@ class ApkSharingScreenTest {
     fun `displays error message when present`() {
         val viewModel =
             createMockViewModel(
-                ApkSharingState(errorMessage = "No WiFi connection detected."),
+                ApkSharingState(errorMessage = UiMessage.Raw("No WiFi connection detected.")),
             )
 
         composeTestRule.setContent {
@@ -121,7 +122,7 @@ class ApkSharingScreenTest {
     fun `does not show QR code when error is present`() {
         val viewModel =
             createMockViewModel(
-                ApkSharingState(errorMessage = "Some error"),
+                ApkSharingState(errorMessage = UiMessage.Raw("Some error")),
             )
 
         composeTestRule.setContent {

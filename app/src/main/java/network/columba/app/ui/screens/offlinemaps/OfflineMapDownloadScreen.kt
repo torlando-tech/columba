@@ -79,6 +79,7 @@ import network.columba.app.viewmodel.DownloadProgress
 import network.columba.app.viewmodel.DownloadWizardStep
 import network.columba.app.viewmodel.OfflineMapDownloadViewModel
 import network.columba.app.viewmodel.RadiusOption
+import network.columba.app.viewmodel.UiMessage
 import java.util.Locale
 
 private const val TAG = "OfflineMapDownload"
@@ -118,12 +119,13 @@ fun OfflineMapDownloadScreen(
     // into a single Toast so they don't conflict or get lost on navigation.
     LaunchedEffect(state.isComplete) {
         if (state.isComplete) {
+            val styleWarning = state.styleCacheWarning?.resolve(context)
             val message =
                 when {
-                    state.styleCacheWarning != null && state.httpAutoDisabled ->
-                        state.styleCacheWarning +
+                    styleWarning != null && state.httpAutoDisabled ->
+                        styleWarning +
                             " Note: HTTP was auto-disabled and must be re-enabled before retrying."
-                    state.styleCacheWarning != null -> state.styleCacheWarning
+                    styleWarning != null -> styleWarning
                     state.httpAutoDisabled -> "HTTP disabled. Your offline maps are ready."
                     else -> null
                 }
@@ -139,7 +141,7 @@ fun OfflineMapDownloadScreen(
     // Show error in snackbar
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { error ->
-            snackbarHostState.showSnackbar(error)
+            snackbarHostState.showSnackbar(error.resolve(context))
             viewModel.clearError()
         }
     }
@@ -291,7 +293,7 @@ fun LocationSelectionStep(
     addressQuery: String,
     addressSearchResults: List<AddressSearchResult>,
     isSearchingAddress: Boolean,
-    addressSearchError: String?,
+    addressSearchError: UiMessage?,
     httpEnabled: Boolean,
     onLocationSet: (Double, Double) -> Unit,
     onCurrentLocationRequest: (Location) -> Unit,
@@ -520,7 +522,7 @@ fun LocationSelectionStep(
                     },
                     supportingText = {
                         addressSearchError?.let { error ->
-                            Text(error, color = MaterialTheme.colorScheme.error)
+                            Text(error.resolve(context), color = MaterialTheme.colorScheme.error)
                         }
                     },
                     isError = addressSearchError != null,
@@ -543,7 +545,7 @@ fun LocationSelectionStep(
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
                                     Text(
-                                        text = result.displayName,
+                                        text = result.displayName.resolve(context),
                                         modifier = Modifier.weight(1f),
                                     )
                                 }
@@ -1004,11 +1006,12 @@ fun DownloadingStep(
             Spacer(modifier = Modifier.height(16.dp))
             Text("Preparing download...")
         } else {
+            val context = LocalContext.current
             val statusText =
                 when {
                     progress.isComplete -> "Complete!"
                     progress.errorMessage != null -> "Error"
-                    progress.statusMessage != null -> progress.statusMessage
+                    progress.statusMessage != null -> progress.statusMessage.resolve(context)
                     progress.progress > 0 -> "Downloading..."
                     else -> "Preparing..."
                 }

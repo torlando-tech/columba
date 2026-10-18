@@ -5,6 +5,7 @@ import android.location.Location
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
+import network.columba.app.R
 import network.columba.app.data.repository.OfflineMapRegion
 import network.columba.app.data.repository.OfflineMapRegionRepository
 import network.columba.app.map.MapLibreOfflineManager
@@ -914,8 +915,10 @@ class OfflineMapDownloadViewModelTest {
 
             viewModel.state.test {
                 val state = expectMostRecentItem()
-                assertNotNull(state.errorMessage)
-                assertTrue(state.errorMessage!!.contains("Network error"))
+                assertEquals(
+                    UiMessage.Text(R.string.offline_map_download_failed, listOf("Network error")),
+                    state.errorMessage,
+                )
                 assertEquals("Network error", state.downloadProgress?.errorMessage)
 
                 cancelAndConsumeRemainingEvents()
@@ -1254,7 +1257,7 @@ class OfflineMapDownloadViewModelTest {
             // Select a result
             val result =
                 AddressSearchResult(
-                    displayName = "Dallas, TX, USA",
+                    displayName = UiMessage.Raw("Dallas, TX, USA"),
                     latitude = 32.7767,
                     longitude = -96.7970,
                 )
@@ -1296,7 +1299,7 @@ class OfflineMapDownloadViewModelTest {
 
             val result =
                 AddressSearchResult(
-                    displayName = "Los Angeles, CA, USA",
+                    displayName = UiMessage.Raw("Los Angeles, CA, USA"),
                     latitude = 34.0522,
                     longitude = -118.2437,
                 )

@@ -50,6 +50,7 @@ import network.columba.app.service.LocalHotspotManager
 import network.columba.app.ui.components.QrCodeImage
 import network.columba.app.viewmodel.ApkSharingViewModel
 import network.columba.app.viewmodel.SharingMode
+import network.columba.app.viewmodel.UiMessage
 
 /**
  * Screen for sharing the Columba APK with another device.
@@ -156,7 +157,7 @@ fun ApkSharingScreen(
 private fun SharingSection(
     isServerRunning: Boolean,
     downloadUrl: String?,
-    errorMessage: String?,
+    errorMessage: UiMessage?,
     apkSizeBytes: Long,
     sharingMode: SharingMode?,
     hotspotSsid: String?,
@@ -166,6 +167,7 @@ private fun SharingSection(
     onStartHotspot: () -> Unit,
     onRequestPermissions: () -> Unit,
 ) {
+    val context = LocalContext.current
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -211,7 +213,7 @@ private fun SharingSection(
 
             errorMessage != null && !needsHotspotPermission -> {
                 // Error state with optional hotspot button
-                ErrorCard(errorMessage)
+                ErrorCard(errorMessage.resolve(context))
 
                 // Offer hotspot as fallback when WiFi isn't available
                 if (LocalHotspotManager.isSupported() && sharingMode == null) {

@@ -106,7 +106,7 @@ fun ContactLocationBottomSheet(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = marker.displayName,
+                            text = marker.displayName.resolve(context),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )

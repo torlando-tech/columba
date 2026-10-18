@@ -13,13 +13,21 @@ sealed interface UiMessage {
     /** Resolve this message to display text for the current locale. */
     fun resolve(context: Context): String
 
-    /** A plain string resource with optional format arguments. */
+    /**
+     * A plain string resource with optional format arguments. An argument may
+     * itself be a [UiMessage] (e.g. a localized fallback inside a
+     * "Something failed: %1$s" wrapper); nested messages resolve recursively.
+     */
     data class Text(
         @StringRes val id: Int,
         val args: List<Any> = emptyList(),
     ) : UiMessage {
         @Suppress("SpreadOperator") // getString's vararg signature is the platform API shape
-        override fun resolve(context: Context): String = context.getString(id, *args.toTypedArray())
+        override fun resolve(context: Context): String =
+            context.getString(
+                id,
+                *args.map { arg -> if (arg is UiMessage) arg.resolve(context) else arg }.toTypedArray(),
+            )
     }
 
     /** A plurals resource resolved with [quantity] plus format arguments. */

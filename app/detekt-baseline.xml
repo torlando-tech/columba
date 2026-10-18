@@ -283,52 +283,6 @@
     <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Selected"</ID>
     <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"VID: ${formatHex(device.vendorId)} | PID: ${formatHex(device.productId)}"</ID>
     <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Waiting for USB permission..."</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Add to Config"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Auto-connect limit"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Available"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Bootstrap Interfaces"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Clear filters"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Clear search"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Clear"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Connected"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Copy Params"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Discovered Interfaces"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"I2P (Invisible Internet Project) is an anonymous overlay network. To connect "</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"I2P Network"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"I2P network"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"I2P or i2pd app from F-Droid and start it before connecting."</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"IFAC only"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"IFAC-protected interfaces only"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"IFAC: "</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Interface Discovery"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Interfaces announced by other nodes will appear here once discovery is active."</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"It's available on F-Droid and Google Play."</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Last heard: ${formatLastHeard(iface.lastHeard)}"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"LoRa parameters copied"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Network info"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"No Discovered Interfaces"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"No discovered interfaces match the current search or filters."</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"No matches"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Only TCP interfaces can be added currently"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Open in maps"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Radio interface"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Refresh"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Search by name, type, host, or IFAC network"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Skip auto-connect for public interfaces; only join networks that announced IFAC credentials."</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Stale"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"TCP network"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"These interfaces will auto-detach once discovered interfaces connect."</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Total"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Unknown interface"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Unknown"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Use for RNode"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Yggdrasil Network"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Yggdrasil is an encrypted IPv6 mesh network. To connect to this "</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Yggdrasil network"</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"interface, you need the Yggdrasil app installed and running on your device. "</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"to this interface, you need an I2P daemon running on your device. Install the "</ID>
-    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"transport: ${transportId.take(12)}..."</ID>
     <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"(Required)"</ID>
     <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"About microReticulum"</ID>
     <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"After flashing, you will be prompted to configure the radio parameters for transport mode."</ID>
@@ -595,79 +549,6 @@
     <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Decline call"</ID>
     <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Decline"</ID>
     <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Incoming Voice Call"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"$peerCount peer${if (peerCount != 1) "s" else ""}"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"$totalCount interfaces found via RNS Discovery"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"$typeLabel interface"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Accept incoming connections from other Reticulum nodes"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Add Interface"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Advanced"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"An error occurred while applying configuration changes:"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Apply &amp; Restart"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Applying Changes"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Applying interface changes restarts Reticulum on this backend. "</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Are you sure you want to delete \"$interfaceName\"? This action cannot be undone."</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Auto Discovery"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Automatically discover peers on local network"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"BLE permission required"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Bluetooth LE"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Connect to a remote Reticulum transport node"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Connects to separate RNode hardware via BLE or Bluetooth Classic"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Delete Interface?"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Delete"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Direct connection to Columba users and Linux ble-reticulum devices"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Discovered"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Discovery enabled - no interfaces found yet"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Enabled"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Failed to Apply Changes"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Grant"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Interface Discovery"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Interface Issue"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Network Interfaces"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"No interfaces configured"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"RNode LoRa"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Restarting Reticulum network..."</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Select Interface Type"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Shared Instance host"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"TCP Client"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"TCP Server"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Tap + to add your first network interface"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Tap to configure RNS 1.1.x interface discovery"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"This may take a few seconds"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Total"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"View details"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"You'll briefly disconnect from peers, and any in-progress "</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Your changes have been saved to the database. Try applying them again, or restart the app."</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"available"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"stale"</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"transfers will be interrupted. This usually takes a few seconds."</ID>
-    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"unknown"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Bandwidth"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Coding Rate"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Connection"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Device"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Edit Configuration"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Frequency"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Go Back"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Grant USB Permission"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Grant permission to connect to the USB device"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Listen Port"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Mode"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"RSSI"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Radio Settings"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Received"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"SNR"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Server"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Spreading Factor"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Status"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"TX Power"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Traffic Statistics"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Transmitted"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Type"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"USB Device"</ID>
-    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"USB permission required"</ID>
     <ID>NoHardcodedUiString:LocationSharingCard.kt$"$localDisplayName (myself)"</ID>
     <ID>NoHardcodedUiString:LocationSharingCard.kt$"${selectedHashes.size} contact(s) selected"</ID>
     <ID>NoHardcodedUiString:LocationSharingCard.kt$"15min"</ID>
@@ -1206,25 +1087,6 @@
     <ID>NoHardcodedUiString:TncConfigurationStep.kt$"TX: ${selectedRegion.defaultTxPower} dBm (max ${selectedRegion.maxTxPower})"</ID>
     <ID>NoHardcodedUiString:TncConfigurationStep.kt$"These settings are saved to the device."</ID>
     <ID>NoHardcodedUiString:TncConfigurationStep.kt$"microReticulum operates as a standalone transport node. "</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Clear saved config and return to normal mode"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Clearing configuration and resetting device..."</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Configure RNode"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Configure Transport"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Disable Transport Mode?"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Disable Transport"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Disable"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Disabling Transport"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Flash RNode Firmware"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"It will return to normal host-controlled mode."</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"RNode options"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Set radio parameters for standalone transport mode"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Set up this device as a Reticulum interface"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"This will clear the saved radio configuration and reset the device. "</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"USB Device Connected"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Update Pyxis"</ID>
-    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Update or install RNode firmware on this device"</ID>
     <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"All permissions granted. Incoming voice calls will show a full-screen call screen."</ID>
     <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Display over other apps"</ID>
     <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Full-screen notifications"</ID>

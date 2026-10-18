@@ -375,69 +375,6 @@
     <ID>NoHardcodedUiString:IdentityCard.kt$"Manage Identities"</ID>
     <ID>NoHardcodedUiString:IdentityCard.kt$"View My Identity"</ID>
     <ID>NoHardcodedUiString:IdentityCard.kt$"View and share your identity, edit your display name, and manage QR codes for contact sharing."</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"- All contacts"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"- All conversations"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"- All messages"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"- Identity keys"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Active"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Base32 Key"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"CANCEL"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"CREATE"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Choose how to import your identity:"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Copy Key as Text"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Copy"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Create New Identity"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Create identity"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Create your first identity to start using Columba, or import an existing identity from a backup file."</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Current: ${currentIdentity?.displayName ?: "None"}"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"DELETE"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"DONE"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Delete Identity?"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Delete"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Deleting \"${identity.displayName}\" will permanently remove:"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Display Name"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Enter a display name for the identity extracted from the Sideband backup."</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Enter a display name for the imported identity."</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Enter a display name for this identity. You can use this to manage different personas or use cases."</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Enter a new display name:"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Export as File"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Export this identity first if you want to back it up."</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"From Identity File"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"From Sideband Backup"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"IMPORT"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Identity Key"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Identity Manager"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Identity: ${identity.identityHash.take(16)}..."</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Import Identity"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Import Key from Text"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Import from File"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Import from Sideband Backup"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Import identity"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"More options"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Navigate back"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"New: ${identity.displayName}"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"No Identities Yet"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Paste Base32 Key"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Paste Key"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Paste a Base32-encoded identity key (e.g., from Sideband)."</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Paste identity key here..."</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Paste key"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Rename Identity"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Rename"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Restarting network service..."</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"SAVE"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"SWITCH"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Share"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Switch Identity?"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Switch to"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Switching to \"${identity.displayName}\" will restart the network service."</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"This action cannot be undone"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"This key can be imported in Sideband or another Columba instance."</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"This may take a few seconds"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"You will see only the conversations, contacts, and messages associated with this identity."</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"e.g., Backup, Restored Identity"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"e.g., Sideband Identity"</ID>
-    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"e.g., Work, Personal, Anonymous"</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"Anonymous Peer"</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"Back"</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"Choose a display name others will see:"</ID>
@@ -445,98 +382,6 @@
     <ID>NoHardcodedUiString:IdentityPage.kt$"Display Name"</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"You can change this anytime, or create multiple identities for different contexts."</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"Your Identity"</ID>
-    <ID>NoHardcodedUiString:IdentityQrCodeDialog.kt$"Destination Hash (LXMF)"</ID>
-    <ID>NoHardcodedUiString:IdentityQrCodeDialog.kt$"Identity Hash"</ID>
-    <ID>NoHardcodedUiString:IdentityQrCodeDialog.kt$"Share Identity"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Another Reticulum app may be using this interface. "</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"BLE Connections"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"BLE connections are not available while using a shared Reticulum instance. "</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Bluetooth Settings"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Bluetooth is turned off"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Bluetooth is turned on"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Bluetooth permissions required"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Central"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Check that the device is powered on, in range, and properly configured."</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Close other apps or disable this interface in Settings."</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Close"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Copy"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Destination Hash (LXMF)"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Destination"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Dismiss"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Display Name"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Error sending announce"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Error: ${error.resolve(context)}"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Error: ${uiState.detail ?: stringResource(uiState.reason.messageResource())}"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Hash: ${testResult.hexHash}"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Identity Hash"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Initialized"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Loading connections..."</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Manage interfaces"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Manually stop or restart the background Reticulum service."</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Network Interfaces (${interfaces.size})"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Network Status"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"No active BLE connections"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"No interfaces configured"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Only Columba's own instance can initiate Bluetooth LE connections."</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Peripheral"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Restart"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Reticulum Status"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Scan this QR code to add me as a contact"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Scan"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Send Test Announce"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Service Control"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Service control is disabled while using a shared Reticulum instance. "</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Share"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Shutdown Service?"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Shutdown"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Tap to view full identity details and QR code for sharing"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Test Actions"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Test announce sent!"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"The network service is managed by another app (e.g., Sideband)."</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"This interface failed to start:"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"This interface is currently offline and not passing traffic."</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"This will stop the background Reticulum service. You will not receive messages until you restart the app or manually restart the service."</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Total"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Turn ON"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"View Details"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"View QR Code"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"View details"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Your Identity"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Choose another file"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Different identity"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Existing: ${active.take(8)}…\n\n"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Got it"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Import identity file"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Imported: ${imported.take(8)}…\n"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Importing the identity file you exported before switching devices "</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Keystore key. Keystore keys are tied to the app's install ID and don't "</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Looking for: ${identity.displayName} (${identity.identityHash.take(8)}…)"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Restore your identity"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Start fresh"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Start fresh?"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"The app will restart to finish setting up."</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"The file was not imported. Choose the original identity file that matches "</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"The file you picked holds a different identity than the one on this device.\n\n"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"This removes your old identity and takes you through onboarding to create "</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Try again"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Why did this happen?"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Why this happens"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Your identity's private key is wrapped with a hardware-backed Android "</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Your messages and contacts were restored from backup, but your identity "</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"a new one. Your restored messages and contacts were tied to the old "</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"back but the identity couldn't decrypt itself.\n\n"</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"cross a factory reset or device swap — even when the app data is "</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"identity, so they'll disappear from the app — and peers on the other "</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"keys couldn't come back across devices. Import the identity file you "</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"lets us re-wrap the same identity with this device's Keystore key."</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"restored from cloud backup. That's why messages and contacts came "</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"saved before switching phones to continue using the same identity — or "</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"side of any existing conversations won't recognize the new identity. "</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"start fresh with a new one."</ID>
-    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"the restored identity."</ID>
     <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Auto mode detects your network type and selects the optimal preset."</ID>
     <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Image Compression"</ID>
     <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Max: ${formatDimension(displayPreset.maxDimensionPx)}px, "</ID>
@@ -742,56 +587,6 @@
     <ID>NoHardcodedUiString:ModemPresetStep.kt$"Select Modem Preset"</ID>
     <ID>NoHardcodedUiString:ModemPresetStep.kt$"Selected"</ID>
     <ID>NoHardcodedUiString:ModemPresetStep.kt$"These are compatible with Meshtastic naming conventions."</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Close"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Copy $label"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Copy Identity Link"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Copy"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Current: $currentDisplayName"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Custom Display Name"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Customize your profile icon that others will see. "</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Default: $defaultDisplayName"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Destination Hash (LXMF)"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Destination Hash"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Display Name &amp; Identity"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Display name saved successfully"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Full Screen"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Generating QR code..."</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Got it"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Identity Hash"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Identity"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Info about $label"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"It's safe to share publicly and allows others to:\n"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Leave empty to use default"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"My Identity"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Profile Icon"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Public Key"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"QR Code"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Save"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Scan this QR code to add me as a contact"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Scan to add $displayName as a contact"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Share Your Identity"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Share"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Think of it like a username that:\n"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"This is compatible with Sideband and other Reticulum apps."</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"This is what peers use to:\n"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"View QR"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"What is a Destination Hash?"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"What is a Public Key?"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"What is an Identity Hash?"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Your LXMF destination hash is derived from your identity and is used for sending and receiving messages.\n\n"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Your display name is shown to other peers when you send announces and messages."</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Your identity hash is a unique cryptographic fingerprint derived from your public key.\n\n"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Your public key is the cryptographic key that enables secure messaging.\n\n"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Add you as a contact"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Allows others to verify your identity"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Cannot be changed or duplicated\n"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Encrypt messages only you can read\n"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Establish secure communication"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Find you on the network\n"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Proves messages came from you\n"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Send you messages\n"</ID>
-    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Verify your identity\n"</ID>
     <ID>NoHardcodedUiString:NetworkCard.kt$"BLE Connections"</ID>
     <ID>NoHardcodedUiString:NetworkCard.kt$"Manage Interfaces"</ID>
     <ID>NoHardcodedUiString:NetworkCard.kt$"Monitor your Reticulum network status, active interfaces, BLE connections, and connection diagnostics."</ID>
@@ -1109,16 +904,6 @@
     <ID>NoHardcodedUiString:WelcomePage.kt$"Restore from backup"</ID>
     <ID>NoHardcodedUiString:WelcomePage.kt$"Welcome to Columba"</ID>
     <ID>NoHardcodedUiString:WelcomePage.kt$"Your identity is generated and stored securely on your device. You control it completely."</ID>
-    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Anonymous Peer"</ID>
-    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Choose Your Display Name"</ID>
-    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Columba"</ID>
-    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Display Name"</ID>
-    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Restore from backup"</ID>
-    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Secure mesh messaging over Reticulum"</ID>
-    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Skip"</ID>
-    <ID>NoHardcodedUiString:WelcomeScreen.kt$"This name will be visible to other peers when you send messages and announces."</ID>
-    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Welcome to Columba"</ID>
-    <ID>NoHardcodedUiString:WelcomeScreen.kt$"You can change this later in Settings"</ID>
     <ID>ReturnCount:BatteryOptimizationManager.kt$BatteryOptimizationManager$fun shouldPromptForExemption(context: Context): Boolean</ID>
     <ID>ReturnCount:DebugViewModel.kt$DebugViewModel$fun generateShareText(displayName: String): String?</ID>
     <ID>ReturnCount:IdentityQrCodeUtils.kt$IdentityQrCodeUtils$fun decodeFromQrString(qrString: String): IdentityData?</ID>

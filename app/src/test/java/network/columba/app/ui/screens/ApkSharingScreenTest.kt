@@ -5,6 +5,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
+import network.columba.app.R
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.ApkSharingState
 import network.columba.app.viewmodel.ApkSharingViewModel
@@ -36,6 +38,9 @@ class ApkSharingScreenTest {
             every { createShareIntent() } returns null
         }
 
+    private fun resText(id: Int, vararg args: Any): String =
+        ApplicationProvider.getApplicationContext<Application>().getString(id, *args)
+
     // ========== Top Bar Tests ==========
 
     @Test
@@ -49,7 +54,7 @@ class ApkSharingScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Share Columba").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.settings_share_columba_title)).assertIsDisplayed()
     }
 
     @Test
@@ -64,9 +69,9 @@ class ApkSharingScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Back").assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.back)).assertDoesNotExist()
         // Back button is an icon button with content description
-        composeTestRule.onNodeWithText("Share Columba").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.settings_share_columba_title)).assertIsDisplayed()
     }
 
     // ========== Loading State Tests ==========
@@ -82,7 +87,7 @@ class ApkSharingScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Starting sharing server...").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_starting_server)).assertIsDisplayed()
     }
 
     @Test
@@ -96,7 +101,7 @@ class ApkSharingScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Share via WiFi").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_via_wifi)).assertIsDisplayed()
     }
 
     // ========== Error State Tests ==========
@@ -132,7 +137,7 @@ class ApkSharingScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Have the other person scan this QR code").assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_scan_qr)).assertDoesNotExist()
     }
 
     // ========== Server Running State Tests ==========
@@ -156,7 +161,7 @@ class ApkSharingScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Have the other person scan this QR code").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_scan_qr)).assertIsDisplayed()
     }
 
     @Test
@@ -199,7 +204,7 @@ class ApkSharingScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("APK size: 15.0 MB").assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_apk_size, 15.0)).assertExists()
     }
 
     @Test
@@ -221,7 +226,9 @@ class ApkSharingScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("APK size:", substring = true).assertDoesNotExist()
+        composeTestRule
+            .onNodeWithText(resText(R.string.apk_sharing_apk_size, 1.0).substringBefore(" 1.0"), substring = true)
+            .assertDoesNotExist()
     }
 
     @Test
@@ -242,9 +249,9 @@ class ApkSharingScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Instructions").assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_instructions)).assertExists()
         composeTestRule
-            .onNodeWithText("Both phones must be on the same WiFi network", substring = true)
+            .onNodeWithText(resText(R.string.apk_sharing_instr_wifi_1), substring = true)
             .assertExists()
     }
 
@@ -266,10 +273,10 @@ class ApkSharingScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("1. Both phones", substring = true).assertExists()
-        composeTestRule.onNodeWithText("2. Open the camera", substring = true).assertExists()
-        composeTestRule.onNodeWithText("3. Tap the link", substring = true).assertExists()
-        composeTestRule.onNodeWithText("4. Download and install", substring = true).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_instruction_step, 1, resText(R.string.apk_sharing_instr_wifi_1)), substring = true).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_instruction_step, 2, resText(R.string.apk_sharing_instr_wifi_2)), substring = true).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_instruction_step, 3, resText(R.string.apk_sharing_instr_wifi_3)), substring = true).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_instruction_step, 4, resText(R.string.apk_sharing_instr_download_install)), substring = true).assertExists()
     }
 
     // ========== Alternative Sharing Section Tests ==========
@@ -285,8 +292,8 @@ class ApkSharingScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Or share another way").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Share APK via...").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_or_share)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_share_via)).assertIsDisplayed()
     }
 
     @Test
@@ -301,7 +308,7 @@ class ApkSharingScreenTest {
         }
 
         composeTestRule
-            .onNodeWithText("Use Bluetooth, Nearby Share, or any other installed sharing app.")
+            .onNodeWithText(resText(R.string.apk_sharing_alt_share_desc))
             .assertIsDisplayed()
     }
 
@@ -317,8 +324,8 @@ class ApkSharingScreenTest {
         }
 
         // Clicking share when createShareIntent returns null should not crash
-        composeTestRule.onNodeWithText("Share APK via...").performClick()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_share_via)).performClick()
         // UI should remain intact after the click
-        composeTestRule.onNodeWithText("Share APK via...").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.apk_sharing_share_via)).assertIsDisplayed()
     }
 }

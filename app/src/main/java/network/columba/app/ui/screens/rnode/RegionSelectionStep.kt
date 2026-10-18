@@ -261,7 +261,7 @@ private fun FrequencyRegionCard(
                     )
                     if (region.hasDutyCycleLimit) {
                         SettingChip(
-                            label = "${region.dutyCycle}% duty",
+                            label = stringResource(R.string.rnode_wizard_region_duty_chip, region.dutyCycle),
                             isSelected = isSelected,
                         )
                     }

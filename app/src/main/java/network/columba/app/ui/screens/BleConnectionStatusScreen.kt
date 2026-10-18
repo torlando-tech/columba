@@ -60,11 +60,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
 import network.columba.app.data.model.BleConnectionInfo
 import network.columba.app.data.model.ConnectionType
 import network.columba.app.data.model.SignalQuality
@@ -120,15 +122,15 @@ fun BleConnectionStatusScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("BLE Connections") },
+                title = { Text(stringResource(R.string.identity_ble_connections)) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.iface_refresh))
                     }
                 },
                 colors =
@@ -151,7 +153,7 @@ fun BleConnectionStatusScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("Loading connections...")
+                        Text(stringResource(R.string.identity_loading_connections))
                     }
                 }
             }
@@ -176,13 +178,13 @@ fun BleConnectionStatusScreen(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = "Bluetooth is turned off",
+                            text = stringResource(R.string.identity_bluetooth_off),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            text = "Turn on Bluetooth to see BLE connections",
+                            text = stringResource(R.string.ble_status_turn_on_bluetooth_hint),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -197,7 +199,7 @@ fun BleConnectionStatusScreen(
                                 contentDescription = null,
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Turn ON")
+                            Text(stringResource(R.string.identity_turn_on))
                         }
 
                         Card(
@@ -218,7 +220,7 @@ fun BleConnectionStatusScreen(
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 )
                                 Text(
-                                    text = "Enable Bluetooth to discover and connect to nearby BLE peers.",
+                                    text = stringResource(R.string.ble_status_enable_bt_description),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 )
@@ -249,18 +251,18 @@ fun BleConnectionStatusScreen(
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                             Text(
-                                text = "Bluetooth is turned on",
+                                text = stringResource(R.string.identity_bluetooth_on),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
-                                text = "No active connections",
+                                text = stringResource(R.string.ble_status_no_active_connections),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Text(
-                                text = "BLE peers will appear here when connected",
+                                text = stringResource(R.string.ble_status_peers_appear_hint),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -275,7 +277,7 @@ fun BleConnectionStatusScreen(
                                     contentDescription = null,
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Bluetooth Settings")
+                                Text(stringResource(R.string.identity_bluetooth_settings))
                             }
                         }
                     }
@@ -337,7 +339,7 @@ fun BleConnectionStatusScreen(
                             tint = MaterialTheme.colorScheme.error,
                         )
                         Text(
-                            text = "Error Loading Connections",
+                            text = stringResource(R.string.ble_status_error_loading),
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.error,
                         )
@@ -347,7 +349,7 @@ fun BleConnectionStatusScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Button(onClick = { viewModel.refresh() }) {
-                            Text("Retry")
+                            Text(stringResource(R.string.call_history_retry))
                         }
                     }
                 }
@@ -393,17 +395,17 @@ fun SummaryCard(
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             SummaryItem(
-                label = "Total",
+                label = stringResource(R.string.identity_total),
                 value = totalConnections.toString(),
                 icon = Icons.Default.Bluetooth,
             )
             SummaryItem(
-                label = "Central",
+                label = stringResource(R.string.identity_central),
                 value = centralConnections.toString(),
                 icon = Icons.Default.BluetoothConnected,
             )
             SummaryItem(
-                label = "Peripheral",
+                label = stringResource(R.string.identity_peripheral),
                 value = peripheralConnections.toString(),
                 icon = Icons.Default.BluetoothSearching,
             )
@@ -509,18 +511,18 @@ fun ConnectionCard(
             )
 
             // Connection details
-            ConnectionDetailRow(label = "MAC Address", value = connection.currentMac, monospace = true)
-            ConnectionDetailRow(label = "MTU", value = "${connection.mtu} bytes")
+            ConnectionDetailRow(label = stringResource(R.string.ble_status_mac_address), value = connection.currentMac, monospace = true)
+            ConnectionDetailRow(label = "MTU", value = pluralStringResource(R.plurals.ble_status_bytes, connection.mtu, connection.mtu))
             ConnectionDetailRow(
-                label = "Connected",
+                label = stringResource(R.string.iface_disc_connected),
                 value = formatDuration(liveDurationMs),
             )
             ConnectionDetailRow(
-                label = "First Seen",
+                label = stringResource(R.string.map_first_seen),
                 value = formatTimestamp(connection.firstSeen),
             )
             ConnectionDetailRow(
-                label = "Last Seen",
+                label = stringResource(R.string.announce_last_seen),
                 value = formatTimestamp(connection.lastSeen),
             )
 
@@ -528,22 +530,22 @@ fun ConnectionCard(
             if (connection.bytesReceived > 0 || connection.bytesSent > 0) {
                 HorizontalDivider()
                 Text(
-                    text = "Performance",
+                    text = stringResource(R.string.iface_cfg_preset_performance),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.testTag("performance_section_${connection.currentMac}"),
                 )
                 ConnectionDetailRow(
-                    label = "Data Sent",
+                    label = stringResource(R.string.ble_status_data_sent),
                     value = formatBytes(connection.bytesSent),
                 )
                 ConnectionDetailRow(
-                    label = "Data Received",
+                    label = stringResource(R.string.ble_status_data_received),
                     value = formatBytes(connection.bytesReceived),
                 )
                 if (connection.successRate > 0) {
                     ConnectionDetailRow(
-                        label = "Success Rate",
+                        label = stringResource(R.string.ble_status_success_rate),
                         value = "${(connection.successRate * 100).toInt()}%",
                     )
                 }
@@ -563,7 +565,7 @@ fun ConnectionCard(
             ) {
                 Icon(Icons.Default.BluetoothDisabled, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Disconnect")
+                Text(stringResource(R.string.ble_status_disconnect))
             }
         }
     }
@@ -571,11 +573,11 @@ fun ConnectionCard(
 
 @Composable
 fun ConnectionTypeBadge(type: ConnectionType) {
-    val (text, color) =
+    val (textRes, color) =
         when (type) {
-            ConnectionType.BOTH -> "Both" to MaterialTheme.colorScheme.primary
-            ConnectionType.CENTRAL -> "Central" to MaterialTheme.colorScheme.secondary
-            ConnectionType.PERIPHERAL -> "Peripheral" to MaterialTheme.colorScheme.tertiary
+            ConnectionType.BOTH -> R.string.ble_status_type_both to MaterialTheme.colorScheme.primary
+            ConnectionType.CENTRAL -> R.string.identity_central to MaterialTheme.colorScheme.secondary
+            ConnectionType.PERIPHERAL -> R.string.identity_peripheral to MaterialTheme.colorScheme.tertiary
         }
 
     Surface(
@@ -583,7 +585,7 @@ fun ConnectionTypeBadge(type: ConnectionType) {
         shape = RoundedCornerShape(4.dp),
     ) {
         Text(
-            text = text,
+            text = stringResource(textRes),
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall,
             color = color,
@@ -613,11 +615,11 @@ fun SignalStrengthRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            val (icon, text, color) =
+            val (icon, textRes, color) =
                 if (rssiUnavailable) {
                     Triple(
                         Icons.Default.Info,
-                        "N/A",
+                        R.string.ble_status_signal_unavailable,
                         MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
@@ -625,25 +627,25 @@ fun SignalStrengthRow(
                         SignalQuality.EXCELLENT ->
                             Triple(
                                 Icons.Default.CheckCircle,
-                                "Excellent",
+                                R.string.ble_status_signal_excellent,
                                 MaterialTheme.colorScheme.primary,
                             )
                         SignalQuality.GOOD ->
                             Triple(
                                 Icons.Default.Check,
-                                "Good",
+                                R.string.ble_status_signal_good,
                                 MaterialTheme.colorScheme.primary,
                             )
                         SignalQuality.FAIR ->
                             Triple(
                                 Icons.Default.Warning,
-                                "Fair",
+                                R.string.ble_status_signal_fair,
                                 MaterialTheme.colorScheme.tertiary,
                             )
                         SignalQuality.POOR ->
                             Triple(
                                 Icons.Default.Error,
-                                "Poor",
+                                R.string.ble_status_signal_poor,
                                 MaterialTheme.colorScheme.error,
                             )
                     }
@@ -658,12 +660,12 @@ fun SignalStrengthRow(
             Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(
-                    text = "Signal Strength",
+                    text = stringResource(R.string.message_detail_signal_strength),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = text,
+                    text = stringResource(textRes),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = color,

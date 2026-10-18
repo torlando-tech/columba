@@ -2813,4 +2813,255 @@
     <string name="onboarding_complete_start_messaging">Start Messaging</string>
     <string name="onboarding_complete_share_text">Add me on Reticulum:\n\n%1$s\n%2$s</string>
     <string name="onboarding_complete_share_chooser">Share identity</string>
+
+    <string name="apk_sharing_via_wifi">Share via WiFi</string>
+    <string name="apk_sharing_via_hotspot">Share via Hotspot</string>
+    <string name="apk_sharing_starting_hotspot">Starting WiFi hotspot...</string>
+    <string name="apk_sharing_starting_server">Starting sharing server...</string>
+    <string name="apk_sharing_step">Step %1$d: %2$s</string>
+    <string name="apk_sharing_step_connect_hotspot">Scan to connect to hotspot</string>
+    <string name="apk_sharing_step_download">Scan to download Columba</string>
+    <string name="apk_sharing_scan_qr">Have the other person scan this QR code</string>
+    <string name="apk_sharing_apk_size">APK size: %1$.1f MB</string>
+    <string name="apk_sharing_no_wifi_hint">No WiFi? Share by creating a temporary hotspot instead.</string>
+    <string name="apk_sharing_start_hotspot">Start Hotspot</string>
+    <string name="apk_sharing_permission_needed">Permission needed to create a WiFi hotspot for sharing.</string>
+    <string name="apk_sharing_grant_permission">Grant Permission</string>
+    <string name="apk_sharing_network_password">"Network: %1$s  /  Password: %2$s"</string>
+    <string name="apk_sharing_network_open">"Network: %1$s  (no password)"</string>
+    <string name="apk_sharing_instructions">Instructions</string>
+    <string name="apk_sharing_instruction_step">%1$d. %2$s</string>
+    <string name="apk_sharing_instr_hotspot_1">On the other phone, scan the first QR code to connect to the hotspot</string>
+    <string name="apk_sharing_instr_hotspot_2">Once connected, scan the second QR code to open the download page</string>
+    <string name="apk_sharing_instr_wifi_1">Both phones must be on the same WiFi network</string>
+    <string name="apk_sharing_instr_wifi_2">Open the camera app on the other phone and scan the QR code above</string>
+    <string name="apk_sharing_instr_wifi_3">Tap the link to open it in a browser</string>
+    <string name="apk_sharing_instr_download_install">Download and install the APK</string>
+    <string name="apk_sharing_or_share">Or share another way</string>
+    <string name="apk_sharing_alt_share_desc">Use Bluetooth, Nearby Share, or any other installed sharing app.</string>
+    <string name="apk_sharing_share_via">Share APK via...</string>
+
+    <string name="ble_status_turn_on_bluetooth_hint">Turn on Bluetooth to see BLE connections</string>
+    <string name="ble_status_enable_bt_description">Enable Bluetooth to discover and connect to nearby BLE peers.</string>
+    <string name="ble_status_no_active_connections">No active connections</string>
+    <string name="ble_status_peers_appear_hint">BLE peers will appear here when connected</string>
+    <string name="ble_status_error_loading">Error Loading Connections</string>
+    <string name="ble_status_mac_address">MAC Address</string>
+    <string name="ble_status_data_sent">Data Sent</string>
+    <string name="ble_status_data_received">Data Received</string>
+    <string name="ble_status_success_rate">Success Rate</string>
+    <string name="ble_status_disconnect">Disconnect</string>
+    <string name="ble_status_type_both">Both</string>
+    <string name="ble_status_signal_unavailable">N/A</string>
+    <string name="ble_status_signal_excellent">Excellent</string>
+    <string name="ble_status_signal_good">Good</string>
+    <string name="ble_status_signal_fair">Fair</string>
+    <string name="ble_status_signal_poor">Poor</string>
+    <plurals name="ble_status_bytes">
+        <item quantity="one">%1$d byte</item>
+        <item quantity="other">%1$d bytes</item>
+    </plurals>
+
+    <string name="nomadnet_browser_title">NomadNet Browser</string>
+    <string name="nomadnet_home_empty_body">Enter a node address to start browsing.\nFormat: &lt;hash&gt;:/page/index.mu</string>
+    <string name="nomadnet_home_empty_placeholder">&lt;hash&gt;:/page/index.mu</string>
+    <string name="nomadnet_go">Go</string>
+    <string name="nomadnet_refresh_cd">Refresh</string>
+    <string name="nomadnet_menu_cd">Menu</string>
+    <string name="nomadnet_copy_url">Copy URL</string>
+    <string name="nomadnet_share">Share</string>
+    <string name="nomadnet_share_chooser_title">Share NomadNet URL</string>
+    <string name="nomadnet_share_file">Share file</string>
+    <string name="nomadnet_open_with">Open with</string>
+    <string name="nomadnet_rendering_monospace_scroll">Monospace (scroll)</string>
+    <string name="nomadnet_rendering_monospace_zoom">Monospace (zoom)</string>
+    <string name="nomadnet_rendering_proportional_wrap">Proportional (wrap)</string>
+    <string name="nomadnet_images_never">Images: never</string>
+    <string name="nomadnet_images_manual">Images: manual</string>
+    <string name="nomadnet_images_auto">Images: auto</string>
+    <string name="nomadnet_images_always">Images: always</string>
+    <string name="nomadnet_load_all_images">Load all images</string>
+    <string name="nomadnet_reload_all_images">Reload all images</string>
+    <string name="nomadnet_clear_image_cache">Clear image cache</string>
+    <string name="nomadnet_close_site">Close site</string>
+    <string name="nomadnet_failed_to_load_page">Failed to load page</string>
+    <string name="nomadnet_retry">Retry</string>
+    <string name="nomadnet_download_failed_title">Download Failed</string>
+    <string name="nomadnet_download_complete_title">Download Complete</string>
+    <string name="nomadnet_open">Open</string>
+    <string name="nomadnet_ok">OK</string>
+    <string name="nomadnet_close">Close</string>
+
+    <string name="offline_maps_import_content_description">Import MBTiles file</string>
+    <string name="offline_maps_download_new_region_content_description">Download new region</string>
+    <string name="offline_maps_total_storage">Total Storage</string>
+    <string name="offline_maps_regions">Regions</string>
+    <string name="offline_maps_download_progress">%1$d%% - %2$d tiles</string>
+    <string name="offline_maps_radius_zoom">%1$d km radius - Zoom %2$d-%3$d</string>
+    <string name="offline_maps_checking">Checking...</string>
+    <string name="offline_maps_update_available">Update available</string>
+    <string name="offline_maps_update_now">Update Now</string>
+    <string name="offline_maps_up_to_date">Up to date</string>
+    <string name="offline_maps_delete_title">Delete Offline Map</string>
+    <string name="offline_maps_delete_confirm">Are you sure you want to delete \"%1$s\"? This will free up %2$s of storage.</string>
+    <string name="offline_maps_update_title">Update Offline Map</string>
+    <string name="offline_maps_update_confirm">Download the latest map data for \"%1$s\"? This will replace the current data and may take a few minutes.</string>
+    <string name="offline_maps_status_downloading">Downloading</string>
+    <string name="offline_maps_empty_title">No Offline Maps</string>
+    <string name="offline_maps_empty_subtitle">Download or import map regions for offline use</string>
+    <string name="offline_maps_empty_hint">Tap + to download, or use the import button to load an MBTiles file</string>
+    <string name="offline_maps_mbtiles_description">Offline map for %1$s</string>
+    <string name="offline_maps_rmsp_description">Offline map from RMSP: %1$s</string>
+
+    <!-- Offline map download wizard (OfflineMapDownloadScreen) -->
+    <string name="offline_map_download_step_location">Select Location</string>
+    <string name="offline_map_download_step_area">Choose Area</string>
+    <string name="offline_map_download_step_confirm">Confirm Download</string>
+    <string name="offline_map_download_step_downloading">Downloading</string>
+    <string name="offline_map_download_cd_back">Back</string>
+    <string name="offline_map_download_cd_cancel">Cancel</string>
+    <string name="offline_map_download_cancel_dialog_title">Cancel Download?</string>
+    <string name="offline_map_download_cancel_dialog_message">Are you sure you want to cancel the download? Progress will be lost.</string>
+    <string name="offline_map_download_cancel_dialog_confirm">Cancel Download</string>
+    <string name="offline_map_download_cancel_dialog_continue">Continue</string>
+    <string name="offline_map_download_toast_style_warning_http_note">%1$s Note: HTTP was auto-disabled and must be re-enabled before retrying.</string>
+    <string name="offline_map_download_toast_http_disabled_ready">HTTP disabled. Your offline maps are ready.</string>
+    <string name="offline_map_download_location_subtitle">Choose the center point for your offline map region.</string>
+    <string name="offline_map_download_use_current_location">Use Current Location</string>
+    <string name="offline_map_download_or_separator">- or -</string>
+    <string name="offline_map_download_latitude">Latitude</string>
+    <string name="offline_map_download_longitude">Longitude</string>
+    <string name="offline_map_download_err_invalid_number">Invalid number</string>
+    <string name="offline_map_download_err_lat_range">Must be between -90 and 90</string>
+    <string name="offline_map_download_err_lon_range">Must be between -180 and 180</string>
+    <string name="offline_map_download_search_label">Search City or Address</string>
+    <string name="offline_map_download_search_cd">Search</string>
+    <string name="offline_map_download_geohash_label">Geohash</string>
+    <string name="offline_map_download_geohash_placeholder">e.g., dqcjq</string>
+    <string name="offline_map_download_geohash_helper">Enter a geohash to set the location</string>
+    <string name="offline_map_download_err_invalid_geohash">Invalid geohash</string>
+    <string name="offline_map_download_location_set">Location set: %1$s, %2$s</string>
+    <string name="offline_map_download_next">Next</string>
+    <string name="offline_map_download_back">Back</string>
+    <string name="offline_map_download_area_size_title">Select Area Size</string>
+    <string name="offline_map_download_zoom_range_title">Zoom Range</string>
+    <string name="offline_map_download_min_zoom">Min zoom: %1$d (less detail, smaller size)</string>
+    <string name="offline_map_download_max_zoom">Max zoom: %1$d (more detail, larger size)</string>
+    <string name="offline_map_download_estimated_download_title">Estimated Download</string>
+    <plurals name="offline_map_download_tiles">
+        <item quantity="one">%1$d tile</item>
+        <item quantity="other">%1$d tiles</item>
+    </plurals>
+    <string name="offline_map_download_name_title">Name Your Map</string>
+    <string name="offline_map_download_region_name_label">Region Name</string>
+    <string name="offline_map_download_region_name_placeholder">e.g., Home, Downtown, Trail</string>
+    <string name="offline_map_download_summary_title">Summary</string>
+    <string name="offline_map_download_summary_location">Location</string>
+    <string name="offline_map_download_summary_radius">Radius</string>
+    <string name="offline_map_download_summary_zoom_range">Zoom Range</string>
+    <string name="offline_map_download_summary_tiles">Tiles</string>
+    <string name="offline_map_download_summary_estimated_size">Estimated Size</string>
+    <string name="offline_map_download_notice">This will download map tiles from OpenFreeMap for offline use. Make sure you\'re connected to Wi-Fi for large downloads.</string>
+    <string name="offline_map_download_download_button">Download</string>
+    <string name="offline_map_download_http_required_title">Internet Access Required</string>
+    <string name="offline_map_download_http_required_body">HTTP map source is disabled. Enable it to download tiles.</string>
+    <string name="offline_map_download_enable">Enable</string>
+    <string name="offline_map_download_preparing_download">Preparing download...</string>
+    <string name="offline_map_download_status_complete">Complete!</string>
+    <string name="offline_map_download_status_error">Error</string>
+    <string name="offline_map_download_status_downloading">Downloading...</string>
+    <string name="offline_map_download_status_preparing">Preparing...</string>
+    <string name="offline_map_download_resources_progress">%1$d / %2$d resources</string>
+    <string name="offline_map_download_cancel">Cancel</string>
+
+    <!-- LocationSharingCard: send/request interval chips -->
+    <string name="settings_location_interval_5min">5min</string>
+    <string name="settings_location_interval_15min">15min</string>
+    <string name="settings_location_interval_30min">30min</string>
+    <!-- ImageCompressionCard: preset summary line (first half of rendered line) -->
+    <string name="settings_imgcomp_max_dim_prefix">"Max: %1$spx, "</string>
+    <!-- RNode wizard: frequency slot value + region spec chips -->
+    <string name="rnode_wizard_slot_value">Slot %1$d</string>
+    <string name="rnode_wizard_review_region_specs">%1$s MHz • %2$s dBm max • %3$s</string>
+    <string name="rnode_wizard_region_duty_chip">%1$d%% duty</string>
+    <!-- RNode flasher: USB device VID/PID line -->
+    <string name="flasher_device_vid_pid">VID: %1$s | PID: %2$s</string>
+    <!-- Contacts screen: My Contacts tab title (NETWORK tab reuses settings_network_title) -->
+    <string name="contacts_tab_my_contacts_title">My Contacts</string>
+
+    <string name="call_end_call">End Call</string>
+    <string name="call_end_call_content_description">End call</string>
+    <string name="call_status_connecting_long">Connecting...</string>
+    <string name="call_status_ringing_long">Ringing...</string>
+    <string name="call_status_calling_long">Calling...</string>
+    <string name="call_status_line_busy">Line Busy</string>
+    <string name="call_status_call_rejected">Call Rejected</string>
+    <string name="call_status_call_ended">Call Ended</string>
+
+    <string name="qr_scanner_title">Scan QR Code</string>
+    <string name="qr_scanner_hint">Point camera at QR code\nIt will scan automatically</string>
+    <string name="qr_scanner_contact_exists_cd">Contact Exists</string>
+    <string name="qr_scanner_contact_already_added">Contact Already Added</string>
+    <string name="qr_scanner_open_settings">Open Settings</string>
+    <string name="qr_scanner_grant_permission">Grant Permission</string>
+
+    <string name="migration_export_data_title">Export Data</string>
+    <string name="migration_export_description">Export all your data (identities, messages, contacts, settings) to a file that can be imported into a new installation.</string>
+    <string name="migration_data_to_export">Data to export:</string>
+    <string name="migration_could_not_load_preview">Could not load preview: %1$s</string>
+    <string name="migration_export_complete_save_dialog">Export complete! Save dialog opened.</string>
+    <string name="migration_export_saved">Export saved successfully</string>
+    <string name="migration_include_attachments">Include file attachments</string>
+    <string name="migration_no_attachments_note">Images and files won\'t be included in export</string>
+    <string name="migration_export_all_data">Export All Data</string>
+    <string name="migration_import_data_title">Import Data</string>
+    <string name="migration_import_description">Import data from a previous export. This will add identities, messages, and contacts from the backup file.</string>
+    <string name="migration_importing_percent">Importing... %1$d%%</string>
+    <string name="migration_import_complete_title">Import complete!</string>
+    <string name="migration_import_complete_summary">Import complete! %1$d identities, %2$d messages, %3$d announces, %4$d interfaces imported.</string>
+    <string name="migration_import_result_counts">%1$d identities, %2$d messages, %3$d contacts, %4$d announces, %5$d interfaces, %6$d themes</string>
+    <string name="migration_select_file">Select Migration File</string>
+    <string name="migration_import_confirm_title">Import Data?</string>
+    <string name="migration_backup_created_on">This backup was created on:</string>
+    <string name="migration_data_to_import">Data to import:</string>
+    <string name="migration_existing_identities_skipped">Existing identities with the same ID will be skipped.</string>
+    <string name="migration_import_button">Import</string>
+    <string name="migration_restarting_service_title">Restarting Service</string>
+    <string name="migration_enable_notifications_title">Enable Notifications?</string>
+    <string name="migration_notif_restored_body">Your backup data has been restored, including your notification preferences.</string>
+    <string name="migration_notif_permission_body">To receive notifications for new messages, you\'ll need to grant notification permission.</string>
+    <string name="migration_encrypt_export_title">Encrypt Export</string>
+    <string name="migration_encrypt_export_description">Choose a password to protect your export file. You will need this password to import the data on another device.</string>
+    <string name="migration_encrypted_backup_title">Encrypted Backup</string>
+    <string name="migration_encrypted_backup_description">This backup file is encrypted. Enter the password that was used during export.</string>
+    <string name="migration_password_label">Password</string>
+    <string name="migration_confirm_password_label">Confirm password</string>
+    <plurals name="migration_count_identities">
+        <item quantity="one">%1$d identity</item>
+        <item quantity="other">%1$d identities</item>
+    </plurals>
+    <plurals name="migration_count_messages">
+        <item quantity="one">%1$d message</item>
+        <item quantity="other">%1$d messages</item>
+    </plurals>
+    <plurals name="migration_count_contacts">
+        <item quantity="one">%1$d contact</item>
+        <item quantity="other">%1$d contacts</item>
+    </plurals>
+    <plurals name="migration_count_announces">
+        <item quantity="one">%1$d announce</item>
+        <item quantity="other">%1$d announces</item>
+    </plurals>
+    <plurals name="migration_count_interfaces">
+        <item quantity="one">%1$d interface</item>
+        <item quantity="other">%1$d interfaces</item>
+    </plurals>
+    <plurals name="migration_count_custom_themes">
+        <item quantity="one">%1$d custom theme</item>
+        <item quantity="other">%1$d custom themes</item>
+    </plurals>
+    <plurals name="migration_count_conversations">
+        <item quantity="one">%1$d conversation</item>
+        <item quantity="other">%1$d conversations</item>
+    </plurals>
 </resources>

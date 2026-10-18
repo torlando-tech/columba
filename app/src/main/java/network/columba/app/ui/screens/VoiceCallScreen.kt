@@ -49,12 +49,14 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import network.columba.app.R
 import network.columba.app.call.PttMediaSessionManager
 import network.columba.app.viewmodel.CallViewModel
 import network.columba.app.rns.api.model.CallState
@@ -236,18 +238,22 @@ fun VoiceCallScreen(
                 Text(
                     text =
                         when (callState) {
-                            is CallState.Connecting -> "Connecting..."
-                            is CallState.Ringing -> "Ringing..."
+                            is CallState.Connecting -> stringResource(R.string.call_status_connecting_long)
+                            is CallState.Ringing -> stringResource(R.string.call_status_ringing_long)
                             is CallState.Active ->
                                 if (isHalfDuplex) {
-                                    if (isPttActive) "Transmitting" else "Listening"
+                                    if (isPttActive) {
+                                        stringResource(R.string.call_status_transmitting)
+                                    } else {
+                                        stringResource(R.string.call_status_listening)
+                                    }
                                 } else {
                                     viewModel.formatDuration(callDuration)
                                 }
-                            is CallState.Busy -> "Line Busy"
-                            is CallState.Rejected -> "Call Rejected"
-                            is CallState.Ended -> "Call Ended"
-                            else -> "Calling..."
+                            is CallState.Busy -> stringResource(R.string.call_status_line_busy)
+                            is CallState.Rejected -> stringResource(R.string.call_status_call_rejected)
+                            is CallState.Ended -> stringResource(R.string.call_status_call_ended)
+                            else -> stringResource(R.string.call_status_calling_long)
                         },
                     style = MaterialTheme.typography.bodyLarge,
                     color =
@@ -367,7 +373,7 @@ fun VoiceCallScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.CallEnd,
-                        contentDescription = "End call",
+                        contentDescription = stringResource(R.string.call_end_call_content_description),
                         modifier = Modifier.size(32.dp),
                         tint = MaterialTheme.colorScheme.onError,
                     )
@@ -376,7 +382,7 @@ fun VoiceCallScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "End Call",
+                    text = stringResource(R.string.call_end_call),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -57,9 +57,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
 import network.columba.app.data.repository.OfflineMapRegion
 import network.columba.app.viewmodel.OfflineMapsViewModel
 import network.columba.app.viewmodel.UpdateCheckResult
@@ -106,12 +108,12 @@ fun OfflineMapsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Offline Maps") },
+                title = { Text(stringResource(R.string.map_offline_maps)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.back),
                         )
                     }
                 },
@@ -130,7 +132,7 @@ fun OfflineMapsScreen(
                         } else {
                             Icon(
                                 imageVector = Icons.Default.FileOpen,
-                                contentDescription = "Import MBTiles file",
+                                contentDescription = stringResource(R.string.offline_maps_import_content_description),
                             )
                         }
                     }
@@ -145,7 +147,7 @@ fun OfflineMapsScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Download new region",
+                    contentDescription = stringResource(R.string.offline_maps_download_new_region_content_description),
                 )
             }
         },
@@ -242,7 +244,7 @@ fun StorageSummaryCard(
         ) {
             Column {
                 Text(
-                    text = "Total Storage",
+                    text = stringResource(R.string.offline_maps_total_storage),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -254,7 +256,7 @@ fun StorageSummaryCard(
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "Regions",
+                    text = stringResource(R.string.offline_maps_regions),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -330,7 +332,7 @@ fun OfflineMapRegionCard(
                     StatusChip(status = region.status)
                     if (region.isDefault) {
                         Text(
-                            text = "Default",
+                            text = stringResource(R.string.rnode_wizard_default),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -350,7 +352,7 @@ fun OfflineMapRegionCard(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
-                        text = "${(region.downloadProgress * 100).toInt()}% - ${region.tileCount} tiles",
+                        text = stringResource(R.string.offline_maps_download_progress, (region.downloadProgress * 100).toInt(), region.tileCount),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -381,7 +383,7 @@ fun OfflineMapRegionCard(
                 // Details
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "${region.radiusKm} km radius - Zoom ${region.minZoom}-${region.maxZoom}",
+                    text = stringResource(R.string.offline_maps_radius_zoom, region.radiusKm, region.minZoom, region.maxZoom),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -427,7 +429,7 @@ fun OfflineMapRegionCard(
                                         strokeWidth = 2.dp,
                                     )
                                     Text(
-                                        text = "Checking...",
+                                        text = stringResource(R.string.offline_maps_checking),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -440,7 +442,7 @@ fun OfflineMapRegionCard(
                                         tint = MaterialTheme.colorScheme.primary,
                                     )
                                     Text(
-                                        text = "Update available",
+                                        text = stringResource(R.string.offline_maps_update_available),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.primary,
                                     )
@@ -449,7 +451,7 @@ fun OfflineMapRegionCard(
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                                         modifier = Modifier.height(28.dp),
                                     ) {
-                                        Text("Update Now", style = MaterialTheme.typography.labelSmall)
+                                        Text(stringResource(R.string.offline_maps_update_now), style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
                                 updateCheckResult?.error != null -> {
@@ -475,7 +477,7 @@ fun OfflineMapRegionCard(
                                             modifier = Modifier.size(14.dp),
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Retry", style = MaterialTheme.typography.labelSmall)
+                                        Text(stringResource(R.string.call_history_retry), style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
                                 updateCheckResult?.latestVersion != null && !updateCheckResult.hasUpdate -> {
@@ -486,7 +488,7 @@ fun OfflineMapRegionCard(
                                         tint = MaterialTheme.colorScheme.tertiary,
                                     )
                                     Text(
-                                        text = "Up to date",
+                                        text = stringResource(R.string.offline_maps_up_to_date),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.tertiary,
                                     )
@@ -503,7 +505,7 @@ fun OfflineMapRegionCard(
                                             modifier = Modifier.size(14.dp),
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Check for Updates", style = MaterialTheme.typography.labelSmall)
+                                        Text(stringResource(R.string.about_check_for_updates), style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
                             }
@@ -541,7 +543,7 @@ fun OfflineMapRegionCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
+                        contentDescription = stringResource(R.string.delete),
                         tint = MaterialTheme.colorScheme.error,
                     )
                 }
@@ -553,9 +555,9 @@ fun OfflineMapRegionCard(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete Offline Map") },
+            title = { Text(stringResource(R.string.offline_maps_delete_title)) },
             text = {
-                Text("Are you sure you want to delete \"${region.name}\"? This will free up ${region.getSizeString()} of storage.")
+                Text(stringResource(R.string.offline_maps_delete_confirm, region.name, region.getSizeString()))
             },
             confirmButton = {
                 TextButton(
@@ -564,12 +566,12 @@ fun OfflineMapRegionCard(
                         onDelete()
                     },
                 ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             },
         )
@@ -579,12 +581,9 @@ fun OfflineMapRegionCard(
     if (showUpdateDialog) {
         AlertDialog(
             onDismissRequest = { showUpdateDialog = false },
-            title = { Text("Update Offline Map") },
+            title = { Text(stringResource(R.string.offline_maps_update_title)) },
             text = {
-                Text(
-                    "Download the latest map data for \"${region.name}\"? " +
-                        "This will replace the current data and may take a few minutes.",
-                )
+                Text(stringResource(R.string.offline_maps_update_confirm, region.name))
             },
             confirmButton = {
                 TextButton(
@@ -593,12 +592,12 @@ fun OfflineMapRegionCard(
                         onUpdateNow()
                     },
                 ) {
-                    Text("Update")
+                    Text(stringResource(R.string.iface_cfg_update))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showUpdateDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             },
         )
@@ -610,16 +609,16 @@ fun StatusChip(
     status: OfflineMapRegion.Status,
     modifier: Modifier = Modifier,
 ) {
-    val (text, color) =
+    val (textRes, color) =
         when (status) {
-            OfflineMapRegion.Status.PENDING -> "Pending" to MaterialTheme.colorScheme.tertiary
-            OfflineMapRegion.Status.DOWNLOADING -> "Downloading" to MaterialTheme.colorScheme.primary
-            OfflineMapRegion.Status.COMPLETE -> "Complete" to MaterialTheme.colorScheme.secondary
-            OfflineMapRegion.Status.ERROR -> "Error" to MaterialTheme.colorScheme.error
+            OfflineMapRegion.Status.PENDING -> R.string.message_detail_status_pending to MaterialTheme.colorScheme.tertiary
+            OfflineMapRegion.Status.DOWNLOADING -> R.string.offline_maps_status_downloading to MaterialTheme.colorScheme.primary
+            OfflineMapRegion.Status.COMPLETE -> R.string.flasher_title_complete to MaterialTheme.colorScheme.secondary
+            OfflineMapRegion.Status.ERROR -> R.string.iface_error to MaterialTheme.colorScheme.error
         }
 
     Text(
-        text = text,
+        text = stringResource(textRes),
         style = MaterialTheme.typography.labelSmall,
         color = color,
         modifier = modifier,
@@ -643,7 +642,7 @@ fun EmptyOfflineMapsState(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "No Offline Maps",
+            text = stringResource(R.string.offline_maps_empty_title),
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -651,7 +650,7 @@ fun EmptyOfflineMapsState(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Download or import map regions for offline use",
+            text = stringResource(R.string.offline_maps_empty_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -659,7 +658,7 @@ fun EmptyOfflineMapsState(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Tap + to download, or use the import button to load an MBTiles file",
+            text = stringResource(R.string.offline_maps_empty_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -1043,9 +1043,6 @@
     <ID>NoHardcodedUiString:MapSourcesCard.kt$"Sources"</ID>
     <ID>NoHardcodedUiString:MapSourcesCard.kt$"Spread overlapping markers for readability"</ID>
     <ID>NoHardcodedUiString:MapSourcesCard.kt$"Warning"</ID>
-    <ID>NoHardcodedUiString:MapStylePreference.kt$MapStylePreference.AUTO$"Auto"</ID>
-    <ID>NoHardcodedUiString:MapStylePreference.kt$MapStylePreference.DARK$"Dark"</ID>
-    <ID>NoHardcodedUiString:MapStylePreference.kt$MapStylePreference.LIGHT$"Light"</ID>
     <ID>NoHardcodedUiString:MarkdownMessageText.kt$SafeMarkdownUriHandler$"Unable to open link"</ID>
     <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"$hops ${if (hops == 1) "hop" else "hops"} away"</ID>
     <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"(auto)"</ID>
@@ -1149,7 +1146,7 @@
     <ID>NoHardcodedUiString:MessagingScreen.kt$"Copy"</ID>
     <ID>NoHardcodedUiString:MessagingScreen.kt$"Delete message"</ID>
     <ID>NoHardcodedUiString:MessagingScreen.kt$"Delete"</ID>
-    <ID>NoHardcodedUiString:MessagingScreen.kt$"Failed to attach file: ${result.message}"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Failed to attach file: ${result.message.resolve(context)}"</ID>
     <ID>NoHardcodedUiString:MessagingScreen.kt$"Failed to load file"</ID>
     <ID>NoHardcodedUiString:MessagingScreen.kt$"Failed to load image"</ID>
     <ID>NoHardcodedUiString:MessagingScreen.kt$"File too large (${actualSizeKb}KB). Max size is ${maxSizeKb}KB."</ID>
@@ -1489,56 +1486,6 @@
     <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Exit Flasher?"</ID>
     <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Exit"</ID>
     <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"flasher_step"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$CommunitySlots$"⚠️ Avoid - Meshtastic interference"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$CommunitySlots$"⚠️ Avoid - Northern Virginia Meshtastic mesh"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"2.4 GHz ISM (worldwide, short range)"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"433-434 MHz ISM, 10% duty cycle"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"864-868 MHz alternative band"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"868-868.6 MHz, 1% duty cycle (very restrictive)"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"902-907.5 MHz (limited band)"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"902-928 MHz ISM band"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"915-918 MHz NTC"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"915-928 MHz ISM band"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"917-925 MHz IMDA"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"919-924 MHz MCMC"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"920-925 MHz NBTC"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"920.8-927.8 MHz ARIB STD-T108"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"Sub-band L: 1% duty cycle, 25 mW (UK, IT, NL presets)"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"Sub-band M: 1% duty cycle, 25 mW (LoRaWAN default)"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"Sub-band P: 10% duty cycle, 500 mW (best for LoRa)"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"Sub-band Q: 1% duty cycle, 25 mW"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"433 MHz band shared by Gothenburg, Borås, Älvsered"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"868 MHz EU band"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"868 MHz UK band"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"869 MHz EU band"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"915 MHz ISM band (default)"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"915-928 MHz AU band (default)"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"920 MHz AS923 band"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Bern configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Brescia configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Brisbane configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Brugge (Bruges) configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Chicago, IL configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Darmstadt configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Duffel configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Edinburgh 2.4 GHz configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Edinburgh 868 MHz configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Genova 433 MHz configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Gothenburg area configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Madrid configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Mörbylånga/Bredinge configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Norway narrowband"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Olympia, WA configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Portsmouth, NH configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Rotterdam Nesselande configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Ruhrgebiet configuration (869.4625 MHz, region-default TX, 10% LT airtime)"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Salerno configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"St. Helens configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Sydney long-range configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Treviso configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Turku configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Western Sydney configuration"</ID>
-    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Wiesbaden configuration"</ID>
     <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"Back"</ID>
     <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"Error"</ID>
     <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"Repair RNode Pairing"</ID>

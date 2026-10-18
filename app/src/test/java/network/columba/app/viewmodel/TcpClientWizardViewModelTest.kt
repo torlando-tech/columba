@@ -876,7 +876,7 @@ class TcpClientWizardViewModelTest {
 
                 val finalState = expectMostRecentItem()
                 assertNotNull(finalState.saveError)
-                assertTrue((finalState.saveError as UiMessage.Raw).text.contains("already exists"))
+                assertEquals(R.string.validation_interface_name_duplicate, (finalState.saveError as UiMessage.Text).id)
                 assertFalse(finalState.saveSuccess)
                 assertFalse(finalState.isSaving)
             }
@@ -909,7 +909,7 @@ class TcpClientWizardViewModelTest {
 
                 val finalState = expectMostRecentItem()
                 assertNotNull(finalState.saveError)
-                assertTrue((finalState.saveError as UiMessage.Raw).text.contains("already exists"))
+                assertEquals(R.string.validation_interface_name_duplicate, (finalState.saveError as UiMessage.Text).id)
             }
         }
 
@@ -963,7 +963,7 @@ class TcpClientWizardViewModelTest {
                 val state = awaitItem()
                 assertFalse("Expected saveSuccess to be false", state.saveSuccess)
                 assertNotNull("Expected saveError to be set", state.saveError)
-                assertTrue("Expected error message about duplicate", (state.saveError as UiMessage.Raw).text.contains("already exists"))
+                assertEquals(R.string.validation_interface_name_duplicate, (state.saveError as UiMessage.Text).id)
             }
         }
 
@@ -1530,7 +1530,7 @@ class TcpClientWizardViewModelTest {
                 val state = awaitItem()
                 assertFalse(state.saveSuccess)
                 assertNotNull(state.saveError)
-                assertTrue((state.saveError as UiMessage.Raw).text.contains("already exists"))
+                assertEquals(R.string.validation_interface_name_duplicate, (state.saveError as UiMessage.Text).id)
             }
         }
 

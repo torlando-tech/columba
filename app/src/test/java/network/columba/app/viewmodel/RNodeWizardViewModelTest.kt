@@ -336,7 +336,7 @@ class RNodeWizardViewModelTest {
                     spreadingFactor = 9,
                     codingRate = 5,
                     txPower = 17,
-                    description = "Test preset",
+                    descriptionRes = R.string.region_desc_us_915,
                 )
             viewModel.selectPreset(testPreset)
             advanceUntilIdle()
@@ -363,7 +363,7 @@ class RNodeWizardViewModelTest {
                     spreadingFactor = 9,
                     codingRate = 5,
                     txPower = 17,
-                    description = "Test preset",
+                    descriptionRes = R.string.region_desc_us_915,
                 )
             viewModel.selectPreset(testPreset)
             advanceUntilIdle()
@@ -394,7 +394,7 @@ class RNodeWizardViewModelTest {
                     spreadingFactor = 9,
                     codingRate = 5,
                     txPower = 17,
-                    description = "Test preset",
+                    descriptionRes = R.string.region_desc_us_915,
                 )
             viewModel.selectPreset(testPreset)
             advanceUntilIdle()
@@ -835,7 +835,7 @@ class RNodeWizardViewModelTest {
                     spreadingFactor = 8,
                     codingRate = 5,
                     txPower = 17,
-                    description = "Explicit TX test preset",
+                    descriptionRes = R.string.region_desc_eu_868_p,
                 )
             viewModel.selectPreset(preset)
             advanceUntilIdle()
@@ -2632,7 +2632,7 @@ class RNodeWizardViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertNotNull(state.nameError)
-                assertTrue((state.nameError as UiMessage.Raw).text.contains("already exists"))
+                assertEquals(R.string.validation_interface_name_duplicate, (state.nameError as UiMessage.Text).id)
                 assertFalse(state.isSaving)
                 assertFalse(state.saveSuccess)
             }
@@ -2672,7 +2672,7 @@ class RNodeWizardViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertNotNull(state.nameError)
-                assertTrue((state.nameError as UiMessage.Raw).text.contains("already exists"))
+                assertEquals(R.string.validation_interface_name_duplicate, (state.nameError as UiMessage.Text).id)
             }
         }
 

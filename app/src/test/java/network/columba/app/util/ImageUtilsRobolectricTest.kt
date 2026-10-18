@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import network.columba.app.data.model.ImageCompressionPreset
+import network.columba.app.viewmodel.UiMessage
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.unmockkAll
@@ -283,7 +284,7 @@ class ImageUtilsRobolectricTest {
 
         // 32KB = 262144 bits / 1200 bps = ~218 seconds = 3m 38s
         assertTrue(result.seconds > 200)
-        assertTrue(result.formattedTime.contains("m"))
+        assertTrue((result.formattedTime as UiMessage.Raw).text.contains("m"))
     }
 
     @Test
@@ -297,7 +298,7 @@ class ImageUtilsRobolectricTest {
 
         // 128KB = 1048576 bits / 50000 bps = ~21 seconds
         assertTrue(result.seconds in 15..30)
-        assertTrue(result.formattedTime.contains("s"))
+        assertTrue((result.formattedTime as UiMessage.Raw).text.contains("s"))
     }
 
     @Test

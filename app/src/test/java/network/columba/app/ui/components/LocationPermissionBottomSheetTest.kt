@@ -7,6 +7,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
+import network.columba.app.R
 import network.columba.app.test.RegisterComponentActivityRule
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -68,18 +70,18 @@ class LocationPermissionBottomSheetTest {
 
     @Test
     fun `locationPermissionBottomSheet displays custom rationale`() {
-        val customRationale = "We need your location to show you on the map."
+        val customRationaleRes = R.string.location_precise_rationale
 
         composeTestRule.setContent {
             LocationPermissionBottomSheet(
                 onDismiss = {},
                 onRequestPermissions = {},
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                rationale = customRationale,
+                rationale = customRationaleRes,
             )
         }
 
-        composeTestRule.onNodeWithText(customRationale).assertIsDisplayed()
+        composeTestRule.onNodeWithText(ApplicationProvider.getApplicationContext<Application>().getString(customRationaleRes)).assertIsDisplayed()
     }
 
     @Test

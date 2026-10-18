@@ -543,7 +543,7 @@ fun MessagingScreen(
                         } else {
                             "Sync complete"
                         }
-                    is SyncResult.Error -> "Sync failed: ${result.message}"
+                    is SyncResult.Error -> "Sync failed: ${result.message.resolve(context)}"
                     is SyncResult.NoRelay -> "No relay configured"
                     is SyncResult.Timeout -> "Sync timed out"
                 }
@@ -633,7 +633,7 @@ fun MessagingScreen(
                                 Toast
                                     .makeText(
                                         context,
-                                        "Failed to attach file: ${result.message}",
+                                        "Failed to attach file: ${result.message.resolve(context)}",
                                         Toast.LENGTH_SHORT,
                                     ).show()
                             }
@@ -1064,7 +1064,7 @@ fun MessagingScreen(
                                     when {
                                         isEstablishing -> "Connecting..."
                                         hasActiveLink -> "Online"
-                                        lastActivity > 0 -> "Last seen ${formatTimeSince(lastActivity, timestampTick)}"
+                                        lastActivity > 0 -> "Last seen ${formatTimeSince(context, lastActivity, timestampTick)}"
                                         else -> ""
                                     }
                                 Text(

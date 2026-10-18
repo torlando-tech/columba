@@ -29,6 +29,9 @@ import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.sinh
 import kotlin.math.tan
+import network.columba.app.R
+import network.columba.app.viewmodel.UiMessage
+import network.columba.app.viewmodel.toUiMessage
 
 /**
  * Parameters for downloading a map region.
@@ -84,7 +87,7 @@ class TileDownloadManager(
         val failedTiles: Int,
         val bytesDownloaded: Long,
         val currentZoom: Int,
-        val errorMessage: String? = null,
+        val errorMessage: UiMessage? = null,
     ) {
         val progress: Float
             get() = if (totalTiles > 0) downloadedTiles.toFloat() / totalTiles else 0f
@@ -237,7 +240,7 @@ class TileDownloadManager(
             Log.d(TAG, "Calculated ${tiles.size} tiles across zoom levels ${params.minZoom}-${params.maxZoom}")
 
             if (tiles.isEmpty()) {
-                updateErrorStatus("No tiles found for region")
+                updateErrorStatus(UiMessage.Text(R.string.tile_no_tiles_found))
                 return null
             }
 
@@ -278,7 +281,7 @@ class TileDownloadManager(
             }
             if (success) params.outputFile else null
         } catch (e: Exception) {
-            updateErrorStatus(e.message ?: "Download failed")
+            updateErrorStatus(e.toUiMessage(R.string.tile_download_failed))
             null
         }
     }
@@ -357,7 +360,7 @@ class TileDownloadManager(
             _progress.value =
                 _progress.value.copy(
                     status = DownloadProgress.Status.CANCELLED,
-                    errorMessage = if (deletionFailed) "Cancelled. Incomplete file may need manual cleanup." else null,
+                    errorMessage = if (deletionFailed) UiMessage.Text(R.string.tile_download_cancelled_cleanup) else null,
                 )
             return false
         }
@@ -365,7 +368,7 @@ class TileDownloadManager(
         return true
     }
 
-    private fun updateErrorStatus(message: String) {
+    private fun updateErrorStatus(message: UiMessage) {
         _progress.value = _progress.value.copy(status = DownloadProgress.Status.ERROR, errorMessage = message)
     }
 
@@ -380,14 +383,14 @@ class TileDownloadManager(
             val allTiles = fetchAllRmspTiles(source, params) ?: return null
 
             if (allTiles.isEmpty()) {
-                updateErrorStatus("No tiles received from RMSP server")
+                updateErrorStatus(UiMessage.Text(R.string.tile_rmsp_no_tiles))
                 return null
             }
 
             writeRmspTilesToFile(allTiles, params)
         } catch (e: Exception) {
             Log.e(TAG, "RMSP download failed: ${e.message}", e)
-            updateErrorStatus(e.message ?: "RMSP download failed")
+            updateErrorStatus(e.toUiMessage(R.string.tile_rmsp_download_failed))
             null
         }
     }
@@ -488,7 +491,7 @@ class TileDownloadManager(
                     _progress.value =
                         _progress.value.copy(
                             status = DownloadProgress.Status.CANCELLED,
-                            errorMessage = if (deletionFailed) "Cancelled. Incomplete file may need manual cleanup." else null,
+                            errorMessage = if (deletionFailed) UiMessage.Text(R.string.tile_download_cancelled_cleanup) else null,
                         )
                     return null
                 }

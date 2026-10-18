@@ -14,6 +14,7 @@ import network.columba.app.service.RelayInfo
 import network.columba.app.util.IdentityQrCodeUtils
 import network.columba.app.util.validation.IdentityInput
 import network.columba.app.util.validation.InputValidator
+import network.columba.app.util.validation.messageResource
 import network.columba.app.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -73,7 +74,7 @@ sealed class AddContactResult {
      */
     data class Error(
         val reason: AddContactErrorReason,
-        val detail: String? = null,
+        val detail: UiMessage? = null,
     ) : AddContactResult()
 }
 
@@ -460,8 +461,11 @@ class ContactsViewModel
                 // Step 1: Parse the input
                 val parsed = InputValidator.parseIdentityInput(input)
                 if (parsed is ValidationResult.Error) {
-                    Log.w(TAG, "Input validation failed: ${parsed.message}")
-                    return AddContactResult.Error(AddContactErrorReason.UNKNOWN, parsed.message)
+                    Log.w(TAG, "Input validation failed: ${parsed.reason}")
+                    return AddContactResult.Error(
+                        AddContactErrorReason.UNKNOWN,
+                        UiMessage.Text(parsed.reason.messageResource(), parsed.args),
+                    )
                 }
 
                 val identityInput = (parsed as ValidationResult.Success).value
@@ -492,14 +496,12 @@ class ContactsViewModel
                             )
                         if (result.isSuccess) {
                             Log.d(TAG, "Added contact with full identity: $destinationHash")
-                            viewModelScope.launch(Dispatchers.IO) {
-                                identityResolutionManager.requestPathForContact(identityInput.destinationHash)
-                            }
+                            requestPathInBackground(identityInput.destinationHash)
                             AddContactResult.Success
                         } else {
                             val error = result.exceptionOrNull()?.message
                             Log.e(TAG, "Failed to add contact: ${error ?: "unknown"}")
-                            AddContactResult.Error(AddContactErrorReason.UNKNOWN, error)
+                            AddContactResult.Error(AddContactErrorReason.UNKNOWN, error?.let(UiMessage::Raw))
                         }
                     }
 
@@ -514,16 +516,12 @@ class ContactsViewModel
                             when (result.getOrNull()) {
                                 is ContactRepository.AddPendingResult.ResolvedImmediately -> {
                                     Log.d(TAG, "Contact resolved from existing announce: $destinationHash")
-                                    viewModelScope.launch(Dispatchers.IO) {
-                                        identityResolutionManager.requestPathForContact(identityInput.destinationHash)
-                                    }
+                                    requestPathInBackground(identityInput.destinationHash)
                                     AddContactResult.Success
                                 }
                                 is ContactRepository.AddPendingResult.AddedAsPending -> {
                                     Log.d(TAG, "Added pending contact: $destinationHash")
-                                    viewModelScope.launch(Dispatchers.IO) {
-                                        identityResolutionManager.requestPathForContact(identityInput.destinationHash)
-                                    }
+                                    requestPathInBackground(identityInput.destinationHash)
                                     AddContactResult.PendingIdentity
                                 }
                                 null -> {
@@ -534,13 +532,20 @@ class ContactsViewModel
                         } else {
                             val error = result.exceptionOrNull()?.message
                             Log.e(TAG, "Failed to add pending contact: ${error ?: "unknown"}")
-                            AddContactResult.Error(AddContactErrorReason.UNKNOWN, error)
+                            AddContactResult.Error(AddContactErrorReason.UNKNOWN, error?.let(UiMessage::Raw))
                         }
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error adding contact from input", e)
-                AddContactResult.Error(AddContactErrorReason.UNKNOWN, e.message)
+                AddContactResult.Error(AddContactErrorReason.UNKNOWN, e.message?.let(UiMessage::Raw))
+            }
+        }
+
+        /** Kick off a background path request for a freshly added contact. */
+        private fun requestPathInBackground(destinationHash: String) {
+            viewModelScope.launch(Dispatchers.IO) {
+                identityResolutionManager.requestPathForContact(destinationHash)
             }
         }
 

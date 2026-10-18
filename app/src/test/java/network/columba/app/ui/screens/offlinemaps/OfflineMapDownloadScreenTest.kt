@@ -1038,7 +1038,7 @@ class OfflineMapDownloadScreenTest {
                 completedResources = 50L,
                 requiredResources = 100L,
                 isComplete = false,
-                errorMessage = "Network error",
+                errorMessage = UiMessage.Raw("Network error"),
             )
 
         composeTestRule.setContent {
@@ -1059,7 +1059,7 @@ class OfflineMapDownloadScreenTest {
                 completedResources = 50L,
                 requiredResources = 100L,
                 isComplete = false,
-                errorMessage = "Network error",
+                errorMessage = UiMessage.Raw("Network error"),
             )
 
         composeTestRule.setContent {
@@ -1122,7 +1122,7 @@ class OfflineMapDownloadScreenTest {
                 completedResources = 50L,
                 requiredResources = 100L,
                 isComplete = false,
-                errorMessage = "Download failed",
+                errorMessage = UiMessage.Raw("Download failed"),
             )
 
         composeTestRule.setContent {

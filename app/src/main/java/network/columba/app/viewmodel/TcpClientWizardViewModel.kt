@@ -12,6 +12,7 @@ import network.columba.app.rns.api.model.InterfaceMode
 import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.util.validation.InputValidator
+import network.columba.app.util.validation.messageResource
 import network.columba.app.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -396,7 +397,7 @@ class TcpClientWizardViewModel
                             _state.update {
                                 it.copy(
                                     isSaving = false,
-                                    saveError = UiMessage.Raw(uniqueResult.message),
+                                    saveError = UiMessage.Text(uniqueResult.reason.messageResource(), uniqueResult.args),
                                 )
                             }
                             return@launch

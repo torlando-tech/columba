@@ -1,9 +1,11 @@
 package network.columba.app.service
 
+import androidx.annotation.StringRes
+import network.columba.app.R
 import network.columba.app.rns.api.model.PropagationState
 
 /**
- * Pure mapping from a [PropagationState] to a human-readable "why did this relay go
+ * Pure mapping from a [PropagationState] to a localized "why did this relay go
  * unreachable" explanation, plus the cross-backend predicate that decides whether a given
  * state is a *node-unreachable* failure (as opposed to an in-flight transfer error or a
  * success).
@@ -34,17 +36,82 @@ object PropagationFailureReason {
     fun isUnreachable(state: PropagationState): Boolean = state.stateName in UNREACHABLE_STATE_NAMES
 
     /**
+     * Classification of an unreachable-relay explanation. The render site resolves
+     * [messageResource] with [Explanation.args]; [Explanation.storageToken] is the stable
+     * machine form persisted in the DB TEXT column.
+     */
+    enum class Reason {
+        NO_PATH,
+        NO_LINK,
+        CONNECTION_FAILED,
+        TRANSFER_FAILED,
+        IDENTITY_NOT_RECEIVED,
+        ACCESS_DENIED,
+        RELAY_UNREACHABLE,
+        RELAY_UNREACHABLE_CODE,
+        SYNC_FAILED,
+    }
+
+    /**
+     * A localized explanation of why a relay went unreachable: [reason] + [args] resolve to
+     * the UI string; [storageToken] round-trips through [Explanation.decode] for persistence.
+     */
+    data class Explanation(
+        val reason: Reason,
+        val args: List<Any> = emptyList(),
+    ) {
+        /** Stable machine token for the `lastFailureExplanation` DB column. */
+        fun storageToken(): String =
+            when (reason) {
+                Reason.RELAY_UNREACHABLE_CODE ->
+                    "${TOKEN_PREFIX}relay_unreachable_code:${args.first()}"
+                Reason.SYNC_FAILED -> "${TOKEN_PREFIX}sync_failed:${args.first()}"
+                else -> TOKEN_PREFIX + reason.storageKey()
+            }
+
+        companion object {
+            private const val TOKEN_PREFIX = "pf:"
+
+            /**
+             * Rebuilds an [Explanation] from a [storageToken]. Returns null for legacy rows
+             * written before tokens existed (plain English sentences), which callers render
+             * verbatim.
+             */
+            fun decode(token: String): Explanation? {
+                if (!token.startsWith(TOKEN_PREFIX)) return null
+                val body = token.removePrefix(TOKEN_PREFIX)
+                val firstColon = body.indexOf(':')
+                val key = if (firstColon >= 0) body.substring(0, firstColon) else body
+                val arg = if (firstColon >= 0) body.substring(firstColon + 1) else null
+                return when (key) {
+                    "no_path" -> Explanation(Reason.NO_PATH)
+                    "no_link" -> Explanation(Reason.NO_LINK)
+                    "connection" -> Explanation(Reason.CONNECTION_FAILED)
+                    "transfer" -> Explanation(Reason.TRANSFER_FAILED)
+                    "identity_not_received" -> Explanation(Reason.IDENTITY_NOT_RECEIVED)
+                    "access_denied" -> Explanation(Reason.ACCESS_DENIED)
+                    "relay_unreachable" -> Explanation(Reason.RELAY_UNREACHABLE)
+                    "relay_unreachable_code" ->
+                        arg?.let { Explanation(Reason.RELAY_UNREACHABLE_CODE, listOf(it)) }
+                    "sync_failed" -> arg?.let { Explanation(Reason.SYNC_FAILED, listOf(it)) }
+                    else -> null
+                }
+            }
+        }
+    }
+
+    /**
      * Human-readable explanation of an unreachable relay, for the UI and the recorded
      * [PreferredPropagationNodeEntity.lastFailureExplanation]. Resolves the specific reason
      * when the state name or code is precise enough, falling back to a generic message
      * otherwise.
      */
-    fun explanation(state: PropagationState): String =
+    fun explanation(state: PropagationState): Explanation =
         when (state.stateName) {
-            "no_path" -> "No path to relay"
-            "no_link" -> "No link to relay"
+            "no_path" -> Explanation(Reason.NO_PATH)
+            "no_link" -> Explanation(Reason.NO_LINK)
             "failed" -> failedExplanation(state.state)
-            else -> "Sync failed (${state.stateName})"
+            else -> Explanation(Reason.SYNC_FAILED, listOf(state.stateName))
         }
 
     /**
@@ -52,18 +119,47 @@ object PropagationFailureReason {
      * backend code spaces: Python `0xf0+` failure terminals and the native enum ordinals
      * (FAILED = 8).
      */
-    private fun failedExplanation(code: Int): String =
+    private fun failedExplanation(code: Int): Explanation =
         when (code) {
             // Python backend PR_* failure terminals (0xf0+).
-            0xf0 -> "No path to relay"
-            0xf1 -> "Connection failed"
-            0xf2 -> "Transfer failed"
-            0xf3 -> "Identity not received"
-            0xf4 -> "Access denied"
+            0xf0 -> Explanation(Reason.NO_PATH)
+            0xf1 -> Explanation(Reason.CONNECTION_FAILED)
+            0xf2 -> Explanation(Reason.TRANSFER_FAILED)
+            0xf3 -> Explanation(Reason.IDENTITY_NOT_RECEIVED)
+            0xf4 -> Explanation(Reason.ACCESS_DENIED)
             // Native backend LXMRouter$PropagationTransferState ordinals: FAILED(8), NO_PATH(9), NO_LINK(10).
-            8 -> "Relay unreachable"
-            9 -> "No path to relay"
-            10 -> "No link to relay"
-            else -> "Relay unreachable (code 0x${Integer.toHexString(code)})"
+            8 -> Explanation(Reason.RELAY_UNREACHABLE)
+            9 -> Explanation(Reason.NO_PATH)
+            10 -> Explanation(Reason.NO_LINK)
+            else -> Explanation(Reason.RELAY_UNREACHABLE_CODE, listOf(Integer.toHexString(code)))
         }
 }
+
+/** Stable lowercase key used in [PropagationFailureReason.Explanation.storageToken]. */
+private fun PropagationFailureReason.Reason.storageKey(): String =
+    when (this) {
+        PropagationFailureReason.Reason.NO_PATH -> "no_path"
+        PropagationFailureReason.Reason.NO_LINK -> "no_link"
+        PropagationFailureReason.Reason.CONNECTION_FAILED -> "connection"
+        PropagationFailureReason.Reason.TRANSFER_FAILED -> "transfer"
+        PropagationFailureReason.Reason.IDENTITY_NOT_RECEIVED -> "identity_not_received"
+        PropagationFailureReason.Reason.ACCESS_DENIED -> "access_denied"
+        PropagationFailureReason.Reason.RELAY_UNREACHABLE -> "relay_unreachable"
+        PropagationFailureReason.Reason.RELAY_UNREACHABLE_CODE -> "relay_unreachable_code"
+        PropagationFailureReason.Reason.SYNC_FAILED -> "sync_failed"
+    }
+
+/** Localized message resource for each [PropagationFailureReason.Reason]. */
+@StringRes
+fun PropagationFailureReason.Reason.messageResource(): Int =
+    when (this) {
+        PropagationFailureReason.Reason.NO_PATH -> R.string.prop_fail_no_path
+        PropagationFailureReason.Reason.NO_LINK -> R.string.prop_fail_no_link
+        PropagationFailureReason.Reason.CONNECTION_FAILED -> R.string.prop_fail_connection
+        PropagationFailureReason.Reason.TRANSFER_FAILED -> R.string.prop_fail_transfer
+        PropagationFailureReason.Reason.IDENTITY_NOT_RECEIVED -> R.string.prop_fail_identity_not_received
+        PropagationFailureReason.Reason.ACCESS_DENIED -> R.string.prop_fail_access_denied
+        PropagationFailureReason.Reason.RELAY_UNREACHABLE -> R.string.prop_fail_relay_unreachable
+        PropagationFailureReason.Reason.RELAY_UNREACHABLE_CODE -> R.string.prop_fail_relay_unreachable_code
+        PropagationFailureReason.Reason.SYNC_FAILED -> R.string.prop_fail_sync_failed
+    }

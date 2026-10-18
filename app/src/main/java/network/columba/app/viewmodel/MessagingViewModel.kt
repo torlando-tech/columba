@@ -3325,7 +3325,7 @@ internal fun validateAndSanitizeContent(
     }
     val validationResult = InputValidator.validateMessageContent(content)
     if (validationResult is ValidationResult.Error) {
-        Log.w(HELPER_TAG, "Invalid message content: ${validationResult.message}")
+        Log.w(HELPER_TAG, "Invalid message content: ${validationResult.reason}")
         return null
     }
     return validationResult.getOrThrow()
@@ -3335,7 +3335,7 @@ private fun validateDestinationHash(destinationHash: String): ByteArray? =
     when (val result = InputValidator.validateDestinationHash(destinationHash)) {
         is ValidationResult.Success -> result.value
         is ValidationResult.Error -> {
-            Log.e(HELPER_TAG, "Invalid destination hash: ${result.message}")
+            Log.e(HELPER_TAG, "Invalid destination hash: ${result.reason}")
             null
         }
     }

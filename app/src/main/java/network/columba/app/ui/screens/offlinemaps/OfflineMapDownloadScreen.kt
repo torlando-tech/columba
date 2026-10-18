@@ -1042,10 +1042,10 @@ fun DownloadingStep(
                 style = MaterialTheme.typography.bodyLarge,
             )
 
-            if (progress.errorMessage != null) {
+            progress.errorMessage?.let { errorMsg ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = progress.errorMessage,
+                    text = errorMsg.resolve(context),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )

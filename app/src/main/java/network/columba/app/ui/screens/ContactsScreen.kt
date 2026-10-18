@@ -126,6 +126,8 @@ import network.columba.app.viewmodel.ContactsViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
 import network.columba.app.viewmodel.messageResource
+import network.columba.app.util.validation.messageResource
+import network.columba.app.viewmodel.UiMessage
 
 private const val TAG = "ContactsScreen"
 
@@ -1009,6 +1011,7 @@ fun ContactListItem(
     onLongPress: () -> Unit = {},
 ) {
     // Determine if contact is pending or unresolved
+    val context = LocalContext.current
     val isPending = contact.status == ContactStatus.PENDING_IDENTITY
     val isUnresolved = contact.status == ContactStatus.UNRESOLVED
     val isActive = contact.status == ContactStatus.ACTIVE
@@ -1157,7 +1160,7 @@ fun ContactListItem(
                             val lastSeen = contact.lastSeenTimestamp
                             if (lastSeen != null) {
                                 Text(
-                                    text = formatTimeSince(lastSeen, nowMillis),
+                                    text = formatTimeSince(context, lastSeen, nowMillis),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -1493,9 +1496,10 @@ fun ManualEntryDialog(
     onDismiss: () -> Unit,
     onConfirm: (identityString: String, nickname: String?) -> Unit,
 ) {
+    val context = LocalContext.current
     var identityString by remember { mutableStateOf("") }
     var nickname by remember { mutableStateOf("") }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorMessage by remember { mutableStateOf<UiMessage?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1526,7 +1530,7 @@ fun ManualEntryDialog(
                     supportingText = {
                         val error = errorMessage
                         if (error != null) {
-                            Text(error, color = MaterialTheme.colorScheme.error)
+                            Text(error.resolve(context), color = MaterialTheme.colorScheme.error)
                         } else {
                             Text("Full lxma:// URL or 32-character hex address")
                         }
@@ -1558,7 +1562,7 @@ fun ManualEntryDialog(
                     // VALIDATION: Use InputValidator to parse both full lxma:// and hash-only input
                     when (val result = InputValidator.parseIdentityInput(identityString)) {
                         is ValidationResult.Error -> {
-                            errorMessage = result.message
+                            errorMessage = UiMessage.Text(result.reason.messageResource(), result.args)
                             return@TextButton
                         }
                         is ValidationResult.Success -> {

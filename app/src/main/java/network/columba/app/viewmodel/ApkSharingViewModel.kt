@@ -259,6 +259,8 @@ class ApkSharingViewModel
                                 isHotspotStarting = false,
                                 errorMessage =
                                     when (error) {
+                                        is LocalHotspotManager.HotspotException ->
+                                            error.uiMessage
                                         is SecurityException ->
                                             UiMessage.Text(R.string.apk_sharing_hotspot_permission)
                                         else ->

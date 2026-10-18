@@ -619,4 +619,201 @@
     <string name="debug_service_unavailable">Service unavailable</string>
     <string name="debug_network_status_unknown">Unknown</string>
     <string name="onboarding_save_failed">Failed to save</string>
+
+    <!-- i18n ticket 10: utils, services, data models -->
+    <!-- TimeUtils relative time -->
+    <string name="time_relative_just_now">Just now</string>
+    <string name="time_since_just_now">just now</string>
+    <plurals name="time_minutes_ago">
+        <item quantity="one">%d minute ago</item>
+        <item quantity="other">%d minutes ago</item>
+    </plurals>
+    <plurals name="time_hours_ago">
+        <item quantity="one">%d hour ago</item>
+        <item quantity="other">%d hours ago</item>
+    </plurals>
+    <plurals name="time_days_ago">
+        <item quantity="one">%d day ago</item>
+        <item quantity="other">%d days ago</item>
+    </plurals>
+    <plurals name="time_weeks_ago">
+        <item quantity="one">%d week ago</item>
+        <item quantity="other">%d weeks ago</item>
+    </plurals>
+    <string name="label_unknown">Unknown</string>
+    <!-- DestinationHashValidator -->
+    <string name="hash_cannot_be_empty">Hash cannot be empty</string>
+    <string name="hash_length_mismatch">Hash must be %1$d characters (got %2$d)</string>
+    <string name="hash_not_hex">Hash must contain only hex characters (0-9, a-f)</string>
+    <!-- InputValidator -->
+    <string name="validation_message_empty">Message cannot be empty</string>
+    <string name="validation_message_too_long">Message too long (max %1$d characters)</string>
+    <string name="validation_hash_length">Invalid hash length (expected %1$d characters, got %2$d)</string>
+    <string name="validation_hash_not_hex">Hash must contain only hexadecimal characters (0-9, a-f)</string>
+    <string name="validation_invalid_hex_format">Invalid hexadecimal format</string>
+    <string name="validation_pubkey_length">Invalid public key length (expected %1$d characters, got %2$d)</string>
+    <string name="validation_pubkey_not_hex">Public key must contain only hexadecimal characters (0-9, a-f)</string>
+    <string name="validation_identity_prefix">Identity must start with %1$s</string>
+    <string name="validation_identity_format">Invalid format. Expected: %1$s</string>
+    <string name="validation_invalid_hash">Invalid hash: %1$s</string>
+    <string name="validation_invalid_pubkey">Invalid public key: %1$s</string>
+    <string name="validation_identity_input_required">Please enter an identity string or destination hash</string>
+    <string name="validation_dest_hash_not_hex">Invalid destination hash: must contain only hexadecimal characters (0-9, a-f)</string>
+    <string name="validation_identity_input_format">"Invalid format. Enter either:\n• Full identity: lxma://hash:pubkey\n• Destination hash: 32 hexadecimal characters"</string>
+    <string name="validation_hostname_empty">Hostname cannot be empty</string>
+    <string name="validation_invalid_ip">Invalid IP address</string>
+    <string name="validation_hostname_invalid">Invalid hostname or IP address</string>
+    <string name="validation_port_not_number">Port must be a number</string>
+    <string name="validation_port_range">Port must be between %1$d and %2$d</string>
+    <string name="validation_nickname_empty">Nickname cannot be empty</string>
+    <string name="validation_nickname_too_long">Nickname too long (max %1$d characters)</string>
+    <string name="validation_interface_name_empty">Interface name cannot be empty</string>
+    <string name="validation_interface_name_too_long">Interface name too long (max %1$d characters)</string>
+    <string name="validation_interface_name_duplicate">An interface with this name already exists</string>
+    <string name="validation_device_name_empty">Device name cannot be empty</string>
+    <string name="validation_device_name_too_long">Device name too long (max %1$d characters)</string>
+    <string name="validation_unknown_config_param">Unknown configuration parameter: %1$s</string>
+    <string name="validation_ble_packet_too_large">BLE packet too large (%1$d bytes, max %2$d)</string>
+    <!-- Permission rationales -->
+    <string name="camera_permission_rationale">"Columba needs camera access to:\n• Scan QR codes to add contacts\n• Read identity information from QR codes\n\nYour camera is only used for QR code scanning and no photos are stored.\n"</string>
+    <string name="location_permission_rationale">"Columba needs location access to:\n\nShare your location with chosen contacts\nHelp friends find you at events\nCalculate distance to contacts\n\nYou control who can see your location and for how long. Location data is only shared peer-to-peer with contacts you choose. Location data, like all data on Columba, is encrypted end to end, never stored on a central server, and is only readable by the contacts you send it to.\n\nColumba will not and can not share your location with anyone until you actively send it to someone. Your location is always encrypted safely over Reticulum.\n"</string>
+    <string name="location_precise_rationale">"Location sharing is set to Precise, but Columba doesn't have precise location access.\n\nWithout it, a shared position is unavailable or only approximate — off by a kilometre or more. Enable precise location for accurate sharing, or set a coarser precision in Location Sharing settings if that's intended.\n"</string>
+    <string name="location_group_tracker_rationale">Group Tracker shares your location with a group host so everyone can see where each other is.\n\nYour location is encrypted and only readable by the group host you configure.</string>
+    <!-- FileUtils / ImageUtils -->
+    <string name="file_read_could_not_open">Could not open file</string>
+    <!-- LocalHotspotManager -->
+    <string name="hotspot_error_policy">Hotspot is not allowed by device policy</string>
+    <string name="hotspot_error_incompatible_mode">WiFi is in a mode that prevents hotspot creation</string>
+    <string name="hotspot_error_no_channel">No WiFi channel available for hotspot</string>
+    <string name="hotspot_error_could_not_start">Could not start hotspot</string>
+    <string name="hotspot_error_generic">Hotspot failed (error %1$d)</string>
+    <!-- Propagation failure reasons / sync -->
+    <string name="prop_fail_no_path">No path to relay</string>
+    <string name="prop_fail_no_link">No link to relay</string>
+    <string name="prop_fail_connection">Connection failed</string>
+    <string name="prop_fail_transfer">Transfer failed</string>
+    <string name="prop_fail_identity_not_received">Identity not received</string>
+    <string name="prop_fail_access_denied">Access denied</string>
+    <string name="prop_fail_relay_unreachable">Relay unreachable</string>
+    <string name="prop_fail_relay_unreachable_code">Relay unreachable (code 0x%1$s)</string>
+    <string name="prop_fail_sync_failed">Sync failed (%1$s)</string>
+    <string name="propagation_sync_failed_state">Sync failed: %1$s</string>
+    <string name="propagation_sync_unknown_error_state">Unknown error (%1$d)</string>
+    <string name="propagation_relay_config_unavailable">Relay configuration not available yet</string>
+    <string name="propagation_node_not_reachable">Propagation node not reachable</string>
+    <!-- UpdateChecker -->
+    <string name="update_no_releases">No releases found</string>
+    <string name="update_parse_release_failed">Could not parse release info</string>
+    <string name="update_parse_version_failed">Could not parse version numbers</string>
+    <string name="update_network_error">Network error</string>
+    <!-- InterfaceConfigManager -->
+    <string name="iface_apply_requires_unlock">Active identity requires unlock before interface config can apply</string>
+    <string name="iface_apply_key_unavailable">Active identity key unavailable; aborting apply</string>
+    <string name="iface_apply_init_failed">Failed to initialize Reticulum: %1$s</string>
+    <!-- PageImageLoader -->
+    <string name="page_image_malformed_url">Malformed image URL: %1$s</string>
+    <string name="page_image_too_large">Image too large (%1$d bytes; cap %2$d)</string>
+    <string name="page_image_not_webp">Not a WebP image (rejected)</string>
+    <string name="page_image_error_loading">Error loading image</string>
+    <string name="page_image_invalid_url">Invalid image URL</string>
+    <!-- VoiceMessageRecorder -->
+    <string name="voice_recording_failed">Recording failed</string>
+    <string name="voice_start_failed">Unable to start recording</string>
+    <!-- MapLibreOfflineManager / TileDownloadManager -->
+    <string name="maplibre_tile_limit_exceeded">Tile count limit exceeded (%1$d tiles). Try a smaller region or fewer zoom levels.</string>
+    <string name="tile_no_tiles_found">No tiles found for region</string>
+    <string name="tile_download_failed">Download failed</string>
+    <string name="tile_download_cancelled_cleanup">Cancelled. Incomplete file may need manual cleanup.</string>
+    <string name="tile_rmsp_no_tiles">No tiles received from RMSP server</string>
+    <string name="tile_rmsp_download_failed">RMSP download failed</string>
+    <!-- MapStylePreference -->
+    <string name="map_style_auto">Auto</string>
+    <string name="map_style_light">Light</string>
+    <string name="map_style_dark">Dark</string>
+    <!-- ImageCompressionPreset -->
+    <string name="compression_preset_low">Low</string>
+    <string name="compression_preset_medium">Medium</string>
+    <string name="compression_preset_high">High</string>
+    <string name="compression_preset_original">Original</string>
+    <string name="compression_preset_auto">Auto</string>
+    <string name="compression_desc_low">32KB max - optimized for LoRa and BLE</string>
+    <string name="compression_desc_medium">128KB max - balanced for mixed networks</string>
+    <string name="compression_desc_high">512KB max - good quality for general use</string>
+    <string name="compression_desc_original">25MB max - minimal compression for fast networks</string>
+    <string name="compression_desc_auto">Automatically select based on enabled interfaces</string>
+    <!-- ModemPreset -->
+    <string name="modem_preset_short_turbo">Short Turbo</string>
+    <string name="modem_preset_short_fast">Short Fast</string>
+    <string name="modem_preset_short_slow">Short Slow</string>
+    <string name="modem_preset_medium_fast">Medium Fast</string>
+    <string name="modem_preset_medium_slow">Medium Slow</string>
+    <string name="modem_preset_long_fast">Long Fast</string>
+    <string name="modem_preset_long_moderate">Long Moderate</string>
+    <string name="modem_preset_long_slow">Long Slow</string>
+    <string name="modem_desc_short_turbo">Fastest speed, very short range</string>
+    <string name="modem_desc_short_fast">Fast speed, short range</string>
+    <string name="modem_desc_short_slow">Moderate speed, short range</string>
+    <string name="modem_desc_medium_fast">Balanced speed and range</string>
+    <string name="modem_desc_medium_slow">Slower speed, medium range</string>
+    <string name="modem_desc_long_fast">Good balance of speed and range</string>
+    <string name="modem_desc_long_moderate">Better range, slower speed</string>
+    <string name="modem_desc_long_slow">Maximum range, slowest speed</string>
+    <!-- FrequencyRegion descriptions -->
+    <string name="region_desc_us_915">902-928 MHz ISM band</string>
+    <string name="region_desc_br_902">902-907.5 MHz (limited band)</string>
+    <string name="region_desc_eu_868_l" formatted="false">Sub-band L: 1% duty cycle, 25 mW (UK, IT, NL presets)</string>
+    <string name="region_desc_eu_868_m" formatted="false">Sub-band M: 1% duty cycle, 25 mW (LoRaWAN default)</string>
+    <string name="region_desc_eu_868_p" formatted="false">Sub-band P: 10% duty cycle, 500 mW (best for LoRa)</string>
+    <string name="region_desc_eu_868_q" formatted="false">Sub-band Q: 1% duty cycle, 25 mW</string>
+    <string name="region_desc_eu_433" formatted="false">433-434 MHz ISM, 10% duty cycle</string>
+    <string name="region_desc_ru_868">868.7-869.2 MHz</string>
+    <string name="region_desc_ua_868" formatted="false">868-868.6 MHz, 1% duty cycle (very restrictive)</string>
+    <string name="region_desc_au_915">915-928 MHz ISM band</string>
+    <string name="region_desc_nz_865">864-868 MHz alternative band</string>
+    <string name="region_desc_jp_920">920.8-927.8 MHz ARIB STD-T108</string>
+    <string name="region_desc_kr_920">920-923 MHz</string>
+    <string name="region_desc_tw_920">920-925 MHz LP0002</string>
+    <string name="region_desc_cn_470">470-510 MHz</string>
+    <string name="region_desc_in_865">865-867 MHz</string>
+    <string name="region_desc_th_920">920-925 MHz NBTC</string>
+    <string name="region_desc_sg_923">917-925 MHz IMDA</string>
+    <string name="region_desc_my_919">919-924 MHz MCMC</string>
+    <string name="region_desc_ph_915">915-918 MHz NTC</string>
+    <string name="region_desc_lora_24">2.4 GHz ISM (worldwide, short range)</string>
+    <!-- CommunitySlots descriptions -->
+    <string name="community_slot_desc_default">⚠️ Avoid - Meshtastic interference</string>
+    <string name="community_slot_desc_nova">⚠️ Avoid - Northern Virginia Meshtastic mesh</string>
+    <!-- RNodeRegionalPresets descriptions -->
+    <string name="preset_desc_au_default">915-928 MHz AU band (default)</string>
+    <string name="preset_desc_au_sydney">Sydney long-range configuration</string>
+    <string name="preset_desc_au_brisbane">Brisbane configuration</string>
+    <string name="preset_desc_au_western_sydney">Western Sydney configuration</string>
+    <string name="preset_desc_eu868">868 MHz EU band</string>
+    <string name="preset_desc_be_duffel">Duffel configuration</string>
+    <string name="preset_desc_fi_turku">Turku configuration</string>
+    <string name="preset_desc_de_darmstadt">Darmstadt configuration</string>
+    <string name="preset_desc_de_wiesbaden">Wiesbaden configuration</string>
+    <string name="preset_desc_de_ruhrgebiet">Ruhrgebiet configuration (869.4625 MHz, region-default TX, 10% LT airtime)</string>
+    <string name="preset_desc_it_salerno">Salerno configuration</string>
+    <string name="preset_desc_it_brescia">Brescia configuration</string>
+    <string name="preset_desc_it_treviso">Treviso configuration</string>
+    <string name="preset_desc_it_genova">Genova 433 MHz configuration</string>
+    <string name="preset_desc_as923">920 MHz AS923 band</string>
+    <string name="preset_desc_nl_rotterdam">Rotterdam Nesselande configuration</string>
+    <string name="preset_desc_be_brugge">Brugge (Bruges) configuration</string>
+    <string name="preset_desc_no_default">Norway narrowband</string>
+    <string name="preset_desc_es_default">869 MHz EU band</string>
+    <string name="preset_desc_es_madrid">Madrid configuration</string>
+    <string name="preset_desc_se_gothenburg">Gothenburg area configuration</string>
+    <string name="preset_desc_se_433">433 MHz band shared by Gothenburg, Borås, Älvsered</string>
+    <string name="preset_desc_se_morbylanga">Mörbylånga/Bredinge configuration</string>
+    <string name="preset_desc_ch_bern">Bern configuration</string>
+    <string name="preset_desc_gb_default">868 MHz UK band</string>
+    <string name="preset_desc_gb_st_helens">St. Helens configuration</string>
+    <string name="preset_desc_gb_edinburgh">Edinburgh 868 MHz configuration</string>
+    <string name="preset_desc_gb_edinburgh_2g4">Edinburgh 2.4 GHz configuration</string>
+    <string name="preset_desc_us_default">915 MHz ISM band (default)</string>
+    <string name="preset_desc_us_portsmouth">Portsmouth, NH configuration</string>
+    <string name="preset_desc_us_olympia">Olympia, WA configuration</string>
+    <string name="preset_desc_us_chicago">Chicago, IL configuration</string>
 </resources>

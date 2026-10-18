@@ -49,7 +49,7 @@ class InputValidatorTest {
         val longMessage = "a".repeat(20000)
         val result = InputValidator.validateMessageContent(longMessage)
         assertTrue(result is ValidationResult.Error)
-        assertTrue((result as ValidationResult.Error).message.contains("too long"))
+        assertEquals(InputErrorReason.MESSAGE_TOO_LONG, (result as ValidationResult.Error).reason)
     }
 
     @Test
@@ -95,7 +95,7 @@ class InputValidatorTest {
         val shortHash = "0123456789abcdef"
         val result = InputValidator.validateDestinationHash(shortHash)
         assertTrue(result is ValidationResult.Error)
-        assertTrue((result as ValidationResult.Error).message.contains("length"))
+        assertEquals(InputErrorReason.HASH_LENGTH, (result as ValidationResult.Error).reason)
     }
 
     @Test
@@ -131,7 +131,7 @@ class InputValidatorTest {
         val shortKey = "0123456789abcdef"
         val result = InputValidator.validatePublicKey(shortKey)
         assertTrue(result is ValidationResult.Error)
-        assertTrue((result as ValidationResult.Error).message.contains("length"))
+        assertEquals(InputErrorReason.PUBKEY_LENGTH, (result as ValidationResult.Error).reason)
     }
 
     @Test
@@ -160,7 +160,7 @@ class InputValidatorTest {
         val invalidIdentity = "0123456789abcdef0123456789abcdef:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
         val result = InputValidator.validateIdentityString(invalidIdentity)
         assertTrue(result is ValidationResult.Error)
-        assertTrue((result as ValidationResult.Error).message.contains("lxma://"))
+        assertEquals(InputErrorReason.IDENTITY_PREFIX, (result as ValidationResult.Error).reason)
     }
 
     @Test
@@ -168,7 +168,7 @@ class InputValidatorTest {
         val invalidIdentity = "lxma://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
         val result = InputValidator.validateIdentityString(invalidIdentity)
         assertTrue(result is ValidationResult.Error)
-        assertTrue((result as ValidationResult.Error).message.contains("format"))
+        assertEquals(InputErrorReason.IDENTITY_FORMAT, (result as ValidationResult.Error).reason)
     }
 
     @Test
@@ -376,7 +376,7 @@ class InputValidatorTest {
         val longNickname = "a".repeat(200)
         val result = InputValidator.validateNickname(longNickname)
         assertTrue(result is ValidationResult.Error)
-        assertTrue((result as ValidationResult.Error).message.contains("too long"))
+        assertEquals(InputErrorReason.NICKNAME_TOO_LONG, (result as ValidationResult.Error).reason)
     }
 
     @Test
@@ -421,7 +421,7 @@ class InputValidatorTest {
         val existingNames = listOf("TCP Client 1", "RNode LoRa", "AutoInterface")
         val result = InputValidator.validateInterfaceNameUniqueness("RNode LoRa", existingNames)
         assertTrue(result is ValidationResult.Error)
-        assertTrue((result as ValidationResult.Error).message.contains("already exists"))
+        assertEquals(InputErrorReason.INTERFACE_NAME_DUPLICATE, (result as ValidationResult.Error).reason)
     }
 
     @Test
@@ -599,7 +599,7 @@ class InputValidatorTest {
         val data = ByteArray(1024)
         val result = InputValidator.validateBlePacketSize(data)
         assertTrue(result is ValidationResult.Error)
-        assertTrue((result as ValidationResult.Error).message.contains("too large"))
+        assertEquals(InputErrorReason.BLE_PACKET_TOO_LARGE, (result as ValidationResult.Error).reason)
     }
 
     // ========== TEXT SANITIZATION TESTS ==========
@@ -764,7 +764,7 @@ class InputValidatorTest {
         val shortHash = "0123456789abcdef" // Only 16 chars
         val result = InputValidator.parseIdentityInput(shortHash)
         assertTrue(result is ValidationResult.Error)
-        assertTrue((result as ValidationResult.Error).message.contains("32"))
+        assertEquals(InputErrorReason.IDENTITY_INPUT_FORMAT, (result as ValidationResult.Error).reason)
     }
 
     @Test
@@ -779,7 +779,7 @@ class InputValidatorTest {
         val invalidHash = "0123456789abcdef0123456789abcdeg" // 'g' is invalid
         val result = InputValidator.parseIdentityInput(invalidHash)
         assertTrue(result is ValidationResult.Error)
-        assertTrue((result as ValidationResult.Error).message.contains("hexadecimal"))
+        assertEquals(InputErrorReason.DEST_HASH_NOT_HEX, (result as ValidationResult.Error).reason)
     }
 
     @Test

@@ -191,7 +191,7 @@ fun ChatsScreen(
                         } else {
                             "Sync complete"
                         }
-                    is SyncResult.Error -> "Sync failed: ${result.message}"
+                    is SyncResult.Error -> "Sync failed: ${result.message.resolve(context)}"
                     is SyncResult.NoRelay -> "No relay configured"
                     is SyncResult.Timeout -> "Sync timed out"
                 }

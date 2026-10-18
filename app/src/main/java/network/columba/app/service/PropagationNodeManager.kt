@@ -1,6 +1,7 @@
 package network.columba.app.service
 
 import android.util.Log
+import network.columba.app.R
 import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import network.columba.app.data.repository.AnnounceRepository
@@ -20,6 +21,8 @@ import network.columba.app.rns.host.manager.PreferredNodePolicy
 import network.columba.app.rns.host.manager.PropagationNodeSelection
 import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.util.HexUtils.toHexString
+import network.columba.app.viewmodel.UiMessage
+import network.columba.app.viewmodel.toUiMessage
 import java.time.Clock
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -56,7 +59,7 @@ sealed class SyncResult {
 
     /** Sync failed with an error */
     data class Error(
-        val message: String,
+        val message: UiMessage,
         val errorCode: Int? = null,
     ) : SyncResult()
 
@@ -542,7 +545,14 @@ class PropagationNodeManager
                     // retry this sync on the new relay automatically.
                     recordSyncFailureAndScheduleRetry(state)
                     if (_isManualSync) {
-                        _manualSyncResult.emit(SyncResult.Error("Sync failed: ${state.stateName}"))
+                        _manualSyncResult.emit(
+                            SyncResult.Error(
+                                UiMessage.Text(
+                                    R.string.propagation_sync_failed_state,
+                                    listOf(state.stateName),
+                                ),
+                            ),
+                        )
                         _isManualSync = false
                     }
                     true
@@ -608,16 +618,19 @@ class PropagationNodeManager
          */
         private suspend fun handleSyncError(state: PropagationState) {
             if (_isSyncing.value) {
-                val errorMsg =
+                val errorMsg: UiMessage =
                     when (state.state) {
-                        0xf0 -> "No path to relay"
-                        0xf1 -> "Connection failed"
-                        0xf2 -> "Transfer failed"
-                        0xf3 -> "Identity not received"
-                        0xf4 -> "Access denied"
-                        else -> "Unknown error (${state.state})"
+                        0xf0 -> UiMessage.Text(R.string.prop_fail_no_path)
+                        0xf1 -> UiMessage.Text(R.string.prop_fail_connection)
+                        0xf2 -> UiMessage.Text(R.string.prop_fail_transfer)
+                        0xf3 -> UiMessage.Text(R.string.prop_fail_identity_not_received)
+                        0xf4 -> UiMessage.Text(R.string.prop_fail_access_denied)
+                        else -> UiMessage.Text(
+                            R.string.propagation_sync_unknown_error_state,
+                            listOf(state.state),
+                        )
                     }
-                Log.w(TAG, "Sync error: $errorMsg (manual=$_isManualSync)")
+                Log.w(TAG, "Sync error: state=${state.state} name=${state.stateName} (manual=$_isManualSync)")
                 syncFinalized.set(true)
                 _isSyncing.value = false
                 _syncProgress.value = SyncProgress.Idle
@@ -675,11 +688,11 @@ class PropagationNodeManager
             if (!PropagationFailureReason.isUnreachable(state)) return
             if (!preferredPropagationNodeRepository.contains(destinationHash)) return
             val reason = PropagationFailureReason.explanation(state)
-            Log.i(TAG, "Recording unreachable relay $destinationHash: $reason (code ${state.state})")
+            Log.i(TAG, "Recording unreachable relay $destinationHash: ${reason.storageToken()} (code ${state.state})")
             preferredPropagationNodeRepository.recordFailure(
                 destinationHash = destinationHash,
                 code = state.state,
-                explanation = reason,
+                explanation = reason.storageToken(),
                 timestamp = nowMs(),
             )
         }
@@ -1387,11 +1400,11 @@ class PropagationNodeManager
                         handleSyncRequestSuccess(propState, timeoutJob)
                     }.onFailure { error ->
                         Log.w(TAG, "Sync request failed: ${error.message}")
-                        resetSyncOnFailure(timeoutJob, error.message ?: "Unknown error")
+                        resetSyncOnFailure(timeoutJob, error.toUiMessage(R.string.error_unknown))
                     }
             } catch (e: Exception) {
                 Log.e(TAG, "Error during sync", e)
-                resetSyncOnFailure(timeoutJob, e.message ?: "Unknown error")
+                resetSyncOnFailure(timeoutJob, e.toUiMessage(R.string.error_unknown))
             }
         }
 
@@ -1404,7 +1417,7 @@ class PropagationNodeManager
                 }
             if (state == null) {
                 Log.w(TAG, "Timed out waiting for relay state to load from database")
-                if (!silent) _manualSyncResult.emit(SyncResult.Error("Relay configuration not available yet"))
+                if (!silent) _manualSyncResult.emit(SyncResult.Error(UiMessage.Text(R.string.propagation_relay_config_unavailable)))
                 return null
             }
             val relay = (state as RelayLoadState.Loaded).relay
@@ -1462,7 +1475,7 @@ class PropagationNodeManager
                     // re-drives rather than leaving the user to request retrieval again.
                     recordSyncFailureAndScheduleRetry(propState)
                     if (_isManualSync) {
-                        _manualSyncResult.emit(SyncResult.Error("Propagation node not reachable"))
+                        _manualSyncResult.emit(SyncResult.Error(UiMessage.Text(R.string.propagation_node_not_reachable)))
                         _isManualSync = false
                     }
                 }
@@ -1477,7 +1490,7 @@ class PropagationNodeManager
 
         private suspend fun resetSyncOnFailure(
             timeoutJob: Job,
-            errorMessage: String,
+            errorMessage: UiMessage,
         ) {
             timeoutJob.cancel()
             syncFinalized.set(true)

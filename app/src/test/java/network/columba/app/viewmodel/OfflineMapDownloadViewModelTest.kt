@@ -891,7 +891,7 @@ class OfflineMapDownloadViewModelTest {
             coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
 
             // Capture the onError callback
-            val onErrorSlot = slot<(String) -> Unit>()
+            val onErrorSlot = slot<(UiMessage) -> Unit>()
             every {
                 mockMapLibreOfflineManager.downloadRegion(
                     name = any(),
@@ -906,7 +906,7 @@ class OfflineMapDownloadViewModelTest {
                 )
             } answers {
                 // Simulate calling the error callback
-                onErrorSlot.captured("Network error")
+                onErrorSlot.captured(UiMessage.Raw("Network error"))
             }
 
             viewModel.nextStep()
@@ -916,10 +916,10 @@ class OfflineMapDownloadViewModelTest {
             viewModel.state.test {
                 val state = expectMostRecentItem()
                 assertEquals(
-                    UiMessage.Text(R.string.offline_map_download_failed, listOf("Network error")),
+                    UiMessage.Text(R.string.offline_map_download_failed, listOf(UiMessage.Raw("Network error"))),
                     state.errorMessage,
                 )
-                assertEquals("Network error", state.downloadProgress?.errorMessage)
+                assertEquals(UiMessage.Raw("Network error"), state.downloadProgress?.errorMessage)
 
                 cancelAndConsumeRemainingEvents()
             }
@@ -1033,7 +1033,7 @@ class OfflineMapDownloadViewModelTest {
             coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 101L
 
             // Capture the onError callback
-            val onErrorSlot = slot<(String) -> Unit>()
+            val onErrorSlot = slot<(UiMessage) -> Unit>()
             every {
                 mockMapLibreOfflineManager.downloadRegion(
                     name = any(),
@@ -1048,7 +1048,7 @@ class OfflineMapDownloadViewModelTest {
                 )
             } answers {
                 // Simulate calling the error callback
-                onErrorSlot.captured("Connection timeout")
+                onErrorSlot.captured(UiMessage.Raw("Connection timeout"))
             }
 
             viewModel.nextStep()

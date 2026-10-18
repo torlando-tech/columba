@@ -55,14 +55,14 @@ class RNodeConfigValidatorTest {
     fun `validateName valid name`() {
         val result = RNodeConfigValidator.validateName("RNode LoRa")
         assertTrue(result.isValid)
-        assertNull(result.errorMessage)
+        assertNull(result.error)
     }
 
     @Test
     fun `validateName blank name is invalid`() {
         val result = RNodeConfigValidator.validateName("")
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("required"))
+        assertEquals(RNodeFieldErrorReason.NAME_REQUIRED, result.error?.reason)
     }
 
     @Test
@@ -77,7 +77,7 @@ class RNodeConfigValidatorTest {
     fun `validateFrequency valid frequency with region`() {
         val result = RNodeConfigValidator.validateFrequency("915000000", usRegion)
         assertTrue(result.isValid)
-        assertNull(result.errorMessage)
+        assertNull(result.error)
     }
 
     @Test
@@ -90,21 +90,21 @@ class RNodeConfigValidatorTest {
     fun `validateFrequency invalid number`() {
         val result = RNodeConfigValidator.validateFrequency("abc", usRegion)
         assertFalse(result.isValid)
-        assertEquals("Invalid number", result.errorMessage)
+        assertEquals(RNodeFieldErrorReason.INVALID_NUMBER, result.error?.reason)
     }
 
     @Test
     fun `validateFrequency below region minimum`() {
         val result = RNodeConfigValidator.validateFrequency("900000000", usRegion)
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("MHz"))
+        assertEquals(RNodeFieldErrorReason.FREQUENCY_RANGE, result.error?.reason)
     }
 
     @Test
     fun `validateFrequency above region maximum`() {
         val result = RNodeConfigValidator.validateFrequency("930000000", usRegion)
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("MHz"))
+        assertEquals(RNodeFieldErrorReason.FREQUENCY_RANGE, result.error?.reason)
     }
 
     @Test
@@ -145,14 +145,14 @@ class RNodeConfigValidatorTest {
     fun `validateBandwidth below minimum`() {
         val result = RNodeConfigValidator.validateBandwidth("5000")
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("7.8"))
+        assertEquals(RNodeFieldErrorReason.BANDWIDTH_MIN, result.error?.reason)
     }
 
     @Test
     fun `validateBandwidth above maximum`() {
         val result = RNodeConfigValidator.validateBandwidth("2000000")
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("1625"))
+        assertEquals(RNodeFieldErrorReason.BANDWIDTH_MAX, result.error?.reason)
     }
 
     @Test
@@ -179,14 +179,14 @@ class RNodeConfigValidatorTest {
     fun `validateSpreadingFactor below minimum`() {
         val result = RNodeConfigValidator.validateSpreadingFactor("4")
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("5"))
+        assertEquals(RNodeFieldErrorReason.SF_MIN, result.error?.reason)
     }
 
     @Test
     fun `validateSpreadingFactor above maximum`() {
         val result = RNodeConfigValidator.validateSpreadingFactor("13")
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("12"))
+        assertEquals(RNodeFieldErrorReason.SF_MAX, result.error?.reason)
     }
 
     @Test
@@ -207,14 +207,14 @@ class RNodeConfigValidatorTest {
     fun `validateCodingRate below minimum`() {
         val result = RNodeConfigValidator.validateCodingRate("4")
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("5"))
+        assertEquals(RNodeFieldErrorReason.CR_MIN, result.error?.reason)
     }
 
     @Test
     fun `validateCodingRate above maximum`() {
         val result = RNodeConfigValidator.validateCodingRate("9")
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("8"))
+        assertEquals(RNodeFieldErrorReason.CR_MAX, result.error?.reason)
     }
 
     // ========== validateTxPower Tests ==========
@@ -229,7 +229,8 @@ class RNodeConfigValidatorTest {
     fun `validateTxPower exceeds region max`() {
         val result = RNodeConfigValidator.validateTxPower("35", usRegion)
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("30"))
+        assertEquals(RNodeFieldErrorReason.TX_POWER_MAX, result.error?.reason)
+        assertEquals(listOf(30), result.error?.args)
     }
 
     @Test
@@ -243,7 +244,8 @@ class RNodeConfigValidatorTest {
         // Default max is 27
         val result = RNodeConfigValidator.validateTxPower("30", null)
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("27"))
+        assertEquals(RNodeFieldErrorReason.TX_POWER_MAX, result.error?.reason)
+        assertEquals(listOf(27), result.error?.args)
     }
 
     @Test
@@ -251,14 +253,15 @@ class RNodeConfigValidatorTest {
         // NZ 865 allows highest TX power (36 dBm)
         val result = RNodeConfigValidator.validateTxPower("36", nzRegion)
         assertTrue(result.isValid)
-        assertNull(result.errorMessage)
+        assertNull(result.error)
     }
 
     @Test
     fun `validateTxPower NZ region rejects above 36 dBm`() {
         val result = RNodeConfigValidator.validateTxPower("37", nzRegion)
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("36"))
+        assertEquals(RNodeFieldErrorReason.TX_POWER_MAX, result.error?.reason)
+        assertEquals(listOf(36), result.error?.args)
     }
 
     @Test
@@ -275,7 +278,8 @@ class RNodeConfigValidatorTest {
 
         val invalidResult = RNodeConfigValidator.validateTxPower("15", euRegion)
         assertFalse(invalidResult.isValid)
-        assertTrue(invalidResult.errorMessage!!.contains("14"))
+        assertEquals(RNodeFieldErrorReason.TX_POWER_MAX, invalidResult.error?.reason)
+        assertEquals(listOf(14), invalidResult.error?.args)
     }
 
     // ========== validateAirtimeLimit Tests ==========
@@ -296,7 +300,8 @@ class RNodeConfigValidatorTest {
     fun `validateAirtimeLimit exceeds regional duty cycle`() {
         val result = RNodeConfigValidator.validateAirtimeLimit("20", euRegion)
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("10"))
+        assertEquals(RNodeFieldErrorReason.AIRTIME_REGIONAL_MAX, result.error?.reason)
+        assertEquals(listOf(10.0), result.error?.args)
     }
 
     @Test
@@ -309,7 +314,7 @@ class RNodeConfigValidatorTest {
     fun `validateAirtimeLimit over 100 percent`() {
         val result = RNodeConfigValidator.validateAirtimeLimit("101", usRegion)
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("100"))
+        assertEquals(RNodeFieldErrorReason.AIRTIME_MAX, result.error?.reason)
     }
 
     @Test
@@ -431,7 +436,7 @@ class RNodeConfigValidatorTest {
                 region = usRegion,
             )
         assertFalse(result.isValid)
-        assertTrue(result.nameError!!.contains("required"))
+        assertEquals(RNodeFieldErrorReason.NAME_REQUIRED, result.nameError?.reason)
     }
 
     @Test
@@ -449,8 +454,8 @@ class RNodeConfigValidatorTest {
                 region = usRegion,
             )
         assertFalse(result.isValid)
-        assertTrue(result.frequencyError!!.contains("902"))
-        assertTrue(result.frequencyError!!.contains("928"))
+        assertEquals(RNodeFieldErrorReason.FREQUENCY_REQUIRED_RANGE, result.frequencyError?.reason)
+        assertEquals(listOf(902.0, 928.0), result.frequencyError?.args)
     }
 
     @Test

@@ -32,4 +32,13 @@ sealed interface UiMessage {
         override fun resolve(context: Context): String =
             context.resources.getQuantityString(id, quantity, *args.toTypedArray())
     }
+
+    /**
+     * Raw pass-through text with no resource wrapper: runtime data (host,
+     * device names) or exception messages surfaced verbatim. NEVER wrap an
+     * English literal in this type — use [Text] with a resource instead.
+     */
+    data class Raw(val text: String) : UiMessage {
+        override fun resolve(context: Context): String = text
+    }
 }

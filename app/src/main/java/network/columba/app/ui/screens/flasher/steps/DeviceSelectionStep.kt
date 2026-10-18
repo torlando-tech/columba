@@ -29,9 +29,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import network.columba.app.rns.host.usb.UsbDeviceInfo
+import network.columba.app.viewmodel.UiMessage
 
 /**
  * Step 1: Device Selection
@@ -45,7 +47,7 @@ fun DeviceSelectionStep(
     selectedDevice: UsbDeviceInfo?,
     isRefreshing: Boolean,
     permissionPending: Boolean,
-    permissionError: String?,
+    permissionError: UiMessage?,
     onDeviceSelected: (UsbDeviceInfo) -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
@@ -108,7 +110,7 @@ fun DeviceSelectionStep(
                         .padding(bottom = 16.dp),
             ) {
                 Text(
-                    text = permissionError,
+                    text = permissionError.resolve(LocalContext.current),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.padding(12.dp),

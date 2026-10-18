@@ -3,6 +3,7 @@ package network.columba.app.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import network.columba.app.R
 import network.columba.app.data.model.TcpCommunityServer
 import network.columba.app.data.model.TcpCommunityServers
 import network.columba.app.repository.InterfaceRepository
@@ -65,7 +66,7 @@ data class TcpClientWizardState(
     val networkRestriction: String = NetworkRestriction.ANY.value,
     // Save state
     val isSaving: Boolean = false,
-    val saveError: String? = null,
+    val saveError: UiMessage? = null,
     val saveSuccess: Boolean = false,
 )
 
@@ -411,7 +412,7 @@ class TcpClientWizardViewModel
                             _state.update {
                                 it.copy(
                                     isSaving = false,
-                                    saveError = uniqueResult.message,
+                                    saveError = UiMessage.Raw(uniqueResult.message),
                                 )
                             }
                             return@launch
@@ -455,7 +456,9 @@ class TcpClientWizardViewModel
                     _state.update {
                         it.copy(
                             isSaving = false,
-                            saveError = e.message ?: "Failed to save configuration",
+                            saveError =
+                                e.message?.let { UiMessage.Raw(it) }
+                                    ?: UiMessage.Text(R.string.tcp_client_save_failed),
                         )
                     }
                 }

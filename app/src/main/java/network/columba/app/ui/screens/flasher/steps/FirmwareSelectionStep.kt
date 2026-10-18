@@ -40,12 +40,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import network.columba.app.rns.host.flasher.FirmwarePackage
 import network.columba.app.rns.host.flasher.FirmwareSource
 import network.columba.app.rns.host.flasher.FrequencyBand
 import network.columba.app.rns.host.flasher.RNodeBoard
+import network.columba.app.viewmodel.UiMessage
 
 /**
  * Step 3: Firmware Selection
@@ -69,7 +71,7 @@ fun FirmwareSelectionStep(
     selectedVersion: String?,
     isDownloading: Boolean,
     downloadProgress: Int,
-    downloadError: String?,
+    downloadError: UiMessage?,
     useManualSelection: Boolean,
     onFirmwareSourceSelected: (FirmwareSource) -> Unit,
     onCustomUrlChanged: (String) -> Unit,
@@ -171,7 +173,7 @@ fun FirmwareSelectionStep(
                         .padding(bottom = 16.dp),
             ) {
                 Text(
-                    text = downloadError,
+                    text = downloadError.resolve(LocalContext.current),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.padding(12.dp),

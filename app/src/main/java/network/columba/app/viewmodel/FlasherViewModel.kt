@@ -63,7 +63,7 @@ data class FlasherUiState(
     val selectedDevice: UsbDeviceInfo? = null,
     val isRefreshingDevices: Boolean = false,
     val permissionPending: Boolean = false,
-    val permissionError: String? = null,
+    val permissionError: UiMessage? = null,
     // Step 2: Device Detection
     val isDetecting: Boolean = false,
     val detectedInfo: RNodeDeviceInfo? = null,
@@ -83,7 +83,7 @@ data class FlasherUiState(
     val selectedVersion: String? = null,
     val isDownloadingFirmware: Boolean = false,
     val downloadProgress: Int = 0,
-    val downloadError: String? = null,
+    val downloadError: UiMessage? = null,
     // Step 4: Flash Progress
     val flashProgress: Int = 0,
     val flashMessage: FlashText? = null,
@@ -331,7 +331,7 @@ class FlasherViewModel
                         Log.d(TAG, "USB permission granted for device ${device.deviceId}")
                     } else {
                         Log.w(TAG, "USB permission denied for device ${device.deviceId}")
-                        _state.update { it.copy(permissionError = "USB permission denied") }
+                        _state.update { it.copy(permissionError = UiMessage.Text(R.string.flasher_usb_permission_denied)) }
                     }
                 }
             }
@@ -507,7 +507,12 @@ class FlasherViewModel
                     fetchAvailableVersions()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load firmware", e)
-                    _state.update { it.copy(downloadError = "Failed to load firmware: ${e.message}") }
+                    _state.update {
+                        it.copy(
+                            downloadError =
+                                UiMessage.Text(R.string.flasher_load_firmware_failed, listOf(e.message ?: "null")),
+                        )
+                    }
                 }
             }
         }

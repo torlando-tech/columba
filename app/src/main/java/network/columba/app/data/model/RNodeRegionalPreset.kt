@@ -51,6 +51,14 @@ data class DiscoveredUsbDevice(
     /** Whether USB permission has been granted */
     val hasPermission: Boolean = false,
 ) {
+    /**
+     * Sentinel driver type for devices whose driver could not be detected.
+     * Render sites map it to a localized label instead of displaying it raw.
+     */
+    companion object {
+        const val DRIVER_TYPE_UNKNOWN = "Unknown"
+    }
+
     /** User-friendly display name */
     val displayName: String
         get() = productName ?: manufacturerName ?: "USB Serial Device ($driverType)"

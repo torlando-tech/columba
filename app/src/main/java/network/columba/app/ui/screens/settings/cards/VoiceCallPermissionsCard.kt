@@ -44,9 +44,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import network.columba.app.R
 import network.columba.app.notifications.CallNotificationHelper
 import kotlinx.coroutines.delay
 
@@ -142,7 +144,7 @@ fun VoiceCallPermissionsCard(
                         tint = contentColor,
                     )
                     Text(
-                        text = "Voice Call Permissions",
+                        text = stringResource(R.string.settings_voice_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = contentColor,
@@ -175,7 +177,7 @@ fun VoiceCallPermissionsCard(
                                 } else {
                                     Icons.Default.KeyboardArrowDown
                                 },
-                            contentDescription = if (isExpanded) "Collapse" else "Expand",
+                            contentDescription = if (isExpanded) stringResource(R.string.collapsible_card_collapse) else stringResource(R.string.collapsible_card_expand),
                             tint = contentColor,
                         )
                     }
@@ -196,7 +198,7 @@ fun VoiceCallPermissionsCard(
                         // disabled before they see (and worry about) the
                         // permission-status content below.
                         Text(
-                            text = "Incoming voice calls are currently disabled. Outgoing calls still work.",
+                            text = stringResource(R.string.settings_voice_calls_disabled),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                             color = contentColor,
@@ -206,40 +208,40 @@ fun VoiceCallPermissionsCard(
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))
                     } else if (allGranted) {
                         Text(
-                            text = "All permissions granted. Incoming voice calls will show a full-screen call screen.",
+                            text = stringResource(R.string.settings_voice_all_granted),
                             style = MaterialTheme.typography.bodyMedium,
                             color = contentColor,
                         )
 
                         PermissionStatusRow(
-                            label = "Microphone",
+                            label = stringResource(R.string.settings_voice_perm_microphone),
                             granted = true,
                             contentColor = contentColor,
                         )
 
                         PermissionStatusRow(
-                            label = "Display over other apps",
+                            label = stringResource(R.string.settings_voice_perm_overlay),
                             granted = true,
                             contentColor = contentColor,
                         )
 
                         if (needsFullScreenPermission) {
                             PermissionStatusRow(
-                                label = "Full-screen notifications",
+                                label = stringResource(R.string.settings_voice_perm_fullscreen),
                                 granted = true,
                                 contentColor = contentColor,
                             )
                         }
                     } else {
                         Text(
-                            text = "Some permissions are missing. Without them, voice calls may not work correctly.",
+                            text = stringResource(R.string.settings_voice_missing_permissions),
                             style = MaterialTheme.typography.bodyMedium,
                             color = contentColor,
                         )
 
                         PermissionRow(
-                            label = "Microphone",
-                            description = "Required to capture audio during voice calls.",
+                            label = stringResource(R.string.settings_voice_perm_microphone),
+                            description = stringResource(R.string.settings_voice_desc_microphone),
                             granted = micGranted,
                             contentColor = contentColor,
                             onGrantClick = {
@@ -253,8 +255,8 @@ fun VoiceCallPermissionsCard(
                         )
 
                         PermissionRow(
-                            label = "Display over other apps",
-                            description = "Required to show the call screen when the app is in the background.",
+                            label = stringResource(R.string.settings_voice_perm_overlay),
+                            description = stringResource(R.string.settings_voice_desc_overlay),
                             granted = overlayGranted,
                             contentColor = contentColor,
                             onGrantClick = {
@@ -264,8 +266,8 @@ fun VoiceCallPermissionsCard(
 
                         if (needsFullScreenPermission) {
                             PermissionRow(
-                                label = "Full-screen notifications",
-                                description = "Required on Android 14+ to launch the call screen from a notification.",
+                                label = stringResource(R.string.settings_voice_perm_fullscreen),
+                                description = stringResource(R.string.settings_voice_desc_fullscreen),
                                 granted = fullScreenGranted,
                                 contentColor = contentColor,
                                 onGrantClick = {
@@ -315,7 +317,7 @@ private fun PermissionRow(
                         containerColor = MaterialTheme.colorScheme.error,
                     ),
             ) {
-                Text("Open Settings")
+                Text(stringResource(R.string.settings_voice_open_settings))
             }
         }
     }
@@ -333,7 +335,7 @@ private fun PermissionStatusRow(
     ) {
         Icon(
             imageVector = if (granted) Icons.Default.CheckCircle else Icons.Default.Close,
-            contentDescription = if (granted) "Granted" else "Not granted",
+            contentDescription = if (granted) stringResource(R.string.settings_voice_granted) else stringResource(R.string.settings_voice_not_granted),
             tint = contentColor,
             modifier = Modifier.size(20.dp),
         )

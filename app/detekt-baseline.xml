@@ -25,28 +25,6 @@
     <ID>LoopWithTooManyJumpStatements:SettingsViewModel.kt$SettingsViewModel$while</ID>
     <ID>MaxLineLength:BleTestFixtures.kt$BleTestFixtures$"""{"identityHash":"${connection.identityHash}","peerName":"${connection.peerName}","currentMac":"${connection.currentMac}","hasCentralConnection":$hasCentral,"hasPeripheralConnection":$hasPeripheral,"mtu":${connection.mtu},"connectedAt":${connection.connectedAt},"firstSeen":${connection.firstSeen},"lastSeen":${connection.lastSeen},"rssi":${connection.rssi}}"""</ID>
     <ID>NestedBlockDepth:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"(Sideband, rnsd, …) can route through Columba's transport. "</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"Advanced"</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"Anonymous Crash Reports"</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"Change pending — restart Reticulum to apply."</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"Columba will join it as a client instead — see the Shared Instance banner."</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"Forward traffic for the mesh network. When disabled, this device will only "</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"If another app is already hosting a shared instance on this device, "</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"It's generally not recommended for mobile devices to be transport nodes. "</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"Make Columba available as a shared RNS instance so other apps on this device "</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"No message content, contacts, or identity information is ever included. "</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"Off by default; you can change this at any time."</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"Requires a service restart to take effect. "</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"Restart"</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"Restarting…"</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"Send anonymous crash and error reports to help the developer fix bugs. "</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"Share Instance"</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"They are less likely to maintain a fixed position in the network, and thus "</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"Transport Node"</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"can negatively impact multihop routing. Enabling this will increase data "</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"handle its own traffic and won't relay messages for other peers. "</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"multi-hop messaging."</ID>
-    <ID>NoHardcodedUiString:AdvancedCard.kt$"usage and battery drain. However, in a BLE-only mesh, it's required for "</ID>
     <ID>NoHardcodedUiString:ApkSharingScreen.kt$"APK size: ${"%.1f".format(sizeMb)} MB"</ID>
     <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Back"</ID>
     <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Grant Permission"</ID>
@@ -63,31 +41,6 @@
     <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Step 1: Scan to connect to hotspot"</ID>
     <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Step 2: Scan to download Columba"</ID>
     <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Use Bluetooth, Nearby Share, or any other installed sharing app."</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Announce Interval: $intervalHours hour${if (intervalHours != 1) "s" else ""}"</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Announce Now"</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Announce sent!"</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Auto Announce"</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Automatically announce your presence on the network at regular intervals. "</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Confirm"</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Custom Interval"</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Enter announce interval (1-12 hours):"</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Error"</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Error: $manualAnnounceError"</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Hours"</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"No announces sent yet"</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Success"</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"This helps other peers discover you."</ID>
-    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Value must be between 1 and 12"</ID>
-    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"Android battery optimization is still enabled. The battery profile above reduces "</ID>
-    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"Battery &amp; Background"</ID>
-    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"Battery optimization exemption granted. Columba can run more reliably in the background during deep idle."</ID>
-    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"Choose how aggressively Columba should run native Reticulum in the background. Changes apply immediately."</ID>
-    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"Open Battery Settings Manually"</ID>
-    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"Request Exemption"</ID>
-    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"View Battery Settings"</ID>
-    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"background work, but Android may still delay or kill background networking "</ID>
-    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"unless Columba is exempted."</ID>
     <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"BLE Connections"</ID>
     <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"BLE peers will appear here when connected"</ID>
     <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Back"</ID>
@@ -115,12 +68,6 @@
     <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Total"</ID>
     <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Turn ON"</ID>
     <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Turn on Bluetooth to see BLE connections"</ID>
-    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Bottom Navigation"</ID>
-    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Choose which shortcuts appear in the bottom bar (max ${NavTab.MAX_TABS}) and use the arrows to arrange them. Settings is always pinned to the end."</ID>
-    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Move ${stringResource(tab.labelRes)} down"</ID>
-    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Move ${stringResource(tab.labelRes)} up"</ID>
-    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Pinned"</ID>
-    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Remove ${stringResource(tab.labelRes)} from bottom bar"</ID>
     <ID>NoHardcodedUiString:CompletePage.kt$"Battery"</ID>
     <ID>NoHardcodedUiString:CompletePage.kt$"Identity"</ID>
     <ID>NoHardcodedUiString:CompletePage.kt$"Networks"</ID>
@@ -144,10 +91,6 @@
     <ID>NoHardcodedUiString:CrashReportingPage.kt$"You can change this anytime in Settings → Advanced"</ID>
     <ID>NoHardcodedUiString:CrashReportingPage.kt$"developer find and fix bugs. No message content, contacts, or "</ID>
     <ID>NoHardcodedUiString:CrashReportingPage.kt$"identity information is ever included."</ID>
-    <ID>NoHardcodedUiString:DataMigrationCard.kt$"Data Migration"</ID>
-    <ID>NoHardcodedUiString:DataMigrationCard.kt$"Export / Import Data"</ID>
-    <ID>NoHardcodedUiString:DataMigrationCard.kt$"Export your data (identities, messages, contacts) to transfer to "</ID>
-    <ID>NoHardcodedUiString:DataMigrationCard.kt$"another device or import from a previous backup."</ID>
     <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Board type unknown (EEPROM may be wiped)"</ID>
     <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Board"</ID>
     <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Continue with Manual Selection"</ID>
@@ -315,11 +258,6 @@
     <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot ${state.selectedSlot} overlaps with Meshtastic. "</ID>
     <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot Number"</ID>
     <ID>NoHardcodedUiString:FrequencySlotStep.kt$"These frequencies are used by Meshtastic networks"</ID>
-    <ID>NoHardcodedUiString:IdentityCard.kt$"Create and manage multiple identities for different contexts (work, personal, anonymous)."</ID>
-    <ID>NoHardcodedUiString:IdentityCard.kt$"Identity"</ID>
-    <ID>NoHardcodedUiString:IdentityCard.kt$"Manage Identities"</ID>
-    <ID>NoHardcodedUiString:IdentityCard.kt$"View My Identity"</ID>
-    <ID>NoHardcodedUiString:IdentityCard.kt$"View and share your identity, edit your display name, and manage QR codes for contact sharing."</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"Anonymous Peer"</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"Back"</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"Choose a display name others will see:"</ID>
@@ -327,143 +265,16 @@
     <ID>NoHardcodedUiString:IdentityPage.kt$"Display Name"</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"You can change this anytime, or create multiple identities for different contexts."</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"Your Identity"</ID>
-    <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Auto mode detects your network type and selects the optimal preset."</ID>
-    <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Image Compression"</ID>
     <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Max: ${formatDimension(displayPreset.maxDimensionPx)}px, "</ID>
-    <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Select compression level for image attachments. "</ID>
-    <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Sending large images may take a very long time or fail."</ID>
-    <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Slow interfaces (LoRa/BLE) are enabled. "</ID>
-    <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Warning"</ID>
     <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Answer call"</ID>
     <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Answer"</ID>
     <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Decline call"</ID>
     <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Decline"</ID>
     <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Incoming Voice Call"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"$localDisplayName (myself)"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"${selectedHashes.size} contact(s) selected"</ID>
     <ID>NoHardcodedUiString:LocationSharingCard.kt$"15min"</ID>
     <ID>NoHardcodedUiString:LocationSharingCard.kt$"30min"</ID>
     <ID>NoHardcodedUiString:LocationSharingCard.kt$"5min"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Allow this app to share your location. "</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Allowed Requesters"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Change"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Choose how precisely your location is shared:"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Currently sharing with:"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Default Duration"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Default duration"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Done"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Edit allowed requesters"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Get everyone's location periodically"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Group Host"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Group Tracker"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Host Group"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"If no contacts are selected, all requests will be blocked."</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Last received: ${formatTelemetryRelativeTime(lastRequestTime, currentTime)}"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Last sent: ${formatTelemetryRelativeTime(lastSendTime, currentTime)}"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Let others use you as their group tracker"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Location Precision"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Location Sharing"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Location precision"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"No contacts available. Add contacts first."</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"No contacts selected - all requests blocked"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"None"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Only selected contacts can request your group's location data. "</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Only selected contacts can request your group's locations"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Receive locations from group"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Request Now"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Request every: ${formatTelemetryIntervalDisplay(requestIntervalSeconds)}"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Requesting..."</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Search contacts"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Select Allowed Requesters"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Select Group Host"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Select the default duration for new location sharing sessions:"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Select yourself to host the group, or choose a contact to send your location to."</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Select"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Send Now"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Send every: ${formatTelemetryIntervalDisplay(sendIntervalSeconds)}"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Sending..."</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Share with group"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Share your location with a group and see where everyone is"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Stop All Sharing"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Stop"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"When off, location sharing is blocked everywhere — including "</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$"active sessions, conversations, and the group tracker."</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.CITY$"City"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.CITY$"~1km radius"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.NEIGHBORHOOD$"Neighborhood"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.NEIGHBORHOOD$"~100m radius"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.PRECISE$"Exact GPS location"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.PRECISE$"Precise"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.REGION$"Region"</ID>
-    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.REGION$"~10km radius"</ID>
     <ID>NoHardcodedUiString:MainActivity.kt$MainActivity$"Janky frame: ${durationMs}ms"</ID>
-    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Configure how map tiles are fetched. Offline maps take priority when available."</ID>
-    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Fetch tiles from the internet"</ID>
-    <ID>NoHardcodedUiString:MapSourcesCard.kt$"HTTP (OpenFreeMap)"</ID>
-    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Map"</ID>
-    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Marker declutter"</ID>
-    <ID>NoHardcodedUiString:MapSourcesCard.kt$"No map tiles will load until a source is enabled or offline maps are downloaded"</ID>
-    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Offline maps available - they will be used when location is covered"</ID>
-    <ID>NoHardcodedUiString:MapSourcesCard.kt$"RMSP (Mesh Network)"</ID>
-    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Settings"</ID>
-    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Sources"</ID>
-    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Spread overlapping markers for readability"</ID>
-    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Warning"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"$hops ${if (hops == 1) "hop" else "hops"} away"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"(auto)"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"32-character hex"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Auto-retrieve from relay"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Auto-select (preferred, then nearest)"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Configure how messages are sent and retrieved via relay."</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Confirm"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Currently: $currentRelayName"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Custom Retrieval Interval"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Custom Size Limit"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Default Delivery Method"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Destination Hash"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Direct (Link-based)"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Enter a valid number"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Enter maximum message size (1-128 MB):"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Enter relay destination hash:"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Enter retrieval interval (1-12 hours):"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Establishes a link, unlimited size, with retries"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"INCOMING MESSAGE SIZE"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"If direct delivery fails, retry through relay"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Last sync: ${formatRelativeTime(lastSyncTimestamp, currentTime)}"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"MESSAGE RETRIEVAL"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"MESSAGE SORT ORDER"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Manage preferred nodes"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Maximum is 128 MB"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Maximum is 43200 seconds (12 hours)"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Maximum size of messages to accept. Larger messages will be rejected."</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Message Delivery &amp; Retrieval"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Minimum is 1 MB"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Minimum is 3600 seconds (1 hour)"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"My Relay"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Nickname (optional)"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"No relay configured. Waiting for propagation node announces..."</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"No relay selected"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Or enter a relay hash manually:"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Periodically check for messages"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Propagated (Via Relay)"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Relay"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Retrieval interval: ${formatIntervalDisplay(retrievalIntervalSeconds)}"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Retry via Relay on Failure"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Seconds"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Set as Relay"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Size limit: ${formatSizeLimit(incomingMessageSizeLimitKb)}"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Sort by sender's time"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Stores message on relay for offline recipients"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Sync Now"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Syncing..."</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Tap to view all discovered relays"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Unlimited"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Use specific relay"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Uses your preferred list by transport; falls back to the nearest relay."</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"View all discovered relays"</ID>
-    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"e.g., My Home Relay"</ID>
     <ID>NoHardcodedUiString:MigrationScreen.kt$"${exportPreview.announceCount} announces"</ID>
     <ID>NoHardcodedUiString:MigrationScreen.kt$"${exportPreview.contactCount} contacts"</ID>
     <ID>NoHardcodedUiString:MigrationScreen.kt$"${exportPreview.customThemeCount} custom themes"</ID>
@@ -532,11 +343,6 @@
     <ID>NoHardcodedUiString:ModemPresetStep.kt$"Select Modem Preset"</ID>
     <ID>NoHardcodedUiString:ModemPresetStep.kt$"Selected"</ID>
     <ID>NoHardcodedUiString:ModemPresetStep.kt$"These are compatible with Meshtastic naming conventions."</ID>
-    <ID>NoHardcodedUiString:NetworkCard.kt$"BLE Connections"</ID>
-    <ID>NoHardcodedUiString:NetworkCard.kt$"Manage Interfaces"</ID>
-    <ID>NoHardcodedUiString:NetworkCard.kt$"Monitor your Reticulum network status, active interfaces, BLE connections, and connection diagnostics."</ID>
-    <ID>NoHardcodedUiString:NetworkCard.kt$"Network"</ID>
-    <ID>NoHardcodedUiString:NetworkCard.kt$"View Network Status"</ID>
     <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"&lt;hash&gt;:/page/index.mu"</ID>
     <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Back"</ID>
     <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Cancel"</ID>
@@ -554,8 +360,6 @@
     <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Reload all images"</ID>
     <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Retry"</ID>
     <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Share"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsCard.kt$"Manage Notifications"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsCard.kt$"Notifications"</ID>
     <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"$estimatedTileCount tiles"</ID>
     <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"${progress.completedResources} / ${progress.requiredResources} resources"</ID>
     <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Are you sure you want to cancel the download? Progress will be lost."</ID>
@@ -633,10 +437,6 @@
     <ID>NoHardcodedUiString:PermissionsPage.kt$"Receive messages even when phone is idle"</ID>
     <ID>NoHardcodedUiString:PermissionsPage.kt$"Stay Connected"</ID>
     <ID>NoHardcodedUiString:PermissionsPage.kt$"Unrestricted Battery"</ID>
-    <ID>NoHardcodedUiString:PrivacyCard.kt$"Blocked Users"</ID>
-    <ID>NoHardcodedUiString:PrivacyCard.kt$"Calls from contacts only"</ID>
-    <ID>NoHardcodedUiString:PrivacyCard.kt$"Messages from contacts only"</ID>
-    <ID>NoHardcodedUiString:PrivacyCard.kt$"Privacy"</ID>
     <ID>NoHardcodedUiString:QrScannerScreen.kt$"Back"</ID>
     <ID>NoHardcodedUiString:QrScannerScreen.kt$"Contact Already Added"</ID>
     <ID>NoHardcodedUiString:QrScannerScreen.kt$"Contact Exists"</ID>
@@ -704,43 +504,9 @@
     <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Enter server details manually"</ID>
     <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Select a community server or enter custom connection details."</ID>
     <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Selected"</ID>
-    <ID>NoHardcodedUiString:ShareColumbaCard.kt$"Share Columba APK"</ID>
-    <ID>NoHardcodedUiString:ShareColumbaCard.kt$"Share Columba"</ID>
-    <ID>NoHardcodedUiString:ShareColumbaCard.kt$"Share the Columba app with someone nearby. "</ID>
-    <ID>NoHardcodedUiString:ShareColumbaCard.kt$"The other person scans a QR code to download and install the app directly from your phone."</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Columba's own instance"</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Copy access configuration"</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Disable Share Instance in Advanced settings and restart "</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"If the shared instance becomes available again, you can "</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Instance Mode"</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Other RNS apps on this device can connect to Columba's "</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Paste config or key..."</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Paste full config or just the hex key"</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"RPC Key (from Sideband → Connectivity)"</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Reticulum to stop hosting."</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Save"</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"The shared Reticulum instance (e.g., Sideband) is no longer "</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Use Columba's own instance"</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"You enabled Share Instance in Advanced settings, but another "</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Your messages will continue to be sent and received. "</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"a shared Reticulum instance on TCP 37428. Columba has "</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"app on this device (e.g., Sideband) is already hosting "</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"available. Columba has automatically restarted with its own "</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"disable sharing in the other app and restart Columba."</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"joined it as a client. To host from Columba instead, "</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"network interfaces."</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"switch back to it from Settings."</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"transport via the shared instance on TCP 37428. "</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"• BLE connections to other Columba users require "</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"• Network interfaces are managed by the other app"</ID>
-    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"• Your identities and messages remain private to Columba"</ID>
     <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"Back"</ID>
     <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"Error"</ID>
     <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"tcp_wizard_step"</ID>
-    <ID>NoHardcodedUiString:ThemeSelectionCard.kt$"Built-in Themes"</ID>
-    <ID>NoHardcodedUiString:ThemeSelectionCard.kt$"Custom Themes"</ID>
-    <ID>NoHardcodedUiString:ThemeSelectionCard.kt$"Preview:"</ID>
-    <ID>NoHardcodedUiString:ThemeSelectionCard.kt$"Theme"</ID>
     <ID>NoHardcodedUiString:TileDownloadManager.kt$TileDownloadManager$"Offline map for ${params.name}"</ID>
     <ID>NoHardcodedUiString:TileDownloadManager.kt$TileDownloadManager$"Offline map from RMSP: ${params.name}"</ID>
     <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Advanced Settings"</ID>
@@ -759,17 +525,6 @@
     <ID>NoHardcodedUiString:TncConfigurationStep.kt$"TX: ${selectedRegion.defaultTxPower} dBm (max ${selectedRegion.maxTxPower})"</ID>
     <ID>NoHardcodedUiString:TncConfigurationStep.kt$"These settings are saved to the device."</ID>
     <ID>NoHardcodedUiString:TncConfigurationStep.kt$"microReticulum operates as a standalone transport node. "</ID>
-    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"All permissions granted. Incoming voice calls will show a full-screen call screen."</ID>
-    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Display over other apps"</ID>
-    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Full-screen notifications"</ID>
-    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Incoming voice calls are currently disabled. Outgoing calls still work."</ID>
-    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Microphone"</ID>
-    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Open Settings"</ID>
-    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Required on Android 14+ to launch the call screen from a notification."</ID>
-    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Required to capture audio during voice calls."</ID>
-    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Required to show the call screen when the app is in the background."</ID>
-    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Some permissions are missing. Without them, voice calls may not work correctly."</ID>
-    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Voice Call Permissions"</ID>
     <ID>NoHardcodedUiString:VoiceCallScreen.kt$"End Call"</ID>
     <ID>NoHardcodedUiString:VoiceCallScreen.kt$"End call"</ID>
     <ID>NoHardcodedUiString:WelcomePage.kt$"A private messenger that requires:"</ID>

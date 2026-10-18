@@ -1,5 +1,6 @@
 package network.columba.app.ui.screens.flasher.components
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -21,10 +22,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import network.columba.app.R
 import network.columba.app.viewmodel.FlasherStep
 
 /**
@@ -48,11 +51,11 @@ fun FlasherStepIndicator(
 ) {
     val steps =
         listOf(
-            StepInfo(FlasherStep.DEVICE_SELECTION, "Device", 1),
-            StepInfo(FlasherStep.DEVICE_DETECTION, "Detect", 2),
-            StepInfo(FlasherStep.FIRMWARE_SELECTION, "Firmware", 3),
-            StepInfo(FlasherStep.FLASH_PROGRESS, "Flash", 4),
-            StepInfo(FlasherStep.COMPLETE, "Done", 5),
+            StepInfo(FlasherStep.DEVICE_SELECTION, R.string.flasher_step_indicator_device, 1),
+            StepInfo(FlasherStep.DEVICE_DETECTION, R.string.flasher_step_indicator_detect, 2),
+            StepInfo(FlasherStep.FIRMWARE_SELECTION, R.string.flasher_step_indicator_firmware, 3),
+            StepInfo(FlasherStep.FLASH_PROGRESS, R.string.flasher_step_indicator_flash, 4),
+            StepInfo(FlasherStep.COMPLETE, R.string.flasher_step_indicator_done, 5),
         )
 
     Column(
@@ -111,7 +114,7 @@ fun FlasherStepIndicator(
                     }
 
                 StepLabel(
-                    label = stepInfo.label,
+                    labelRes = stepInfo.labelRes,
                     state = state,
                     modifier = Modifier.weight(1f),
                 )
@@ -122,7 +125,7 @@ fun FlasherStepIndicator(
 
 private data class StepInfo(
     val step: FlasherStep,
-    val label: String,
+    @StringRes val labelRes: Int,
     val number: Int,
 )
 
@@ -232,7 +235,7 @@ private fun StepConnector(
 
 @Composable
 private fun StepLabel(
-    label: String,
+    @StringRes labelRes: Int,
     state: StepState,
     modifier: Modifier = Modifier,
 ) {
@@ -248,7 +251,7 @@ private fun StepLabel(
     )
 
     Text(
-        text = label,
+        text = stringResource(labelRes),
         style = MaterialTheme.typography.labelSmall,
         fontSize = 10.sp,
         color = textColor,

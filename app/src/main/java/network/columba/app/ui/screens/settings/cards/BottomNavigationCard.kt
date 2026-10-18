@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.navigation.NavTab
 import network.columba.app.ui.components.CollapsibleSettingsCard
 
@@ -44,13 +45,13 @@ fun BottomNavigationCard(
     onTabsChange: (List<NavTab>) -> Unit,
 ) {
     CollapsibleSettingsCard(
-        title = "Bottom Navigation",
+        title = stringResource(R.string.settings_bnav_title),
         icon = Icons.Default.Sensors,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
     ) {
         Text(
-            text = "Choose which shortcuts appear in the bottom bar (max ${NavTab.MAX_TABS}) and use the arrows to arrange them. Settings is always pinned to the end.",
+            text = stringResource(R.string.settings_bnav_description, NavTab.MAX_TABS),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -103,9 +104,9 @@ fun BottomNavigationCard(
         if (available.isNotEmpty()) {
             Text(
                 text = if (atCapacity) {
-                    "Remove a tab to add another"
+                    stringResource(R.string.settings_bnav_remove_to_add)
                 } else {
-                    "Add a shortcut:"
+                    stringResource(R.string.settings_bnav_add_shortcut)
                 },
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -162,7 +163,7 @@ private fun TabRow(
                 Spacer(modifier = Modifier.width(8.dp))
                 Icon(
                     imageVector = Icons.Default.Lock,
-                    contentDescription = "Pinned",
+                    contentDescription = stringResource(R.string.settings_bnav_pinned),
                     modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -172,20 +173,20 @@ private fun TabRow(
             IconButton(onClick = onRemove) {
                 Icon(
                     imageVector = Icons.Default.Remove,
-                    contentDescription = "Remove ${stringResource(tab.labelRes)} from bottom bar",
+                    contentDescription = stringResource(R.string.settings_bnav_remove, stringResource(tab.labelRes)),
                 )
             }
         }
         IconButton(onClick = onMoveUp, enabled = canMoveUp) {
             Icon(
                 imageVector = Icons.Default.KeyboardArrowUp,
-                contentDescription = "Move ${stringResource(tab.labelRes)} up",
+                contentDescription = stringResource(R.string.settings_bnav_move_up, stringResource(tab.labelRes)),
             )
         }
         IconButton(onClick = onMoveDown, enabled = canMoveDown) {
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = "Move ${stringResource(tab.labelRes)} down",
+                contentDescription = stringResource(R.string.settings_bnav_move_down, stringResource(tab.labelRes)),
             )
         }
     }

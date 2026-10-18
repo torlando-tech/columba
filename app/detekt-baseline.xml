@@ -68,39 +68,11 @@
     <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Total"</ID>
     <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Turn ON"</ID>
     <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Turn on Bluetooth to see BLE connections"</ID>
-    <ID>NoHardcodedUiString:CompletePage.kt$"Battery"</ID>
-    <ID>NoHardcodedUiString:CompletePage.kt$"Identity"</ID>
-    <ID>NoHardcodedUiString:CompletePage.kt$"Networks"</ID>
-    <ID>NoHardcodedUiString:CompletePage.kt$"Notifications"</ID>
-    <ID>NoHardcodedUiString:CompletePage.kt$"Share your identity QR code to let others add you as a contact."</ID>
-    <ID>NoHardcodedUiString:CompletePage.kt$"Show QR Code"</ID>
-    <ID>NoHardcodedUiString:CompletePage.kt$"Summary"</ID>
-    <ID>NoHardcodedUiString:CompletePage.kt$"You're all set!"</ID>
-    <ID>NoHardcodedUiString:ConnectivityPage.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:ConnectivityPage.kt$"Continue"</ID>
-    <ID>NoHardcodedUiString:ConnectivityPage.kt$"How will you connect?"</ID>
-    <ID>NoHardcodedUiString:ConnectivityPage.kt$"Select the networks you'd like to use:"</ID>
-    <ID>NoHardcodedUiString:ConnectivityPage.kt$"You can configure these later in Settings"</ID>
     <ID>NoHardcodedUiString:ContactsTab.kt$ContactsTab.MY_CONTACTS$"My Contacts"</ID>
     <ID>NoHardcodedUiString:ContactsTab.kt$ContactsTab.NETWORK$"Network"</ID>
-    <ID>NoHardcodedUiString:CrashReportingPage.kt$"Anonymous Crash Reports"</ID>
-    <ID>NoHardcodedUiString:CrashReportingPage.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:CrashReportingPage.kt$"Columba can send anonymous crash and error reports to help the "</ID>
-    <ID>NoHardcodedUiString:CrashReportingPage.kt$"Continue"</ID>
-    <ID>NoHardcodedUiString:CrashReportingPage.kt$"Help Us Improve"</ID>
-    <ID>NoHardcodedUiString:CrashReportingPage.kt$"You can change this anytime in Settings → Advanced"</ID>
-    <ID>NoHardcodedUiString:CrashReportingPage.kt$"developer find and fix bugs. No message content, contacts, or "</ID>
-    <ID>NoHardcodedUiString:CrashReportingPage.kt$"identity information is ever included."</ID>
     <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"VID: ${formatHex(device.vendorId)} | PID: ${formatHex(device.productId)}"</ID>
     <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot $slot"</ID>
     <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot ${slot.slot}"</ID>
-    <ID>NoHardcodedUiString:IdentityPage.kt$"Anonymous Peer"</ID>
-    <ID>NoHardcodedUiString:IdentityPage.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:IdentityPage.kt$"Choose a display name others will see:"</ID>
-    <ID>NoHardcodedUiString:IdentityPage.kt$"Continue"</ID>
-    <ID>NoHardcodedUiString:IdentityPage.kt$"Display Name"</ID>
-    <ID>NoHardcodedUiString:IdentityPage.kt$"You can change this anytime, or create multiple identities for different contexts."</ID>
-    <ID>NoHardcodedUiString:IdentityPage.kt$"Your Identity"</ID>
     <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Max: ${formatDimension(displayPreset.maxDimensionPx)}px, "</ID>
     <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Answer call"</ID>
     <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Answer"</ID>
@@ -256,18 +228,6 @@
     <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Update Offline Map"</ID>
     <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Update available"</ID>
     <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Update"</ID>
-    <ID>NoHardcodedUiString:OnboardingPagerScreen.kt$"Skip"</ID>
-    <ID>NoHardcodedUiString:PermissionsPage.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:PermissionsPage.kt$"Columba can notify you when:"</ID>
-    <ID>NoHardcodedUiString:PermissionsPage.kt$"Continue"</ID>
-    <ID>NoHardcodedUiString:PermissionsPage.kt$"Enable"</ID>
-    <ID>NoHardcodedUiString:PermissionsPage.kt$"Get alerts for new messages"</ID>
-    <ID>NoHardcodedUiString:PermissionsPage.kt$"Granted"</ID>
-    <ID>NoHardcodedUiString:PermissionsPage.kt$"Notifications"</ID>
-    <ID>NoHardcodedUiString:PermissionsPage.kt$"Prevents Android from pausing Columba"</ID>
-    <ID>NoHardcodedUiString:PermissionsPage.kt$"Receive messages even when phone is idle"</ID>
-    <ID>NoHardcodedUiString:PermissionsPage.kt$"Stay Connected"</ID>
-    <ID>NoHardcodedUiString:PermissionsPage.kt$"Unrestricted Battery"</ID>
     <ID>NoHardcodedUiString:QrScannerScreen.kt$"Back"</ID>
     <ID>NoHardcodedUiString:QrScannerScreen.kt$"Contact Already Added"</ID>
     <ID>NoHardcodedUiString:QrScannerScreen.kt$"Contact Exists"</ID>
@@ -285,15 +245,6 @@
     <ID>NoHardcodedUiString:TileDownloadManager.kt$TileDownloadManager$"Offline map from RMSP: ${params.name}"</ID>
     <ID>NoHardcodedUiString:VoiceCallScreen.kt$"End Call"</ID>
     <ID>NoHardcodedUiString:VoiceCallScreen.kt$"End call"</ID>
-    <ID>NoHardcodedUiString:WelcomePage.kt$"A private messenger that requires:"</ID>
-    <ID>NoHardcodedUiString:WelcomePage.kt$"Columba"</ID>
-    <ID>NoHardcodedUiString:WelcomePage.kt$"Get Started"</ID>
-    <ID>NoHardcodedUiString:WelcomePage.kt$"No email address"</ID>
-    <ID>NoHardcodedUiString:WelcomePage.kt$"No phone number"</ID>
-    <ID>NoHardcodedUiString:WelcomePage.kt$"No sign-up or accounts"</ID>
-    <ID>NoHardcodedUiString:WelcomePage.kt$"Restore from backup"</ID>
-    <ID>NoHardcodedUiString:WelcomePage.kt$"Welcome to Columba"</ID>
-    <ID>NoHardcodedUiString:WelcomePage.kt$"Your identity is generated and stored securely on your device. You control it completely."</ID>
     <ID>ReturnCount:BatteryOptimizationManager.kt$BatteryOptimizationManager$fun shouldPromptForExemption(context: Context): Boolean</ID>
     <ID>ReturnCount:DebugViewModel.kt$DebugViewModel$fun generateShareText(displayName: String): String?</ID>
     <ID>ReturnCount:IdentityQrCodeUtils.kt$IdentityQrCodeUtils$fun decodeFromQrString(qrString: String): IdentityData?</ID>

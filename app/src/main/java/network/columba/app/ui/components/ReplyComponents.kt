@@ -44,9 +44,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.ui.model.ReplyPreviewUi
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -307,9 +309,14 @@ fun ReplyPreviewBubble(
                             )
                         }
                     }
-                    if (replyPreview.contentPreview.isNotEmpty()) {
+                    if (replyPreview.isDeletedPlaceholder || replyPreview.contentPreview.isNotEmpty()) {
                         Text(
-                            text = replyPreview.contentPreview,
+                            text =
+                                if (replyPreview.isDeletedPlaceholder) {
+                                    stringResource(R.string.message_deleted)
+                                } else {
+                                    replyPreview.contentPreview
+                                },
                             style = MaterialTheme.typography.bodySmall,
                             color = contentColor.copy(alpha = 0.7f),
                             maxLines = 1,

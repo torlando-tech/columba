@@ -126,6 +126,7 @@ import network.columba.app.viewmodel.AnnounceStreamViewModel
 import network.columba.app.viewmodel.ContactsViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
+import network.columba.app.viewmodel.messageResource
 
 private const val TAG = "ContactsScreen"
 
@@ -193,7 +194,8 @@ fun ContactsScreen(
     }
     LaunchedEffect(announceError) {
         announceError?.let { error ->
-            Toast.makeText(context, "Error: $error", Toast.LENGTH_LONG).show()
+            val detail = error.detail ?: context.getString(error.reason.messageResource())
+            Toast.makeText(context, "Error: $detail", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -768,7 +770,7 @@ fun ContactsScreen(
                             showManualEntryDialog = false
                         }
                         is AddContactResult.Error -> {
-                            Log.e(TAG, "Error adding contact: ${result.message}")
+                            Log.e(TAG, "Error adding contact: ${result.detail ?: result.reason}")
                             // Error is handled inside the dialog
                         }
                     }

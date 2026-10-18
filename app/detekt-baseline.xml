@@ -142,7 +142,7 @@
     <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Delete Announce?"</ID>
     <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Delete"</ID>
     <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Discovered Nodes"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Error: $error"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Error: $detail"</ID>
     <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Listening for announces..."</ID>
     <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Loading network..."</ID>
     <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"More options"</ID>
@@ -318,7 +318,7 @@
     <ID>NoHardcodedUiString:ContactsScreen.kt$"Edit Nickname"</ID>
     <ID>NoHardcodedUiString:ContactsScreen.kt$"Enter a custom name"</ID>
     <ID>NoHardcodedUiString:ContactsScreen.kt$"Enter a name"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Error: $error"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Error: $detail"</ID>
     <ID>NoHardcodedUiString:ContactsScreen.kt$"Full lxma:// URL or 32-character hex address"</ID>
     <ID>NoHardcodedUiString:ContactsScreen.kt$"Identity not found - tap to retry"</ID>
     <ID>NoHardcodedUiString:ContactsScreen.kt$"Identity not found"</ID>
@@ -721,7 +721,7 @@
     <ID>NoHardcodedUiString:IdentityScreen.kt$"Display Name"</ID>
     <ID>NoHardcodedUiString:IdentityScreen.kt$"Error sending announce"</ID>
     <ID>NoHardcodedUiString:IdentityScreen.kt$"Error: $error"</ID>
-    <ID>NoHardcodedUiString:IdentityScreen.kt$"Error: ${uiState.message}"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Error: ${uiState.detail ?: stringResource(uiState.reason.messageResource())}"</ID>
     <ID>NoHardcodedUiString:IdentityScreen.kt$"Hash: ${testResult.hexHash}"</ID>
     <ID>NoHardcodedUiString:IdentityScreen.kt$"Identity Hash"</ID>
     <ID>NoHardcodedUiString:IdentityScreen.kt$"Initialized"</ID>

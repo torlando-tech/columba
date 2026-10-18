@@ -1216,7 +1216,7 @@
     <ID>NoHardcodedUiString:MigrationScreen.kt$"Cancel"</ID>
     <ID>NoHardcodedUiString:MigrationScreen.kt$"Choose a password to protect your export file. "</ID>
     <ID>NoHardcodedUiString:MigrationScreen.kt$"Confirm password"</ID>
-    <ID>NoHardcodedUiString:MigrationScreen.kt$"Could not load preview: ${exportPreview.message}"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Could not load preview: ${exportPreview.message.resolve(context)}"</ID>
     <ID>NoHardcodedUiString:MigrationScreen.kt$"Data Migration"</ID>
     <ID>NoHardcodedUiString:MigrationScreen.kt$"Data to export:"</ID>
     <ID>NoHardcodedUiString:MigrationScreen.kt$"Data to import:"</ID>
@@ -1825,8 +1825,6 @@
     <ID>ThrowsCount:IdentityManagerViewModel.kt$IdentityManagerViewModel$fun importIdentity( fileUri: Uri, displayName: String, )</ID>
     <ID>TooGenericExceptionThrown:AnnounceStreamViewModel.kt$AnnounceStreamViewModel$throw RuntimeException("Service error: ${status.message}")</ID>
     <ID>TooGenericExceptionThrown:DebugViewModel.kt$DebugViewModel$throw RuntimeException("Could not get LXMF destination")</ID>
-    <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("Failed to read file")</ID>
-    <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("Failed to read identity file: ${e.message}")</ID>
     <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("No destination_hash in result")</ID>
     <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("No file_path in result")</ID>
     <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("No identity_hash in result")</ID>

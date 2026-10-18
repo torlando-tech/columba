@@ -227,7 +227,7 @@ private fun DeviceCard(
                         },
                 )
                 Text(
-                    text = "VID: ${formatHex(device.vendorId)} | PID: ${formatHex(device.productId)}",
+                    text = stringResource(R.string.flasher_device_vid_pid, formatHex(device.vendorId), formatHex(device.productId)),
                     style = MaterialTheme.typography.bodySmall,
                     color =
                         if (isSelected) {

@@ -334,7 +334,7 @@ private fun CurrentSlotCard(
                 )
             } else if (slot != null) {
                 Text(
-                    text = "Slot $slot",
+                    text = stringResource(R.string.rnode_wizard_slot_value, slot),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = contentColor,
@@ -631,7 +631,7 @@ private fun PopularPresetCard(
                 Column(horizontalAlignment = Alignment.End) {
                     if (slot != null) {
                         Text(
-                            text = "Slot $slot",
+                            text = stringResource(R.string.rnode_wizard_slot_value, slot),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -714,7 +714,7 @@ private fun MeshtasticSlotCard(
 
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "Slot ${slot.slot}",
+                    text = stringResource(R.string.rnode_wizard_slot_value, slot.slot),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

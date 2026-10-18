@@ -818,19 +818,19 @@ private fun TelemetryCollectorSection(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 TelemetryIntervalChip(
-                    label = "5min",
+                    label = stringResource(R.string.settings_location_interval_5min),
                     selected = sendIntervalSeconds == 300,
                     enabled = enabled && collectorAddress != null,
                     onClick = { onSendIntervalChange(300) },
                 )
                 TelemetryIntervalChip(
-                    label = "15min",
+                    label = stringResource(R.string.settings_location_interval_15min),
                     selected = sendIntervalSeconds == 900,
                     enabled = enabled && collectorAddress != null,
                     onClick = { onSendIntervalChange(900) },
                 )
                 TelemetryIntervalChip(
-                    label = "30min",
+                    label = stringResource(R.string.settings_location_interval_30min),
                     selected = sendIntervalSeconds == 1800,
                     enabled = enabled && collectorAddress != null,
                     onClick = { onSendIntervalChange(1800) },
@@ -950,19 +950,19 @@ private fun TelemetryCollectorSection(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 TelemetryIntervalChip(
-                    label = "5min",
+                    label = stringResource(R.string.settings_location_interval_5min),
                     selected = requestIntervalSeconds == 300,
                     enabled = requestEnabled && collectorAddress != null,
                     onClick = { onRequestIntervalChange(300) },
                 )
                 TelemetryIntervalChip(
-                    label = "15min",
+                    label = stringResource(R.string.settings_location_interval_15min),
                     selected = requestIntervalSeconds == 900,
                     enabled = requestEnabled && collectorAddress != null,
                     onClick = { onRequestIntervalChange(900) },
                 )
                 TelemetryIntervalChip(
-                    label = "30min",
+                    label = stringResource(R.string.settings_location_interval_30min),
                     selected = requestIntervalSeconds == 1800,
                     enabled = requestEnabled && collectorAddress != null,
                     onClick = { onRequestIntervalChange(1800) },

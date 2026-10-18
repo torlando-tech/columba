@@ -11,6 +11,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.test.core.app.ApplicationProvider
+import network.columba.app.R
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.AddressSearchResult
 import network.columba.app.viewmodel.DownloadProgress
@@ -45,6 +47,19 @@ class OfflineMapDownloadScreenTest {
 
     private val composeTestRule get() = composeRule
 
+    private fun resText(
+        id: Int,
+        vararg args: Any,
+    ): String =
+        ApplicationProvider.getApplicationContext<Application>().getString(id, *args)
+
+    private fun resPlural(
+        id: Int,
+        quantity: Int,
+        vararg args: Any,
+    ): String =
+        ApplicationProvider.getApplicationContext<Application>().resources.getQuantityString(id, quantity, *args)
+
     // ========== LocationSelectionStep Tests ==========
 
     @Test
@@ -71,7 +86,7 @@ class OfflineMapDownloadScreenTest {
         }
 
         composeTestRule
-            .onNodeWithText("Choose the center point for your offline map region.")
+            .onNodeWithText(resText(R.string.offline_map_download_location_subtitle))
             .assertIsDisplayed()
     }
 
@@ -98,7 +113,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Use Current Location").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_use_current_location)).assertIsDisplayed()
     }
 
     @Test
@@ -124,7 +139,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Latitude").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_latitude)).assertIsDisplayed()
     }
 
     @Test
@@ -150,7 +165,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Longitude").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_longitude)).assertIsDisplayed()
     }
 
     @Test
@@ -176,8 +191,8 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Geohash").assertExists()
-        composeTestRule.onNodeWithText("Enter a geohash", substring = true).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_geohash_label)).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_geohash_helper)).assertExists()
     }
 
     @Test
@@ -203,7 +218,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Next").assertIsNotEnabled()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_next)).assertIsNotEnabled()
     }
 
     @Test
@@ -229,7 +244,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Next").assertIsEnabled()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_next)).assertIsEnabled()
     }
 
     @Test
@@ -255,7 +270,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Location set", substring = true).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_location_set, "37.7749", "-122.4194")).assertExists()
     }
 
     @Test
@@ -281,7 +296,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Search City or Address").assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_search_label)).assertExists()
     }
 
     @Test
@@ -340,7 +355,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("No results found").assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_no_results)).assertExists()
     }
 
     @Test
@@ -369,7 +384,7 @@ class OfflineMapDownloadScreenTest {
         // The CircularProgressIndicator should be displayed when isSearchingAddress is true
         // We can't easily test for CircularProgressIndicator directly, but we can verify
         // the search icon is NOT displayed when searching
-        composeTestRule.onNodeWithContentDescription("Search").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.offline_map_download_search_cd)).assertDoesNotExist()
     }
 
     @Test
@@ -396,11 +411,11 @@ class OfflineMapDownloadScreenTest {
         }
 
         // Address search field should NOT be displayed when geocoder is unavailable
-        composeTestRule.onNodeWithText("Search City or Address").assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_search_label)).assertDoesNotExist()
         // But other location options should still be available
-        composeTestRule.onNodeWithText("Use Current Location").assertExists()
-        composeTestRule.onNodeWithText("Latitude").assertExists()
-        composeTestRule.onNodeWithText("Geohash").assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_use_current_location)).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_latitude)).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_geohash_label)).assertExists()
     }
 
     // ========== LocationSelectionStep Validation Tests (Issue #574) ==========
@@ -431,8 +446,8 @@ class OfflineMapDownloadScreenTest {
         }
 
         // Type an out-of-range latitude
-        composeTestRule.onNodeWithText("Latitude").performTextInput("123")
-        composeTestRule.onNodeWithText("Must be between -90 and 90").assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_latitude)).performTextInput("123")
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_err_lat_range)).assertExists()
         // Should NOT have called onLocationSet with invalid value
         assert(receivedLat == null) { "onLocationSet should not be called with out-of-range latitude" }
     }
@@ -460,8 +475,8 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Latitude").performTextInput("-91")
-        composeTestRule.onNodeWithText("Must be between -90 and 90").assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_latitude)).performTextInput("-91")
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_err_lat_range)).assertExists()
     }
 
     @Test
@@ -487,8 +502,8 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Longitude").performTextInput("200")
-        composeTestRule.onNodeWithText("Must be between -180 and 180").assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_longitude)).performTextInput("200")
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_err_lon_range)).assertExists()
     }
 
     @Test
@@ -517,9 +532,9 @@ class OfflineMapDownloadScreenTest {
         }
 
         // Type valid lat; note: lon is still empty so onLocationSet won't fire (lon is null)
-        composeTestRule.onNodeWithText("Latitude").performTextInput("45")
-        composeTestRule.onNodeWithText("Must be between -90 and 90").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Invalid number").assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_latitude)).performTextInput("45")
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_err_lat_range)).assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_err_invalid_number)).assertDoesNotExist()
     }
 
     @Test
@@ -546,9 +561,9 @@ class OfflineMapDownloadScreenTest {
         }
 
         // Typing just "-" should not show an error (user is still typing)
-        composeTestRule.onNodeWithText("Latitude").performTextInput("-")
-        composeTestRule.onNodeWithText("Invalid number").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Must be between -90 and 90").assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_latitude)).performTextInput("-")
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_err_invalid_number)).assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_err_lat_range)).assertDoesNotExist()
     }
 
     @Test
@@ -574,8 +589,8 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Latitude").performTextInput("abc")
-        composeTestRule.onNodeWithText("Invalid number").assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_latitude)).performTextInput("abc")
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_err_invalid_number)).assertExists()
     }
 
     @Test
@@ -608,8 +623,8 @@ class OfflineMapDownloadScreenTest {
         }
 
         // Type valid longitude first, then latitude — onLocationSet fires when both are valid
-        composeTestRule.onNodeWithText("Longitude").performTextInput("-74")
-        composeTestRule.onNodeWithText("Latitude").performTextInput("40")
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_longitude)).performTextInput("-74")
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_latitude)).performTextInput("40")
 
         assertEquals(40.0, receivedLat)
         assertEquals(-74.0, receivedLon)
@@ -642,14 +657,14 @@ class OfflineMapDownloadScreenTest {
         }
 
         // Type an invalid latitude — error should appear
-        composeTestRule.onNodeWithText("Latitude").performTextInput("123")
-        composeTestRule.onNodeWithText("Must be between -90 and 90").assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_latitude)).performTextInput("123")
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_err_lat_range)).assertExists()
 
         // Simulate GPS setting a valid latitude (recomposition with new prop)
         latState.value = 40.0
 
         // Error should be cleared because latitude prop changed, resetting the remember key
-        composeTestRule.onNodeWithText("Must be between -90 and 90").assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_err_lat_range)).assertDoesNotExist()
     }
 
     // ========== RadiusSelectionStep Tests ==========
@@ -670,7 +685,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Select Area Size").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_area_size_title)).assertIsDisplayed()
     }
 
     @Test
@@ -711,9 +726,9 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Zoom Range").assertExists()
-        composeTestRule.onNodeWithText("Min zoom: 5", substring = true).assertExists()
-        composeTestRule.onNodeWithText("Max zoom: 14", substring = true).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_zoom_range_title)).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_min_zoom, 5)).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_max_zoom, 14)).assertExists()
     }
 
     @Test
@@ -732,8 +747,8 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Estimated Download").assertExists()
-        composeTestRule.onNodeWithText("2500 tiles").assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_estimated_download_title)).assertExists()
+        composeTestRule.onNodeWithText(resPlural(R.plurals.offline_map_download_tiles, 2500, 2500)).assertExists()
         composeTestRule.onNodeWithText("~37 MB").assertExists()
     }
 
@@ -753,8 +768,8 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Back").assertExists()
-        composeTestRule.onNodeWithText("Next").assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_back)).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_next)).assertExists()
     }
 
     @Test
@@ -775,7 +790,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Back").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_back)).performScrollTo().performClick()
         assert(backCalled) { "onBack should have been called" }
     }
 
@@ -797,7 +812,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Next").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_next)).performScrollTo().performClick()
         assert(nextCalled) { "onNext should have been called" }
     }
 
@@ -823,8 +838,8 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Name Your Map").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Region Name").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_name_title)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_region_name_label)).assertIsDisplayed()
     }
 
     @Test
@@ -847,9 +862,9 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Summary").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Location").assertExists()
-        composeTestRule.onNodeWithText("Radius").assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_summary_title)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_summary_location)).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_summary_radius)).assertExists()
         composeTestRule.onNodeWithText("10 km").assertExists()
         composeTestRule.onNodeWithText("5 - 14").assertExists()
         composeTestRule.onNodeWithText("1000").assertExists()
@@ -876,7 +891,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Wi-Fi", substring = true).assertExists()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_notice)).assertExists()
     }
 
     @Test
@@ -899,7 +914,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Download").assertIsNotEnabled()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_download_button)).assertIsNotEnabled()
     }
 
     @Test
@@ -922,7 +937,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Download").assertIsEnabled()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_download_button)).assertIsEnabled()
     }
 
     @Test
@@ -947,7 +962,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Download").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_download_button)).performScrollTo().performClick()
         assert(downloadStarted) { "onStartDownload should have been called" }
     }
 
@@ -962,7 +977,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Preparing download...").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_preparing_download)).assertIsDisplayed()
     }
 
     @Test
@@ -983,7 +998,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Preparing...").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_status_preparing)).assertIsDisplayed()
     }
 
     @Test
@@ -1004,9 +1019,9 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Downloading...").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_status_downloading)).assertIsDisplayed()
         composeTestRule.onNodeWithText("50%").assertIsDisplayed()
-        composeTestRule.onNodeWithText("50 / 100 resources").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_resources_progress, 50L, 100L)).assertIsDisplayed()
     }
 
     @Test
@@ -1027,7 +1042,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Complete!").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_status_complete)).assertIsDisplayed()
     }
 
     @Test
@@ -1048,7 +1063,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Error").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_status_error)).assertIsDisplayed()
     }
 
     @Test
@@ -1090,7 +1105,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Cancel").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_cancel)).assertIsDisplayed()
     }
 
     @Test
@@ -1111,7 +1126,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Cancel").assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_cancel)).assertDoesNotExist()
     }
 
     @Test
@@ -1132,7 +1147,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Cancel").assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_cancel)).assertDoesNotExist()
     }
 
     @Test
@@ -1154,7 +1169,7 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.onNodeWithText(resText(R.string.offline_map_download_cancel)).performClick()
         assert(cancelCalled) { "onCancel should have been called" }
     }
 

@@ -5,6 +5,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
+import network.columba.app.R
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.MigrationUiState
 import network.columba.app.viewmodel.MigrationViewModel
@@ -38,6 +40,9 @@ class MigrationScreenTest {
     private lateinit var mockViewModel: MigrationViewModel
     private val includeAttachmentsFlow = MutableStateFlow(true)
 
+    private fun resText(id: Int): String =
+        ApplicationProvider.getApplicationContext<Application>().getString(id)
+
     @Suppress("NoRelaxedMocks") // MigrationViewModel is a complex ViewModel with many properties; explicit stubbing for all would be excessive
     @Before
     fun setup() {
@@ -64,7 +69,7 @@ class MigrationScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Include file attachments").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.migration_include_attachments)).assertIsDisplayed()
     }
 
     @Test
@@ -80,7 +85,7 @@ class MigrationScreenTest {
 
         // Helper text should NOT be displayed when checked
         composeTestRule
-            .onNodeWithText("Images and files won't be included in export")
+            .onNodeWithText(resText(R.string.migration_no_attachments_note))
             .assertDoesNotExist()
     }
 
@@ -96,7 +101,7 @@ class MigrationScreenTest {
         }
 
         composeTestRule
-            .onNodeWithText("Images and files won't be included in export")
+            .onNodeWithText(resText(R.string.migration_no_attachments_note))
             .assertIsDisplayed()
     }
 
@@ -112,10 +117,10 @@ class MigrationScreenTest {
         }
 
         // Then - checkbox label is displayed
-        composeTestRule.onNodeWithText("Include file attachments").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.migration_include_attachments)).assertIsDisplayed()
 
         // Click on the label text (entire row is clickable)
-        composeTestRule.onNodeWithText("Include file attachments").performClick()
+        composeTestRule.onNodeWithText(resText(R.string.migration_include_attachments)).performClick()
 
         // Verify the ViewModel method was called with toggled value (true -> false)
         verify { mockViewModel.setIncludeAttachments(false) }
@@ -133,13 +138,13 @@ class MigrationScreenTest {
         }
 
         // Then - checkbox label and helper text are displayed
-        composeTestRule.onNodeWithText("Include file attachments").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.migration_include_attachments)).assertIsDisplayed()
         composeTestRule
-            .onNodeWithText("Images and files won't be included in export")
+            .onNodeWithText(resText(R.string.migration_no_attachments_note))
             .assertIsDisplayed()
 
         // Click on the label text
-        composeTestRule.onNodeWithText("Include file attachments").performClick()
+        composeTestRule.onNodeWithText(resText(R.string.migration_include_attachments)).performClick()
 
         // Verify the ViewModel method was called with toggled value (false -> true)
         verify { mockViewModel.setIncludeAttachments(true) }
@@ -154,7 +159,7 @@ class MigrationScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Export All Data").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.migration_export_all_data)).assertIsDisplayed()
     }
 
     @Test
@@ -166,7 +171,7 @@ class MigrationScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Export Data").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.migration_export_data_title)).assertIsDisplayed()
     }
 
     // ========== Notification Permission Dialog Tests ==========
@@ -181,6 +186,6 @@ class MigrationScreenTest {
         }
 
         // Dialog should not be visible on initial screen load
-        composeTestRule.onNodeWithText("Enable Notifications?").assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.migration_enable_notifications_title)).assertDoesNotExist()
     }
 }

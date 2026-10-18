@@ -150,8 +150,8 @@ private fun PresetDescription(
             if (displayPreset != ImageCompressionPreset.AUTO) {
                 Text(
                     text =
-                        "Max: ${formatDimension(displayPreset.maxDimensionPx)}px, " +
-                            "${formatBytes(displayPreset.targetSizeBytes)}",
+                        stringResource(R.string.settings_imgcomp_max_dim_prefix, formatDimension(displayPreset.maxDimensionPx)) +
+                            formatBytes(displayPreset.targetSizeBytes),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )

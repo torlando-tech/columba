@@ -7,6 +7,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import network.columba.app.R
 
 /**
  * One-time opt-in dialog shown on launch to existing users (those who completed onboarding
@@ -26,23 +28,20 @@ fun CrashReportingOptInDialog(
                 contentDescription = null,
             )
         },
-        title = { Text("Help improve Columba?") },
+        title = { Text(stringResource(R.string.settings_crash_optin_title)) },
         text = {
             Text(
-                "Columba can send anonymous crash and error reports so the developer can " +
-                    "find and fix bugs. No message content, contacts, or identity " +
-                    "information is ever included. You can change this anytime in " +
-                    "Settings → Advanced.",
+                stringResource(R.string.settings_crash_optin_body),
             )
         },
         confirmButton = {
             TextButton(onClick = onEnable) {
-                Text("Enable")
+                Text(stringResource(R.string.settings_crash_optin_enable))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Not now")
+                Text(stringResource(R.string.settings_crash_optin_not_now))
             }
         },
     )

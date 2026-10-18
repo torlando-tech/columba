@@ -25,46 +25,6 @@
     <ID>LoopWithTooManyJumpStatements:SettingsViewModel.kt$SettingsViewModel$while</ID>
     <ID>MaxLineLength:BleTestFixtures.kt$BleTestFixtures$"""{"identityHash":"${connection.identityHash}","peerName":"${connection.peerName}","currentMac":"${connection.currentMac}","hasCentralConnection":$hasCentral,"hasPeripheralConnection":$hasPeripheral,"mtu":${connection.mtu},"connectedAt":${connection.connectedAt},"firstSeen":${connection.firstSeen},"lastSeen":${connection.lastSeen},"rssi":${connection.rssi}}"""</ID>
     <ID>NestedBlockDepth:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"API Level"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"About Reticulum"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"About"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Android Version"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"App Information"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"BLE-Reticulum"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Build Date"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Build Number"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Build Type"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Built With"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Check for Updates"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Columba Logo"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Columba"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Copy System Info"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Device Information"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Device Model"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Git Commit"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"GitHub Repository"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Identity Hash"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Identity"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Include pre-releases"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Jetpack Compose"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"LXMF by Mark Qvist"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"LXST"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Links &amp; Resources"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Manufacturer"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Material Design 3"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Native Android messaging app using Bluetooth LE, TCP, or RNode (LoRa) over LXMF and Reticulum"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Protocol Versions"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Report Bug"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Report an Issue"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Reticulum by Mark Qvist"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Reticulum"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Up to date (v${result.currentVersion})"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Update available: ${result.tagName}"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Updates"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"Version"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"View License"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"View Release"</ID>
-    <ID>NoHardcodedUiString:AboutCard.kt$"© 2025–${network.columba.app.BuildConfig.COPYRIGHT_YEAR} Columba Contributors"</ID>
     <ID>NoHardcodedUiString:AdvancedCard.kt$"(Sideband, rnsd, …) can route through Columba's transport. "</ID>
     <ID>NoHardcodedUiString:AdvancedCard.kt$"Advanced"</ID>
     <ID>NoHardcodedUiString:AdvancedCard.kt$"Anonymous Crash Reports"</ID>
@@ -176,21 +136,6 @@
     <ID>NoHardcodedUiString:ConnectivityPage.kt$"You can configure these later in Settings"</ID>
     <ID>NoHardcodedUiString:ContactsTab.kt$ContactsTab.MY_CONTACTS$"My Contacts"</ID>
     <ID>NoHardcodedUiString:ContactsTab.kt$ContactsTab.NETWORK$"Network"</ID>
-    <ID>NoHardcodedUiString:CrashReportDialog.kt$"App Crashed"</ID>
-    <ID>NoHardcodedUiString:CrashReportDialog.kt$"Dismiss"</ID>
-    <ID>NoHardcodedUiString:CrashReportDialog.kt$"Exception: $exceptionName"</ID>
-    <ID>NoHardcodedUiString:CrashReportDialog.kt$"Report Bug"</ID>
-    <ID>NoHardcodedUiString:CrashReportDialog.kt$"Sensitive data like identity hashes and IP addresses are automatically redacted."</ID>
-    <ID>NoHardcodedUiString:CrashReportDialog.kt$"The app crashed unexpectedly. Would you like to report this issue?"</ID>
-    <ID>NoHardcodedUiString:CrashReportDialog.kt$"Time: $crashTime"</ID>
-    <ID>NoHardcodedUiString:CrashReportDialog.kt$"Your bug report will include system info and recent logs. "</ID>
-    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"Columba can send anonymous crash and error reports so the developer can "</ID>
-    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"Enable"</ID>
-    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"Help improve Columba?"</ID>
-    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"Not now"</ID>
-    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"Settings → Advanced."</ID>
-    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"find and fix bugs. No message content, contacts, or identity "</ID>
-    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"information is ever included. You can change this anytime in "</ID>
     <ID>NoHardcodedUiString:CrashReportingPage.kt$"Anonymous Crash Reports"</ID>
     <ID>NoHardcodedUiString:CrashReportingPage.kt$"Back"</ID>
     <ID>NoHardcodedUiString:CrashReportingPage.kt$"Columba can send anonymous crash and error reports to help the "</ID>
@@ -611,26 +556,6 @@
     <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Share"</ID>
     <ID>NoHardcodedUiString:NotificationSettingsCard.kt$"Manage Notifications"</ID>
     <ID>NoHardcodedUiString:NotificationSettingsCard.kt$"Notifications"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"BLE Peer Connected"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"BLE Peer Disconnected"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Direct Only"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Enable Notifications"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Exclude TCP"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Heard Announce"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Message from Saved Peer"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notification Settings"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notification Types"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notifications"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notify when a Bluetooth LE peer connects"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notify when a Bluetooth LE peer disconnects"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notify when you hear a new announce from a peer"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notify when you receive a message from a saved peer"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notify when you receive a new message"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Only notify for direct (1-hop) announces from nearby peers"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Received Message"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Select which events you want to be notified about"</ID>
-    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Skip announces received via TCP interfaces"</ID>
     <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"$estimatedTileCount tiles"</ID>
     <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"${progress.completedResources} / ${progress.requiredResources} resources"</ID>
     <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Are you sure you want to cancel the download? Progress will be lost."</ID>
@@ -779,20 +704,6 @@
     <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Enter server details manually"</ID>
     <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Select a community server or enter custom connection details."</ID>
     <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Selected"</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"Access configuration copied to clipboard"</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"Bug Report"</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"Go to Permissions &gt; Location to change"</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"Grant Location Access"</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"Group Tracker shares your location with a group host "</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"Host access configuration is unavailable"</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"Settings"</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"Shared instance access configuration"</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"Shared instance available"</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"Switch"</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"System Info"</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"System info copied to clipboard"</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"Your location is encrypted and only readable by the group host you configure."</ID>
-    <ID>NoHardcodedUiString:SettingsScreen.kt$"so everyone can see where each other is.\n\n"</ID>
     <ID>NoHardcodedUiString:ShareColumbaCard.kt$"Share Columba APK"</ID>
     <ID>NoHardcodedUiString:ShareColumbaCard.kt$"Share Columba"</ID>
     <ID>NoHardcodedUiString:ShareColumbaCard.kt$"Share the Columba app with someone nearby. "</ID>
@@ -826,40 +737,6 @@
     <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"Back"</ID>
     <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"Error"</ID>
     <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"tcp_wizard_step"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Auto-harmonize colors"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Change Color"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Color Palette"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Dark Mode"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Describe your theme..."</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Description (Optional)"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Light Mode"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"My Custom Theme"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Pick $currentColorRoleName Color"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Primary"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Save &amp; Apply"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Save"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Secondary"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Surface Variant"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Surface"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Tertiary"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Theme Colors"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Theme Name"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Theme Preview"</ID>
-    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Top App Bar"</ID>
-    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Apply Theme"</ID>
-    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Are you sure you want to delete \"${theme.name}\"? This action cannot be undone."</ID>
-    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Create Theme"</ID>
-    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Create your first theme"</ID>
-    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Custom Themes"</ID>
-    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Delete Theme?"</ID>
-    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Delete"</ID>
-    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Edit"</ID>
-    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"More options"</ID>
-    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"No custom themes yet"</ID>
     <ID>NoHardcodedUiString:ThemeSelectionCard.kt$"Built-in Themes"</ID>
     <ID>NoHardcodedUiString:ThemeSelectionCard.kt$"Custom Themes"</ID>
     <ID>NoHardcodedUiString:ThemeSelectionCard.kt$"Preview:"</ID>

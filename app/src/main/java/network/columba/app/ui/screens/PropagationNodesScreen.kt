@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import network.columba.app.ui.components.PropagationNodeReorderList
+import network.columba.app.ui.components.localizedHashErrorText
 import network.columba.app.util.DestinationHashValidator
 import network.columba.app.viewmodel.PropagationNodesViewModel
 
@@ -376,7 +377,7 @@ private fun AddPropagationNodeDialog(
                             Text(
                                 text =
                                     if (hashValidation is DestinationHashValidator.ValidationResult.Error) {
-                                        hashValidation.message
+                                        localizedHashErrorText(hashValidation.reason, hashValidation.args)
                                     } else {
                                         DestinationHashValidator.getCharacterCount(hashInput)
                                     },

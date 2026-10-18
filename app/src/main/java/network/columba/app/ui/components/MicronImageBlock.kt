@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import network.columba.app.R
 import network.columba.app.micron.MicronElement
 import network.columba.app.nomadnet.PageImageState
 import network.columba.app.nomadnet.PageImageStatus
@@ -281,7 +282,7 @@ fun MicronImageBlock(
         PageImageStatus.FAILED -> {
             ImagePlaceholder(
                 element = element,
-                statusLine = effectiveState.error ?: "Error loading image",
+                statusLine = effectiveState.error?.resolve(context) ?: context.getString(R.string.page_image_error_loading),
                 showTapAffordance = true,
                 onClick = onImageReload,
                 modifier = blockModifier.testTag("micron-image-failed"),
@@ -304,7 +305,7 @@ fun MicronImageBlock(
             // offering a retry would be a dead no-op (issue 8).
             ImagePlaceholder(
                 element = element,
-                statusLine = effectiveState.error ?: "Invalid image URL",
+                statusLine = effectiveState.error?.resolve(context) ?: context.getString(R.string.page_image_invalid_url),
                 showTapAffordance = false,
                 onClick = {},
                 modifier = blockModifier.testTag("micron-image-malformed"),

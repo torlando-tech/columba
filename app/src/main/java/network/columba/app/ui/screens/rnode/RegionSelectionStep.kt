@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import network.columba.app.data.model.FrequencyRegion
@@ -243,7 +244,7 @@ private fun FrequencyRegionCard(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = region.description,
+                    text = stringResource(region.descriptionRes),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -395,7 +396,7 @@ private fun PopularPresetCard(
             Spacer(Modifier.height(4.dp))
 
             Text(
-                preset.description,
+                stringResource(preset.descriptionRes),
                 style = MaterialTheme.typography.bodySmall,
                 color =
                     if (isSelected) {

@@ -1,5 +1,6 @@
 package network.columba.app.viewmodel
 
+import network.columba.app.R
 import network.columba.app.data.model.FrequencyRegion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -16,7 +17,7 @@ class RNodeConfigValidatorTest {
         FrequencyRegion(
             id = "us_915",
             name = "US / Americas (915 MHz)",
-            description = "902-928 MHz",
+            descriptionRes = R.string.region_desc_us_915,
             frequencyStart = 902_000_000L,
             frequencyEnd = 928_000_000L,
             maxTxPower = 30,
@@ -28,7 +29,7 @@ class RNodeConfigValidatorTest {
         FrequencyRegion(
             id = "eu_868_p",
             name = "EU (868 MHz) - 10% duty",
-            description = "869.4-869.65 MHz, 10% duty cycle",
+            descriptionRes = R.string.region_desc_eu_868_p,
             frequencyStart = 869_400_000L,
             frequencyEnd = 869_650_000L,
             maxTxPower = 14,
@@ -41,7 +42,7 @@ class RNodeConfigValidatorTest {
         FrequencyRegion(
             id = "nz_865",
             name = "New Zealand (865 MHz)",
-            description = "864-868 MHz alternative band",
+            descriptionRes = R.string.region_desc_nz_865,
             frequencyStart = 864_000_000L,
             frequencyEnd = 868_000_000L,
             maxTxPower = 36,

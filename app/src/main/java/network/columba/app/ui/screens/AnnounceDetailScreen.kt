@@ -63,6 +63,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -89,6 +90,7 @@ fun AnnounceDetailScreen(
     autoIdentifyViewModel: NomadNetAutoIdentifyViewModel = hiltViewModel(),
 ) {
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val autoIdentifyNodes by autoIdentifyViewModel.autoIdentifyNodes.collectAsState()
 
@@ -572,7 +574,7 @@ fun AnnounceDetailScreen(
                             title = sighting.interfaceType.displayLabel,
                             content = interfaceInfo.text,
                             subtitle =
-                                "${formatTimeSince(sighting.lastSeenTimestamp)} — " +
+                                "${formatTimeSince(context, sighting.lastSeenTimestamp)} — " +
                                     "${sighting.hops} ${if (sighting.hops == 1) "hop" else "hops"}",
                         )
                     }
@@ -598,7 +600,7 @@ fun AnnounceDetailScreen(
                 InfoCard(
                     icon = Icons.Default.AccessTime,
                     title = "Last Seen",
-                    content = formatTimeSince(announceNonNull.lastSeenTimestamp),
+                    content = formatTimeSince(context, announceNonNull.lastSeenTimestamp),
                     subtitle = formatFullTimestamp(announceNonNull.lastSeenTimestamp),
                 )
 

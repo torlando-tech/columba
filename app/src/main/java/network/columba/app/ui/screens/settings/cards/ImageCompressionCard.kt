@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.ui.components.CollapsibleSettingsCard
@@ -100,6 +101,7 @@ fun ImageCompressionCard(
 /**
  * Build the label for a preset chip.
  */
+@Composable
 private fun buildPresetLabel(
     preset: ImageCompressionPreset,
     detectedPreset: ImageCompressionPreset?,
@@ -107,9 +109,9 @@ private fun buildPresetLabel(
 ): String {
     return when {
         preset == ImageCompressionPreset.AUTO && isSelected && detectedPreset != null -> {
-            "Auto (${detectedPreset.displayName})"
+            "Auto (${stringResource(detectedPreset.displayNameRes)})"
         }
-        else -> preset.displayName
+        else -> stringResource(preset.displayNameRes)
     }
 }
 
@@ -141,7 +143,7 @@ private fun PresetDescription(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = displayPreset.description,
+                text = stringResource(displayPreset.descriptionRes),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -52,9 +52,22 @@ sealed interface UiMessage {
 }
 
 /**
+ * An exception that carries a localized [UiMessage] instead of an English
+ * detail string. Throw sites in services (no resource access) wrap a
+ * resource-id message in this type; [toUiMessage] unwraps it at render time
+ * so the localized text survives the exception hop.
+ */
+class UiMessageException(val uiMessage: UiMessage, cause: Throwable? = null) :
+    Exception(uiMessage.toString(), cause)
+
+/**
  * Maps an exception to a [UiMessage]: a non-null exception message passes
  * through verbatim as [UiMessage.Raw] (developer diagnostics stay English);
  * a null message falls back to the localized [fallbackRes].
  */
 fun Throwable?.toUiMessage(@StringRes fallbackRes: Int): UiMessage =
-    this?.message?.let { UiMessage.Raw(it) } ?: UiMessage.Text(fallbackRes)
+    when {
+        this is UiMessageException -> uiMessage
+        this?.message != null -> UiMessage.Raw(message!!)
+        else -> UiMessage.Text(fallbackRes)
+    }

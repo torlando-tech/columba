@@ -195,7 +195,7 @@ class FrequencyRegionTest {
             )
             assertTrue(
                 "Region ${region.id} should have non-empty description",
-                region.description.isNotBlank(),
+                region.descriptionRes != 0,
             )
         }
     }

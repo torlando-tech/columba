@@ -76,7 +76,7 @@ data class DownloadProgress(
     val completedResources: Long = 0L,
     val requiredResources: Long = 0L,
     val isComplete: Boolean = false,
-    val errorMessage: String? = null,
+    val errorMessage: UiMessage? = null,
     val statusMessage: UiMessage? = null, // Shown during post-download finalization (e.g., style caching)
 )
 
@@ -837,7 +837,7 @@ class OfflineMapDownloadViewModel
                             viewModelScope.launch {
                                 offlineMapRegionRepository.markError(
                                     id = regionId,
-                                    errorMessage = errorMessage,
+                                    errorMessage = errorMessage.resolve(context),
                                 )
                             }
 

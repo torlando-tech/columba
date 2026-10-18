@@ -42,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -619,7 +620,7 @@ private fun PopularPresetCard(
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = preset.description,
+                    text = stringResource(preset.descriptionRes),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -705,7 +706,7 @@ private fun MeshtasticSlotCard(
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = slot.description.removePrefix("⚠️ "),
+                        text = stringResource(slot.descriptionRes).removePrefix("⚠️ "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )

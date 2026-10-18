@@ -3724,7 +3724,7 @@ class RNodeWizardViewModel
                             )
                     ) {
                         is ValidationResult.Error -> {
-                            _state.update { it.copy(nameError = UiMessage.Raw(uniqueResult.message), isSaving = false) }
+                            _state.update { it.copy(nameError = UiMessage.Text(uniqueResult.reason.messageResource(), uniqueResult.args), isSaving = false) }
                             return@launch
                         }
                         is ValidationResult.Success -> { /* Name is unique, continue */ }

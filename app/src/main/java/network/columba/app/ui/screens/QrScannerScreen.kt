@@ -65,6 +65,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -413,7 +414,7 @@ private fun PermissionRequiredContent(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = CameraPermissionManager.getPermissionRationale(),
+            text = stringResource(CameraPermissionManager.getPermissionRationale()),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
         )

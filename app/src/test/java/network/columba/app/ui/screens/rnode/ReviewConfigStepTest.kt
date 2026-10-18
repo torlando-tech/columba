@@ -53,7 +53,7 @@ class ReviewConfigStepTest {
             maxTxPower = 30,
             defaultTxPower = 17,
             dutyCycle = 100,
-            description = "902-928 MHz ISM band",
+            descriptionRes = R.string.region_desc_us_915,
         )
 
     private val restrictedRegion =
@@ -65,7 +65,7 @@ class ReviewConfigStepTest {
             maxTxPower = 14,
             defaultTxPower = 14,
             dutyCycle = 1,
-            description = "Sub-band M: 1% duty cycle, 25 mW (LoRaWAN default)",
+            descriptionRes = R.string.region_desc_eu_868_m,
         )
 
     private val testDevice =

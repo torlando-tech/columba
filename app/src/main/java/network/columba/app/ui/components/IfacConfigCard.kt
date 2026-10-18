@@ -22,18 +22,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-
-/**
- * Default explanation shown inside the IFAC card. Used when the caller does
- * not supply its own [IfacConfigCard.description].
- */
-internal const val DEFAULT_IFAC_DESCRIPTION: String =
-    "Leave blank unless the remote interface requires an IFAC network " +
-        "name and passphrase. Auto-filled when adding from a discovered interface."
+import network.columba.app.R
 
 /**
  * Reusable Material card that renders the two IFAC (network access) fields —
@@ -54,7 +48,7 @@ internal const val DEFAULT_IFAC_DESCRIPTION: String =
  * @param onPassphraseVisibilityToggle Invoked when the user taps the eye icon.
  * @param modifier Applied to the outer [Card].
  * @param description Explanatory body text rendered under the header; defaults
- *   to [DEFAULT_IFAC_DESCRIPTION]. Pass a wizard-specific string when the
+ *   to the localized `ifac_card_description` string. Pass a wizard-specific string when the
  *   guidance needs tweaking (e.g. "Only interfaces with matching credentials
  *   can communicate").
  * @param networkNameError Optional error message surfaced beneath the network
@@ -71,7 +65,7 @@ fun IfacConfigCard(
     onPassphraseChange: (String) -> Unit,
     onPassphraseVisibilityToggle: () -> Unit,
     modifier: Modifier = Modifier,
-    description: String = DEFAULT_IFAC_DESCRIPTION,
+    description: String? = null,
     networkNameError: String? = null,
     passphraseError: String? = null,
 ) {
@@ -91,13 +85,13 @@ fun IfacConfigCard(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "IFAC (Network Access)",
+                    stringResource(R.string.ifac_card_header),
                     style = MaterialTheme.typography.titleSmall,
                 )
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                description,
+                description ?: stringResource(R.string.ifac_card_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -105,7 +99,7 @@ fun IfacConfigCard(
             OutlinedTextField(
                 value = networkName,
                 onValueChange = onNetworkNameChange,
-                label = { Text("Network Name") },
+                label = { Text(stringResource(R.string.ifac_card_network_name_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = networkNameError != null,
@@ -115,7 +109,7 @@ fun IfacConfigCard(
             OutlinedTextField(
                 value = passphrase,
                 onValueChange = onPassphraseChange,
-                label = { Text("Passphrase") },
+                label = { Text(stringResource(R.string.ifac_card_passphrase_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = passphraseError != null,
@@ -143,9 +137,9 @@ fun IfacConfigCard(
                                 },
                             contentDescription =
                                 if (passphraseVisible) {
-                                    "Hide passphrase"
+                                    stringResource(R.string.ifac_card_hide_passphrase)
                                 } else {
-                                    "Show passphrase"
+                                    stringResource(R.string.ifac_card_show_passphrase)
                                 },
                         )
                     }

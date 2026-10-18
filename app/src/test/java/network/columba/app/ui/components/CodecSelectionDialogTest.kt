@@ -434,10 +434,10 @@ class CodecSelectionDialogTest {
     }
 
     @Test
-    fun `each CodecProfile has displayName and description`() {
+    fun `each CodecProfile has label and description resources`() {
         CodecProfile.entries.forEach { profile ->
-            assertTrue("displayName should not be blank", profile.displayName.isNotBlank())
-            assertTrue("description should not be blank", profile.description.isNotBlank())
+            assertTrue("labelRes should be set", profile.labelRes != 0)
+            assertTrue("descriptionRes should be set", profile.descriptionRes != 0)
         }
     }
 

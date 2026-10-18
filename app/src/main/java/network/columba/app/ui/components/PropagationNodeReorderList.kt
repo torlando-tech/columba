@@ -45,9 +45,11 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.util.formatRelativeTime
 import network.columba.app.viewmodel.UiMessage
 import kotlin.math.abs
@@ -81,11 +83,12 @@ data class PropagationNodeRow(
 )
 
 /** Display label for a raw `NetworkRestriction` name. */
+@Composable
 fun networkRestrictionLabel(restriction: String): String =
     when (restriction.uppercase()) {
-        "WIFI_ONLY" -> "Wi-Fi only"
-        "CELLULAR_ONLY" -> "Cellular only"
-        else -> "Any"
+        "WIFI_ONLY" -> stringResource(R.string.interface_restriction_wifi_only)
+        "CELLULAR_ONLY" -> stringResource(R.string.interface_restriction_cellular_only)
+        else -> stringResource(R.string.prop_reorder_restriction_any)
     }
 
 /** Cycle to the next restriction: ANY -> WIFI_ONLY -> CELLULAR_ONLY -> ANY. */
@@ -275,7 +278,7 @@ private fun PropagationNodeRowContent(
             ) {
                 Icon(
                     imageVector = Icons.Filled.DragHandle,
-                    contentDescription = "Reorder ${row.displayName}",
+                    contentDescription = stringResource(R.string.prop_reorder_reorder_node, row.displayName),
                     modifier = Modifier.size(20.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -313,7 +316,7 @@ private fun PropagationNodeRowContent(
                         Spacer(modifier = Modifier.size(6.dp))
                         Icon(
                             imageVector = Icons.Filled.CheckCircle,
-                            contentDescription = "Current relay",
+                            contentDescription = stringResource(R.string.prop_reorder_current_relay),
                             modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.primary,
                         )
@@ -386,7 +389,7 @@ private fun PropagationNodeRowContent(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.PlayArrow,
-                                contentDescription = "Set active now",
+                                contentDescription = stringResource(R.string.prop_reorder_set_active_now),
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         }
@@ -399,7 +402,7 @@ private fun PropagationNodeRowContent(
                         onClick = onRemove,
                         modifier = Modifier.testTag("prop_node_remove_${row.destinationHash}"),
                     ) {
-                        Text("Remove")
+                        Text(stringResource(R.string.prop_reorder_remove))
                     }
                 }
             }

@@ -25,8 +25,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 
 /**
  * Reusable collapsible card component for Settings screen.
@@ -118,7 +120,12 @@ fun CollapsibleSettingsCard(
                                 } else {
                                     Icons.Default.KeyboardArrowDown
                                 },
-                            contentDescription = if (isExpanded) "Collapse" else "Expand",
+                            contentDescription =
+                                if (isExpanded) {
+                                    stringResource(R.string.collapsible_card_collapse)
+                                } else {
+                                    stringResource(R.string.collapsible_card_expand)
+                                },
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }

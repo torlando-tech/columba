@@ -6,7 +6,6 @@
     <ID>LongParameterList:CustomThemeRepository.kt$CustomThemeRepository$( id: Long, name: String, description: String, seedPrimary: Int, seedSecondary: Int, seedTertiary: Int, lightColors: ThemeColorSet, darkColors: ThemeColorSet, baseTheme: String? = null, )</ID>
     <ID>LongParameterList:CustomThemeRepository.kt$CustomThemeRepository$( name: String, description: String, seedPrimary: Int, seedSecondary: Int, seedTertiary: Int, lightColors: ThemeColorSet, darkColors: ThemeColorSet, baseTheme: String? = null, )</ID>
     <ID>LoopWithTooManyJumpStatements:ColumbaDatabase.kt$ColumbaDatabase.Companion.&lt;no name provided&gt;$while</ID>
-    <ID>NoHardcodedUiString:IdentityRepository.kt$IdentityRepository$"Anonymous Peer"</ID>
     <ID>SwallowedException:EnrichedContact.kt$EnrichedContact$e: Exception</ID>
     <ID>TooManyFunctions:AnnounceRepository.kt$AnnounceRepository</ID>
     <ID>TooManyFunctions:ContactRepository.kt$ContactRepository</ID>

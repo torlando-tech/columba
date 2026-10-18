@@ -688,7 +688,16 @@ private fun FirmwareSourceCard(
                     FilterChip(
                         selected = selectedSource == source,
                         onClick = { onSourceSelected(source) },
-                        label = { Text(source.displayName) },
+                        label = {
+                            Text(
+                                when (source) {
+                                    is FirmwareSource.Official -> stringResource(R.string.flasher_source_official)
+                                    is FirmwareSource.MicroReticulum -> stringResource(R.string.flasher_source_microreticulum)
+                                    is FirmwareSource.CommunityEdition -> stringResource(R.string.flasher_source_community_edition)
+                                    is FirmwareSource.Custom -> stringResource(R.string.flasher_source_custom)
+                                },
+                            )
+                        },
                         colors =
                             FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,

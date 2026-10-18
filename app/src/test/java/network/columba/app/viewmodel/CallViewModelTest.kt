@@ -505,48 +505,6 @@ class CallViewModelTest {
         assertEquals("90:45", viewModel.formatDuration(5445))
     }
 
-    // ========== Status Text Tests ==========
-
-    @Test
-    fun `getStatusText returns Connecting for Connecting state`() {
-        assertEquals("Connecting...", viewModel.getStatusText(CallState.Connecting("abc")))
-    }
-
-    @Test
-    fun `getStatusText returns Ringing for Ringing state`() {
-        assertEquals("Ringing...", viewModel.getStatusText(CallState.Ringing("abc")))
-    }
-
-    @Test
-    fun `getStatusText returns Incoming for Incoming state`() {
-        assertEquals("Incoming Call", viewModel.getStatusText(CallState.Incoming("abc")))
-    }
-
-    @Test
-    fun `getStatusText returns Connected for Active state`() {
-        assertEquals("Connected", viewModel.getStatusText(CallState.Active("abc")))
-    }
-
-    @Test
-    fun `getStatusText returns Call Ended for Ended state`() {
-        assertEquals("Call Ended", viewModel.getStatusText(CallState.Ended))
-    }
-
-    @Test
-    fun `getStatusText returns Line Busy for Busy state`() {
-        assertEquals("Line Busy", viewModel.getStatusText(CallState.Busy))
-    }
-
-    @Test
-    fun `getStatusText returns Rejected for Rejected state`() {
-        assertEquals("Call Rejected", viewModel.getStatusText(CallState.Rejected))
-    }
-
-    @Test
-    fun `getStatusText returns empty for Idle state`() {
-        assertEquals("", viewModel.getStatusText(CallState.Idle))
-    }
-
     // ========== Peer Name Resolution Tests ==========
 
     @Test

@@ -40,10 +40,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
 import network.columba.app.viewmodel.IdentityUnlockUiState
 import network.columba.app.viewmodel.IdentityUnlockViewModel
 
@@ -109,7 +111,7 @@ fun IdentityUnlockScreen(
             Spacer(Modifier.height(24.dp))
 
             Text(
-                text = "Restore your identity",
+                text = stringResource(R.string.unlock_restore_title),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
@@ -118,11 +120,7 @@ fun IdentityUnlockScreen(
             Spacer(Modifier.height(16.dp))
 
             Text(
-                text =
-                    "Your messages and contacts were restored from backup, but your identity " +
-                        "keys couldn't come back across devices. Import the identity file you " +
-                        "saved before switching phones to continue using the same identity — or " +
-                        "start fresh with a new one.",
+                text = stringResource(R.string.unlock_restore_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -131,7 +129,7 @@ fun IdentityUnlockScreen(
             activeIdentity?.let { identity ->
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = "Looking for: ${identity.displayName} (${identity.identityHash.take(8)}…)",
+                    text = stringResource(R.string.unlock_looking_for, identity.displayName, identity.identityHash.take(8)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -172,7 +170,7 @@ fun IdentityUnlockScreen(
                 enabled = uiState !is IdentityUnlockUiState.Loading,
             ) {
                 Text(
-                    text = "Import identity file",
+                    text = stringResource(R.string.unlock_import_button),
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
@@ -189,7 +187,7 @@ fun IdentityUnlockScreen(
                 enabled = uiState !is IdentityUnlockUiState.Loading,
             ) {
                 Text(
-                    text = "Start fresh",
+                    text = stringResource(R.string.unlock_start_fresh),
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
@@ -203,7 +201,7 @@ fun IdentityUnlockScreen(
                     modifier = Modifier.size(16.dp),
                 )
                 Spacer(Modifier.size(4.dp))
-                Text(text = "Why did this happen?")
+                Text(text = stringResource(R.string.unlock_why_button))
             }
 
             Spacer(Modifier.height(24.dp))
@@ -213,24 +211,20 @@ fun IdentityUnlockScreen(
     if (showStartFreshConfirm) {
         AlertDialog(
             onDismissRequest = { showStartFreshConfirm = false },
-            title = { Text("Start fresh?") },
+            title = { Text(stringResource(R.string.unlock_start_fresh_title)) },
             text = {
                 Text(
-                    "This removes your old identity and takes you through onboarding to create " +
-                        "a new one. Your restored messages and contacts were tied to the old " +
-                        "identity, so they'll disappear from the app — and peers on the other " +
-                        "side of any existing conversations won't recognize the new identity. " +
-                        "The app will restart to finish setting up.",
+                    stringResource(R.string.unlock_start_fresh_body),
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     showStartFreshConfirm = false
                     viewModel.startFresh()
-                }) { Text("Start fresh") }
+                }) { Text(stringResource(R.string.unlock_start_fresh)) }
             },
             dismissButton = {
-                TextButton(onClick = { showStartFreshConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { showStartFreshConfirm = false }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }
@@ -238,20 +232,14 @@ fun IdentityUnlockScreen(
     if (showExplainer) {
         AlertDialog(
             onDismissRequest = { showExplainer = false },
-            title = { Text("Why this happens") },
+            title = { Text(stringResource(R.string.unlock_why_title)) },
             text = {
                 Text(
-                    "Your identity's private key is wrapped with a hardware-backed Android " +
-                        "Keystore key. Keystore keys are tied to the app's install ID and don't " +
-                        "cross a factory reset or device swap — even when the app data is " +
-                        "restored from cloud backup. That's why messages and contacts came " +
-                        "back but the identity couldn't decrypt itself.\n\n" +
-                        "Importing the identity file you exported before switching devices " +
-                        "lets us re-wrap the same identity with this device's Keystore key.",
+                    stringResource(R.string.unlock_why_body),
                 )
             },
             confirmButton = {
-                TextButton(onClick = { showExplainer = false }) { Text("Got it") }
+                TextButton(onClick = { showExplainer = false }) { Text(stringResource(R.string.unlock_got_it)) }
             },
         )
     }
@@ -296,7 +284,7 @@ private fun ErrorBlock(
                 color = MaterialTheme.colorScheme.error,
                 textAlign = TextAlign.Center,
             )
-            TextButton(onClick = onDismiss) { Text("Try again") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.unlock_try_again)) }
         }
     }
 }
@@ -309,16 +297,16 @@ private fun HashMismatchDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Different identity") },
+        title = { Text(stringResource(R.string.unlock_mismatch_title)) },
         text = {
             Text(
-                "The file you picked holds a different identity than the one on this device.\n\n" +
-                    "Imported: ${imported.take(8)}…\n" +
-                    "Existing: ${active.take(8)}…\n\n" +
-                    "The file was not imported. Choose the original identity file that matches " +
-                    "the restored identity.",
+                stringResource(
+                    R.string.unlock_mismatch_body,
+                    imported.take(8),
+                    active.take(8),
+                ),
             )
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Choose another file") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.unlock_choose_another)) } },
     )
 }

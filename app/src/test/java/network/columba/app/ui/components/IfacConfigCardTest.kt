@@ -48,9 +48,14 @@ class IfacConfigCardTest {
         }
 
         composeRule.onNodeWithText("IFAC (Network Access)").assertIsDisplayed()
-        // Default description pinned by DEFAULT_IFAC_DESCRIPTION so every
-        // wizard gets the same guidance text unless it explicitly overrides.
-        composeRule.onNodeWithText(DEFAULT_IFAC_DESCRIPTION).assertIsDisplayed()
+        // Default description comes from the localized ifac_card_description
+        // resource so every wizard gets the same guidance text unless it explicitly overrides.
+        composeRule
+            .onNodeWithText(
+                "Leave blank unless the remote interface requires an IFAC network " +
+                    "name and passphrase. Auto-filled when adding from a discovered interface.",
+            )
+            .assertIsDisplayed()
         composeRule.onNodeWithText("Network Name").assertIsDisplayed()
         composeRule.onNodeWithText("Passphrase").assertIsDisplayed()
     }

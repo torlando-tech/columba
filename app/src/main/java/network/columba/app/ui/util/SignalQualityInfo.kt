@@ -1,11 +1,15 @@
 package network.columba.app.ui.util
 
+import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material.icons.filled.SignalCellular4Bar
 import androidx.compose.material.icons.filled.SignalCellularAlt
 import androidx.compose.material.icons.filled.SignalCellularConnectedNoInternet0Bar
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import network.columba.app.R
 import java.util.Locale
 
 // Color constants for signal quality indicators
@@ -18,13 +22,22 @@ private val ColorVeryPoor = Color(0xFFF44336) // Red
 /**
  * Information about signal quality for display in UI.
  * Used for both RSSI (signal strength) and SNR (signal-to-noise ratio) metrics.
+ *
+ * [textRes]/[subtitleRes] are localized resource ids; render with
+ * [resolvedText] / `stringResource(info.subtitleRes)` at the UI edge.
  */
 data class SignalQualityInfo(
     val icon: ImageVector,
     val color: Color,
-    val text: String,
-    val subtitle: String,
+    @StringRes val textRes: Int,
+    val textArgs: List<Any> = emptyList(),
+    @StringRes val subtitleRes: Int,
 )
+
+/** Resolves [textRes] with [textArgs] into display text at the UI edge. */
+@Composable
+@Suppress("SpreadOperator") // stringResource's vararg format-args API requires the spread
+fun SignalQualityInfo.resolvedText(): String = stringResource(textRes, *textArgs.toTypedArray())
 
 /**
  * Get signal strength (RSSI) display information.
@@ -45,36 +58,41 @@ fun getRssiInfo(rssi: Int): SignalQualityInfo =
             SignalQualityInfo(
                 icon = Icons.Default.SignalCellular4Bar,
                 color = ColorExcellent,
-                text = "Excellent ($rssi dBm)",
-                subtitle = "Very strong signal",
+                textRes = R.string.signal_quality_rssi_excellent,
+                textArgs = listOf(rssi),
+                subtitleRes = R.string.signal_quality_rssi_sub_excellent,
             )
         rssi > -70 ->
             SignalQualityInfo(
                 icon = Icons.Default.SignalCellular4Bar,
                 color = ColorGood,
-                text = "Good ($rssi dBm)",
-                subtitle = "Strong signal",
+                textRes = R.string.signal_quality_rssi_good,
+                textArgs = listOf(rssi),
+                subtitleRes = R.string.signal_quality_rssi_sub_good,
             )
         rssi > -85 ->
             SignalQualityInfo(
                 icon = Icons.Default.SignalCellularAlt,
                 color = ColorFair,
-                text = "Fair ($rssi dBm)",
-                subtitle = "Moderate signal strength",
+                textRes = R.string.signal_quality_rssi_fair,
+                textArgs = listOf(rssi),
+                subtitleRes = R.string.signal_quality_rssi_sub_fair,
             )
         rssi > -100 ->
             SignalQualityInfo(
                 icon = Icons.Default.SignalCellularAlt,
                 color = ColorPoor,
-                text = "Weak ($rssi dBm)",
-                subtitle = "Low signal, may be unreliable",
+                textRes = R.string.signal_quality_rssi_weak,
+                textArgs = listOf(rssi),
+                subtitleRes = R.string.signal_quality_rssi_sub_weak,
             )
         else ->
             SignalQualityInfo(
                 icon = Icons.Default.SignalCellularConnectedNoInternet0Bar,
                 color = ColorVeryPoor,
-                text = "Very Weak ($rssi dBm)",
-                subtitle = "Marginal signal at edge of range",
+                textRes = R.string.signal_quality_rssi_very_weak,
+                textArgs = listOf(rssi),
+                subtitleRes = R.string.signal_quality_rssi_sub_very_weak,
             )
     }
 
@@ -98,36 +116,41 @@ fun getSnrInfo(snr: Float): SignalQualityInfo {
             SignalQualityInfo(
                 icon = Icons.Default.SignalCellular4Bar,
                 color = ColorExcellent,
-                text = "Excellent ($snrStr dB)",
-                subtitle = "Clear signal, very low noise",
+                textRes = R.string.signal_quality_snr_excellent,
+                textArgs = listOf(snrStr),
+                subtitleRes = R.string.signal_quality_snr_sub_excellent,
             )
         snr > 5f ->
             SignalQualityInfo(
                 icon = Icons.Default.SignalCellular4Bar,
                 color = ColorGood,
-                text = "Good ($snrStr dB)",
-                subtitle = "Low noise level",
+                textRes = R.string.signal_quality_snr_good,
+                textArgs = listOf(snrStr),
+                subtitleRes = R.string.signal_quality_snr_sub_good,
             )
         snr > 0f ->
             SignalQualityInfo(
                 icon = Icons.Default.SignalCellularAlt,
                 color = ColorFair,
-                text = "Fair ($snrStr dB)",
-                subtitle = "Moderate noise level",
+                textRes = R.string.signal_quality_snr_fair,
+                textArgs = listOf(snrStr),
+                subtitleRes = R.string.signal_quality_snr_sub_fair,
             )
         snr > -5f ->
             SignalQualityInfo(
                 icon = Icons.Default.SignalCellularAlt,
                 color = ColorPoor,
-                text = "Poor ($snrStr dB)",
-                subtitle = "High noise, may be unreliable",
+                textRes = R.string.signal_quality_snr_poor,
+                textArgs = listOf(snrStr),
+                subtitleRes = R.string.signal_quality_snr_sub_poor,
             )
         else ->
             SignalQualityInfo(
                 icon = Icons.Default.SignalCellularConnectedNoInternet0Bar,
                 color = ColorVeryPoor,
-                text = "Very Poor ($snrStr dB)",
-                subtitle = "Very noisy, at decodability limit",
+                textRes = R.string.signal_quality_snr_very_poor,
+                textArgs = listOf(snrStr),
+                subtitleRes = R.string.signal_quality_snr_sub_very_poor,
             )
     }
 }

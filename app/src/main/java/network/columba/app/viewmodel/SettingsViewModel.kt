@@ -1039,7 +1039,7 @@ class SettingsViewModel
         fun setTheme(theme: AppTheme) {
             viewModelScope.launch {
                 settingsRepository.saveThemePreference(theme)
-                Log.d(TAG, "Theme changed to: ${theme.displayName}")
+                Log.d(TAG, "Theme changed to: ${theme.getIdentifier()}")
             }
         }
 

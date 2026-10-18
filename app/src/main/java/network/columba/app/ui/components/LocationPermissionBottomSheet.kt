@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.util.LocationPermissionManager
 
 /**
@@ -45,7 +46,7 @@ fun LocationPermissionBottomSheet(
     onRequestPermissions: () -> Unit,
     sheetState: SheetState,
     @StringRes rationale: Int = LocationPermissionManager.getPermissionRationale(),
-    primaryActionLabel: String = "Enable Location",
+    primaryActionLabel: String? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -72,7 +73,7 @@ fun LocationPermissionBottomSheet(
                     modifier = Modifier.padding(end = 12.dp),
                 )
                 Text(
-                    text = "Location Permission",
+                    text = stringResource(R.string.loc_perm_title),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                 )
@@ -95,11 +96,11 @@ fun LocationPermissionBottomSheet(
                 horizontalArrangement = Arrangement.End,
             ) {
                 TextButton(onClick = onDismiss) {
-                    Text("Not Now")
+                    Text(stringResource(R.string.loc_perm_not_now))
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(onClick = onRequestPermissions) {
-                    Text(primaryActionLabel)
+                    Text(primaryActionLabel ?: stringResource(R.string.loc_perm_enable_location))
                 }
             }
         }

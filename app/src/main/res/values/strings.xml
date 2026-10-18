@@ -816,4 +816,408 @@
     <string name="preset_desc_us_portsmouth">Portsmouth, NH configuration</string>
     <string name="preset_desc_us_olympia">Olympia, WA configuration</string>
     <string name="preset_desc_us_chicago">Chicago, IL configuration</string>
+    <!-- InterfaceConfigDialog: dialog chrome -->
+    <string name="iface_cfg_edit_title">Edit Interface</string>
+    <string name="iface_cfg_add_title">Add Interface</string>
+    <string name="iface_cfg_name_label">Interface Name</string>
+    <string name="iface_cfg_name_placeholder">e.g., Home WiFi, Laptop TCP</string>
+    <string name="iface_cfg_target_host_label">Target Host *</string>
+    <string name="iface_cfg_target_host_placeholder">IP address or hostname</string>
+    <string name="iface_cfg_enabled">Enabled</string>
+    <string name="iface_cfg_advanced_options">Advanced Options</string>
+    <string name="iface_cfg_update">Update</string>
+    <string name="iface_cfg_add">Add</string>
+
+    <!-- InterfaceTypeSelector -->
+    <string name="iface_cfg_type_auto">Auto Discovery</string>
+    <string name="iface_cfg_type_tcp_client">TCP Client</string>
+    <string name="iface_cfg_type_tcp_server">TCP Server</string>
+    <string name="iface_cfg_type_label">Interface Type</string>
+
+    <!-- AutoInterfaceFields -->
+    <string name="iface_cfg_auto_title">Auto Discovery Configuration</string>
+    <string name="iface_cfg_group_id_label">Group ID (optional)</string>
+    <string name="iface_cfg_group_id_placeholder">Leave empty for default network</string>
+    <string name="iface_cfg_discovery_port_label">Discovery Port</string>
+    <string name="iface_cfg_discovery_port_default">29716 (default)</string>
+    <string name="iface_cfg_data_port_label">Data Port</string>
+    <string name="iface_cfg_data_port_default">42671 (default)</string>
+
+    <!-- TCPClientFields -->
+    <string name="iface_cfg_tcp_client_title">TCP Client Configuration</string>
+    <string name="iface_cfg_target_port_label">Target Port</string>
+    <string name="iface_cfg_socks_proxy_title">SOCKS5 Proxy</string>
+    <string name="iface_cfg_socks_proxy_desc">Route through a SOCKS5 proxy (e.g., Orbot for Tor). Required for .onion addresses.</string>
+    <string name="iface_cfg_proxy_host_label">Proxy Host</string>
+    <string name="iface_cfg_proxy_host_support">SOCKS5 proxy address. Use 127.0.0.1 for Orbot running on this device.</string>
+    <string name="iface_cfg_proxy_port_label">Proxy Port</string>
+    <string name="iface_cfg_proxy_port_support">Orbot default: 9050.</string>
+
+    <!-- RNodeFields IFAC card description -->
+    <string name="iface_cfg_rnode_ifac_description">Leave blank unless the RNode network requires an IFAC network name and passphrase. Only interfaces with matching credentials can communicate.</string>
+
+    <!-- DiscoveryScopeSelector -->
+    <string name="iface_cfg_scope_link">Link (local network only)</string>
+    <string name="iface_cfg_scope_admin">Admin</string>
+    <string name="iface_cfg_scope_site">Site</string>
+    <string name="iface_cfg_scope_organisation">Organisation</string>
+    <string name="iface_cfg_scope_global">Global</string>
+    <string name="iface_cfg_scope_fallback">Link</string>
+    <string name="iface_cfg_scope_label">Discovery Scope</string>
+
+    <!-- AndroidBLEFields -->
+    <string name="iface_cfg_ble_title">Bluetooth LE Configuration</string>
+    <string name="iface_cfg_device_name_label">Device Name (optional)</string>
+    <string name="iface_cfg_device_name_placeholder">Leave empty to omit from advertisement</string>
+    <string name="iface_cfg_device_name_counter">%1$d/%2$d characters</string>
+    <string name="iface_cfg_device_name_support">Optional: For debugging only. Keep short (max 8 chars recommended) or leave empty to maximize BLE advertisement reliability.</string>
+    <string name="iface_cfg_max_connections_label">Max Connections</string>
+    <string name="iface_cfg_max_connections_support">Maximum simultaneous BLE peers (recommended: 7)</string>
+    <string name="iface_cfg_power_profile_title">Power Profile</string>
+    <string name="iface_cfg_preset_performance">Performance</string>
+    <string name="iface_cfg_preset_balanced">Balanced</string>
+    <string name="iface_cfg_preset_battery_saver">Battery Saver</string>
+    <string name="iface_cfg_preset_custom">Custom</string>
+    <string name="iface_cfg_preset_desc_performance">Fastest device discovery, higher battery usage</string>
+    <string name="iface_cfg_preset_desc_balanced">Default discovery speed and battery usage</string>
+    <string name="iface_cfg_preset_desc_battery_saver">Reduced scanning to conserve battery</string>
+    <string name="iface_cfg_preset_desc_custom">Manually configure scan and advertising intervals</string>
+    <string name="iface_cfg_scan_interval_active">Scan Interval (active): %1$ds</string>
+    <string name="iface_cfg_scan_active_support">Delay between scans while discovering new devices</string>
+    <string name="iface_cfg_scan_interval_idle">Scan Interval (idle): %1$ds</string>
+    <string name="iface_cfg_scan_idle_support">Delay between scans when no new devices are being found</string>
+    <string name="iface_cfg_scan_duration">Scan Duration: %1$ds</string>
+    <string name="iface_cfg_scan_duration_support">How long each scan listens for nearby devices</string>
+    <string name="iface_cfg_scan_duty_warning">Warning: scan duration ≥ active interval — high duty-cycle scanning will increase battery usage</string>
+    <string name="iface_cfg_ad_refresh_interval">Ad Refresh Interval: %1$ds</string>
+    <string name="iface_cfg_ad_refresh_support">How often to restart advertising in case Android silently stopped it</string>
+
+    <!-- NetworkRestrictionSelector -->
+    <string name="iface_cfg_network_restriction_desc">Network restriction</string>
+    <string name="iface_cfg_active_on_network">Active On Network</string>
+    <string name="iface_cfg_restriction_any">Any</string>
+    <string name="iface_cfg_restriction_support">Skip starting this interface when the device\'s active network doesn\'t match. Wi-Fi/Ethernet are bucketed together; cellular includes mobile data.</string>
+
+    <!-- TCPServerFields -->
+    <string name="iface_cfg_tcp_server_title">TCP Server Configuration</string>
+    <string name="iface_cfg_tcp_server_desc">Allows other Reticulum nodes to connect to this device. Useful for Yggdrasil connectivity or when this device should act as a hub.</string>
+    <string name="iface_cfg_listen_ip_label">Listen IP</string>
+    <string name="iface_cfg_listen_ip_support">IP address to bind to. Use 0.0.0.0 to listen on all interfaces.</string>
+    <string name="iface_cfg_listen_port_label">Listen Port</string>
+    <string name="iface_cfg_listen_port_support">TCP port to listen on for incoming connections.</string>
+    <string name="iface_cfg_tcp_server_ifac_description">Leave blank unless inbound clients must authenticate with an IFAC network name and passphrase. Only clients with matching credentials will be able to connect.</string>
+    <!-- IconPickerDialog -->
+    <string name="icon_picker_title">Choose Profile Icon</string>
+    <string name="icon_picker_search_label">Search icons</string>
+    <string name="icon_picker_search_placeholder">e.g., star, heart, wifi</string>
+    <string name="icon_picker_search_desc">Search</string>
+    <string name="icon_picker_clear_search_desc">Clear search</string>
+    <string name="icon_picker_save">Save</string>
+    <string name="icon_picker_clear">Clear</string>
+    <string name="icon_picker_preview">Preview</string>
+    <string name="icon_picker_background">Background</string>
+    <string name="icon_picker_icon">Icon</string>
+    <string name="icon_picker_tap_color_hint">Tap a color to customize</string>
+    <string name="icon_picker_background_color_title">Background Color</string>
+    <string name="icon_picker_icon_color_title">Icon Color</string>
+    <string name="icon_picker_search_results">Search Results</string>
+    <string name="icon_picker_showing_first_100">" (showing first 100)"</string>
+    <string name="icon_picker_no_results">No icons found for \"%1$s\"</string>
+    <string name="icon_picker_collapse">Collapse</string>
+    <string name="icon_picker_expand">Expand</string>
+    <plurals name="icon_picker_icon_count">
+        <item quantity="one">%d icons</item>
+        <item quantity="other">%d icons</item>
+    </plurals>
+    <plurals name="icon_picker_search_hint">
+        <item quantity="one">Search to find any of %d icons</item>
+        <item quantity="other">Search to find any of %d icons</item>
+    </plurals>
+    <!-- ColorPickerDialog -->
+    <string name="color_picker_hex_color">Hex Color</string>
+    <string name="color_picker_hue">Hue</string>
+    <string name="color_picker_saturation">Saturation</string>
+    <string name="color_picker_lightness">Lightness</string>
+    <string name="color_picker_confirm">Confirm</string>
+    <!-- ImageQualitySelectionDialog -->
+    <string name="image_quality_choose_title">Choose Image Quality</string>
+    <string name="image_quality_send">Send</string>
+    <string name="image_quality_each_suffix">%1$s each</string>
+    <plurals name="image_quality_send_images">
+        <item quantity="one">Send %d Images</item>
+        <item quantity="other">Send %d Images</item>
+    </plurals>
+    <!-- BackgroundLocationPermissionBottomSheet.kt -->
+    <string name="bg_location_title">Background Location</string>
+    <string name="bg_location_body">To share your location with contacts while the app is in the background, Columba needs the \"Allow all the time\" permission.\n\nThis lets Columba continue sending your encrypted location to chosen contacts even when you switch to another app or lock your screen.\n\nOn the next screen, please select \"Allow all the time\".</string>
+    <string name="bg_location_not_now">Not Now</string>
+    <string name="bg_location_continue">Continue</string>
+    <!-- BlePermissionBottomSheet.kt -->
+    <string name="ble_perm_title">Bluetooth Permissions Required</string>
+    <string name="ble_perm_rationale">Columba uses Bluetooth Low Energy (BLE) to communicate with nearby devices in a mesh network.\n\nTo enable this functionality, we need the following permissions:\n\n• Bluetooth Scan: To discover nearby Reticulum peers\n• Bluetooth Connect: To establish connections with peers\n• Bluetooth Advertise: To broadcast your presence to other devices\n\nThese permissions allow Columba to create a decentralized, off-grid communication network.</string>
+    <string name="ble_perm_not_now">Not Now</string>
+    <!-- LocationPermissionBottomSheet.kt -->
+    <string name="loc_perm_title">Location Permission</string>
+    <string name="loc_perm_not_now">Not Now</string>
+    <!-- PermissionDeniedCard.kt -->
+    <string name="perm_denied_title">Permissions Required</string>
+    <string name="perm_denied_default_message">Bluetooth permissions have been denied. To use BLE features in Columba, please grant Bluetooth permissions in your device settings.\n\nWithout these permissions, Columba cannot discover or connect to nearby devices via Bluetooth.</string>
+    <string name="perm_denied_open_settings">Open Settings</string>
+    <!-- BluetoothPermissionController.kt -->
+    <string name="ble_ctrl_open_settings">Open Settings</string>
+    <string name="ble_ctrl_grant_permissions">Grant Permissions</string>
+    <!-- ContactLocationBottomSheet -->
+    <string name="contact_loc_directions">Directions</string>
+    <string name="contact_loc_message">Message</string>
+    <string name="contact_loc_remove_from_map">Remove from map</string>
+    <string name="contact_loc_location_unknown">Location unknown</string>
+    <string name="contact_loc_dir_north">north</string>
+    <string name="contact_loc_dir_northeast">northeast</string>
+    <string name="contact_loc_dir_east">east</string>
+    <string name="contact_loc_dir_southeast">southeast</string>
+    <string name="contact_loc_dir_south">south</string>
+    <string name="contact_loc_dir_southwest">southwest</string>
+    <string name="contact_loc_dir_west">west</string>
+    <string name="contact_loc_dir_northwest">northwest</string>
+    <string name="contact_loc_updated_just_now">Updated just now</string>
+    <string name="contact_loc_updated_seconds_ago">Updated %1$ds ago</string>
+    <string name="contact_loc_updated_minutes_ago">Updated %1$dm ago</string>
+    <string name="contact_loc_updated_hours_ago">Updated %1$dh ago</string>
+    <string name="contact_loc_updated_days_ago">Updated %1$dd ago</string>
+    <string name="contact_loc_no_maps_app_found">No maps application found</string>
+    <string name="contact_loc_stale">Stale</string>
+    <string name="contact_loc_last_known">Last known</string>
+
+    <!-- QuickShareLocationBottomSheet -->
+    <string name="quick_share_title">Share your location</string>
+    <string name="quick_share_with_contact">with %1$s</string>
+    <string name="quick_share_duration_label">Duration:</string>
+    <string name="quick_share_start_sharing">Start Sharing</string>
+
+    <!-- ShareLocationBottomSheet -->
+    <string name="share_loc_title">Share your location</string>
+    <string name="share_loc_search_contacts">Search contacts</string>
+    <string name="share_loc_search">Search</string>
+    <string name="share_loc_remove_contact">Remove %1$s</string>
+    <string name="share_loc_duration_label">Duration:</string>
+    <string name="share_loc_start_sharing">Start Sharing</string>
+
+    <!-- QrCodeBottomSheet -->
+    <string name="qr_sheet_title">QR Code</string>
+    <string name="qr_sheet_scan_title">Scan QR Code</string>
+    <string name="qr_sheet_scan_supporting">Scan a contact\'s QR code</string>
+    <string name="qr_sheet_show_title">Show QR Code</string>
+    <string name="qr_sheet_show_supporting">Show your QR code for others to scan</string>
+
+    <!-- QrCodeComposables -->
+    <string name="qr_composables_no_data">No data to encode</string>
+    <string name="qr_composables_generate_failed">Failed to generate QR code</string>
+    <string name="qr_composables_qr_code">QR Code</string>
+    <string name="qr_composables_qr_code_expanded">QR Code (tap to close)</string>
+    <string name="qr_composables_copy">Copy</string>
+
+    <!-- IdentityQrCodeDialogContent -->
+    <string name="identity_qr_title">Your Identity</string>
+    <string name="identity_qr_close">Close</string>
+    <string name="identity_qr_scan_hint">Scan this QR code to add me as a contact</string>
+
+    <!-- SearchableTopAppBar -->
+    <string name="search_app_bar_search_placeholder">Search...</string>
+    <string name="search_app_bar_close_search">Close search</string>
+    <string name="search_app_bar_search">Search</string>
+    <string name="search_app_bar_clear_search">Clear search</string>
+
+    <!-- SortModeSelector -->
+    <string name="sort_mode_quality">Quality</string>
+    <string name="sort_mode_proximity">Proximity</string>
+    <string name="attach_panel_allow_access_photos">Allow access to show recent photos</string>
+    <string name="attach_panel_allow_access">Allow access</string>
+    <string name="attach_panel_no_photos">No photos found</string>
+    <string name="attach_panel_photo_description">Photo</string>
+    <string name="file_attach_card_file_type">File type: %1$s</string>
+    <string name="file_attach_opts_open_with">Open with...</string>
+    <string name="file_attach_opts_open_with_description">Open in another app</string>
+    <string name="file_attach_opts_save_to_device">Save to device</string>
+    <string name="file_attach_opts_save_description">Save to a folder on your device</string>
+    <string name="file_attach_preview_remove">Remove %1$s</string>
+    <string name="file_attach_preview_total">Total: %1$s</string>
+    <string name="image_opts_title">Image</string>
+    <string name="image_opts_save_to_device">Save to device</string>
+    <string name="image_opts_save_description">Save to a folder on your device</string>
+    <string name="image_opts_share">Share</string>
+    <string name="image_opts_share_description">Share via another app</string>
+    <string name="ifac_card_header">IFAC (Network Access)</string>
+    <string name="ifac_card_network_name_label">Network Name</string>
+    <string name="ifac_card_passphrase_label">Passphrase</string>
+    <string name="ifac_card_hide_passphrase">Hide passphrase</string>
+    <string name="ifac_card_show_passphrase">Show passphrase</string>
+    <string name="add_contact_action">Add Contact</string>
+    <string name="add_contact_title">Add Contact?</string>
+    <string name="add_contact_destination_hash">Destination Hash</string>
+    <string name="add_contact_show_less">Show less</string>
+    <string name="add_contact_show_full">Show full</string>
+    <string name="add_contact_nickname_label">Nickname (optional)</string>
+    <string name="add_contact_nickname_placeholder">Enter a friendly name</string>
+    <string name="add_contact_nickname_helper">You can add a nickname to easily identify this contact.</string>
+    <string name="collapsible_card_collapse">Collapse</string>
+    <string name="collapsible_card_expand">Expand</string>
+    <!-- MarkdownMessageText.kt -->
+    <string name="markdown_unable_to_open_link">Unable to open link</string>
+
+    <!-- MicronComposables.kt -->
+    <string name="micron_partial_load_failed">Failed to load partial</string>
+    <string name="micron_unable_to_open_link">Unable to open link</string>
+
+    <!-- MicronImageBlock.kt -->
+    <string name="micron_img_default_alt">Image</string>
+    <string name="micron_img_placeholder_alt">image</string>
+    <string name="micron_img_access_denied">Access denied by node</string>
+    <string name="micron_img_save_to_gallery">Save to gallery</string>
+    <string name="micron_img_reload">Reload image</string>
+    <string name="micron_img_copy_link">Copy image link</string>
+    <string name="micron_img_tap_to_load">Tap to load image</string>
+    <string name="micron_img_loading">Loading...</string>
+    <string name="micron_img_loading_size">" (%1$s of %2$s)"</string>
+    <string name="micron_img_saved_to_gallery">Saved to gallery</string>
+    <string name="micron_img_save_failed">Could not save image</string>
+
+    <!-- ProfileIcon.kt -->
+    <string name="profile_icon_description">Profile icon</string>
+
+    <!-- PropagationNodeReorderList.kt -->
+    <string name="prop_reorder_restriction_any">Any</string>
+    <string name="prop_reorder_reorder_node">Reorder %1$s</string>
+    <string name="prop_reorder_current_relay">Current relay</string>
+    <string name="prop_reorder_set_active_now">Set active now</string>
+    <string name="prop_reorder_remove">Remove</string>
+
+    <!-- ReplyComponents.kt -->
+    <string name="reply_comp_reply">Reply</string>
+    <string name="reply_comp_image">Image</string>
+    <string name="reply_comp_message">Message</string>
+    <string name="reply_comp_photo">Photo</string>
+    <string name="reply_comp_cancel_reply">Cancel reply</string>
+    <string name="reply_comp_replying_to">Replying to %1$s</string>
+
+    <!-- StarToggleButton.kt -->
+    <string name="star_toggle_remove">Remove from contacts</string>
+    <string name="star_toggle_save">Save to contacts</string>
+    <!-- CodecProfile descriptions (labels reuse existing codec_profile_* names) -->
+    <string name="codec_profile_bandwidth_ultra_low_desc">Codec2 700C - Best for very slow connections</string>
+    <string name="codec_profile_bandwidth_very_low_desc">Codec2 1600 - Good for slow connections</string>
+    <string name="codec_profile_bandwidth_low_desc">Codec2 3200 - Balanced for limited bandwidth</string>
+    <string name="codec_profile_quality_medium_desc">Opus - Good balance of quality and bandwidth</string>
+    <string name="codec_profile_quality_high_desc">Opus - Higher fidelity audio</string>
+    <string name="codec_profile_quality_max_desc">Opus - Best audio, requires more bandwidth</string>
+    <string name="codec_profile_latency_low_desc">Opus - Reduced delay, 20ms frames</string>
+    <string name="codec_profile_latency_ultra_low_desc">Opus - Minimized delay, 10ms frames</string>
+    <!-- PresetTheme labels/descriptions -->
+    <string name="preset_theme_vibrant_label">Vibrant</string>
+    <string name="preset_theme_vibrant_desc">Purple-pink gradient matching the app icon</string>
+    <string name="preset_theme_dynamic_label">Dynamic</string>
+    <string name="preset_theme_dynamic_desc">Extracts colors from your device wallpaper</string>
+    <string name="preset_theme_ocean_label">Ocean</string>
+    <string name="preset_theme_ocean_desc">Cool blue tones for clarity and focus</string>
+    <string name="preset_theme_forest_label">Forest</string>
+    <string name="preset_theme_forest_desc">Natural green tones, easy on the eyes</string>
+    <string name="preset_theme_sunset_label">Sunset</string>
+    <string name="preset_theme_sunset_desc">Warm orange-red tones for energy</string>
+    <string name="preset_theme_monochrome_label">Monochrome</string>
+    <string name="preset_theme_monochrome_desc">Grayscale minimalism for professionals</string>
+    <string name="preset_theme_oled_black_label">OLED Black</string>
+    <string name="preset_theme_oled_black_desc">True black (#000000) for OLED screens - maximum battery savings</string>
+    <string name="preset_theme_expressive_label">Expressive</string>
+    <string name="preset_theme_expressive_desc">Purple/lavender palette with sage/mint green accents</string>
+    <!-- SignalQualityInfo (RSSI) -->
+    <string name="signal_quality_rssi_excellent">Excellent (%1$d dBm)</string>
+    <string name="signal_quality_rssi_good">Good (%1$d dBm)</string>
+    <string name="signal_quality_rssi_fair">Fair (%1$d dBm)</string>
+    <string name="signal_quality_rssi_weak">Weak (%1$d dBm)</string>
+    <string name="signal_quality_rssi_very_weak">Very Weak (%1$d dBm)</string>
+    <string name="signal_quality_rssi_sub_excellent">Very strong signal</string>
+    <string name="signal_quality_rssi_sub_good">Strong signal</string>
+    <string name="signal_quality_rssi_sub_fair">Moderate signal strength</string>
+    <string name="signal_quality_rssi_sub_weak">Low signal, may be unreliable</string>
+    <string name="signal_quality_rssi_sub_very_weak">Marginal signal at edge of range</string>
+    <!-- SignalQualityInfo (SNR) -->
+    <string name="signal_quality_snr_excellent">Excellent (%1$s dB)</string>
+    <string name="signal_quality_snr_good">Good (%1$s dB)</string>
+    <string name="signal_quality_snr_fair">Fair (%1$s dB)</string>
+    <string name="signal_quality_snr_poor">Poor (%1$s dB)</string>
+    <string name="signal_quality_snr_very_poor">Very Poor (%1$s dB)</string>
+    <string name="signal_quality_snr_sub_excellent">Clear signal, very low noise</string>
+    <string name="signal_quality_snr_sub_good">Low noise level</string>
+    <string name="signal_quality_snr_sub_fair">Moderate noise level</string>
+    <string name="signal_quality_snr_sub_poor">High noise, may be unreliable</string>
+    <string name="signal_quality_snr_sub_very_poor">Very noisy, at decodability limit</string>
+    <!-- AnnounceFilterChips -->
+    <string name="announce_filter_aspect_peers">Peers</string>
+    <string name="announce_filter_aspect_sites">Sites</string>
+    <string name="announce_filter_aspect_relays">Relays</string>
+    <string name="announce_filter_aspect_audio">Audio</string>
+    <string name="announce_filter_iface_local">Local</string>
+    <string name="announce_filter_iface_tcp_server">TCP Server</string>
+    <string name="announce_filter_iface_rnode">RNode</string>
+    <string name="announce_filter_all">All</string>
+    <string name="announce_filter_label">"Filtering: "</string>
+    <string name="announce_filter_active_desc">Active filters: %1$s. Tap to edit.</string>
+    <!-- CodecSelectionDialog -->
+    <string name="codec_selection_title">Select Call Quality</string>
+    <string name="codec_selection_subtitle">Choose a codec profile based on your connection speed</string>
+    <string name="codec_selection_confirm">Call</string>
+    <!-- QualitySelectionDialog -->
+    <string name="quality_dialog_confirm">Confirm</string>
+    <string name="quality_path_probing">Probing link...</string>
+    <string name="quality_path_connecting">Connecting...</string>
+    <string name="quality_path_mtu">%1$dB MTU</string>
+    <string name="quality_path_failed">Connection failed</string>
+    <string name="quality_path_no_link">No active link</string>
+    <string name="quality_recommended">Recommended</string>
+    <string name="quality_experimental">Experimental</string>
+    <!-- PeerCard -->
+    <string name="peer_card_path_current">Current path %1$s</string>
+    <plurals name="peer_card_path_history">
+        <item quantity="one">Current path %1$s; also seen via %2$d other interface type in the past 30 days</item>
+        <item quantity="other">Current path %1$s; also seen via %2$d other interface types in the past 30 days</item>
+    </plurals>
+    <string name="peer_card_iface_wifi">WiFi</string>
+    <string name="peer_card_iface_internet">Internet</string>
+    <string name="peer_card_iface_lora_rnode">LoRa/RNode</string>
+    <string name="peer_card_iface_shared_instance">Shared Instance</string>
+    <string name="peer_card_node_type_site">Site</string>
+    <string name="peer_card_node_type_peer">Peer</string>
+    <string name="peer_card_node_type_relay">Relay</string>
+    <string name="peer_card_node_type_phone">Phone</string>
+    <string name="peer_card_node_type_node">Node</string>
+    <!-- SharingStatusChip -->
+    <plurals name="sharing_status_count">
+        <item quantity="one">Sharing with %1$d person</item>
+        <item quantity="other">Sharing with %1$d people</item>
+    </plurals>
+    <string name="sharing_status_stop">Stop sharing</string>
+    <!-- SyncStatusBottomSheet -->
+    <string name="sync_sheet_title">Propagation Node Sync</string>
+    <string name="sync_sheet_ready">Ready</string>
+    <string name="sync_sheet_ready_sub">Not currently syncing</string>
+    <string name="sync_sheet_starting">Starting sync...</string>
+    <string name="sync_sheet_starting_sub">Initiating connection to relay</string>
+    <string name="sync_sheet_complete">Download complete</string>
+    <string name="sync_sheet_complete_sub">Messages received</string>
+    <string name="sync_sheet_state_path_requested">Discovering network path to relay...</string>
+    <string name="sync_sheet_state_link_establishing">Establishing secure connection...</string>
+    <string name="sync_sheet_state_link_established">Connected, preparing request...</string>
+    <string name="sync_sheet_state_request_sent">Requested message list from relay...</string>
+    <string name="sync_sheet_state_downloading">Downloading messages...</string>
+    <string name="sync_sheet_state_complete">Sync complete!</string>
+    <string name="sync_sheet_state_processing">Processing...</string>
+    <!-- ReactionComponents -->
+    <string name="reaction_details">Details</string>
+    <string name="reaction_choose">Choose a reaction</string>
+    <string name="reaction_more_emojis">More emojis</string>
+    <string name="reaction_selected_message">Selected message</string>
+    <string name="reaction_select_text">Select text</string>
+    <!-- Leftover component-owned defaults -->
+    <string name="loc_perm_enable_location">Enable Location</string>
+    <string name="color_picker_title">Pick a Color</string>
+    <string name="ifac_card_description">Leave blank unless the remote interface requires an IFAC network name and passphrase. Auto-filled when adding from a discovered interface.</string>
 </resources>

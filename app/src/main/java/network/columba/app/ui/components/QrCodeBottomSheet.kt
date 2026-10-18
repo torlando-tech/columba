@@ -19,8 +19,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,7 +43,7 @@ fun QrCodeBottomSheet(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = "QR Code",
+                text = stringResource(R.string.qr_sheet_title),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
@@ -51,8 +53,8 @@ fun QrCodeBottomSheet(
 
             // Scan QR Code option
             ListItem(
-                headlineContent = { Text("Scan QR Code") },
-                supportingContent = { Text("Scan a contact's QR code") },
+                headlineContent = { Text(stringResource(R.string.qr_sheet_scan_title)) },
+                supportingContent = { Text(stringResource(R.string.qr_sheet_scan_supporting)) },
                 leadingContent = {
                     Icon(
                         Icons.Default.QrCodeScanner,
@@ -68,8 +70,8 @@ fun QrCodeBottomSheet(
 
             // Show QR Code option
             ListItem(
-                headlineContent = { Text("Show QR Code") },
-                supportingContent = { Text("Show your QR code for others to scan") },
+                headlineContent = { Text(stringResource(R.string.qr_sheet_show_title)) },
+                supportingContent = { Text(stringResource(R.string.qr_sheet_show_supporting)) },
                 leadingContent = {
                     Icon(
                         Icons.Default.QrCode,

@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
@@ -196,7 +197,7 @@ private fun MicronLineComposable(
             }
             PartialManager.PartialState.Status.ERROR -> {
                 Text(
-                    "Failed to load partial",
+                    stringResource(R.string.micron_partial_load_failed),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(4.dp),
@@ -479,7 +480,7 @@ private fun MicronLineComposable(
                         context.startActivity(Intent(Intent.ACTION_VIEW, toBrowsableUri(webLink.item)))
                     } catch (e: Exception) {
                         Log.w("MicronComposables", "Unable to open link: ${webLink.item}", e)
-                        Toast.makeText(context, "Unable to open link", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.micron_unable_to_open_link), Toast.LENGTH_SHORT).show()
                     }
                 }
             },

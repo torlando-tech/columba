@@ -355,7 +355,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(settingsState.selectedTheme, settingsState.isLoading) {
                 if (!settingsState.isLoading) {
                     isThemeReady = true
-                    Log.d(TAG, "Theme loaded: ${settingsState.selectedTheme.displayName} - dismissing splash")
+                    Log.d(TAG, "Theme loaded: ${settingsState.selectedTheme.getIdentifier()} - dismissing splash")
                 }
             }
 

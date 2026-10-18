@@ -87,57 +87,6 @@
     <ID>NoHardcodedUiString:AdvancedCard.kt$"handle its own traffic and won't relay messages for other peers. "</ID>
     <ID>NoHardcodedUiString:AdvancedCard.kt$"multi-hop messaging."</ID>
     <ID>NoHardcodedUiString:AdvancedCard.kt$"usage and battery drain. However, in a BLE-only mesh, it's required for "</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"${interfaceInfo.subtitle} — latest Reticulum-selected route"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Block"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Browse Site"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Cost for node peering"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Current Path"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Destination Aspect"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Destination Hash"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Go Back"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Interfaces Reticulum selected for this destination"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Last Seen"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Maximum message size accepted by this relay"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Network Distance"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Node Details"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Node not found"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Peering Cost"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Remove $contactName from your contacts? You can re-add them later from the Announce Stream."</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Remove &amp; Auto-Select New"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Remove Contact?"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Remove Only"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Remove"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Required proof-of-work difficulty"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Seen Via — Last 30 Days"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Stamp Cost"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Start Chat"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Transfer Size Limit"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Unset as Your Relay?"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"View messaging destination"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"View telephony destination"</ID>
-    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"\"$relayName\" will be removed from contacts."</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"$reachableCount nodes in range (active paths)"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Announce now"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Announce sent!"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Clear All Announces"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Clear All Announces?"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Clear All"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Delete Announce?"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Delete"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Discovered Nodes"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Error: $detail"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Listening for announces..."</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Loading network..."</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"More options"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"No nodes discovered yet"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Remove $peerName from the list? They will reappear when they announce again."</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Scroll to top"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Start Chat"</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"This will remove all discovered nodes from the list, except those saved in My Contacts. Nodes will reappear when they announce again."</ID>
-    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"View Details"</ID>
     <ID>NoHardcodedUiString:ApkSharingScreen.kt$"APK size: ${"%.1f".format(sizeMb)} MB"</ID>
     <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Back"</ID>
     <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Grant Permission"</ID>
@@ -206,16 +155,6 @@
     <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Total"</ID>
     <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Turn ON"</ID>
     <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Turn on Bluetooth to see BLE connections"</ID>
-    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Blackhole (don't relay announces)"</ID>
-    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Blocked ${dateFormat.format(Date(peer.blockedTimestamp))}"</ID>
-    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Blocked Users"</ID>
-    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"No blocked users"</ID>
-    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"They will be able to send you messages again. Their conversation will reappear if it wasn't deleted."</ID>
-    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Unblock ${peer.displayName ?: peer.peerHash.take(16)}?"</ID>
-    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Unblock"</ID>
-    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Unblocked ${peer.displayName ?: peer.peerHash.take(16)}"</ID>
     <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Bottom Navigation"</ID>
     <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Choose which shortcuts appear in the bottom bar (max ${NavTab.MAX_TABS}) and use the arrows to arrange them. Settings is always pinned to the end."</ID>
     <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Move ${stringResource(tab.labelRes)} down"</ID>
@@ -235,59 +174,6 @@
     <ID>NoHardcodedUiString:ConnectivityPage.kt$"How will you connect?"</ID>
     <ID>NoHardcodedUiString:ConnectivityPage.kt$"Select the networks you'd like to use:"</ID>
     <ID>NoHardcodedUiString:ConnectivityPage.kt$"You can configure these later in Settings"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"(auto)"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"ALL CONTACTS"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Add Contact"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Add contact"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Add"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Added via ${contact.addedVia}"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Announce now"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Announce sent!"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Clear All Announces"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Clear nickname"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Clear search"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Clearing the nickname will use the announce name if available"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Contact Already Added"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Contact Exists"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Contact: $destinationHash"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Contacts"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Edit Nickname"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Enter a custom name"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Enter a name"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Error: $detail"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Full lxma:// URL or 32-character hex address"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Identity not found - tap to retry"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Identity not found"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Identity or Address"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Loading contacts..."</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"MY RELAY"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Manual Entry"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"More options"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"My Relay"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Never seen"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Nickname (optional)"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Nickname"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"No contacts yet"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"PINNED"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Paste RNS identity string"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Paste an LXMF identity string (lxma://...) or destination hash from Sideband"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"RELAY"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Remove &amp; Auto-Select New"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Remove Contact"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Remove Only"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Retry search"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Save"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Scan QR Code"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Scan a contact's QR code to add them"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Searching for identity..."</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Set a custom nickname for this contact"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Sharing location with you"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Star peers in the Announce Stream\nor add contacts via QR code"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"Unset as Your Relay?"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"View Peer Details"</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"\"${currentRelayToUnset.displayName}\" will be removed from contacts."</ID>
-    <ID>NoHardcodedUiString:ContactsScreen.kt$"lxma://... or 32-char hash"</ID>
     <ID>NoHardcodedUiString:ContactsTab.kt$ContactsTab.MY_CONTACTS$"My Contacts"</ID>
     <ID>NoHardcodedUiString:ContactsTab.kt$ContactsTab.NETWORK$"Network"</ID>
     <ID>NoHardcodedUiString:CrashReportDialog.kt$"App Crashed"</ID>
@@ -841,37 +727,6 @@
     <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.REGION$"Region"</ID>
     <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.REGION$"~10km radius"</ID>
     <ID>NoHardcodedUiString:MainActivity.kt$MainActivity$"Janky frame: ${durationMs}ms"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Altitude"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Bandwidth"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Coding Rate"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Copy Params"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Dismiss"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Download Offline Maps First"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Enable HTTP Map Source"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Enable location access to see your position on the map."</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"First Seen"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Frequency"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Hops"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Last Heard"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"LoRa Parameters"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"LoRa parameters copied"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Loading map..."</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Location permission required"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Location"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Map layers"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Map style"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Modulation"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"My location"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Network"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"No Map Source Enabled"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Offline Maps"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Radio Parameters"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Request Now"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Send Now"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Show on map"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Spreading Factor"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Status"</ID>
-    <ID>NoHardcodedUiString:MapScreen.kt$"Use for RNode"</ID>
     <ID>NoHardcodedUiString:MapSourcesCard.kt$"Configure how map tiles are fetched. Offline maps take priority when available."</ID>
     <ID>NoHardcodedUiString:MapSourcesCard.kt$"Fetch tiles from the internet"</ID>
     <ID>NoHardcodedUiString:MapSourcesCard.kt$"HTTP (OpenFreeMap)"</ID>
@@ -1181,25 +1036,6 @@
     <ID>NoHardcodedUiString:PrivacyCard.kt$"Calls from contacts only"</ID>
     <ID>NoHardcodedUiString:PrivacyCard.kt$"Messages from contacts only"</ID>
     <ID>NoHardcodedUiString:PrivacyCard.kt$"Privacy"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$" hops"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Add propagation node"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Add relays to build a transport-aware priority list. The highest-priority "</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Add"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Added"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"By destination hash"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Currently active"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Destination hash (hex)"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"From announces"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Import your current relay"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Loading…"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Nickname (optional)"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"No preferred propagation nodes"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Propagation Nodes"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Saved relays"</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"node that matches the current transport is used; with none matching, "</ID>
-    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"the nearest announced relay is used."</ID>
     <ID>NoHardcodedUiString:QrScannerScreen.kt$"Back"</ID>
     <ID>NoHardcodedUiString:QrScannerScreen.kt$"Contact Already Added"</ID>
     <ID>NoHardcodedUiString:QrScannerScreen.kt$"Contact Exists"</ID>

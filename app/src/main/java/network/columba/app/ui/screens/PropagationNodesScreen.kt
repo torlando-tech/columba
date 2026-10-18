@@ -45,10 +45,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
+import network.columba.app.R
 import network.columba.app.ui.components.PropagationNodeReorderList
 import network.columba.app.ui.components.localizedHashErrorText
 import network.columba.app.util.DestinationHashValidator
@@ -82,12 +85,12 @@ fun PropagationNodesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Propagation Nodes") },
+                title = { Text(stringResource(R.string.propagation_nodes_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.back),
                         )
                     }
                 },
@@ -108,7 +111,7 @@ fun PropagationNodesScreen(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Add,
-                    contentDescription = "Add propagation node",
+                    contentDescription = stringResource(R.string.propagation_add_node),
                 )
             }
         },
@@ -205,7 +208,7 @@ private fun ActiveRelayHeader(
             )
             Column {
                 Text(
-                    text = "Currently active",
+                    text = stringResource(R.string.propagation_currently_active),
                     style = MaterialTheme.typography.labelMedium,
                     color =
                         if (activeHash != null) {
@@ -215,7 +218,7 @@ private fun ActiveRelayHeader(
                         },
                 )
                 Text(
-                    text = activeName ?: "None — auto-selecting",
+                    text = activeName ?: stringResource(R.string.propagation_none_auto_selecting),
                     style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -261,15 +264,12 @@ private fun EmptyPropagationsState(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text = "No preferred propagation nodes",
+            text = stringResource(R.string.propagation_empty_title),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text =
-                "Add relays to build a transport-aware priority list. The highest-priority " +
-                    "node that matches the current transport is used; with none matching, " +
-                    "the nearest announced relay is used.",
+            text = stringResource(R.string.propagation_empty_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -279,7 +279,7 @@ private fun EmptyPropagationsState(
                 onClick = onImportCurrent,
                 modifier = Modifier.testTag("prop_node_import_current"),
             ) {
-                Text("Import your current relay")
+                Text(stringResource(R.string.propagation_import_current))
             }
         }
     }
@@ -315,7 +315,7 @@ private fun AddPropagationNodeDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add propagation node") },
+        title = { Text(stringResource(R.string.propagation_add_node)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -324,28 +324,28 @@ private fun AddPropagationNodeDialog(
                         onClick = { tab = 0 },
                         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
                     ) {
-                        Text("Saved relays")
+                        Text(stringResource(R.string.propagation_tab_saved_relays))
                     }
                     SegmentedButton(
                         selected = tab == 1,
                         onClick = { tab = 1; ensureAnnouncesLoaded() },
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
                     ) {
-                        Text("From announces")
+                        Text(stringResource(R.string.propagation_tab_from_announces))
                     }
                     SegmentedButton(
                         selected = tab == 2,
                         onClick = { tab = 2 },
                         shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
                     ) {
-                        Text("By destination hash")
+                        Text(stringResource(R.string.propagation_tab_by_hash))
                     }
                 }
 
                 if (tab == 0) {
                     CandidateList(
                         list = savedCandidates,
-                        emptyMessage = "No saved propagation nodes yet. Star a relay (Save peer) to see it here.",
+                        emptyMessage = stringResource(R.string.propagation_no_saved_relays),
                         alreadyAdded = { hash -> hash in existingHashes },
                         onPick = { candidate ->
                             onAddFromAnnounce(candidate)
@@ -355,7 +355,7 @@ private fun AddPropagationNodeDialog(
                 } else if (tab == 1) {
                     CandidateList(
                         list = candidates,
-                        emptyMessage = "No propagation-node announces on the network yet.",
+                        emptyMessage = stringResource(R.string.propagation_no_announces),
                         alreadyAdded = { hash -> hash in existingHashes },
                         onPick = { candidate ->
                             onAddFromAnnounce(candidate)
@@ -372,7 +372,7 @@ private fun AddPropagationNodeDialog(
                     OutlinedTextField(
                         value = hashInput,
                         onValueChange = { hashInput = it },
-                        label = { Text("Destination hash (hex)") },
+                        label = { Text(stringResource(R.string.propagation_destination_hash_hex)) },
                         supportingText = {
                             Text(
                                 text =
@@ -395,7 +395,7 @@ private fun AddPropagationNodeDialog(
                     OutlinedTextField(
                         value = nicknameInput,
                         onValueChange = { nicknameInput = it },
-                        label = { Text("Nickname (optional)") },
+                        label = { Text(stringResource(R.string.propagation_nickname_optional)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -421,12 +421,12 @@ private fun AddPropagationNodeDialog(
                 },
                 enabled = canConfirm,
             ) {
-                Text("Add")
+                Text(stringResource(R.string.propagation_add))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         },
     )
@@ -450,7 +450,7 @@ private fun CandidateList(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             CircularProgressIndicator(modifier = Modifier.size(18.dp))
-            Text("Loading…", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.propagation_loading), style = MaterialTheme.typography.bodyMedium)
         }
     } else if (list.isEmpty()) {
         Text(
@@ -503,7 +503,7 @@ private fun CandidateList(
                             )
                             Text(
                                 text =
-                                    candidate.destinationHash.take(8) + " · " + candidate.hops + " hops",
+                                    pluralStringResource(R.plurals.propagation_candidate_hops, candidate.hops, candidate.destinationHash.take(8), candidate.hops),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -511,7 +511,7 @@ private fun CandidateList(
                         }
                         if (added) {
                             Text(
-                                "Added",
+                                stringResource(R.string.propagation_added),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

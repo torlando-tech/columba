@@ -109,60 +109,6 @@
     <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Serial"</ID>
     <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Since the board type couldn't be determined automatically, please select it manually in the next step."</ID>
     <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Status"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Bluetooth Classic"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Bluetooth Device Name"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Bluetooth LE"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Bluetooth Pairing Mode"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Bluetooth"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Cancel manual entry"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Cancel"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Connect RNode via USB cable. Supports FTDI, CP210x, CH340, and CDC-ACM devices."</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Connect RNode via USB to securely configure Bluetooth pairing"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Connect to an RNode device over WiFi/TCP (port 7633)."</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Connected"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Connection Method"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Connection Type"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Current Device"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Default port is 7633."</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Dismiss"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"ESP32-S3 and nRF52840 devices support BLE. ESP32 (original) devices support Bluetooth Classic."</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Enter Bluetooth Pairing Mode"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Enter device manually"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Enter the 6-digit PIN shown on your RNode's display:"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Enter the PIN code shown on your RNode display"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Exit Pairing Mode"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Failed"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Grant"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Having trouble pairing?"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"IP Address or Hostname"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"If your device isn't listed"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Looking for: $name"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Or select a different device:"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"PIN Code"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"PIN Code:"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Pair RNode with your phone via Bluetooth"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Pair via USB"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Pair"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Pairing..."</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Permitted"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Power on device and rescan to auto-detect type."</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Rescan USB Devices"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Retry"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Scan Again"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Scanning for RNode devices..."</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Scanning for RNodes to pair..."</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Scanning for USB devices..."</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Select connection type:"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Selected"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Submit"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Success"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Test Connection"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"The RNode must be connected to the same network and have WiFi/TCP enabled. "</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Unknown type"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Waiting for RNode to reconnect..."</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"WiFi / TCP"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"e.g., 10.0.0.1 or rnode.local"</ID>
-    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"e.g., RNode 1234"</ID>
     <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Connect an RNode device via USB and tap refresh"</ID>
     <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Connect your RNode device via USB"</ID>
     <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"No USB devices found"</ID>
@@ -239,25 +185,8 @@
     <ID>NoHardcodedUiString:FlashProgressStep.kt$"Reset Required"</ID>
     <ID>NoHardcodedUiString:FlashProgressStep.kt$"Setting up device identity and firmware verification. This may take a moment."</ID>
     <ID>NoHardcodedUiString:FlashProgressStep.kt$"You may need to use the bootloader to recover."</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Avoid Meshtastic frequencies to prevent interference."</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Choose a different slot to avoid interference."</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Choose a frequency slot within the ${region.name} band. "</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Community-tested configurations for your region"</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Decrease slot"</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Frequency Spectrum"</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Increase slot"</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Meshtastic Frequencies (Avoid)"</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Meshtastic Interference"</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Meshtastic"</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Only one frequency slot available for this region/preset combination"</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Popular RNode Frequencies"</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Select Frequency Slot"</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Selected"</ID>
     <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot $slot"</ID>
     <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot ${slot.slot}"</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot ${state.selectedSlot} overlaps with Meshtastic. "</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot Number"</ID>
-    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"These frequencies are used by Meshtastic networks"</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"Anonymous Peer"</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"Back"</ID>
     <ID>NoHardcodedUiString:IdentityPage.kt$"Choose a display name others will see:"</ID>
@@ -338,11 +267,6 @@
     <ID>NoHardcodedUiString:MigrationScreen.kt$"Your backup data has been restored, including your notification preferences."</ID>
     <ID>NoHardcodedUiString:MigrationScreen.kt$"messages, and contacts from the backup file."</ID>
     <ID>NoHardcodedUiString:MigrationScreen.kt$"to a file that can be imported into a new installation."</ID>
-    <ID>NoHardcodedUiString:ModemPresetStep.kt$"Choose a preset that matches your range and speed needs. "</ID>
-    <ID>NoHardcodedUiString:ModemPresetStep.kt$"Recommended"</ID>
-    <ID>NoHardcodedUiString:ModemPresetStep.kt$"Select Modem Preset"</ID>
-    <ID>NoHardcodedUiString:ModemPresetStep.kt$"Selected"</ID>
-    <ID>NoHardcodedUiString:ModemPresetStep.kt$"These are compatible with Meshtastic naming conventions."</ID>
     <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"&lt;hash&gt;:/page/index.mu"</ID>
     <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Back"</ID>
     <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Cancel"</ID>
@@ -452,60 +376,10 @@
     <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Exit Flasher?"</ID>
     <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Exit"</ID>
     <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"flasher_step"</ID>
-    <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"Error"</ID>
-    <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"Repair RNode Pairing"</ID>
-    <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"Transport Configuration Failed"</ID>
     <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"wizard_step"</ID>
     <ID>NoHardcodedUiString:RegionSelectionStep.kt$"${region.dutyCycle}% duty"</ID>
-    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Back to countries"</ID>
-    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Choose your region to set the correct frequency band and power limits."</ID>
-    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Configure all parameters manually"</ID>
-    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Custom Settings"</ID>
-    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Popular Local Presets"</ID>
-    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Search countries"</ID>
-    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Select Frequency Region"</ID>
-    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Selected"</ID>
     <ID>NoHardcodedUiString:ReviewConfigStep.kt$"${region.frequency / 1_000_000.0} MHz • ${region.maxTxPower} dBm max • ${region.dutyCycleDisplay}"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Advanced Settings"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Airtime Limits"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Bandwidth (Hz)"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Display Logo on RNode"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Duty Cycle Limit: ${region.dutyCycle}%"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Frequency (Hz)"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Frequency Region"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Frequency Slot"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Interface Name"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Leave blank unless the RNode network requires an IFAC "</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Long-term (%)"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Modem Preset"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Popular Preset"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Radio Settings"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Short-term (%)"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Show Columba logo on RNode's display when connected"</ID>
     <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Slot ${state.selectedSlot}"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"TCP-only field — does not apply to Bluetooth or USB connections."</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"matching credentials can communicate."</ID>
-    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"network name and passphrase. Only interfaces with "</ID>
-    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Auto-disconnect once better connections are discovered"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Bootstrap Interface"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Connect via Tor (Orbot)"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Interface Name"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Orbot must be installed and connected."</ID>
-    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Route through SOCKS5 proxy. Required for .onion addresses. "</ID>
-    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"SOCKS5 Proxy Host"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"SOCKS5 Proxy Port"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Server"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Target Host"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Target Port"</ID>
-    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"hostname or IP address"</ID>
-    <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Choose Server"</ID>
-    <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Custom"</ID>
-    <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Enter server details manually"</ID>
-    <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Select a community server or enter custom connection details."</ID>
-    <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Selected"</ID>
-    <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"Back"</ID>
-    <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"Error"</ID>
     <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"tcp_wizard_step"</ID>
     <ID>NoHardcodedUiString:TileDownloadManager.kt$TileDownloadManager$"Offline map for ${params.name}"</ID>
     <ID>NoHardcodedUiString:TileDownloadManager.kt$TileDownloadManager$"Offline map from RMSP: ${params.name}"</ID>

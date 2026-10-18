@@ -67,6 +67,7 @@ import network.columba.app.rns.host.ble.util.BlePermissionManager
 import network.columba.app.viewmodel.RNodeConnectionType
 import network.columba.app.viewmodel.RNodeWizardState
 import network.columba.app.viewmodel.RNodeWizardViewModel
+import network.columba.app.viewmodel.UiMessage
 
 @Composable
 fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
@@ -207,7 +208,7 @@ private fun TcpConnectionForm(
     tcpHost: String,
     isValidating: Boolean,
     validationSuccess: Boolean?,
-    validationError: String?,
+    validationError: UiMessage?,
     onHostChange: (String) -> Unit,
     onTestConnection: () -> Unit,
 ) {
@@ -293,7 +294,7 @@ private fun TcpConnectionForm(
         validationError?.let { error ->
             Spacer(Modifier.height(8.dp))
             Text(
-                text = error,
+                text = error.resolve(LocalContext.current),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -396,7 +397,7 @@ private fun BluetoothDeviceDiscovery(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    text = error,
+                    text = error.resolve(LocalContext.current),
                     modifier = Modifier.padding(16.dp),
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
@@ -417,7 +418,7 @@ private fun BluetoothDeviceDiscovery(
                     modifier = Modifier.padding(16.dp),
                 ) {
                     Text(
-                        text = error,
+                        text = error.resolve(LocalContext.current),
                         color = MaterialTheme.colorScheme.onErrorContainer,
                     )
                     Spacer(Modifier.height(8.dp))
@@ -548,7 +549,7 @@ private fun BluetoothDeviceDiscovery(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = error,
+                        text = error.resolve(LocalContext.current),
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.weight(1f),
                     )
@@ -749,12 +750,12 @@ private fun BluetoothDeviceDiscovery(
                         when {
                             error != null ->
                                 Text(
-                                    error,
+                                    error.resolve(LocalContext.current),
                                     color = MaterialTheme.colorScheme.error,
                                 )
                             warning != null ->
                                 Text(
-                                    warning,
+                                    warning.resolve(LocalContext.current),
                                     color = MaterialTheme.colorScheme.tertiary,
                                 )
                         }
@@ -1111,7 +1112,7 @@ private fun UsbDeviceDiscovery(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = error,
+                        text = error.resolve(LocalContext.current),
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.weight(1f),
                     )
@@ -1262,7 +1263,11 @@ private fun UsbDeviceCard(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            device.driverType,
+                            if (device.driverType == DiscoveredUsbDevice.DRIVER_TYPE_UNKNOWN) {
+                                stringResource(R.string.rnode_wizard_driver_unknown)
+                            } else {
+                                device.driverType
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color =
                                 if (isSelected) {
@@ -1389,7 +1394,7 @@ private fun UsbBluetoothPairingCard(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            state.usbPairingStatus,
+                            state.usbPairingStatus?.resolve(LocalContext.current) ?: "",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
@@ -1452,7 +1457,7 @@ private fun UsbBluetoothPairingCard(
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        state.usbPairingStatus ?: "Waiting for PIN from RNode...",
+                        state.usbPairingStatus?.resolve(LocalContext.current) ?: "Waiting for PIN from RNode...",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )

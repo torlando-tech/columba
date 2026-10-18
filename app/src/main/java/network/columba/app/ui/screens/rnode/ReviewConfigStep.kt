@@ -40,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import network.columba.app.data.model.FrequencySlotCalculator
@@ -96,12 +97,12 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                     )
                     Text(
-                        viewModel.getEffectiveDeviceName(),
+                        viewModel.getEffectiveDeviceName().resolve(LocalContext.current),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                     Text(
-                        viewModel.getConnectionTypeString(),
+                        viewModel.getConnectionTypeString().resolve(LocalContext.current),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                     )
@@ -120,7 +121,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = state.nameError != null,
-                supportingText = state.nameError?.let { { Text(it) } },
+                supportingText = state.nameError?.let { { Text(it.resolve(LocalContext.current)) } },
             )
 
             Spacer(Modifier.height(16.dp))
@@ -363,7 +364,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         isError = state.frequencyError != null,
                         supportingText = {
                             Text(
-                                state.frequencyError
+                                state.frequencyError?.resolve(LocalContext.current)
                                     ?: if (minFreqMhz != null && maxFreqMhz != null) {
                                         "%.1f-%.1f MHz".format(minFreqMhz, maxFreqMhz)
                                     } else {
@@ -386,7 +387,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         isError = state.bandwidthError != null,
-                        supportingText = state.bandwidthError?.let { { Text(it) } },
+                        supportingText = state.bandwidthError?.let { { Text(it.resolve(LocalContext.current)) } },
                     )
                 }
 
@@ -406,7 +407,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         isError = state.spreadingFactorError != null,
-                        supportingText = state.spreadingFactorError?.let { { Text(it) } },
+                        supportingText = state.spreadingFactorError?.let { { Text(it.resolve(LocalContext.current)) } },
                         placeholder = { Text("7-12") },
                     )
                     OutlinedTextField(
@@ -417,7 +418,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         isError = state.codingRateError != null,
-                        supportingText = state.codingRateError?.let { { Text(it) } },
+                        supportingText = state.codingRateError?.let { { Text(it.resolve(LocalContext.current)) } },
                         placeholder = { Text("5-8") },
                     )
                     OutlinedTextField(
@@ -430,7 +431,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         isError = state.txPowerError != null,
                         supportingText = {
                             Text(
-                                state.txPowerError ?: "Max: $maxTxPower dBm",
+                                state.txPowerError?.resolve(LocalContext.current) ?: "Max: $maxTxPower dBm",
                                 color =
                                     if (state.txPowerError != null) {
                                         MaterialTheme.colorScheme.error
@@ -470,7 +471,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             isError = state.stAlockError != null,
-                            supportingText = state.stAlockError?.let { { Text(it) } },
+                            supportingText = state.stAlockError?.let { { Text(it.resolve(LocalContext.current)) } },
                         )
                         OutlinedTextField(
                             value = state.ltAlock,
@@ -481,7 +482,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             isError = state.ltAlockError != null,
-                            supportingText = state.ltAlockError?.let { { Text(it) } },
+                            supportingText = state.ltAlockError?.let { { Text(it.resolve(LocalContext.current)) } },
                         )
                     }
 

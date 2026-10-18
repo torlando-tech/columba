@@ -66,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -85,6 +86,7 @@ import network.columba.app.viewmodel.DebugInfo
 import network.columba.app.viewmodel.DebugViewModel
 import network.columba.app.viewmodel.InterfaceInfo
 import network.columba.app.viewmodel.TestAnnounceResult
+import network.columba.app.viewmodel.messageResource
 import kotlinx.coroutines.launch
 
 /**
@@ -984,7 +986,7 @@ fun BleConnectionsCard(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Error: ${uiState.message}",
+                                text = "Error: ${uiState.detail ?: stringResource(uiState.reason.messageResource())}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.error,
                             )

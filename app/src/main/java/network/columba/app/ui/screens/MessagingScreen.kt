@@ -249,6 +249,7 @@ import network.columba.app.viewmodel.InterfaceImportViewModel
 import network.columba.app.viewmodel.MessagingViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
+import network.columba.app.viewmodel.messageResource
 import android.Manifest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -570,7 +571,8 @@ fun MessagingScreen(
                 when (result) {
                     is ContactToggleResult.Added -> "Saved $peerName to Contacts"
                     is ContactToggleResult.Removed -> "Removed $peerName from Contacts"
-                    is ContactToggleResult.Error -> result.message
+                    is ContactToggleResult.Error ->
+                        result.detail ?: context.getString(result.reason.messageResource())
                 }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
@@ -578,15 +580,15 @@ fun MessagingScreen(
 
     // Observe file attachment errors and show Toast
     LaunchedEffect(Unit) {
-        viewModel.fileAttachmentError.collect { errorMessage ->
-            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+        viewModel.fileAttachmentError.collect { message ->
+            Toast.makeText(context, message.resolve(context), Toast.LENGTH_SHORT).show()
         }
     }
 
     // Observe shared image compression errors and show Toast
     LaunchedEffect(Unit) {
-        viewModel.sharedImageError.collect { errorMessage ->
-            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+        viewModel.sharedImageError.collect { message ->
+            Toast.makeText(context, message.resolve(context), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -596,7 +598,7 @@ fun MessagingScreen(
     // user feedback so the tap doesn't feel silently dropped.
     LaunchedEffect(Unit) {
         viewModel.locationSharingMessage.collect { message ->
-            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            Toast.makeText(context, message.resolve(context), Toast.LENGTH_LONG).show()
         }
     }
 

@@ -1,11 +1,13 @@
 package network.columba.app.viewmodel
 
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.filter
+import network.columba.app.R
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.AnnounceRepository
@@ -36,6 +38,29 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
+
+/**
+ * Why a manual announce failed; the UI resolves the reason to a string
+ * resource. [AnnounceError.detail] (raw exception text) takes precedence
+ * when present.
+ */
+enum class AnnounceErrorReason {
+    UNKNOWN,
+    TRIGGER_FAILED,
+}
+
+@StringRes
+fun AnnounceErrorReason.messageResource(): Int =
+    when (this) {
+        AnnounceErrorReason.UNKNOWN -> R.string.error_unknown
+        AnnounceErrorReason.TRIGGER_FAILED -> R.string.announce_error_trigger_failed
+    }
+
+/** Manual announce failure surfaced to the UI (AnnounceStream + Settings). */
+data class AnnounceError(
+    val reason: AnnounceErrorReason,
+    val detail: String? = null,
+)
 
 internal fun matchesRecentInterfaceFilter(
     announce: Announce,
@@ -178,8 +203,8 @@ class AnnounceStreamViewModel
         private val _announceSuccess = MutableStateFlow(false)
         val announceSuccess: StateFlow<Boolean> = _announceSuccess.asStateFlow()
 
-        private val _announceError = MutableStateFlow<String?>(null)
-        val announceError: StateFlow<String?> = _announceError.asStateFlow()
+        private val _announceError = MutableStateFlow<AnnounceError?>(null)
+        val announceError: StateFlow<AnnounceError?> = _announceError.asStateFlow()
 
         init {
             viewModelScope.launch {
@@ -478,10 +503,14 @@ class AnnounceStreamViewModel
                         delay(3000)
                         clearAnnounceStatus()
                     } else {
-                        val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                        val error =
+                            AnnounceError(
+                                AnnounceErrorReason.UNKNOWN,
+                                result.exceptionOrNull()?.message,
+                            )
                         _isAnnouncing.value = false
                         _announceError.value = error
-                        Log.e(TAG, "Manual announce failed: $error")
+                        Log.e(TAG, "Manual announce failed: ${error.detail}")
 
                         // Auto-dismiss error message after 5 seconds
                         delay(5000)
@@ -491,7 +520,7 @@ class AnnounceStreamViewModel
                     throw e
                 } catch (e: Exception) {
                     _isAnnouncing.value = false
-                    _announceError.value = e.message ?: "Error triggering announce"
+                    _announceError.value = AnnounceError(AnnounceErrorReason.TRIGGER_FAILED, e.message)
                     Log.e(TAG, "Error triggering manual announce", e)
 
                     // Auto-dismiss error message after 5 seconds

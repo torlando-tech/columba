@@ -771,7 +771,7 @@ class AnnounceStreamViewModelTest {
             // Verify error state
             assertFalse(viewModel.isAnnouncing.value)
             assertFalse(viewModel.announceSuccess.value)
-            assertEquals("Network error", viewModel.announceError.value)
+            assertEquals(AnnounceError(AnnounceErrorReason.UNKNOWN, "Network error"), viewModel.announceError.value)
         }
 
     @Test
@@ -927,7 +927,7 @@ class AnnounceStreamViewModelTest {
             advanceTimeBy(100)
             runCurrent()
 
-            assertEquals("Test error", viewModel.announceError.value)
+            assertEquals(AnnounceError(AnnounceErrorReason.UNKNOWN, "Test error"), viewModel.announceError.value)
 
             // Clear status
             viewModel.clearAnnounceStatus()
@@ -962,7 +962,7 @@ class AnnounceStreamViewModelTest {
 
             // Verify error state is set
             assertFalse(viewModel.isAnnouncing.value)
-            assertEquals("Database error", viewModel.announceError.value)
+            assertEquals(AnnounceError(AnnounceErrorReason.TRIGGER_FAILED, "Database error"), viewModel.announceError.value)
         }
 
     @Test
@@ -1024,7 +1024,7 @@ class AnnounceStreamViewModelTest {
             runCurrent()
 
             // Error should be set
-            assertEquals("Network error", viewModel.announceError.value)
+            assertEquals(AnnounceError(AnnounceErrorReason.UNKNOWN, "Network error"), viewModel.announceError.value)
 
             // Advance time past the 5 second auto-dismiss (remaining ~4900ms)
             advanceTimeBy(5000)

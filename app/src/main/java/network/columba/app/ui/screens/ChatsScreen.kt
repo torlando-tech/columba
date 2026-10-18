@@ -94,6 +94,7 @@ import network.columba.app.viewmodel.ChatsSegment
 import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
+import network.columba.app.viewmodel.messageResource
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -204,7 +205,8 @@ fun ChatsScreen(
                 when (result) {
                     ContactToggleResult.Added -> "Saved contact"
                     ContactToggleResult.Removed -> "Removed contact"
-                    is ContactToggleResult.Error -> result.message
+                    is ContactToggleResult.Error ->
+                        result.detail ?: context.getString(result.reason.messageResource())
                 }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }

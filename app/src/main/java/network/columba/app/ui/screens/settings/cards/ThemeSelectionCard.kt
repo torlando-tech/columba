@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import network.columba.app.R
 import network.columba.app.ui.components.CollapsibleSettingsCard
 import network.columba.app.ui.theme.AppTheme
+import network.columba.app.ui.theme.CustomTheme
 import network.columba.app.ui.theme.PresetTheme
 import network.columba.app.ui.theme.ThemeMode
 
@@ -105,7 +106,12 @@ fun ThemeSelectionCard(
             options = PresetTheme.entries.toList(),
             selected = selectedTheme,
             onSelect = onThemeChange,
-        ) { it.displayName }
+        ) { theme ->
+            when (theme) {
+                is PresetTheme -> stringResource(theme.displayNameRes)
+                is CustomTheme -> theme.displayName
+            }
+        }
 
         // Custom themes section (only show if there are custom themes)
         if (customThemes.isNotEmpty()) {
@@ -120,12 +126,21 @@ fun ThemeSelectionCard(
                 options = customThemes,
                 selected = selectedTheme,
                 onSelect = onThemeChange,
-            ) { it.displayName }
+            ) { theme ->
+                when (theme) {
+                    is PresetTheme -> stringResource(theme.displayNameRes)
+                    is CustomTheme -> theme.displayName
+                }
+            }
         }
 
         // Description of selected theme
         Text(
-            text = selectedTheme.description,
+            text =
+                when (selectedTheme) {
+                    is PresetTheme -> stringResource(selectedTheme.descriptionRes)
+                    is CustomTheme -> selectedTheme.description
+                },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Medium,

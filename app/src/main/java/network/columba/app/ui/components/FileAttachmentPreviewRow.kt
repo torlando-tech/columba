@@ -19,10 +19,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.ui.theme.ColumbaTheme
 import network.columba.app.util.FileAttachment
 import network.columba.app.util.FileUtils
@@ -142,7 +144,7 @@ private fun FileAttachmentChip(
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Remove ${attachment.filename}",
+                    contentDescription = stringResource(R.string.file_attach_preview_remove, attachment.filename),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp),
                 )
@@ -166,7 +168,7 @@ private fun TotalSizeIndicator(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         Text(
-            text = "Total: ${FileUtils.formatFileSize(totalSizeBytes)}",
+            text = stringResource(R.string.file_attach_preview_total, FileUtils.formatFileSize(totalSizeBytes)),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -43,12 +43,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import network.columba.app.ui.util.getInterfaceInfo
 import network.columba.app.ui.util.getRssiInfo
 import network.columba.app.ui.util.getSnrInfo
+import network.columba.app.ui.util.resolvedText
 import network.columba.app.viewmodel.MessageDetailViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -266,8 +268,8 @@ fun MessageDetailScreen(
                             icon = rssiInfo.icon,
                             iconTint = rssiInfo.color,
                             title = "Signal Strength",
-                            content = rssiInfo.text,
-                            subtitle = rssiInfo.subtitle,
+                            content = rssiInfo.resolvedText(),
+                            subtitle = stringResource(rssiInfo.subtitleRes),
                         )
                     }
 
@@ -278,8 +280,8 @@ fun MessageDetailScreen(
                             icon = snrInfo.icon,
                             iconTint = snrInfo.color,
                             title = "Signal Quality",
-                            content = snrInfo.text,
-                            subtitle = snrInfo.subtitle,
+                            content = snrInfo.resolvedText(),
+                            subtitle = stringResource(snrInfo.subtitleRes),
                         )
                     }
                 }

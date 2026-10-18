@@ -43,6 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -110,6 +111,7 @@ fun MicronImageBlock(
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val defaultAlt = stringResource(R.string.micron_img_default_alt)
 
     val blockModifier =
         modifier
@@ -236,7 +238,7 @@ fun MicronImageBlock(
                     if (imageBitmap != null) {
                         Image(
                             bitmap = imageBitmap,
-                            contentDescription = element.alt.ifBlank { "Image" },
+                            contentDescription = element.alt.ifBlank { defaultAlt },
                             contentScale = ContentScale.Fit,
                             modifier = imageModifier,
                         )
@@ -271,7 +273,7 @@ fun MicronImageBlock(
         PageImageStatus.DENIED -> {
             ImagePlaceholder(
                 element = element,
-                statusLine = "Access denied by node",
+                statusLine = stringResource(R.string.micron_img_access_denied),
                 showTapAffordance = false,
                 onClick = {},
                 icon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
@@ -320,21 +322,21 @@ fun MicronImageBlock(
             modifier = Modifier.testTag("micron-image-sheet"),
         ) {
             Text(
-                text = element.alt.ifBlank { "Image" },
+                text = element.alt.ifBlank { defaultAlt },
                 style = typography.titleSmall,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             )
-            SheetAction(Icons.Outlined.SaveAlt, "Save to gallery") {
+            SheetAction(Icons.Outlined.SaveAlt, stringResource(R.string.micron_img_save_to_gallery)) {
                 effectiveState.file?.let { f ->
                     saveImageToGallery(context, f.absolutePath, f.name)
                 }
                 scope.launch { sheetState.hide() }.invokeOnCompletion { showSheet = false }
             }
-            SheetAction(Icons.Outlined.Refresh, "Reload image") {
+            SheetAction(Icons.Outlined.Refresh, stringResource(R.string.micron_img_reload)) {
                 onImageReload()
                 scope.launch { sheetState.hide() }.invokeOnCompletion { showSheet = false }
             }
-            SheetAction(Icons.Outlined.Image, "Copy image link") {
+            SheetAction(Icons.Outlined.Image, stringResource(R.string.micron_img_copy_link)) {
                 onCopyLink(element.url)
                 scope.launch { sheetState.hide() }.invokeOnCompletion { showSheet = false }
             }
@@ -409,7 +411,7 @@ private fun ImagePlaceholder(
                 )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = element.alt.ifBlank { "image" },
+                text = element.alt.ifBlank { stringResource(R.string.micron_img_placeholder_alt) },
                 style = typography.bodyMedium,
                 color = colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -426,7 +428,7 @@ private fun ImagePlaceholder(
         if (showTapAffordance) {
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Tap to load image",
+                text = stringResource(R.string.micron_img_tap_to_load),
                 style = typography.labelSmall,
                 color = colorScheme.primary,
             )
@@ -439,12 +441,16 @@ private fun loadingStatusLine(state: PageImageState): String {
     val pct = (state.progress * 100).roundToInt()
     val sizePart =
         if (state.totalBytes > 0) {
-            " (${formatBytes(state.receivedBytes)} of ${formatBytes(state.totalBytes)})"
+            stringResource(
+                R.string.micron_img_loading_size,
+                formatBytes(state.receivedBytes),
+                formatBytes(state.totalBytes),
+            )
         } else {
             ""
         }
     val speedPart = state.speedBps?.let { " - ${formatSpeed(it)}" } ?: ""
-    return "$pct%$sizePart$speedPart".ifBlank { "Loading..." }
+    return "$pct%$sizePart$speedPart".ifBlank { stringResource(R.string.micron_img_loading) }
 }
 
 /**
@@ -570,11 +576,11 @@ fun saveImageToGallery(
             java.io.File(filePath).inputStream().use { it.copyTo(out) }
         }
         android.widget.Toast
-            .makeText(context, "Saved to gallery", android.widget.Toast.LENGTH_SHORT)
+            .makeText(context, context.getString(R.string.micron_img_saved_to_gallery), android.widget.Toast.LENGTH_SHORT)
             .show()
     } else {
         android.widget.Toast
-            .makeText(context, "Could not save image", android.widget.Toast.LENGTH_SHORT)
+            .makeText(context, context.getString(R.string.micron_img_save_failed), android.widget.Toast.LENGTH_SHORT)
             .show()
     }
 }

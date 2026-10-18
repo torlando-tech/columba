@@ -131,7 +131,7 @@ fun SwipeableMessageBubble(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Reply,
-                        contentDescription = "Reply",
+                        contentDescription = stringResource(R.string.reply_comp_reply),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(24.dp),
                     )
@@ -286,7 +286,7 @@ fun ReplyPreviewBubble(
                     if (replyPreview.hasImage) {
                         Icon(
                             imageVector = Icons.Default.Image,
-                            contentDescription = "Image",
+                            contentDescription = stringResource(R.string.reply_comp_image),
                             tint = contentColor.copy(alpha = 0.7f),
                             modifier = Modifier.size(14.dp),
                         )
@@ -294,7 +294,7 @@ fun ReplyPreviewBubble(
                     if (replyPreview.hasFileAttachment) {
                         Icon(
                             imageVector = Icons.Default.AttachFile,
-                            contentDescription = "File",
+                            contentDescription = stringResource(R.string.attachment_file),
                             tint = contentColor.copy(alpha = 0.7f),
                             modifier = Modifier.size(14.dp),
                         )
@@ -324,7 +324,7 @@ fun ReplyPreviewBubble(
                         )
                     } else if (!replyPreview.hasImage && !replyPreview.hasFileAttachment) {
                         Text(
-                            text = "Message",
+                            text = stringResource(R.string.reply_comp_message),
                             style = MaterialTheme.typography.bodySmall,
                             color = contentColor.copy(alpha = 0.5f),
                             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
@@ -385,7 +385,7 @@ fun ReplyInputBar(
             // Reply info
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Replying to ${replyPreview.senderName}",
+                    text = stringResource(R.string.reply_comp_replying_to, replyPreview.senderName),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
@@ -402,12 +402,12 @@ fun ReplyInputBar(
                     if (replyPreview.hasImage) {
                         Icon(
                             imageVector = Icons.Default.Image,
-                            contentDescription = "Image",
+                            contentDescription = stringResource(R.string.reply_comp_image),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(14.dp),
                         )
                         Text(
-                            text = "Photo",
+                            text = stringResource(R.string.reply_comp_photo),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -415,7 +415,7 @@ fun ReplyInputBar(
                     if (replyPreview.hasFileAttachment && replyPreview.firstFileName != null) {
                         Icon(
                             imageVector = Icons.Default.AttachFile,
-                            contentDescription = "File",
+                            contentDescription = stringResource(R.string.attachment_file),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(14.dp),
                         )
@@ -446,7 +446,7 @@ fun ReplyInputBar(
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Cancel reply",
+                    contentDescription = stringResource(R.string.reply_comp_cancel_reply),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
                 )

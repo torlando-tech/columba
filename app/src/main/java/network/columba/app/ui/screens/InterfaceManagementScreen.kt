@@ -493,7 +493,7 @@ fun InterfaceManagementScreen(
                         .padding(16.dp),
             ) {
                 state.successMessage?.let { message ->
-                    SuccessMessage(message) {
+                    SuccessMessage(message.resolve(context)) {
                         viewModel.clearSuccess()
                     }
                 }
@@ -509,7 +509,7 @@ fun InterfaceManagementScreen(
                         .padding(16.dp),
             ) {
                 state.errorMessage?.let { message ->
-                    ErrorMessage(message) {
+                    ErrorMessage(message.resolve(context)) {
                         viewModel.clearError()
                     }
                 }
@@ -525,7 +525,7 @@ fun InterfaceManagementScreen(
                         .padding(16.dp),
             ) {
                 state.infoMessage?.let { message ->
-                    InfoMessage(message) {
+                    InfoMessage(message.resolve(context)) {
                         viewModel.clearInfo()
                     }
                 }
@@ -582,7 +582,7 @@ fun InterfaceManagementScreen(
     // Apply Error Dialog
     state.applyChangesError?.let { error ->
         ApplyErrorDialog(
-            errorMessage = error,
+            errorMessage = error.resolve(context),
             onDismiss = { viewModel.clearApplyError() },
         )
     }

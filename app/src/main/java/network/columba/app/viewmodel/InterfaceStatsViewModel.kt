@@ -11,6 +11,7 @@ import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import network.columba.app.R
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.rns.api.RnsTransportAdmin
@@ -39,7 +40,7 @@ import javax.inject.Inject
 data class InterfaceStatsState(
     val interfaceEntity: InterfaceEntity? = null,
     val isLoading: Boolean = true,
-    val errorMessage: String? = null,
+    val errorMessage: UiMessage? = null,
     // Runtime status
     val isOnline: Boolean = false,
     val isConnecting: Boolean = false,
@@ -140,7 +141,7 @@ class InterfaceStatsViewModel
                     observeReconnectSignal()
                 }
             } else {
-                _state.update { it.copy(isLoading = false, errorMessage = "Invalid interface ID") }
+                _state.update { it.copy(isLoading = false, errorMessage = UiMessage.Text(R.string.iface_stats_invalid_id)) }
             }
         }
 
@@ -185,13 +186,13 @@ class InterfaceStatsViewModel
                         Log.d(TAG, "Loaded interface: ${entity.name}")
                     } else {
                         _state.update {
-                            it.copy(isLoading = false, errorMessage = "Interface not found")
+                            it.copy(isLoading = false, errorMessage = UiMessage.Text(R.string.iface_stats_not_found))
                         }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error loading interface", e)
                     _state.update {
-                        it.copy(isLoading = false, errorMessage = "Error loading interface: ${e.message}")
+                        it.copy(isLoading = false, errorMessage = UiMessage.Text(R.string.iface_stats_load_failed, listOf(e.message ?: "null")))
                     }
                 }
             }

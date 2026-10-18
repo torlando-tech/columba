@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -590,6 +591,7 @@ fun AndroidBLEFields(
     scrollState: ScrollState? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
     Text(
         "Bluetooth LE Configuration",
         style = MaterialTheme.typography.titleSmall,
@@ -637,7 +639,7 @@ fun AndroidBLEFields(
         isError = configState.maxConnectionsError != null,
         supportingText = {
             Column {
-                configState.maxConnectionsError?.let { Text(it) }
+                configState.maxConnectionsError?.let { Text(it.resolve(context)) }
                 Text(
                     "Maximum simultaneous BLE peers (recommended: 7)",
                     style = MaterialTheme.typography.bodySmall,

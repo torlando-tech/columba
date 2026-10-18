@@ -672,7 +672,7 @@ class OfflineMapsScreenTest {
                 currentVersion = null,
                 latestVersion = null,
                 isChecking = false,
-                error = "Could not reach update server",
+                error = network.columba.app.viewmodel.UiMessage.Raw("Could not reach update server"),
             )
 
         composeTestRule.setContent {
@@ -698,7 +698,7 @@ class OfflineMapsScreenTest {
                 currentVersion = null,
                 latestVersion = null,
                 isChecking = false,
-                error = "Could not reach update server",
+                error = network.columba.app.viewmodel.UiMessage.Raw("Could not reach update server"),
             )
 
         composeTestRule.setContent {

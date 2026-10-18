@@ -15,6 +15,7 @@ import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.AddressSearchResult
 import network.columba.app.viewmodel.DownloadProgress
 import network.columba.app.viewmodel.RadiusOption
+import network.columba.app.viewmodel.UiMessage
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -287,8 +288,8 @@ class OfflineMapDownloadScreenTest {
     fun locationStep_displaysAddressSearchResults() {
         val searchResults =
             listOf(
-                AddressSearchResult("Dallas, TX, USA", 32.7767, -96.7970),
-                AddressSearchResult("Dallas, OR, USA", 44.9193, -123.3172),
+                AddressSearchResult(UiMessage.Raw("Dallas, TX, USA"), 32.7767, -96.7970),
+                AddressSearchResult(UiMessage.Raw("Dallas, OR, USA"), 44.9193, -123.3172),
             )
 
         composeTestRule.setContent {
@@ -327,7 +328,7 @@ class OfflineMapDownloadScreenTest {
                 addressQuery = "xyz123",
                 addressSearchResults = emptyList(),
                 isSearchingAddress = false,
-                addressSearchError = "No results found",
+                addressSearchError = UiMessage.Raw("No results found"),
                 onLocationSet = { _, _ -> },
                 onCurrentLocationRequest = {},
                 onAddressQueryChange = {},

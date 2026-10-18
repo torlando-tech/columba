@@ -41,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,6 +63,7 @@ fun InterfaceStatsScreen(
     viewModel: InterfaceStatsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
 
     SideEffect {
         Log.d("InterfaceStatsScreen", "🖥️ InterfaceStatsScreen COMPOSING - interface: ${state.interfaceEntity?.name}")
@@ -98,7 +100,7 @@ fun InterfaceStatsScreen(
                 }
                 state.errorMessage != null -> {
                     ErrorContent(
-                        errorMessage = state.errorMessage!!,
+                        errorMessage = state.errorMessage!!.resolve(context),
                         onBack = onNavigateBack,
                     )
                 }

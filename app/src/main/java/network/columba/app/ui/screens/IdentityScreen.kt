@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
 import network.columba.app.data.model.SignalQuality
 import network.columba.app.ui.components.BluetoothPermissionController
 import network.columba.app.ui.components.QrCodeImage
@@ -86,6 +87,7 @@ import network.columba.app.viewmodel.DebugInfo
 import network.columba.app.viewmodel.DebugViewModel
 import network.columba.app.viewmodel.InterfaceInfo
 import network.columba.app.viewmodel.TestAnnounceResult
+import network.columba.app.viewmodel.UiMessage
 import network.columba.app.viewmodel.messageResource
 import kotlinx.coroutines.launch
 
@@ -234,8 +236,9 @@ fun StatusCard(
     isLoading: Boolean = false,
     initialized: Boolean,
     networkStatus: String,
-    error: String?,
+    error: UiMessage?,
 ) {
+    val context = LocalContext.current
     val isConnecting = networkStatus == "CONNECTING"
 
     Card(
@@ -297,7 +300,15 @@ fun StatusCard(
                         "No"
                     },
             )
-            InfoRow(label = "Network Status", value = if (isLoading) "Loading..." else networkStatus)
+            InfoRow(
+                label = "Network Status",
+                value =
+                    if (isLoading) {
+                        "Loading..."
+                    } else {
+                        networkStatus.ifEmpty { stringResource(R.string.debug_network_status_unknown) }
+                    },
+            )
 
             if (isLoading || isConnecting) {
                 Row(
@@ -318,7 +329,7 @@ fun StatusCard(
 
             if (error != null) {
                 Text(
-                    text = "Error: $error",
+                    text = "Error: ${error.resolve(context)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier =

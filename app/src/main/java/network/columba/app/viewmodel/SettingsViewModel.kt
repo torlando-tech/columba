@@ -143,6 +143,10 @@ data class SettingsState(
     // Persistent wake lock (Advanced). True = service holds PARTIAL_WAKE_LOCK
     // for its whole lifetime; false = duty-cycle mode (see LockManager).
     val persistentWakeLockEnabled: Boolean = true,
+    // AutoInterface keepalive pulse (duty-cycle only, python backend).
+    // True = service wakes the CPU ~every 22s so LAN peers keep this device
+    // in their peering tables. Default off until measured.
+    val keepalivePulseEnabled: Boolean = false,
     // RNS shared-instance HOSTING (python backend only; capability-gated in UI).
     //
     // - `shareInstanceHostingEnabled` mirrors the persisted preference — what
@@ -612,6 +616,7 @@ class SettingsViewModel
                             allowVoiceCalls = _state.value.allowVoiceCalls,
                             // Preserve wake-lock state from loadAdvancedSettings()
                             persistentWakeLockEnabled = _state.value.persistentWakeLockEnabled,
+                            keepalivePulseEnabled = _state.value.keepalivePulseEnabled,
                             // Preserve message size limit from loadLocationSharingSettings()
                             incomingMessageSizeLimitKb = _state.value.incomingMessageSizeLimitKb,
                             // Preserve message sorting from loadLocationSharingSettings()
@@ -1882,6 +1887,11 @@ class SettingsViewModel
                     _state.update { it.copy(persistentWakeLockEnabled = enabled) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.keepalivePulseFlow.collect { enabled ->
+                    _state.update { it.copy(keepalivePulseEnabled = enabled) }
+                }
+            }
         }
 
         /**
@@ -1968,6 +1978,34 @@ class SettingsViewModel
                         .startForegroundService(context, wakeLockIntent)
                 }.onFailure { Log.w(TAG, "setWakeLockMode($enabled) service intent failed", it) }
                 Log.d(TAG, "Persistent wake lock ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set the AutoInterface keepalive-pulse setting. Persists (with the
+         * cross-process mirror for cold-start), then pushes
+         * `ACTION_REEVALUATE_LOCKS` so the live `:reticulum` service
+         * re-evaluates the pulse policy immediately (the handler re-reads
+         * the mirrored pref; no extra needed).
+         */
+        fun setKeepalivePulseEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveKeepalivePulse(enabled)
+                _state.update { it.copy(keepalivePulseEnabled = enabled) }
+                runCatching {
+                    val pulseIntent =
+                        android.content.Intent(
+                            context,
+                            network.columba.app.rns.host.ReticulumService::class.java,
+                        ).apply {
+                            action =
+                                network.columba.app.rns.host
+                                    .ReticulumService.ACTION_REEVALUATE_LOCKS
+                        }
+                    androidx.core.content.ContextCompat
+                        .startForegroundService(context, pulseIntent)
+                }.onFailure { Log.w(TAG, "setKeepalivePulse($enabled) service intent failed", it) }
+                Log.d(TAG, "Keepalive pulse ${if (enabled) "enabled" else "disabled"}")
             }
         }
 

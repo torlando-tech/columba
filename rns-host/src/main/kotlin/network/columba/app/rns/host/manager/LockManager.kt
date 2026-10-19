@@ -42,6 +42,16 @@ class LockManager(
          * the CPU suspend within ~1.5 min of the last packet.
          */
         private const val TRAFFIC_WAKE_LOCK_TIMEOUT_MS = 90 * 1000L
+
+        /**
+         * Hold time for the AutoInterface keepalive pulse. One 1.6 s
+         * peer_announce cycle plus slack for the buffered RX drain; the pulse
+         * interval (22 s) + this window stays under AutoInterface's
+         * PEERING_TIMEOUT (22 s x 1.25 Android = 27.5 s) so peers never
+         * drop the device between pulses.
+         */
+        private const val PULSE_WAKE_LOCK_TIMEOUT_MS = 5 * 1000L
+        private const val PULSE_WAKE_LOCK_TAG = "Columba::ReticulumKeepalivePulse"
     }
 
     // Mutex for thread-safe lock operations
@@ -58,6 +68,7 @@ class LockManager(
     private var multicastLock: WifiManager.MulticastLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var trafficWakeLock: PowerManager.WakeLock? = null
+    private var pulseWakeLock: PowerManager.WakeLock? = null
 
     /**
      * Acquire all locks for reliable network operation.
@@ -158,6 +169,36 @@ class LockManager(
     }
 
     /**
+     * Hold the CPU briefly so the AutoInterface keepalive pulse can run
+     * (peer_announce TX + buffered discovery/data RX drain). Independent of
+     * [acquireTrafficWakeLock]: the pulse fires on a fixed cadence whether
+     * or not mesh traffic signaled, and its short window must not be
+     * extended to the traffic lock's 90 s. No-op while the persistent lock
+     * is held — it already covers this.
+     */
+    fun acquireKeepalivePulseWakeLock() {
+        if (!persistentWakeLockEnabled) {
+            synchronized(lockMutex) {
+                if (persistentWakeLockEnabled) return
+                try {
+                    if (pulseWakeLock == null) {
+                        pulseWakeLock =
+                            powerManager
+                                .newWakeLock(
+                                    PowerManager.PARTIAL_WAKE_LOCK,
+                                    PULSE_WAKE_LOCK_TAG,
+                                ).apply { setReferenceCounted(false) }
+                    }
+                    @Suppress("DEPRECATION")
+                    pulseWakeLock?.acquire(PULSE_WAKE_LOCK_TIMEOUT_MS)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error acquiring keepalive pulse wake lock", e)
+                }
+            }
+        }
+    }
+
+    /**
      * Release all held locks.
      * Safe to call multiple times - checks isHeld before releasing.
      * Thread-safe: synchronized on lockMutex.
@@ -168,6 +209,7 @@ class LockManager(
                 releaseMulticastLock()
                 releaseWakeLock()
                 releaseTrafficWakeLock()
+                releasePulseWakeLock()
             } catch (e: Exception) {
                 Log.e(TAG, "Error releasing locks", e)
             }
@@ -184,6 +226,7 @@ class LockManager(
                 multicastHeld = multicastLock?.isHeld == true,
                 wakeHeld = wakeLock?.isHeld == true,
                 trafficHeld = trafficWakeLock?.isHeld == true,
+                pulseHeld = pulseWakeLock?.isHeld == true,
             )
         }
     }
@@ -244,6 +287,14 @@ class LockManager(
         trafficWakeLock = null
     }
 
+    private fun releasePulseWakeLock() {
+        if (pulseWakeLock?.isHeld == true) {
+            pulseWakeLock?.release()
+            Log.i(TAG, "Keepalive pulse wake lock released")
+        }
+        pulseWakeLock = null
+    }
+
     /**
      * Data class representing current lock status.
      */
@@ -251,5 +302,6 @@ class LockManager(
         val multicastHeld: Boolean,
         val wakeHeld: Boolean,
         val trafficHeld: Boolean = false,
+        val pulseHeld: Boolean = false,
     )
 }

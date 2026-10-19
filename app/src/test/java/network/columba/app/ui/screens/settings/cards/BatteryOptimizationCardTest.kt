@@ -153,4 +153,51 @@ class BatteryOptimizationCardTest {
         toggleFor("persistent_wake_lock_toggle").assertDoesNotExist()
         composeTestRule.onNodeWithText("Persistent Wake Lock").assertDoesNotExist()
     }
+
+    @Test
+    fun keepalivePulseRow_shown_whenDutyCycleActive() {
+        composeTestRule.setContent {
+            withDutyCycleCaps {
+                BatteryOptimizationCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
+                    batteryProfile = BatteryProfile.BALANCED,
+                    onBatteryProfileChange = {},
+                    persistentWakeLockEnabled = false,
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("LAN Keepalive Pulse").assertIsDisplayed()
+        toggleFor("keepalive_pulse_toggle").assertIsOff()
+    }
+
+    @Test
+    fun keepalivePulseRow_hidden_whenPersistentLockHeld() {
+        composeTestRule.setContent {
+            withDutyCycleCaps {
+                BatteryOptimizationCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
+                    batteryProfile = BatteryProfile.BALANCED,
+                    onBatteryProfileChange = {},
+                    persistentWakeLockEnabled = true,
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("LAN Keepalive Pulse").assertDoesNotExist()
+    }
+
+    @Test
+    fun keepalivePulseRow_hidden_whenBackendLacksDutyCycle() {
+        composeTestRule.setContent {
+            BatteryOptimizationCard(
+                isExpanded = true,
+                onExpandedChange = {},
+                batteryProfile = BatteryProfile.BALANCED,
+                onBatteryProfileChange = {},
+                persistentWakeLockEnabled = false,
+            )
+        }
+        composeTestRule.onNodeWithText("LAN Keepalive Pulse").assertDoesNotExist()
+    }
 }

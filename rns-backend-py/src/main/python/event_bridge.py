@@ -471,41 +471,92 @@ def install_rns_guards():
 
 TCP_RECONNECT_BACKOFF_BASE = 5.0
 TCP_RECONNECT_BACKOFF_MAX = 300.0
+# A connection that lived at least this long is "healthy": the server's
+# anti-flap logic (BackboneInterface FAST_FLAP_THRESHOLD, default 20 s)
+# only counts shorter ones, and the reconnect loop's own wait is 5 s.
+TCP_CONNECT_HEALTHY_LIFETIME = 30.0
+# base * 2**16 already exceeds the cap; keeping the exponent small also
+# avoids OverflowError converting 2**n to float on marathon outages.
+_TCP_RECONNECT_BACKOFF_MAX_EXPONENT = 16
+
+
+def _tcp_backoff_delay(failures):
+    return min(
+        TCP_RECONNECT_BACKOFF_BASE * (2 ** min(failures - 1, _TCP_RECONNECT_BACKOFF_MAX_EXPONENT)),
+        TCP_RECONNECT_BACKOFF_MAX,
+    )
 
 
 def install_tcp_reconnect_backoff():
-    """Pace failed TCP reconnects so a rejecting server never sees a flood.
+    """Pace TCP reconnects so a blocking server never sees a flood.
 
-    Upstream `TCPClientInterface.reconnect()` retries every `RECONNECT_WAIT`
-    (5 s) forever (`max_reconnect_tries = None`). That is fine while a server
-    is merely down, but a gateway or backbone that enforces anti-flap /
-    rate-limit policy answers repeated attempts with refusals, and a flat
-    5 s retry loop against such a host is exactly the traffic shape its
-    protection punishes — the client digs its own ban in deeper.
+    Upstream `TCPClientInterface.reconnect()` / `BackboneClientInterface
+    .reconnect()` retry every `RECONNECT_WAIT` (5 s) forever
+    (`max_reconnect_tries = None`). Two failure shapes make that flat loop
+    dangerous against `BackboneInterface`'s anti-flap protection (on by
+    default: connections torn down inside 20 s count as flaps, >5 flaps
+    means incoming connections are ignored for 12 h):
 
-    We wrap `connect()` rather than `reconnect()`: every attempt path funnels
-    through it, and it is stable across RNS versions. Consecutive failures
-    per interface add an exponential sleep (5 s doubling, capped at 300 s)
-    on top of the loop's own wait; the first success clears the counter.
-    A healthy reconnect is unaffected — the extra sleep only runs after a
-    failure. Idempotent.
+    1. Refused connects (server down/unreachable): every attempt raises,
+       a flat 5 s loop hammers the host back into service.
+    2. Blocked clients: the server's kernel still accepts the handshake
+       and its Python layer closes the socket immediately, so connect()
+       *succeeds* and only the sub-second connection lifetime reveals the
+       rejection. A 5 s dial-close loop runs forever.
+
+    We wrap `connect()` — every attempt path funnels through it and it is
+    stable across RNS versions. Consecutive refused connects, and connects
+     following a connection that lived under `TCP_CONNECT_HEALTHY_LIFETIME`,
+    each add an exponential sleep (5 s doubling, capped at 300 s) before
+    the dial; a healthy (long-lived) previous connection or a connect
+    after a long outage clears the counters. Idempotent.
     """
     from RNS.Interfaces.TCPInterface import TCPClientInterface
 
-    if getattr(TCPClientInterface.connect, "_columba_backoff", False):
+    classes = [TCPClientInterface]
+    try:
+        from RNS.Interfaces.BackboneInterface import BackboneClientInterface
+
+        classes.append(BackboneClientInterface)
+    except ImportError:
+        pass  # RNS without BackboneInterface: TCPClientInterface only.
+
+    for cls in classes:
+        _install_connect_backoff(cls)
+
+
+def _install_connect_backoff(cls):
+    if getattr(cls.connect, "_columba_backoff", False):
         return
-    original_connect = TCPClientInterface.connect
+    original_connect = cls.connect
 
     def connect(self, *args, **kwargs):
+        if getattr(self, "_columba_last_connect_ok", False):
+            last = getattr(self, "_columba_last_connect_at", None)
+            if last is not None and time.time() - last < TCP_CONNECT_HEALTHY_LIFETIME:
+                # Previous connection died young — against a blocking
+                # backbone this is the accept-then-close shape; connect()
+                # itself will succeed, so pace before dialing.
+                cycles = getattr(self, "_columba_short_cycles", 0) + 1
+                self._columba_short_cycles = cycles
+                delay = _tcp_backoff_delay(cycles)
+                RNS.log(
+                    f"TCP connection to {getattr(self, 'target_ip', '?')}:"
+                    f"{getattr(self, 'target_port', '?')} lived under "
+                    f"{TCP_CONNECT_HEALTHY_LIFETIME:.0f}s ({cycles} in a row); "
+                    f"waiting {delay:.0f}s before redialing",
+                    RNS.LOG_WARNING,
+                )
+                time.sleep(delay)
+            else:
+                self._columba_short_cycles = 0
+                self._columba_connect_failures = 0
         try:
             result = original_connect(self, *args, **kwargs)
         except Exception:
             failures = getattr(self, "_columba_connect_failures", 0) + 1
             self._columba_connect_failures = failures
-            delay = min(
-                TCP_RECONNECT_BACKOFF_BASE * (2 ** (failures - 1)),
-                TCP_RECONNECT_BACKOFF_MAX,
-            )
+            delay = _tcp_backoff_delay(failures)
             RNS.log(
                 f"TCP connect to {getattr(self, 'target_ip', '?')}:"
                 f"{getattr(self, 'target_port', '?')} failed "
@@ -514,11 +565,13 @@ def install_tcp_reconnect_backoff():
             )
             time.sleep(delay)
             raise
+        self._columba_last_connect_ok = True
+        self._columba_last_connect_at = time.time()
         self._columba_connect_failures = 0
         return result
 
     connect._columba_backoff = True
-    TCPClientInterface.connect = connect
+    cls.connect = connect
 
 
 def reset_reticulum_for_restart():

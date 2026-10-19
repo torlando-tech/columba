@@ -146,6 +146,48 @@ class KeepalivePulseManagerTest {
     }
 
     @Test
+    fun `onPulseFired after cancel is a no-op`() {
+        // A disable (or any cancel) racing an alarm intent already in flight
+        // must not restart the pulse chain.
+        manager.reevaluate(dutyCycleActive = true, autoInterfaceEnabled = true)
+        manager.cancel()
+
+        manager.onPulseFired()
+
+        verify(exactly = 0) { lockManager.acquireKeepalivePulseWakeLock() }
+        assertNull(shadowAlarmManager.nextScheduledAlarm)
+    }
+
+    @Test
+    fun `pulseEnabledOverride schedules despite the mirror still reading off`() {
+        // The UI pushes the toggle value before the mirror write has
+        // necessarily hit disk; the intent value wins for this reevaluation.
+        every { settingsAccessor.getKeepalivePulseEnabled() } returns false
+
+        manager.reevaluate(
+            dutyCycleActive = true,
+            autoInterfaceEnabled = true,
+            pulseEnabledOverride = true,
+        )
+
+        assertNotNull(shadowAlarmManager.nextScheduledAlarm)
+    }
+
+    @Test
+    fun `pulseEnabledOverride false cancels despite the mirror reading on`() {
+        manager.reevaluate(dutyCycleActive = true, autoInterfaceEnabled = true)
+        assertNotNull(shadowAlarmManager.nextScheduledAlarm)
+
+        manager.reevaluate(
+            dutyCycleActive = true,
+            autoInterfaceEnabled = true,
+            pulseEnabledOverride = false,
+        )
+
+        assertNull(shadowAlarmManager.nextScheduledAlarm)
+    }
+
+    @Test
     fun `schedule is skipped when exact alarms are not allowed`() {
         ShadowAlarmManager.setCanScheduleExactAlarms(false)
 

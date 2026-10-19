@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtClass
+import org.jetbrains.kotlin.psi.KtConstantExpression
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
 import org.jetbrains.kotlin.psi.KtEnumEntry
 import org.jetbrains.kotlin.psi.KtEscapeStringTemplateEntry
@@ -14,6 +15,7 @@ import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
+import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.psi.KtValueArgumentList
@@ -48,8 +50,27 @@ class UiTextDumper(
 
     private val entries = ArrayList<Entry>()
 
+    /**
+     * Per-function `val name -> skeleton` for locals whose initializer is a
+     * literal or a resolvable resource call. Lets `contentDescription = cd`
+     * where `val cd = stringResource(…)` compare equal to the pre-extraction
+     * literal. Last declaration wins; only the enclosing function's scope is
+     * consulted.
+     */
+    private val localVals = HashMap<KtNamedFunction, HashMap<String, String>>()
+
+    /** Import alias -> owning package (`import a.b.c.R as XyzR`). */
+    private val aliasPkg = HashMap<String, String>()
+
     fun dump(file: KtFile): List<Entry> {
         entries.clear()
+        localVals.clear()
+        aliasPkg.clear()
+        file.importDirectives.forEach { dir ->
+            val fq = dir.importedFqName?.asString() ?: return@forEach
+            val alias = dir.aliasName ?: return@forEach
+            if (fq.endsWith(".R")) aliasPkg[alias] = fq.removeSuffix(".R")
+        }
         file.accept(visitor())
         return entries.toList()
     }
@@ -74,8 +95,11 @@ class UiTextDumper(
                 if (namedSinksActive) {
                     args.forEach { arg ->
                         val name = arg.getArgumentName()?.asName?.identifier ?: return@forEach
-                        if (name in UiSinkTable.namedSinks) {
-                            emit(arg.getArgumentExpression(), "$callee.$name")
+                        // `labelRes = R.string.x` is the resource twin of
+                        // `label = "x"`; normalize so base and head line up.
+                        val sinkName = name.removeSuffix("Res")
+                        if (sinkName in UiSinkTable.namedSinks) {
+                            emit(arg.getArgumentExpression(), "$callee.$sinkName")
                         }
                     }
                 }
@@ -104,10 +128,26 @@ class UiTextDumper(
                 val entryArgs =
                     PsiTreeUtil.findChildOfType(enumEntry, KtValueArgumentList::class.java)?.arguments.orEmpty()
                 entryArgs.forEachIndexed { index, arg ->
-                    val paramName = paramNames.getOrNull(index)
-                    if (paramName != null && paramName in UiSinkTable.namedSinks && arg.getArgumentName() == null) {
-                        emit(arg.getArgumentExpression(), "${enumClass.name}.$paramName")
+                    val paramName = arg.getArgumentName()?.asName?.identifier ?: paramNames.getOrNull(index)
+                    val sinkName = paramName?.removeSuffix("Res")
+                    if (sinkName != null && sinkName in UiSinkTable.namedSinks) {
+                        emit(arg.getArgumentExpression(), "${enumClass.name}.$sinkName")
                     }
+                }
+            }
+
+            override fun visitProperty(property: KtProperty) {
+                super.visitProperty(property)
+                val name = property.name ?: return
+                val fn = property.parents.filterIsInstance<KtNamedFunction>().firstOrNull() ?: return
+                val init = property.initializer ?: return
+                val skeleton =
+                    when {
+                        init is KtStringTemplateExpression -> templateSkeleton(init)
+                        else -> resolveExpr(init)?.singleOrNull()?.takeIf { it.first.isEmpty() }?.second
+                    }
+                if (skeleton != null) {
+                    localVals.getOrPut(fn) { HashMap() }[name] = skeleton
                 }
             }
         }
@@ -121,6 +161,8 @@ class UiTextDumper(
             expression is KtStringTemplateExpression -> add(kind, templateSkeleton(expression))
             expression is KtBinaryExpression && expression.operationToken == KtTokens.PLUS ->
                 add(kind, concatSkeleton(expression))
+            expression is KtNameReferenceExpression ->
+                add(kind, localVal(expression) ?: "{}")
             else -> {
                 val resolved = resolveExpr(expression)
                 if (resolved != null) {
@@ -134,6 +176,11 @@ class UiTextDumper(
             }
         }
     }
+
+    private fun localVal(ref: KtNameReferenceExpression): String? =
+        ref.parents.filterIsInstance<KtNamedFunction>().firstOrNull()?.let { fn ->
+            localVals[fn]?.get(ref.getReferencedName())
+        }
 
     private fun add(
         kind: String,
@@ -162,12 +209,48 @@ class UiTextDumper(
                 .mapNotNull { rRefOf(it.getArgumentExpression()) }
                 .firstOrNull() ?: return null
         val (pkg, type, name) = ref
+        val args =
+            call.valueArguments
+                .filter { rRefOf(it.getArgumentExpression()) == null }
+                .map { argSkeleton(it.getArgumentExpression()) }
         return when {
-            callee in STRING_CALLERS && type == "string" -> resolveRef(pkg, type, name)
-            callee in PLURAL_CALLERS && type == "plurals" -> resolveRef(pkg, type, name)
+            callee in STRING_CALLERS && type == "string" ->
+                res.resolveString(pkg, moduleName, name)?.let { listOf("" to normalizeText(substituteFmt(it, args))) }
+            callee in PLURAL_CALLERS && type == "plurals" ->
+                res.resolvePlurals(pkg, moduleName, name)?.let { quantities ->
+                    listOf("one", "other").mapNotNull { q ->
+                        quantities[q]?.let { "[$q]" to normalizeText(substituteFmt(it, args)) }
+                    }.ifEmpty { null }
+                }
             else -> null
         }
     }
+
+    /**
+     * Substitutes call arguments into a format string the way `String.format`
+     * would, so `Step %1$d: %2$s` called with `(1, "Scan to connect")` dumps
+     * the same skeleton as the pre-extraction literal `"Step 1: Scan to
+     * connect"`. Opaque args stay `{}`; passing args means the string is
+     * formatted, so `%%` collapses.
+     */
+    private fun substituteFmt(fmt: String, args: List<String>): String {
+        if (args.isEmpty()) return fmt
+        var next = 0
+        val out =
+            FORMAT_SPEC_REGEX.replace(fmt) { m ->
+                val pos = m.groupValues[1].removeSuffix("$")
+                if (pos.isNotEmpty()) args.getOrNull(pos.toInt() - 1) ?: "{}" else args.getOrNull(next++) ?: "{}"
+            }
+        return out.replace("%%", "%")
+    }
+
+    private fun argSkeleton(expr: KtExpression?): String =
+        when {
+            expr == null -> "{}"
+            expr is KtStringTemplateExpression -> templateSkeleton(expr)
+            expr is KtConstantExpression -> expr.text
+            else -> resolveExpr(expr)?.singleOrNull()?.takeIf { it.first.isEmpty() }?.second ?: "{}"
+        }
 
     private fun resolveRef(
         pkg: String?,
@@ -186,8 +269,15 @@ class UiTextDumper(
 
     private fun rRefOf(expression: KtExpression?): Triple<String?, String, String>? {
         val text = expression?.text?.trim() ?: return null
-        val match = R_REF_REGEX.matchEntire(text) ?: return null
-        return Triple(match.groupValues[1].ifEmpty { null }, match.groupValues[2], match.groupValues[3])
+        R_REF_REGEX.matchEntire(text)?.let { m ->
+            return Triple(m.groupValues[1].ifEmpty { null }, m.groupValues[2], m.groupValues[3])
+        }
+        // Import alias: `import a.b.c.R as XyzR` makes `XyzR.string.x` resolvable.
+        ALIAS_REF_REGEX.matchEntire(text)?.let { m ->
+            val pkg = aliasPkg[m.groupValues[1]] ?: return null
+            return Triple(pkg, m.groupValues[2], m.groupValues[3])
+        }
+        return null
     }
 
     private fun templateSkeleton(template: KtStringTemplateExpression): String {
@@ -227,16 +317,26 @@ class UiTextDumper(
         val STRING_CALLERS = setOf("stringResource", "getString")
         val PLURAL_CALLERS = setOf("pluralStringResource", "getQuantityString")
         val R_REF_REGEX = Regex("""^(?:(\w[\w.]*)\.)?R\.(string|plurals)\.(\w+)$""")
+        val ALIAS_REF_REGEX = Regex("""^(\w+R)\.(string|plurals)\.(\w+)$""")
     }
 }
 
 /** Normalizes rendered text so literal and resource spellings compare equal. */
-fun normalizeText(raw: String): String =
-    raw.replace(FORMAT_SPEC_REGEX, "{}")
+fun normalizeText(raw: String): String {
+    // A resource that contains a real format specifier is a format string, so
+    // Android collapses `%%` to a literal `%` at render time. Kotlin literals
+    // never contain `%%`, so collapsing here makes `"%1$d%%"` (resource) equal
+    // `"${x}%"` (literal). Strings with no specifier keep `%%` untouched.
+    val collapsed = if (FORMAT_SPEC_REGEX.containsMatchIn(raw)) raw.replace("%%", "%") else raw
+    return collapsed
+        .replace(FORMAT_SPEC_REGEX, "{}")
         .replace(TEMPLATE_PLACEHOLDER_REGEX, "{}")
         .replace(WHITESPACE_REGEX, " ")
         .trim()
+}
 
-private val FORMAT_SPEC_REGEX = Regex("""%(\d+\$)?[-+ 0#]*\d*\.?\d*[dfscx]""")
+// No space in the flag class: `% duty` is prose ("% duty cycle"), not the
+// Java space-flag specifier; allowing space mangled `10% duty` into `{}`.
+private val FORMAT_SPEC_REGEX = Regex("""%(\d+\$)?[-+0#]*\d*\.?\d*[dfscx]""")
 private val TEMPLATE_PLACEHOLDER_REGEX = Regex("""\{[^{}]*}""")
 private val WHITESPACE_REGEX = Regex("""\s+""")

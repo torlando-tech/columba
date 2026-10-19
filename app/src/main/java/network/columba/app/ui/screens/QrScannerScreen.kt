@@ -364,11 +364,12 @@ fun QrScannerScreen(
                     text = {
                         Text(
                             text =
-                                if (existingContactName != null) {
-                                    "This contact is already in your contacts list as \"$existingContactName\"."
-                                } else {
-                                    "This contact is already in your contacts list."
-                                },
+                                existingContactName?.let {
+                                    stringResource(
+                                        R.string.qr_scanner_contact_already_added_body_with_name,
+                                        it,
+                                    )
+                                } ?: stringResource(R.string.qr_scanner_contact_already_added_body),
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center,
                         )

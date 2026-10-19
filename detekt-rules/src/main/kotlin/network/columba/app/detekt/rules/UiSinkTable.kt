@@ -114,5 +114,9 @@ object UiSinkTable {
             "png", "jpg", "jpeg", "webp", "ogg", "opus", "codec2", "rns", "lxmf",
             "mpl", "api", "url", "uri", "pdf", "csv", "sql", "db", "ms", "cpu",
             "ram", "vm", "e", "g", "example", "zip",
+            // Short units/abbreviations in format-only labels: version prefix
+            // ("v$version"), duration chips ("1h", "1hr"), distance ("5 km"),
+            // airtime columns ("% LT"), carrier-sense column header ("CR").
+            "v", "h", "hr", "km", "lt", "cr",
         )
 }

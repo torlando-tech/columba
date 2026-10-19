@@ -450,4 +450,12 @@ class NoHardcodedUiStringRuleTest {
         assertEquals(0, rule.lint("fun screen() { Text(\"OK\") }").size)
         assertEquals(0, rule.lint("fun screen() { Text(\"IP\") }").size)
     }
+
+    @Test
+    fun `version prefix and unit chips are not flagged`() {
+        assertEquals(0, rule.lint("fun screen() { Text(\"v\${version}\") }").size)
+        assertEquals(0, rule.lint("fun screen() { Text(\"1h\") }").size)
+        assertEquals(0, rule.lint("fun screen() { Text(\"1hr\") }").size)
+        assertEquals(0, rule.lint("fun screen() { Text(\"5 km\") }").size)
+    }
 }

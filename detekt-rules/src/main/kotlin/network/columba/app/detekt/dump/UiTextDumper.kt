@@ -54,8 +54,8 @@ class UiTextDumper(
      * Per-function `val name -> skeleton` for locals whose initializer is a
      * literal or a resolvable resource call. Lets `contentDescription = cd`
      * where `val cd = stringResource(…)` compare equal to the pre-extraction
-     * literal. Last declaration wins; only the enclosing function's scope is
-     * consulted.
+     * literal. Conflicting re-declarations of one name (shadowing) poison the
+     * entry to opaque; only the enclosing function's scope is consulted.
      */
     private val localVals = HashMap<KtNamedFunction, HashMap<String, String>>()
 
@@ -147,7 +147,17 @@ class UiTextDumper(
                         else -> resolveExpr(init)?.singleOrNull()?.takeIf { it.first.isEmpty() }?.second
                     }
                 if (skeleton != null) {
-                    localVals.getOrPut(fn) { HashMap() }[name] = skeleton
+                    val scope = localVals.getOrPut(fn) { HashMap() }
+                    val existing = scope[name]
+                    // A second, different binding for the same name (shadowing
+                    // in a nested block) makes the reference ambiguous: resolve
+                    // it opaquely rather than risk comparing against the wrong
+                    // binding and missing a real text change.
+                    scope[name] = if (existing == null || existing == skeleton) {
+                        skeleton
+                    } else {
+                        AMBIGUOUS
+                    }
                 }
             }
         }
@@ -179,7 +189,7 @@ class UiTextDumper(
 
     private fun localVal(ref: KtNameReferenceExpression): String? =
         ref.parents.filterIsInstance<KtNamedFunction>().firstOrNull()?.let { fn ->
-            localVals[fn]?.get(ref.getReferencedName())
+            localVals[fn]?.get(ref.getReferencedName())?.takeIf { it != AMBIGUOUS }
         }
 
     private fun add(
@@ -216,12 +226,17 @@ class UiTextDumper(
         return when {
             callee in STRING_CALLERS && type == "string" ->
                 res.resolveString(pkg, moduleName, name)?.let { listOf("" to normalizeText(substituteFmt(it, args))) }
-            callee in PLURAL_CALLERS && type == "plurals" ->
+            callee in PLURAL_CALLERS && type == "plurals" -> {
+                // `pluralStringResource(id, quantity, *args)` /
+                // `getQuantityString(resId, quantity, *args)`: the quantity
+                // selects the form; it is not a format argument.
+                val pluralArgs = args.drop(1)
                 res.resolvePlurals(pkg, moduleName, name)?.let { quantities ->
                     listOf("one", "other").mapNotNull { q ->
-                        quantities[q]?.let { "[$q]" to normalizeText(substituteFmt(it, args)) }
+                        quantities[q]?.let { "[$q]" to normalizeText(substituteFmt(it, pluralArgs)) }
                     }.ifEmpty { null }
                 }
+            }
             else -> null
         }
     }
@@ -318,6 +333,7 @@ class UiTextDumper(
         val PLURAL_CALLERS = setOf("pluralStringResource", "getQuantityString")
         val R_REF_REGEX = Regex("""^(?:(\w[\w.]*)\.)?R\.(string|plurals)\.(\w+)$""")
         val ALIAS_REF_REGEX = Regex("""^(\w+R)\.(string|plurals)\.(\w+)$""")
+        val AMBIGUOUS = "\u0000"
     }
 }
 

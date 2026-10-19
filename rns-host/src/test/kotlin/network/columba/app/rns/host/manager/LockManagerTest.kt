@@ -62,6 +62,22 @@ class LockManagerTest {
     }
 
     @Test
+    fun `acquireKeepalivePulseWakeLock holds a 5s timed lock in duty-cycle mode`() {
+        lockManager.setPersistentWakeLockEnabled(false)
+
+        lockManager.acquireKeepalivePulseWakeLock()
+
+        verify { wakeLock.acquire(5_000L) }
+    }
+
+    @Test
+    fun `acquireKeepalivePulseWakeLock is a no-op while the persistent lock is held`() {
+        lockManager.acquireKeepalivePulseWakeLock()
+
+        verify(exactly = 0) { wakeLock.acquire(5_000L) }
+    }
+
+    @Test
     fun `applyMulticastLockPolicy false acquires the multicast lock`() {
         every { multicastLock.isHeld } returns true
 

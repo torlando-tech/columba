@@ -956,6 +956,45 @@ class SettingsRepositoryTest {
         }
 
     @Test
+    fun saveKeepalivePulse_dualWritesDataStoreAndMirror() =
+        runTest {
+            repository.saveKeepalivePulse(true)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertTrue(repository.keepalivePulseFlow.first())
+            val mirror =
+                context.getSharedPreferences(
+                    "cross_process_settings",
+                    android.content.Context.MODE_MULTI_PROCESS,
+                )
+            assertTrue(mirror.getBoolean("autointerface_keepalive_pulse", false))
+        }
+
+    @Test
+    fun importAllPreferences_mirrorsKeepalivePulse_forServiceProcess() =
+        runTest {
+            val entries =
+                listOf(
+                    network.columba.app.migration.PreferenceEntry(
+                        key = "autointerface_keepalive_pulse",
+                        type = "boolean",
+                        value = "true",
+                    ),
+                )
+
+            repository.importAllPreferences(entries)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertTrue(repository.keepalivePulseFlow.first())
+            val mirror =
+                context.getSharedPreferences(
+                    "cross_process_settings",
+                    android.content.Context.MODE_MULTI_PROCESS,
+                )
+            assertTrue(mirror.getBoolean("autointerface_keepalive_pulse", false))
+        }
+
+    @Test
     fun importAllPreferences_restoresIntSettings() =
         runTest {
             val entries =

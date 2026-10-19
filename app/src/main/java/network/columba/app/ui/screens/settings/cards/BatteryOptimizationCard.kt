@@ -65,6 +65,8 @@ fun BatteryOptimizationCard(
     onBatteryProfileChange: (BatteryProfile) -> Unit,
     persistentWakeLockEnabled: Boolean = true,
     onPersistentWakeLockToggle: (Boolean) -> Unit = {},
+    keepalivePulseEnabled: Boolean = false,
+    onKeepalivePulseToggle: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -281,6 +283,49 @@ fun BatteryOptimizationCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = contentColor.copy(alpha = 0.7f),
                     )
+                    // The keepalive pulse only exists in duty-cycle mode;
+                    // with the persistent lock the CPU never suspends and
+                    // peering is already continuous.
+                    if (!persistentWakeLockEnabled) {
+                        HorizontalDivider(color = contentColor.copy(alpha = 0.2f))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = null,
+                                    tint = contentColor,
+                                )
+                                Text(
+                                    text = "LAN Keepalive Pulse",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium,
+                                    color = contentColor,
+                                )
+                            }
+                            Switch(
+                                checked = keepalivePulseEnabled,
+                                onCheckedChange = onKeepalivePulseToggle,
+                                modifier = Modifier.testTag("keepalive_pulse_toggle"),
+                            )
+                        }
+                        Text(
+                            text =
+                                "Briefly wake the device every ~22 seconds so local " +
+                                "(AutoInterface) peers keep this device in their peering " +
+                                "table and inbound links complete within one window. " +
+                                "Needs the battery-optimization exemption below, or " +
+                                "Android may delay the pulses. Changes apply immediately.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = contentColor.copy(alpha = 0.7f),
+                        )
+                    }
                     }
                     HorizontalDivider(color = contentColor.copy(alpha = 0.2f))
                     if (isCheckingStatus) {

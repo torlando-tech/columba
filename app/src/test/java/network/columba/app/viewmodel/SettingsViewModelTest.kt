@@ -214,6 +214,7 @@ class SettingsViewModelTest {
         every { settingsRepository.allowCallsFromContactsOnlyFlow } returns flowOf(false)
         every { settingsRepository.allowVoiceCallsFlow } returns flowOf(true)
         every { settingsRepository.persistentWakeLockFlow } returns flowOf(true)
+        every { settingsRepository.keepalivePulseFlow } returns flowOf(false)
         every { settingsRepository.telemetryCollectorEnabledFlow } returns flowOf(false)
         every { settingsRepository.telemetryCollectorAddressFlow } returns flowOf(null)
         every { settingsRepository.telemetrySendIntervalSecondsFlow } returns flowOf(60)
@@ -2017,6 +2018,49 @@ class SettingsViewModelTest {
                 assertFalse("Persisted duty-cycle (false) must stick in state", state.persistentWakeLockEnabled)
 
                 cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `state collectsCollectedKeepalivePulseFromRepository`() =
+        runTest {
+            every { settingsRepository.keepalivePulseFlow } returns MutableStateFlow(true)
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertTrue("Persisted pulse (true) must stick in state", state.keepalivePulseEnabled)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setKeepalivePulseEnabled persistsAndPushesReevaluateIntent`() =
+        runTest {
+            viewModel = createViewModel()
+            coEvery { settingsRepository.saveKeepalivePulse(any()) } just Runs
+
+            io.mockk.mockkStatic(androidx.core.content.ContextCompat::class) {
+                every {
+                    androidx.core.content.ContextCompat
+                        .startForegroundService(any(), any())
+                } just Runs
+
+                viewModel.setKeepalivePulseEnabled(true)
+                advanceUntilIdle()
+
+                coVerify { settingsRepository.saveKeepalivePulse(true) }
+                io.mockk.verify {
+                    androidx.core.content.ContextCompat
+                        .startForegroundService(context, any())
+                }
+                assertTrue(viewModel.state.value.keepalivePulseEnabled)
             }
         }
 

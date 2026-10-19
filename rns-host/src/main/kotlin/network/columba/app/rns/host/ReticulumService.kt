@@ -55,6 +55,7 @@ class ReticulumService : Service() {
         // Re-run the wake/multicast lock policy after interface configs change
         // (AutoInterface enable toggles the service-held MulticastLock).
         const val ACTION_REEVALUATE_LOCKS = "network.columba.app.service.REEVALUATE_LOCKS"
+        const val ACTION_KEEPALIVE_PULSE = "network.columba.app.service.KEEPALIVE_PULSE"
         const val EXTRA_NETWORK_STATUS = "network_status"
         const val EXTRA_PERSISTENT_WAKE_LOCK = "persistent_wake_lock"
         const val EXTRA_AUTO_INTERFACE_ENABLED = "auto_interface_enabled"
@@ -383,6 +384,7 @@ class ReticulumService : Service() {
             }
             ACTION_SET_WAKE_LOCK_MODE -> handleSetWakeLockMode(intent)
             ACTION_REEVALUATE_LOCKS -> handleReevaluateLocks(intent)
+            ACTION_KEEPALIVE_PULSE -> managers.keepalivePulse.onPulseFired()
         }
 
         return START_STICKY
@@ -499,6 +501,10 @@ class ReticulumService : Service() {
             Log.i(TAG, "Duty-cycle wake-lock mode (persistent lock off)")
         }
         managers.lockManager.setPersistentWakeLockEnabled(persistent)
+        managers.keepalivePulse.reevaluate(
+            dutyCycleActive = !persistent,
+            autoInterfaceEnabled = autoInterfaceOverride ?: autoInterfaceEnabled(),
+        )
         Log.d(TAG, "Wake locks acquired in onCreate")
 
         rnsBackend.setTrafficActivityCallback {
@@ -543,6 +549,10 @@ class ReticulumService : Service() {
                 BackendCapabilities.Support.FULL
         val enabled = !dutyCycleSupported || requested
         managers.lockManager.setPersistentWakeLockEnabled(enabled)
+        managers.keepalivePulse.reevaluate(
+            dutyCycleActive = !enabled,
+            autoInterfaceEnabled = autoInterfaceEnabled(),
+        )
         Log.i(
             TAG,
             "Persistent wake lock ${if (enabled) "enabled" else "disabled (duty-cycle mode)"} via UI toggle",
@@ -609,6 +619,7 @@ class ReticulumService : Service() {
         if (::managers.isInitialized) {
             managers.notificationManager.resetSyncNotification()
             managers.networkChangeManager.stop()
+            managers.keepalivePulse.cancel()
             managers.lockManager.releaseAll()
             // Safety net: stop BLE if not already stopped by ACTION_STOP
             managers.bleCoordinator.stopImmediate()

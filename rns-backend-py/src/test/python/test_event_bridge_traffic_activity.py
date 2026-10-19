@@ -66,6 +66,19 @@ class TrafficActivityHookTests(unittest.TestCase):
         self.module._traffic_activity_callback = None
         self.module._traffic_activity_last_emit = 0.0
         self.signals = []
+
+        class TCPClientInterface:
+            pass
+
+        class AutoInterface:
+            pass
+
+        class ColumbaRNodeInterface:
+            pass
+
+        self.tcp_iface = TCPClientInterface()
+        self.auto_iface = AutoInterface()
+        self.rnode_iface = ColumbaRNodeInterface()
         self.callback = types.SimpleNamespace(
             onEvent=lambda payload: self.signals.append(payload)
         )
@@ -124,6 +137,26 @@ class TrafficActivityHookTests(unittest.TestCase):
 
         self.assertEqual([b"packet"], self.transport.incoming)
         self.assertEqual([], self.signals)
+
+    def test_buffered_interface_rx_does_not_signal(self):
+        """TCP/multicast RX is kernel-buffered and retransmitted; holding the
+        CPU for it is what kept the lock pinned 24/7 on a busy home network."""
+        self.module.install_traffic_activity_callback(self.callback)
+
+        self.transport.inbound(b"tcp-packet", self.tcp_iface)
+        self.transport.inbound(b"mcast-packet", self.auto_iface)
+
+        self.assertEqual([b"tcp-packet", b"mcast-packet"], self.transport.incoming)
+        self.assertEqual([], self.signals)
+
+    def test_wireless_interface_rx_signals(self):
+        """RNode/BLE UART buffers are tiny; RX must keep the CPU awake."""
+        self.module.install_traffic_activity_callback(self.callback)
+
+        self.transport.inbound(b"rnode-packet", self.rnode_iface)
+
+        self.assertEqual([b"rnode-packet"], self.transport.incoming)
+        self.assertEqual(1, len(self.signals))
 
     def test_install_is_idempotent(self):
         self.module.install_traffic_activity_callback(self.callback)

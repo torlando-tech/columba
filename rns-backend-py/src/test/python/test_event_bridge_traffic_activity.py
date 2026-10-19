@@ -73,11 +73,15 @@ class TrafficActivityHookTests(unittest.TestCase):
         class AutoInterface:
             pass
 
+        class AutoInterfacePeer:
+            pass
+
         class ColumbaRNodeInterface:
             pass
 
         self.tcp_iface = TCPClientInterface()
         self.auto_iface = AutoInterface()
+        self.auto_peer_iface = AutoInterfacePeer()
         self.rnode_iface = ColumbaRNodeInterface()
         self.callback = types.SimpleNamespace(
             onEvent=lambda payload: self.signals.append(payload)
@@ -139,14 +143,20 @@ class TrafficActivityHookTests(unittest.TestCase):
         self.assertEqual([], self.signals)
 
     def test_buffered_interface_rx_does_not_signal(self):
-        """TCP/multicast RX is kernel-buffered and retransmitted; holding the
-        CPU for it is what kept the lock pinned 24/7 on a busy home network."""
+        """TCP/LAN-UDP RX is kernel-buffered and retransmitted; holding the
+        CPU for it is what kept the lock pinned 24/7 on a busy home network.
+        AutoInterface data RX arrives as the spawned AutoInterfacePeer (the
+        parent delegates), so that is the type that must be filtered."""
         self.module.install_traffic_activity_callback(self.callback)
 
         self.transport.inbound(b"tcp-packet", self.tcp_iface)
         self.transport.inbound(b"mcast-packet", self.auto_iface)
+        self.transport.inbound(b"lan-data-packet", self.auto_peer_iface)
 
-        self.assertEqual([b"tcp-packet", b"mcast-packet"], self.transport.incoming)
+        self.assertEqual(
+            [b"tcp-packet", b"mcast-packet", b"lan-data-packet"],
+            self.transport.incoming,
+        )
         self.assertEqual([], self.signals)
 
     def test_wireless_interface_rx_signals(self):

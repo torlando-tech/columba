@@ -66,7 +66,7 @@ class ResResolver(root: File) {
             valueFiles(module).forEach { xml ->
                 val root = fileRoot(xml) ?: return@forEach
                 children(root, "string").forEach { el ->
-                    map[el.getAttribute("name")] = androidUnescape(el.textContent)
+                    map[el.getAttribute("name")] = valueOf(el.textContent)
                 }
             }
             map
@@ -80,7 +80,7 @@ class ResResolver(root: File) {
                 children(root, "plurals").forEach { pl ->
                     val quantities = HashMap<String, String>()
                     children(pl, "item").forEach { item ->
-                        quantities[item.getAttribute("quantity")] = androidUnescape(item.textContent)
+                        quantities[item.getAttribute("quantity")] = valueOf(item.textContent)
                     }
                     map[pl.getAttribute("name")] = quantities
                 }
@@ -117,8 +117,38 @@ class ResResolver(root: File) {
         }
         return out
     }
-    /** Undo Android resource escapes (`\\'`, `\\"`, `\\\\`, `\\n`, `\\@`, …). */
-    private fun androidUnescape(text: String): String = ESCAPE_REGEX.replace(text) { it.groupValues[1] }
+    /**
+     * aapt value semantics: a value wrapped in `"…"` or `'…'` has its quotes
+     * stripped (the quotes only protect whitespace); unquoted values are
+     * trimmed. Then escapes are undone.
+     */
+    private fun valueOf(raw: String): String {
+        val trimmed = raw.trim()
+        val unwrapped =
+            if (trimmed.length >= 2 &&
+                ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) ||
+                    (trimmed.startsWith("'") && trimmed.endsWith("'")))
+            ) {
+                trimmed.substring(1, trimmed.length - 1)
+            } else {
+                trimmed
+            }
+        return androidUnescape(unwrapped)
+    }
+
+    /**
+     * Undo Android resource escapes (`\\'`, `\\"`, `\\\\`, `\\@`, …). `\\n`,
+     * `\\t`, `\\r` become the control characters aapt produces at runtime.
+     */
+    private fun androidUnescape(text: String): String =
+        ESCAPE_REGEX.replace(text) { m ->
+            when (m.groupValues[1]) {
+                "n" -> "\n"
+                "t" -> "\t"
+                "r" -> "\r"
+                else -> m.groupValues[1]
+            }
+        }
 
     private companion object {
         val NAMESPACE_REGEX = Regex("""namespace\s*=\s*"([^"]+)"""")

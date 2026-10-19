@@ -137,4 +137,116 @@ class UiTextDumperTest {
         assertEquals(listOf(0, 1, 2), entries.map { it.ordinal })
         assertEquals(listOf("First", "Second", "Third"), entries.map { it.skeleton })
     }
+
+    @Test
+    fun `backslash-n resource matches literal newline`() {
+        module("a", "com.test.a", """<string name="two">Line one\nLine two</string>""")
+        val literal = dump("a", "fun s() { Text(\"Line one\\nLine two\") }")
+        val resource = dump("a", "fun s() { Text(stringResource(R.string.two)) }")
+        assertEquals(listOf("Line one Line two"), literal.map { it.skeleton })
+        assertEquals(literal.map { it.skeleton }, resource.map { it.skeleton })
+    }
+
+    @Test
+    fun `double percent collapses only in format strings`() {
+        module(
+            "a",
+            "com.test.a",
+            """<string name="pct">Importing %1${'$'}d%%</string><string name="lit">Short-term (%)</string>""",
+        )
+        val fmt = dump("a", "fun s() { Text(stringResource(R.string.pct, n)) }")
+        assertEquals(listOf("Importing {}%"), fmt.map { it.skeleton })
+        val lit = dump("a", "fun s() { Text(stringResource(R.string.lit)) }")
+        assertEquals(listOf("Short-term (%)"), lit.map { it.skeleton })
+    }
+
+    @Test
+    fun `quoted resource strips wrapping quotes`() {
+        module("a", "com.test.a", """<string name="f">"Filtering: "</string>""")
+        val literal = dump("a", "fun s() { Text(\"Filtering: \") }")
+        val resource = dump("a", "fun s() { Text(stringResource(R.string.f)) }")
+        assertEquals(literal.map { it.skeleton }, resource.map { it.skeleton })
+    }
+
+    @Test
+    fun `Res-suffixed enum param normalizes to base sink`() {
+        module("a", "com.test.a", """<string name="band">902-928 MHz ISM band</string>""")
+        val code =
+            """
+            enum class FrequencyRegion(val descriptionRes: Int) {
+                US(R.string.band)
+            }
+            """.trimIndent()
+        val entries = dump("a", code)
+        assertEquals(listOf("FrequencyRegion.description"), entries.map { it.kind })
+        assertEquals(listOf("902-928 MHz ISM band"), entries.map { it.skeleton })
+    }
+
+    @Test
+    fun `local val holding a resource resolves at the sink`() {
+        module("a", "com.test.a", """<string name="send">Send message</string>""")
+        val code =
+            """
+            fun s() {
+                val cd = stringResource(R.string.send)
+                Icon(painter, contentDescription = cd)
+            }
+            """.trimIndent()
+        val entries = dump("a", code)
+        assertEquals(listOf("Send message"), entries.map { it.skeleton })
+    }
+
+    @Test
+    fun `local val does not leak across functions`() {
+        module("a", "com.test.a", """<string name="send">Send message</string>""")
+        val code =
+            """
+            fun a() { val cd = stringResource(R.string.send) }
+            fun b() { Icon(painter, contentDescription = cd) }
+            """.trimIndent()
+        val entries = dump("a", code)
+        assertEquals(listOf("{}"), entries.map { it.skeleton })
+    }
+
+    @Test
+    fun `import-aliased cross-module R resolves`() {
+        module("a", "com.test.a")
+        module("host", "com.test.host", """<string name="done">Flashing complete!</string>""")
+        val code =
+            """
+            import com.test.host.R as HostR
+            fun s() { Text(stringResource(HostR.string.done)) }
+            """.trimIndent()
+        assertEquals(listOf("Flashing complete!"), dump("a", code).map { it.skeleton })
+    }
+
+    @Test
+    fun `literal format args substitute into resource text`() {
+        module("a", "com.test.a", """<string name="step">Step %1${'$'}d: %2${'$'}s</string>""")
+        val code = "fun s() { Text(stringResource(R.string.step, 1, \"Scan to connect\")) }"
+        assertEquals(listOf("Step 1: Scan to connect"), dump("a", code).map { it.skeleton })
+    }
+
+    @Test
+    fun `opaque format arg stays placeholder and percent collapses`() {
+        module("a", "com.test.a", """<string name="n">Importing %1${'$'}d%%</string>""")
+        val code = "fun s(n: Int) { Text(stringResource(R.string.n, n)) }"
+        assertEquals(listOf("Importing {}%"), dump("a", code).map { it.skeleton })
+    }
+
+    @Test
+    fun `swapped format args are detected`() {
+        module("a", "com.test.a", """<string name="step">Step %1${'$'}d: %2${'$'}s</string>""")
+        val swapped = dump("a", "fun s() { Text(stringResource(R.string.step, 2, \"Wrong\")) }")
+        assertEquals(listOf("Step 2: Wrong"), swapped.map { it.skeleton })
+    }
+
+    @Test
+    fun `percent-space-word prose is not a format specifier`() {
+        module("a", "com.test.a", """<string name="duty">%1${'$'}d%% duty</string>""")
+        val literal = dump("a", "fun s(d: Int) { Text(\"${'$'}{d}% duty\") }")
+        val resource = dump("a", "fun s(d: Int) { Text(stringResource(R.string.duty, d)) }")
+        assertEquals(listOf("{}% duty"), literal.map { it.skeleton })
+        assertEquals(literal.map { it.skeleton }, resource.map { it.skeleton })
+    }
 }

@@ -241,6 +241,15 @@ class PythonRnsRuntime(
 
     private val running = AtomicBoolean(false)
 
+    /**
+     * The config the running stack was actually started with, with the delivery
+     * identity key scrubbed (it never leaves the native side, so a later `start()`
+     * carrying fresh key bytes for an otherwise identical config must not read as
+     * a mismatch). Used only to classify the already-running log line below.
+     */
+    @Volatile
+    private var startedConfig: ReticulumConfig? = null
+
     /** Guards [applyAndroidEnvPatches] so it runs exactly once per process. */
     private val envPatched = AtomicBoolean(false)
 
@@ -283,6 +292,25 @@ class PythonRnsRuntime(
     }
 
     /**
+     * Log the ignored `start()`. A config that differs from the applied one means
+     * the caller's settings are silently dropped — the stack keeps the config it
+     * first started with, so anything derived from the new config (interfaces,
+     * transport flags, display name) will not match what is running.
+     */
+    private fun logAlreadyRunning(config: ReticulumConfig) {
+        val mismatch = startedConfig?.let { config.copy(deliveryIdentityKey = null) != it } == true
+        if (mismatch) {
+            Log.w(
+                TAG,
+                "start() called while already running with a DIFFERENT config — " +
+                    "ignoring; the running stack keeps the previously applied config",
+            )
+        } else {
+            Log.w(TAG, "start() called while already running — ignoring")
+        }
+    }
+
+    /**
      * Bring the Python RNS/LXMF stack up: write the RNS `config` file from
      * [config], construct `Reticulum(configdir)`, load the delivery identity,
      * construct the `LXMRouter`, and register the delivery destination.
@@ -293,7 +321,7 @@ class PythonRnsRuntime(
     @Synchronized
     fun start(config: ReticulumConfig) {
         if (running.get()) {
-            Log.w(TAG, "start() called while already running — ignoring")
+            logAlreadyRunning(config)
             return
         }
         ensureStarted()
@@ -444,7 +472,7 @@ class PythonRnsRuntime(
         // Ported from release/v0.10.x's `PythonWrapperManager.setStampGeneratorCallback`.
         registerExternalStampGenerator()
 
-        running.set(true)
+        startedConfig = config.copy(deliveryIdentityKey = null).also { running.set(true) }
         Log.i(TAG, "Python RNS/LXMF stack started")
     }
 

@@ -131,9 +131,9 @@ columba:
   NoHardcodedUiString:
     active: true
     excludes: ['**/test/**', '**/androidTest/**']
-    # Ratified DO-NOT-TRANSLATE literals (exact source text, incl. quotes) from
-    # .scratch/i18n-string-extraction/inventory/final-dnt-checklist.md and the
-    # ticket-03 verdicts. This config allowlist is the sanctioned zero-tolerance
+    # Ratified DO-NOT-TRANSLATE literals (exact source text, incl. quotes) per
+    # the DNT policy in docs/translation-workflow.md. This config allowlist is
+    # the sanctioned zero-tolerance
     # mechanism: the detekt baseline and the @Suppress count are both ratcheted
     # to zero, so DNT literals live HERE, not in code. Each entry cites its DNT
     # category. Adding an entry requires the same ratification as the checklist.

@@ -4,11 +4,11 @@ package network.columba.app.detekt.rules
  * Single source of truth for "which call arguments render user-facing text".
  *
  * Shared by [NoHardcodedUiString] (enforcement) and the sink-equivalence dumper
- * (`.scratch/i18n-string-extraction` ticket 23) so the rule and the before/after
+ * (CI job `ui-text-equivalence`) so the rule and the before/after
  * proof can never drift apart.
  *
- * Derived from the exhaustive 2026-10-17 inventory
- * (`.scratch/i18n-string-extraction/inventory/`). When a new label-taking helper
+ * Derived from the exhaustive 2026-10-17 UI-text inventory; see
+ * `docs/translation-workflow.md`. When a new label-taking helper
  * composable is added, add it here — the equivalence gate and the rule both follow.
  */
 object UiSinkTable {

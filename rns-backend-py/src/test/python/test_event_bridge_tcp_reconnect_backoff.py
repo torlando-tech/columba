@@ -177,6 +177,18 @@ class TcpReconnectBackoffTests(unittest.TestCase):
         self.assertTrue(self.tcp_class.connect(inst))
         self.assertEqual([], self.sleeps)
 
+    def test_outage_after_healthy_connection_backs_off(self):
+        # A long-lived connection drops and the server is then unreachable:
+        # the previous-success state must be judged once, so the retry
+        # episode accumulates toward the cap instead of resetting per try.
+        inst = make_instance([True] + [False] * 10)
+        self.assertTrue(self.tcp_class.connect(inst))
+        self.clock.advance(3600.0)
+        for _ in range(4):
+            with self.assertRaises(OSError):
+                self.tcp_class.connect(inst)
+        self.assertEqual([5.0, 10.0, 20.0, 40.0], self.sleeps)
+
     def test_counters_are_per_interface(self):
         a = make_instance([False])
         b = make_instance([False])

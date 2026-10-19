@@ -532,6 +532,10 @@ def _install_connect_backoff(cls):
 
     def connect(self, *args, **kwargs):
         if getattr(self, "_columba_last_connect_ok", False):
+            # Consume the previous-success state: the last connection's
+            # lifetime is judged exactly once, so failures in the retry
+            # episode that follows accumulate instead of re-resetting.
+            self._columba_last_connect_ok = False
             last = getattr(self, "_columba_last_connect_at", None)
             if last is not None and time.time() - last < TCP_CONNECT_HEALTHY_LIFETIME:
                 # Previous connection died young — against a blocking

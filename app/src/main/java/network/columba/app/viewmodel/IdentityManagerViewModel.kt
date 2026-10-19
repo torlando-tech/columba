@@ -201,7 +201,10 @@ class IdentityManagerViewModel
                                     Log.e(TAG, "Failed to restart service", e)
                                     _uiState.value =
                                         IdentityManagerUiState.Error(
-                                            UiMessage.Text(R.string.identity_switch_restart_failed, listOf(e.message ?: "null")),
+                                            UiMessage.Text(
+                                                R.string.identity_switch_restart_failed,
+                                                listOf(e.toUiMessage(R.string.identity_switch_failed)),
+                                            ),
                                         )
                                 }
                         }.onFailure { e ->

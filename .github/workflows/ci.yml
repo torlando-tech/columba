@@ -166,19 +166,32 @@ jobs:
         # carry the `string-changes-expected` label; reviewers approve the
         # printed diff.
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.number }}
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
+          set -euo pipefail
           if echo "$LABELS" | grep -q 'string-changes-expected'; then
             echo "Label 'string-changes-expected' present — string changes approved."
             exit 0
           fi
-          git fetch -q origin "$BASE_SHA"
+          # Fetch the PR merge ref (depth 2 so both parents are present). The
+          # default shallow checkout only has the merge commit, so neither the
+          # base nor the head SHA is otherwise reachable; fetching the merge ref
+          # works for both same-repo and fork PRs.
+          git fetch -q origin "refs/pull/${PR_NUMBER}/merge" --depth=2
+          MERGE_SHA="$(git rev-parse FETCH_HEAD)"
+          BASE_SHA="$(git rev-parse FETCH_HEAD^1)"
           git worktree add -q ../base "$BASE_SHA"
-          mapfile -t FILES < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- '*.kt' | grep -vE '(^|/)(test|androidTest)/' || true)
+          # Resource value edits change rendered text even when no Kotlin file
+          # changes, so when any values*/ resource is touched, compare every
+          # main-source Kotlin file rather than only the changed ones.
+          if git diff --name-only "$BASE_SHA" "$MERGE_SHA" -- '*/src/main/res/values*/*' | grep -q .; then
+            mapfile -t FILES < <(git ls-files -- '*/src/main/*.kt' | grep -vE '(^|/)(test|androidTest)/')
+          else
+            mapfile -t FILES < <(git diff --name-only "$BASE_SHA" "$MERGE_SHA" -- '*.kt' | grep -vE '(^|/)(test|androidTest)/')
+          fi
           if [ "${#FILES[@]}" -eq 0 ]; then
-            echo "No changed main-source .kt files."
+            echo "No main-source .kt files to compare."
             exit 0
           fi
           IFS=,

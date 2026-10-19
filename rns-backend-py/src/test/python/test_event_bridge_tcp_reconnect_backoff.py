@@ -1,9 +1,12 @@
 """Tests for event_bridge.install_tcp_reconnect_backoff.
 
-A TCP gateway enforcing anti-flap policy refuses repeated connection
-attempts; upstream RNS retries every 5 s forever, which is the traffic
-shape such a host punishes. The guard paces failed connects with an
-exponential backoff and clears it on success.
+BackboneInterface's anti-flap protection (on by default: connections
+torn down inside 20 s count as flaps, >5 flaps ignores the client for
+12 h) accepts the TCP handshake and closes the socket immediately, so a
+blocked client's connect() *succeeds* and only the short connection
+lifetime reveals the rejection. Upstream retries every 5 s forever in
+both shapes. The guard paces refused connects and short-lived
+connection cycles with an exponential backoff.
 """
 
 import importlib.util
@@ -15,6 +18,17 @@ import unittest
 EVENT_BRIDGE_PATH = os.path.join(
     os.path.dirname(__file__), "..", "..", "main", "python", "event_bridge.py"
 )
+
+
+class FakeClock:
+    def __init__(self):
+        self.now = 1000.0
+
+    def time(self):
+        return self.now
+
+    def advance(self, seconds):
+        self.now += seconds
 
 
 def make_instance(outcomes):
@@ -38,37 +52,54 @@ def make_instance(outcomes):
     return inst
 
 
+def _fake_rns_and_lxmf():
+    rns = types.ModuleType("RNS")
+    rns.log = staticmethod(lambda *a, **k: None)
+    rns.LOG_DEBUG = 5
+    rns.LOG_INFO = 6
+    rns.LOG_WARNING = 7
+    rns.LOG_ERROR = 3
+    interfaces = types.ModuleType("RNS.Interfaces")
+
+    tcp_module = types.ModuleType("RNS.Interfaces.TCPInterface")
+
+    class TCPClientInterface:
+        @staticmethod
+        def connect(self, *args, **kwargs):
+            return self.scripted(*args, **kwargs)
+
+    tcp_module.TCPClientInterface = TCPClientInterface
+
+    backbone_module = types.ModuleType("RNS.Interfaces.BackboneInterface")
+
+    class BackboneClientInterface:
+        @staticmethod
+        def connect(self, *args, **kwargs):
+            return self.scripted(*args, **kwargs)
+
+    backbone_module.BackboneClientInterface = BackboneClientInterface
+
+    rns.Interfaces = interfaces
+    sys.modules["RNS"] = rns
+    sys.modules["RNS.Interfaces"] = interfaces
+    sys.modules["RNS.Interfaces.TCPInterface"] = tcp_module
+    sys.modules["RNS.Interfaces.BackboneInterface"] = backbone_module
+
+    lxmf = types.ModuleType("LXMF")
+    lxmf.LXMFMessage = type("LXMFMessage", (), {})
+    lxmf.LXMFIdentity = type("LXMFIdentity", (), {})
+    lxmf.LXMFDelivery = type("LXMFDelivery", (), {})
+    lxmf.LXMFLink = type("LXMFLink", (), {})
+    sys.modules["LXMF"] = lxmf
+    return TCPClientInterface, BackboneClientInterface
+
+
 class TcpReconnectBackoffTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        rns = types.ModuleType("RNS")
-        rns.log = staticmethod(lambda *a, **k: None)
-        rns.LOG_DEBUG = 5
-        rns.LOG_INFO = 6
-        rns.LOG_WARNING = 7
-        rns.LOG_ERROR = 3
-        interfaces = types.ModuleType("RNS.Interfaces")
-        tcp_module = types.ModuleType("RNS.Interfaces.TCPInterface")
-
-        class TCPClientInterface:
-            @staticmethod
-            def connect(self, *args, **kwargs):
-                return self.scripted(*args, **kwargs)
-
-        tcp_module.TCPClientInterface = TCPClientInterface
-        rns.Interfaces = interfaces
-        sys.modules["RNS"] = rns
-        sys.modules["RNS.Interfaces"] = interfaces
-        sys.modules["RNS.Interfaces.TCPInterface"] = tcp_module
-        cls.tcp_class = TCPClientInterface
-        cls.original_connect = TCPClientInterface.connect
-
-        lxmf = types.ModuleType("LXMF")
-        lxmf.LXMFMessage = type("LXMFMessage", (), {})
-        lxmf.LXMFIdentity = type("LXMFIdentity", (), {})
-        lxmf.LXMFDelivery = type("LXMFDelivery", (), {})
-        lxmf.LXMFLink = type("LXMFLink", (), {})
-        sys.modules["LXMF"] = lxmf
+        cls.tcp_class, cls.backbone_class = _fake_rns_and_lxmf()
+        cls.original_tcp_connect = cls.tcp_class.connect
+        cls.original_backbone_connect = cls.backbone_class.connect
 
         spec = importlib.util.spec_from_file_location(
             "event_bridge_tcp_backoff_test", EVENT_BRIDGE_PATH
@@ -79,13 +110,18 @@ class TcpReconnectBackoffTests(unittest.TestCase):
 
     def setUp(self):
         self.sleeps = []
+        self.clock = FakeClock()
         self._real_sleep = self.module.time.sleep
+        self._real_time = self.module.time.time
         self.module.time.sleep = lambda seconds: self.sleeps.append(seconds)
+        self.module.time.time = self.clock.time
         self.module.install_tcp_reconnect_backoff()
 
     def tearDown(self):
         self.module.time.sleep = self._real_sleep
-        type(self).tcp_class.connect = type(self).original_connect
+        self.module.time.time = self._real_time
+        type(self).tcp_class.connect = type(self).original_tcp_connect
+        type(self).backbone_class.connect = type(self).original_backbone_connect
 
     def test_failures_back_off_exponentially_and_reraise(self):
         inst = make_instance([False] * 6)
@@ -102,16 +138,44 @@ class TcpReconnectBackoffTests(unittest.TestCase):
         self.assertTrue(all(d <= 300.0 for d in self.sleeps))
         self.assertEqual(300.0, self.sleeps[-1])
 
-    def test_success_clears_failure_counter(self):
+    def test_marathon_outage_does_not_overflow(self):
+        # 2**n overflows float past n=1023; the exponent cap must keep the
+        # delay arithmetic safe for arbitrarily long failure streaks.
+        inst = make_instance([False] * 2000)
+        for _ in range(1100):
+            with self.assertRaises(OSError):
+                self.tcp_class.connect(inst)
+        self.assertEqual(300.0, self.sleeps[-1])
+
+    def test_healthy_gap_clears_failure_counter(self):
         inst = make_instance([False, False, True, False])
         for _ in range(2):
             with self.assertRaises(OSError):
                 self.tcp_class.connect(inst)
         self.assertTrue(self.tcp_class.connect(inst))
-        # Counter reset: the next failure starts the ladder again at base.
+        # The connection lives past the healthy threshold, then dies; the
+        # next failure starts the ladder again at base.
+        self.clock.advance(self.module.TCP_CONNECT_HEALTHY_LIFETIME + 1)
         with self.assertRaises(OSError):
             self.tcp_class.connect(inst)
         self.assertEqual([5.0, 10.0, 5.0], self.sleeps)
+
+    def test_short_lived_cycles_are_paced_without_exceptions(self):
+        # Blocking-backbone shape: connect() always succeeds (kernel
+        # accept) but the connection dies immediately; only the short
+        # lifetime may slow the redial.
+        inst = make_instance([True])
+        for _ in range(4):
+            self.assertTrue(self.tcp_class.connect(inst))
+            self.clock.advance(5.0)  # loop wait + instant close
+        self.assertEqual([5.0, 10.0, 20.0], self.sleeps)
+
+    def test_long_lived_connection_redials_immediately(self):
+        inst = make_instance([True])
+        self.assertTrue(self.tcp_class.connect(inst))
+        self.clock.advance(3600.0)  # a night of sleep, then a real drop
+        self.assertTrue(self.tcp_class.connect(inst))
+        self.assertEqual([], self.sleeps)
 
     def test_counters_are_per_interface(self):
         a = make_instance([False])
@@ -123,6 +187,13 @@ class TcpReconnectBackoffTests(unittest.TestCase):
             self.tcp_class.connect(b)
         # b's first failure pays the base wait, unaffected by a's ladder.
         self.assertEqual([5.0, 10.0, 5.0], self.sleeps)
+
+    def test_backbone_client_is_patched_too(self):
+        inst = make_instance([False, False, False])
+        for _ in range(3):
+            with self.assertRaises(OSError):
+                self.backbone_class.connect(inst)
+        self.assertEqual([5.0, 10.0, 20.0], self.sleeps)
 
     def test_install_is_idempotent(self):
         wrapped = self.tcp_class.connect

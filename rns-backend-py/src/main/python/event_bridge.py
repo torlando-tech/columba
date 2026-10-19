@@ -469,6 +469,58 @@ def install_rns_guards():
     AutoInterface.final_init = guarded_final_init
 
 
+TCP_RECONNECT_BACKOFF_BASE = 5.0
+TCP_RECONNECT_BACKOFF_MAX = 300.0
+
+
+def install_tcp_reconnect_backoff():
+    """Pace failed TCP reconnects so a rejecting server never sees a flood.
+
+    Upstream `TCPClientInterface.reconnect()` retries every `RECONNECT_WAIT`
+    (5 s) forever (`max_reconnect_tries = None`). That is fine while a server
+    is merely down, but a gateway or backbone that enforces anti-flap /
+    rate-limit policy answers repeated attempts with refusals, and a flat
+    5 s retry loop against such a host is exactly the traffic shape its
+    protection punishes — the client digs its own ban in deeper.
+
+    We wrap `connect()` rather than `reconnect()`: every attempt path funnels
+    through it, and it is stable across RNS versions. Consecutive failures
+    per interface add an exponential sleep (5 s doubling, capped at 300 s)
+    on top of the loop's own wait; the first success clears the counter.
+    A healthy reconnect is unaffected — the extra sleep only runs after a
+    failure. Idempotent.
+    """
+    from RNS.Interfaces.TCPInterface import TCPClientInterface
+
+    if getattr(TCPClientInterface.connect, "_columba_backoff", False):
+        return
+    original_connect = TCPClientInterface.connect
+
+    def connect(self, *args, **kwargs):
+        try:
+            result = original_connect(self, *args, **kwargs)
+        except Exception:
+            failures = getattr(self, "_columba_connect_failures", 0) + 1
+            self._columba_connect_failures = failures
+            delay = min(
+                TCP_RECONNECT_BACKOFF_BASE * (2 ** (failures - 1)),
+                TCP_RECONNECT_BACKOFF_MAX,
+            )
+            RNS.log(
+                f"TCP connect to {getattr(self, 'target_ip', '?')}:"
+                f"{getattr(self, 'target_port', '?')} failed "
+                f"({failures} in a row); waiting {delay:.0f}s before the next attempt",
+                RNS.LOG_WARNING,
+            )
+            time.sleep(delay)
+            raise
+        self._columba_connect_failures = 0
+        return result
+
+    connect._columba_backoff = True
+    TCPClientInterface.connect = connect
+
+
 def reset_reticulum_for_restart():
     """Reset RNS.Reticulum + RNS.Transport process-global state so a fresh
     Reticulum() can be constructed after a stop — Columba's "Apply & Restart".

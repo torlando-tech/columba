@@ -403,6 +403,10 @@ class PythonRnsRuntime(
         // via RNS.panic() (see event_bridge.install_rns_guards). Before
         // Reticulum() so the startup interface bring-up is covered.
         eventBridge.callAttr("install_rns_guards")
+        // A rejecting TCP gateway must never face a flat 5 s retry loop —
+        // anti-flap policy reads that as flooding (see
+        // event_bridge.install_tcp_reconnect_backoff).
+        eventBridge.callAttr("install_tcp_reconnect_backoff")
         installTrafficActivityHook()
 
         // Construct the upstream Reticulum instance. RNS.Reticulum is a process

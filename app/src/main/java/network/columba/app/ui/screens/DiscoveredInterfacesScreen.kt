@@ -891,7 +891,7 @@ internal fun DiscoveredInterfaceSearchAndFilter(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "$filteredCount of $totalCount",
+                        text = stringResource(R.string.iface_disc_filter_count, filteredCount, totalCount),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

@@ -1,6 +1,8 @@
 package network.columba.app.ui.screens.settings.cards
 
 import android.app.Application
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -8,8 +10,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.test.RegisterComponentActivityRule
+import network.columba.app.ui.components.LocalCapabilities
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -38,15 +42,36 @@ class BatteryOptimizationCardTest {
 
     private fun toggleFor(tag: String) = composeTestRule.onNodeWithTag(tag)
 
+    /**
+     * The Persistent Wake Lock row is capability-gated on
+     * `performance.dutyCycleWakeLock` (only the python backend emits the
+     * traffic signals duty-cycling needs). Tests that exercise the row must
+     * provide a backend that supports it; the UNKNOWN sentinel default
+     * hides it.
+     */
+    @Composable
+    private fun withDutyCycleCaps(content: @Composable () -> Unit) {
+        val caps =
+            BackendCapabilities.UNKNOWN.copy(
+                performance =
+                    BackendCapabilities.UNKNOWN.performance.copy(
+                        dutyCycleWakeLock = BackendCapabilities.Support.FULL,
+                    ),
+            )
+        CompositionLocalProvider(LocalCapabilities provides caps) { content() }
+    }
+
     @Test
     fun persistentWakeLockToggle_displaysLabelAndDescription() {
         composeTestRule.setContent {
-            BatteryOptimizationCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                batteryProfile = BatteryProfile.BALANCED,
-                onBatteryProfileChange = {},
-            )
+            withDutyCycleCaps {
+                BatteryOptimizationCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
+                    batteryProfile = BatteryProfile.BALANCED,
+                    onBatteryProfileChange = {},
+                )
+            }
         }
         composeTestRule.onNodeWithText("Persistent Wake Lock").assertIsDisplayed()
         composeTestRule
@@ -63,13 +88,15 @@ class BatteryOptimizationCardTest {
     @Test
     fun persistentWakeLockToggle_isOn_whenEnabled() {
         composeTestRule.setContent {
-            BatteryOptimizationCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                batteryProfile = BatteryProfile.BALANCED,
-                onBatteryProfileChange = {},
-                persistentWakeLockEnabled = true,
-            )
+            withDutyCycleCaps {
+                BatteryOptimizationCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
+                    batteryProfile = BatteryProfile.BALANCED,
+                    onBatteryProfileChange = {},
+                    persistentWakeLockEnabled = true,
+                )
+            }
         }
         toggleFor("persistent_wake_lock_toggle").assertIsOn()
     }
@@ -77,13 +104,15 @@ class BatteryOptimizationCardTest {
     @Test
     fun persistentWakeLockToggle_isOff_whenDisabled() {
         composeTestRule.setContent {
-            BatteryOptimizationCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                batteryProfile = BatteryProfile.BALANCED,
-                onBatteryProfileChange = {},
-                persistentWakeLockEnabled = false,
-            )
+            withDutyCycleCaps {
+                BatteryOptimizationCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
+                    batteryProfile = BatteryProfile.BALANCED,
+                    onBatteryProfileChange = {},
+                    persistentWakeLockEnabled = false,
+                )
+            }
         }
         toggleFor("persistent_wake_lock_toggle").assertIsOff()
     }
@@ -92,16 +121,34 @@ class BatteryOptimizationCardTest {
     fun persistentWakeLockToggle_callsCallback_withFalse_whenTurningOff() {
         var receivedValue: Boolean? = null
         composeTestRule.setContent {
+            withDutyCycleCaps {
+                BatteryOptimizationCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
+                    batteryProfile = BatteryProfile.BALANCED,
+                    onBatteryProfileChange = {},
+                    persistentWakeLockEnabled = true,
+                    onPersistentWakeLockToggle = { receivedValue = it },
+                )
+            }
+        }
+        toggleFor("persistent_wake_lock_toggle").performClick()
+        assertEquals(false, receivedValue)
+    }
+
+    @Test
+    fun persistentWakeLockToggle_hidden_whenBackendLacksTrafficSignals() {
+        // Kotlin-native backend: no traffic signals, the service keeps the
+        // persistent lock regardless, so offering the toggle would lie.
+        composeTestRule.setContent {
             BatteryOptimizationCard(
                 isExpanded = true,
                 onExpandedChange = {},
                 batteryProfile = BatteryProfile.BALANCED,
                 onBatteryProfileChange = {},
-                persistentWakeLockEnabled = true,
-                onPersistentWakeLockToggle = { receivedValue = it },
             )
         }
-        toggleFor("persistent_wake_lock_toggle").performClick()
-        assertEquals(false, receivedValue)
+        toggleFor("persistent_wake_lock_toggle").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Persistent Wake Lock").assertDoesNotExist()
     }
 }

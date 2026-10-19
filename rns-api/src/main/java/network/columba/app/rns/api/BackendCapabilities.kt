@@ -133,12 +133,21 @@ data class BackendCapabilities(
      * equivalent. UI hides the "Share Instance" toggle in Advanced
      * settings on backends that report `false` so the option doesn't
      * appear where it has no effect.
+     *
+     * `dutyCycleWakeLock` reports whether the backend emits traffic-
+     * activity signals into `RnsBackend.setTrafficActivityCallback`, the
+     * replacement for the persistent wake lock in duty-cycle mode. Only
+     * the python backend's event_bridge hooks the RNS packet choke points;
+     * on backends without signals the service must keep the persistent
+     * lock regardless of the stored preference, and the UI hides the
+     * toggle.
      */
     @Parcelize
     data class PerformanceCaps(
         val batteryProfileTuning: Support,
         val sharedInstanceAvailabilityChecks: Boolean,
         val shareInstanceHosting: Boolean = false,
+        val dutyCycleWakeLock: Support = Support.UNSUPPORTED,
     ) : Parcelable
 
     /**

@@ -91,5 +91,8 @@ val PYTHON_CAPABILITIES: BackendCapabilities = BackendCapabilities(
         batteryProfileTuning = Support.UNSUPPORTED,
         sharedInstanceAvailabilityChecks = true,
         shareInstanceHosting = true,
+        // event_bridge wraps Transport.inbound/outbound and signals the
+        // service LockManager, replacing the persistent wake lock.
+        dutyCycleWakeLock = Support.FULL,
     ),
 )

@@ -16,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.host.binder.ReticulumServiceBinder
 import network.columba.app.rns.host.di.ServiceModule
@@ -470,10 +471,18 @@ class ReticulumService : Service() {
         // CRITICAL: Acquire wake lock early to prevent CPU sleep during initialization
         // Native stack manages multicast lock per-AutoInterface for battery savings.
         managers.lockManager.skipMulticastLock = true
-        managers.lockManager.setPersistentWakeLockEnabled(
-            managers.settingsAccessor.getPersistentWakeLockEnabled(),
-        )
-        managers.lockManager.acquireAll()
+        // Duty-cycle mode only exists where traffic signals exist: backends
+        // without them (kotlin native) keep the persistent lock regardless of
+        // the stored preference, or transfers would run with no CPU lock.
+        val dutyCycleSupported =
+            rnsBackend.capabilities.value.performance.dutyCycleWakeLock ==
+                BackendCapabilities.Support.FULL
+        val persistent =
+            !dutyCycleSupported || managers.settingsAccessor.getPersistentWakeLockEnabled()
+        if (!persistent) {
+            Log.i(TAG, "Duty-cycle wake-lock mode (persistent lock off)")
+        }
+        managers.lockManager.setPersistentWakeLockEnabled(persistent)
         Log.d(TAG, "Wake locks acquired in onCreate")
 
         rnsBackend.setTrafficActivityCallback {
@@ -483,7 +492,11 @@ class ReticulumService : Service() {
 
     /** Apply a live persistent-wake-lock toggle pushed from the UI process. */
     private fun handleSetWakeLockMode(intent: Intent?) {
-        val enabled = intent?.getBooleanExtra(EXTRA_PERSISTENT_WAKE_LOCK, true) ?: true
+        val requested = intent?.getBooleanExtra(EXTRA_PERSISTENT_WAKE_LOCK, true) ?: true
+        val dutyCycleSupported =
+            rnsBackend.capabilities.value.performance.dutyCycleWakeLock ==
+                BackendCapabilities.Support.FULL
+        val enabled = !dutyCycleSupported || requested
         managers.lockManager.setPersistentWakeLockEnabled(enabled)
         Log.i(
             TAG,

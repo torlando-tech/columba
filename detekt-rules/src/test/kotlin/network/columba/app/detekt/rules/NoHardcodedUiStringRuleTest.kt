@@ -409,4 +409,45 @@ class NoHardcodedUiStringRuleTest {
             """.trimIndent()
         assertEquals(0, rule.lint(statement).size)
     }
+
+    @Test
+    fun `braced if-branch blocks are descended`() {
+        val findings =
+            rule.lint(
+                """
+                fun screen() {
+                    Text(if (ready) { "Ready" } else { "Waiting" })
+                }
+                """.trimIndent(),
+            )
+        assertEquals(2, findings.size)
+    }
+
+    @Test
+    fun `braced when-branch block is descended to final expression`() {
+        val findings =
+            rule.lint(
+                """
+                fun screen() {
+                    Text(when (mode) {
+                        Mode.A -> { "Start" }
+                        else -> { stringResource(R.string.other) }
+                    })
+                }
+                """.trimIndent(),
+            )
+        assertEquals(1, findings.size)
+    }
+
+    @Test
+    fun `short user-facing words are flagged`() {
+        assertEquals(1, rule.lint("fun screen() { Text(\"No\") }").size)
+        assertEquals(1, rule.lint("fun screen() { Text(\"On\") }").size)
+    }
+
+    @Test
+    fun `short technical tokens are not flagged`() {
+        assertEquals(0, rule.lint("fun screen() { Text(\"OK\") }").size)
+        assertEquals(0, rule.lint("fun screen() { Text(\"IP\") }").size)
+    }
 }

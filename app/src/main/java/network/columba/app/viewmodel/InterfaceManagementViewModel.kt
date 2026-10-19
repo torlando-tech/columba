@@ -206,6 +206,7 @@ class InterfaceManagementViewModel
         private val transportAdmin: RnsTransportAdmin,
         private val transportObserver: InterfaceTransportObserver,
         private val rnsBackend: RnsBackend,
+        @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     ) : ViewModel() {
         companion object {
             private const val TAG = "InterfaceMgmtVM"
@@ -1247,6 +1248,10 @@ class InterfaceManagementViewModel
                         val configs = interfaceRepository.enabledInterfaces.first()
                         val filtered = filterByTransport(configs, transportObserver.snapshotTransport())
                         transportAdmin.reloadInterfaces(filtered)
+                        // The service-held MulticastLock follows AutoInterface
+                        // enablement; hot-reload does not rewrite the config
+                        // snapshot, so push the live value to :reticulum.
+                        notifyServiceLockPolicy(configs)
                         kotlinx.coroutines.delay(1000)
                         fetchInterfaceStatus()
                         kotlinx.coroutines.delay(4000)
@@ -1270,6 +1275,40 @@ class InterfaceManagementViewModel
                         }
                     }
                 }
+        }
+
+        /**
+         * Push the live AutoInterface-enabled state to the `:reticulum`
+         * service so its MulticastLock policy tracks the interface the user
+         * actually enabled (the config snapshot is only rewritten on full
+         * initialize, not on hot-reload). Failures are logged; the service
+         * re-reads the snapshot at its next cold start regardless.
+         */
+        private fun notifyServiceLockPolicy(configs: List<InterfaceConfig>) {
+            val autoInterfaceEnabled =
+                configs.any { it is InterfaceConfig.AutoInterface && it.enabled }
+            runCatching {
+                val intent =
+                    android.content.Intent(
+                        context,
+                        network.columba.app.rns.host.ReticulumService::class.java,
+                    ).apply {
+                        action =
+                            network.columba.app.rns.host
+                                .ReticulumService.ACTION_REEVALUATE_LOCKS
+                        putExtra(
+                            network.columba.app.rns.host
+                                .ReticulumService.EXTRA_AUTO_INTERFACE_ENABLED,
+                            autoInterfaceEnabled,
+                        )
+                    }
+                androidx.core.content.ContextCompat
+                    .startForegroundService(context, intent)
+            }.onFailure { e ->
+                // Plain-JVM unit tests have no Android framework: Intent/Log
+                // throw "Stub!" there. Logging must never outlive the guard.
+                runCatching { Log.w(TAG, "notifyServiceLockPolicy intent failed", e) }
+            }
         }
 
         fun applyChanges() {

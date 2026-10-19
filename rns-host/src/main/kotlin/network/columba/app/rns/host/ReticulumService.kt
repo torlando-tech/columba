@@ -18,10 +18,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.host.binder.ReticulumServiceBinder
 import network.columba.app.rns.host.di.ServiceModule
 import network.columba.app.rns.host.persistence.BackendInitializer
 import network.columba.app.rns.host.persistence.PeerActivityCollector
+import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import network.columba.app.rns.host.rnode.KotlinRNodeBridge
 import network.columba.app.rns.host.rnode.RNodeOnlineStatusListener
 import network.columba.app.rns.host.usb.KotlinUSBBridge
@@ -50,8 +52,12 @@ class ReticulumService : Service() {
         const val ACTION_RESTART_BLE = "network.columba.app.RESTART_BLE"
         const val ACTION_UPDATE_NOTIFICATION = "network.columba.app.service.UPDATE_NOTIFICATION"
         const val ACTION_SET_WAKE_LOCK_MODE = "network.columba.app.service.SET_WAKE_LOCK_MODE"
+        // Re-run the wake/multicast lock policy after interface configs change
+        // (AutoInterface enable toggles the service-held MulticastLock).
+        const val ACTION_REEVALUATE_LOCKS = "network.columba.app.service.REEVALUATE_LOCKS"
         const val EXTRA_NETWORK_STATUS = "network_status"
         const val EXTRA_PERSISTENT_WAKE_LOCK = "persistent_wake_lock"
+        const val EXTRA_AUTO_INTERFACE_ENABLED = "auto_interface_enabled"
 
         // Grace window for treating ACTION_STOP as a stale redelivery during an
         // Apply & Restart. The original STOP intent travels at most a few seconds
@@ -376,6 +382,7 @@ class ReticulumService : Service() {
                 }
             }
             ACTION_SET_WAKE_LOCK_MODE -> handleSetWakeLockMode(intent)
+            ACTION_REEVALUATE_LOCKS -> handleReevaluateLocks(intent)
         }
 
         return START_STICKY
@@ -467,10 +474,19 @@ class ReticulumService : Service() {
      * RX/TX bursts. No-op while the persistent lock is held; the kotlin
      * backend's default setter is a no-op (it manages its own locks).
      */
-    private fun configureWakeLocksAndTrafficHook() {
-        // CRITICAL: Acquire wake lock early to prevent CPU sleep during initialization
-        // Native stack manages multicast lock per-AutoInterface for battery savings.
-        managers.lockManager.skipMulticastLock = true
+    private fun configureWakeLocksAndTrafficHook(autoInterfaceOverride: Boolean? = null) {
+        // CRITICAL: Acquire wake locks early to prevent CPU sleep during
+        // initialization. The MulticastLock is held by the service only when
+        // the backend cannot manage it itself (python: upstream RNS is pure
+        // Python and cannot acquire Android locks) AND an AutoInterface is
+        // enabled — holding it without an AutoInterface just drains radio.
+        val backendManagesMulticast =
+            rnsBackend.capabilities.value.performance.managesOwnMulticastLock
+        managers.lockManager.applyMulticastLockPolicy(
+            skip =
+                backendManagesMulticast ||
+                !(autoInterfaceOverride ?: autoInterfaceEnabled()),
+        )
         // Duty-cycle mode only exists where traffic signals exist: backends
         // without them (kotlin native) keep the persistent lock regardless of
         // the stored preference, or transfers would run with no CPU lock.
@@ -488,6 +504,35 @@ class ReticulumService : Service() {
         rnsBackend.setTrafficActivityCallback {
             managers.lockManager.acquireTrafficWakeLock()
         }
+    }
+
+    /**
+     * Whether the persisted config snapshot has an enabled AutoInterface —
+     * the only consumer of multicast RX. Defaults to true when no snapshot
+     * exists yet (fresh install ships AutoInterface enabled), so the lock is
+     * held until the UI's first snapshot says otherwise.
+     */
+    private fun autoInterfaceEnabled(): Boolean =
+        ReticulumConfigSnapshot
+            .read(this)
+            ?.configWithoutKey
+            ?.enabledInterfaces
+            ?.any { it is InterfaceConfig.AutoInterface && it.enabled }
+            ?: true
+
+    /**
+     * Re-run the lock policy after an interface-config change. The UI pushes
+     * the live AutoInterface-enabled flag because hot-reload does not rewrite
+     * the config snapshot; without the extra, fall back to the snapshot.
+     */
+    private fun handleReevaluateLocks(intent: Intent?) {
+        val override =
+            if (intent?.hasExtra(EXTRA_AUTO_INTERFACE_ENABLED) == true) {
+                intent.getBooleanExtra(EXTRA_AUTO_INTERFACE_ENABLED, true)
+            } else {
+                null
+            }
+        configureWakeLocksAndTrafficHook(autoInterfaceOverride = override)
     }
 
     /** Apply a live persistent-wake-lock toggle pushed from the UI process. */

@@ -101,6 +101,7 @@ class InterfaceManagementViewModelNetworkRestrictionTest {
                 transportAdmin,
                 transportObserver,
                 rnsBackend,
+                context = mockk(relaxed = true),
             )
     }
 

@@ -76,10 +76,31 @@ class LockManager(
     }
 
     /**
-     * When true, acquireAll() skips the multicast lock.
-     * Set by the native stack (NativeInterfaceFactory manages it per-AutoInterface).
+     * When true, the multicast lock is not held by this manager: either the
+     * backend manages it itself (kotlin native `NativeInterfaceFactory`,
+     * see `PerformanceCaps.managesOwnMulticastLock`) or no AutoInterface is
+     * enabled so nothing needs multicast RX. Mutate only via
+     * [applyMulticastLockPolicy]; read by [acquireAll] so network-change
+     * re-acquisition honors the policy too.
      */
     var skipMulticastLock: Boolean = false
+        private set
+
+    /**
+     * Set the multicast-lock policy at runtime: acquiring when the policy
+     * flips to "service must hold it", releasing when it flips away.
+     * Idempotent; safe from any thread.
+     */
+    fun applyMulticastLockPolicy(skip: Boolean) {
+        synchronized(lockMutex) {
+            skipMulticastLock = skip
+            if (skip) {
+                releaseMulticastLock()
+            } else {
+                acquireMulticastLock()
+            }
+        }
+    }
 
     /**
      * When false (duty-cycle mode), the persistent wake lock is not held and

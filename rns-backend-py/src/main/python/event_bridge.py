@@ -148,10 +148,15 @@ def apply_android_env_patches():
 TRAFFIC_ACTIVITY_MIN_INTERVAL_S = 15.0
 
 # Interfaces whose RX the kernel buffers (and RNS retransmits): TCP sockets
-# and LAN multicast. Their traffic never justifies holding the CPU.
+# and LAN UDP. Their traffic never justifies holding the CPU. Note the
+# AutoInterface data path delivers through the spawned per-peer interface
+# (`AutoInterface.process_incoming` delegates to `AutoInterfacePeer`), so
+# that is the type reaching `Transport.inbound` — the parent class name
+# alone would never match.
 _BUFFERED_RX_INTERFACE_NAMES = frozenset(
     {
         "AutoInterface",
+        "AutoInterfacePeer",
         "TCPClientInterface",
         "TCPServerInterface",
         "UDPInterface",

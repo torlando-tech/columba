@@ -81,6 +81,8 @@ class BatteryOptimizationCardTest {
                     "drains battery while backgrounded all day. Off lets the CPU " +
                     "sleep between traffic; a short lock still covers active " +
                     "transfers, and delivery resumes within seconds of each wake. " +
+                    "While asleep the device also pauses its local AutoInterface " +
+                    "peering, so LAN peers may treat it as offline between wakes. " +
                     "Changes apply immediately.",
             ).assertIsDisplayed()
     }

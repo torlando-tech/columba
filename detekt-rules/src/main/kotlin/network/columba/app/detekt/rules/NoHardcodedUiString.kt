@@ -11,6 +11,7 @@ import io.gitlab.arturbosch.detekt.api.Severity
 import org.jetbrains.kotlin.com.intellij.psi.util.PsiTreeUtil
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtBinaryExpression
+import org.jetbrains.kotlin.psi.KtBlockExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
@@ -36,8 +37,9 @@ import org.jetbrains.kotlin.psi.psiUtil.parents
  *
  * Detection is syntactic (the CI `detekt` task has no type resolution):
  * callee-name + argument-name matching against [UiSinkTable]. Sink arguments are
- * descended through `+`-chains, `if`/`else` branches, `?:` (elvis) branches, and
- * `when`-branch results — but only when the `if`/`when` expression is itself the
+ * descended through `+`-chains, `if`/`else` branches, `?:` (elvis) branches,
+ * `when`-branch results, and braced branch blocks (final expression of each
+ * block) — but only when the `if`/`when` expression is itself the
  * sink argument, so comparisons (`== "pending"`) in conditions and `when`
  * conditions remain non-sinks (wire keys). String comparisons are intentionally
  * NOT sinks. `@Preview` sample data is exempt.
@@ -64,7 +66,7 @@ class NoHardcodedUiString(config: Config = Config.empty) : Rule(config) {
             debt = Debt.FIVE_MINS,
         )
 
-    private val wordRegex = Regex("\\p{L}{3,}")
+    private val wordRegex = Regex("\\p{L}+")
 
     /**
      * Ratified DO-NOT-TRANSLATE literals (see `detekt-config.yml`
@@ -196,6 +198,8 @@ class NoHardcodedUiString(config: Config = Config.empty) : Rule(config) {
             }
             is KtWhenExpression ->
                 expression.entries.forEach { entry -> checkSink(entry.expression, sink) }
+            is KtBlockExpression ->
+                checkSink(expression.statements.lastOrNull(), sink)
         }
     }
 

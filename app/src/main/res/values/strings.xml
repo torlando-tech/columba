@@ -721,8 +721,8 @@
     <string name="rnode_wizard_bandwidth_hz">Bandwidth (Hz)</string>
     <string name="rnode_wizard_max_dbm">Max: %1$d dBm</string>
     <string name="rnode_wizard_airtime_limits">Airtime Limits</string>
-    <string name="rnode_wizard_short_term">Short-term (%%)</string>
-    <string name="rnode_wizard_long_term">Long-term (%%)</string>
+    <string name="rnode_wizard_short_term" formatted="false">Short-term (%)</string>
+    <string name="rnode_wizard_long_term" formatted="false">Long-term (%)</string>
     <string name="rnode_wizard_max_pct">Max: %1$d%%</string>
     <string name="rnode_wizard_optional">Optional</string>
     <string name="rnode_wizard_duty_limit_note">Regional duty cycle limit: %1$d%%. Values above this are not allowed.</string>

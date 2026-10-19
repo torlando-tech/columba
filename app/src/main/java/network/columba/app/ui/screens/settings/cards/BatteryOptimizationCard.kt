@@ -80,6 +80,11 @@ fun BatteryOptimizationCard(
     // both backends.
     val batteryProfileTuningSupported =
         LocalCapabilities.current.performance.batteryProfileTuning == BackendCapabilities.Support.FULL
+    // Duty-cycle wake locking needs backend traffic signals; only the python
+    // backend emits them (event_bridge). On other backends the service keeps
+    // the persistent lock no matter what, so the toggle is hidden.
+    val dutyCycleWakeLockSupported =
+        LocalCapabilities.current.performance.dutyCycleWakeLock == BackendCapabilities.Support.FULL
 
     fun refreshStatus() {
         isExempted = BatteryOptimizationManager.isIgnoringBatteryOptimizations(context)
@@ -231,8 +236,11 @@ fun BatteryOptimizationCard(
                     // battery-optimization exemption section below.
 
                     // Persistent Wake Lock toggle — the mesh daemon's CPU
-                    // wake policy (persistent vs. duty-cycle). Backend-
-                    // agnostic: both backends' services honor it.
+                    // wake policy (persistent vs. duty-cycle). Duty-cycle
+                    // needs backend traffic signals (python event_bridge);
+                    // on backends without them the service keeps the
+                    // persistent lock regardless, so the row is hidden.
+                    if (dutyCycleWakeLockSupported) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -269,8 +277,9 @@ fun BatteryOptimizationCard(
                                 "transfers, and delivery resumes within seconds of each wake. " +
                                 "Changes apply immediately.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = contentColor,
+                        color = contentColor.copy(alpha = 0.7f),
                     )
+                    }
                     HorizontalDivider(color = contentColor.copy(alpha = 0.2f))
                     if (isCheckingStatus) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))

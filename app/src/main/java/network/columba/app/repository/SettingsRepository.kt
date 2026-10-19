@@ -2288,6 +2288,22 @@ class SettingsRepository
                     }
                 }
             }
+            // The :reticulum service reads this key from the cross-process
+            // SharedPreferences mirror (DataStore can't be opened in two
+            // processes), and it only learns of changes through the live
+            // toggle push — which a restore doesn't send. Mirror the
+            // restored value or the service would keep the pre-restore
+            // wake policy across restarts.
+            entries.firstOrNull { it.key == KEY_PERSISTENT_WAKE_LOCK }
+                ?.takeIf { it.type == "boolean" }
+                ?.let { entry ->
+                    context.getSharedPreferences(
+                        CROSS_PROCESS_PREFS_NAME,
+                        Context.MODE_MULTI_PROCESS,
+                    ).edit()
+                        .putBoolean(KEY_PERSISTENT_WAKE_LOCK, entry.value.toBoolean())
+                        .apply()
+                }
         }
 
         /**

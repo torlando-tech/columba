@@ -927,6 +927,33 @@ class SettingsRepositoryTest {
         }
 
     @Test
+    fun importAllPreferences_mirrorsPersistentWakeLock_forServiceProcess() =
+        runTest {
+            // The :reticulum service reads the wake policy from the
+            // cross-process SharedPreferences mirror; a restore that only
+            // writes DataStore would leave the service on the old policy.
+            val entries =
+                listOf(
+                    network.columba.app.migration.PreferenceEntry(
+                        key = "persistent_wake_lock",
+                        type = "boolean",
+                        value = "false",
+                    ),
+                )
+
+            repository.importAllPreferences(entries)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertFalse(repository.getPersistentWakeLock())
+            val mirror =
+                context.getSharedPreferences(
+                    "cross_process_settings",
+                    android.content.Context.MODE_MULTI_PROCESS,
+                )
+            assertFalse(mirror.getBoolean("persistent_wake_lock", true))
+        }
+
+    @Test
     fun importAllPreferences_restoresIntSettings() =
         runTest {
             val entries =

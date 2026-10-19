@@ -249,4 +249,46 @@ class UiTextDumperTest {
         assertEquals(listOf("{}% duty"), literal.map { it.skeleton })
         assertEquals(literal.map { it.skeleton }, resource.map { it.skeleton })
     }
+
+    @Test
+    fun `plural quantity is not a format argument`() {
+        module(
+            "a",
+            "com.test.a",
+            """<plurals name="shared"><item quantity="one">%1${'$'}s shared a file</item><item quantity="other">%1${'$'}s shared files</item></plurals>""",
+        )
+        val code = "fun s() { Text(pluralStringResource(R.plurals.shared, 2, \"Alice\")) }"
+        assertEquals(
+            listOf("Alice shared a file", "Alice shared files"),
+            dump("a", code).map { it.skeleton },
+        )
+    }
+
+    @Test
+    fun `shadowed local val resolves opaquely`() {
+        module("a", "com.test.a", """<string name="outer">Outer</string><string name="inner">Inner</string>""")
+        val code =
+            """
+            fun s() {
+                val label = stringResource(R.string.outer)
+                run { val label = stringResource(R.string.inner) }
+                Text(label)
+            }
+            """.trimIndent()
+        assertEquals(listOf("{}"), dump("a", code).map { it.skeleton })
+    }
+
+    @Test
+    fun `single local val still resolves`() {
+        module("a", "com.test.a", """<string name="outer">Outer</string>""")
+        val code =
+            """
+            fun s() {
+                val label = stringResource(R.string.outer)
+                run { doThing() }
+                Text(label)
+            }
+            """.trimIndent()
+        assertEquals(listOf("Outer"), dump("a", code).map { it.skeleton })
+    }
 }

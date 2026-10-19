@@ -168,6 +168,11 @@ columba:
       # Exception diagnostic text (DNT checklist §2): RnsError.Generic message,
       # never rendered (render sites switch on the sealed type).
       - '"No delivery destination to apply display name to"'
+      # Font-size preview glyph (MessagingScreen min/max slider labels): the
+      # letter "A" rendered at two sizes, not translatable prose.
+      - '"A"'
+      # I2P destination display: a b32 address literal, not prose.
+      - '"$b32Address.b32.i2p"'
   NoRelaxedMocks:
     active: true
   NoVerifyOnlyTests:

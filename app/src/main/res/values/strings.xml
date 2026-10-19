@@ -3011,6 +3011,8 @@
     <string name="qr_scanner_hint">Point camera at QR code\nIt will scan automatically</string>
     <string name="qr_scanner_contact_exists_cd">Contact Exists</string>
     <string name="qr_scanner_contact_already_added">Contact Already Added</string>
+    <string name="qr_scanner_contact_already_added_body_with_name">This contact is already in your contacts list as \"%1$s\".</string>
+    <string name="qr_scanner_contact_already_added_body">This contact is already in your contacts list.</string>
     <string name="qr_scanner_open_settings">Open Settings</string>
     <string name="qr_scanner_grant_permission">Grant Permission</string>
     <string name="qr_scanner_turn_off_flash">Turn off flash</string>

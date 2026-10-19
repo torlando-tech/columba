@@ -13,7 +13,7 @@ plugins {
     id("com.chaquo.python") version "17.0.0" apply false
     id("app.cash.paparazzi") version "1.3.5" apply false
     id("jacoco")
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
+    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
     id("de.aaschmid.cpd") version "3.5"
 }
@@ -86,9 +86,13 @@ subprojects {
     // apply) would fail configuration.
     tasks.withType(org.gradle.api.tasks.compile.JavaCompile::class.java).configureEach {
         javaCompiler.set(
-            project.extensions.getByType(org.gradle.jvm.toolchain.JavaToolchainService::class.java)
+            project.extensions
+                .getByType(org.gradle.jvm.toolchain.JavaToolchainService::class.java)
                 .compilerFor {
-                    languageVersion.set(org.gradle.jvm.toolchain.JavaLanguageVersion.of(21))
+                    languageVersion.set(
+                        org.gradle.jvm.toolchain.JavaLanguageVersion
+                            .of(21),
+                    )
                 },
         )
     }
@@ -192,7 +196,10 @@ tasks.register("jacocoTestReport", JacocoReport::class) {
         }
 
         // Add patterns for class directories and exec data (resolved at execution time)
-        val buildDir = subproject.layout.buildDirectory.get().asFile
+        val buildDir =
+            subproject.layout.buildDirectory
+                .get()
+                .asFile
         // Use ASM-transformed classes which contain all classes including UI/Compose
         // Try both variant paths - noSentryDebug for app, debug for other modules
         classDirectoriesList.add(File("$buildDir/intermediates/classes/noSentryDebug/transformNoSentryDebugClassesWithAsm/dirs"))

@@ -60,6 +60,14 @@ class KeepalivePulseManager(
     private var scheduled = false
 
     /**
+     * Whether the current policy wants pulses. `onPulseFired` checks this so
+     * an alarm intent already in flight when the user disables pulses (or
+     * the service cancels the pulse) cannot restart the chain.
+     */
+    @Volatile
+    private var wanted = false
+
+    /**
      * Start or stop the pulse to match the current policy. Cheap and
      * idempotent; call after any input changes (setting toggle, wake-lock
      * mode toggle, interface config change, service start).
@@ -67,12 +75,17 @@ class KeepalivePulseManager(
     fun reevaluate(
         dutyCycleActive: Boolean,
         autoInterfaceEnabled: Boolean,
+        pulseEnabledOverride: Boolean? = null,
     ) {
-        val wanted =
+        // The override carries the just-toggled setting value: the UI pushes
+        // this intent before the cross-process mirror write has necessarily
+        // hit disk, and the mirror read here would see the old value.
+        val wantedNow =
             dutyCycleActive &&
                 autoInterfaceEnabled &&
-                settingsAccessor.getKeepalivePulseEnabled()
-        if (wanted) scheduleNext() else cancel()
+                (pulseEnabledOverride ?: settingsAccessor.getKeepalivePulseEnabled())
+        wanted = wantedNow
+        if (wantedNow) scheduleNext() else cancel()
     }
 
     /**
@@ -81,6 +94,10 @@ class KeepalivePulseManager(
      * ACTION_KEEPALIVE_PULSE.
      */
     fun onPulseFired() {
+        if (!wanted) {
+            // cancel() ran while this alarm intent was already in flight.
+            return
+        }
         lockManager.acquireKeepalivePulseWakeLock()
         // The firing alarm is consumed; allow scheduleNext to queue the
         // following pulse.
@@ -89,6 +106,7 @@ class KeepalivePulseManager(
     }
 
     fun cancel() {
+        wanted = false
         if (!scheduled) return
         scheduled = false
         runCatching { alarmManager.cancel(pulsePendingIntent()) }

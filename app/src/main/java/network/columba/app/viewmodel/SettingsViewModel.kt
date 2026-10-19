@@ -2001,6 +2001,14 @@ class SettingsViewModel
                             action =
                                 network.columba.app.rns.host
                                     .ReticulumService.ACTION_REEVALUATE_LOCKS
+                            // Carry the value: the cross-process mirror
+                            // write may not have hit disk when the service
+                            // handles this intent.
+                            putExtra(
+                                network.columba.app.rns.host
+                                    .ReticulumService.EXTRA_KEEPALIVE_PULSE,
+                                enabled,
+                            )
                         }
                     androidx.core.content.ContextCompat
                         .startForegroundService(context, pulseIntent)

@@ -147,6 +147,17 @@ def apply_android_env_patches():
 # sustained burst keeps refreshing before expiry.
 TRAFFIC_ACTIVITY_MIN_INTERVAL_S = 15.0
 
+# Interfaces whose RX the kernel buffers (and RNS retransmits): TCP sockets
+# and LAN multicast. Their traffic never justifies holding the CPU.
+_BUFFERED_RX_INTERFACE_NAMES = frozenset(
+    {
+        "AutoInterface",
+        "TCPClientInterface",
+        "TCPServerInterface",
+        "UDPInterface",
+    }
+)
+
 _traffic_activity_callback = None
 _traffic_activity_last_emit = 0.0
 
@@ -173,6 +184,23 @@ def _signal_traffic_activity():
         )
 
 
+def _rx_needs_wake(interface):
+    """True when RX from `interface` justifies holding the CPU awake.
+
+    Kernel-buffered interfaces (TCP sockets, LAN multicast) queue incoming
+    bytes in the OS while the CPU sleeps and retransmit on the RNS layer —
+    a wake lock there buys latency, not delivery. On a busy home network a
+    TCP gateway + AutoInterface announce stream signals every few seconds,
+    saturating the throttle and holding the lock 24/7, which defeats
+    duty-cycle mode entirely. Wireless interfaces (RNode UART, BLE, AX.25)
+    lose bytes from tiny hardware buffers when the CPU suspends, so their
+    RX still signals. Unknown interfaces signal (safe default).
+    """
+    if interface is None:
+        return True
+    return type(interface).__name__ not in _BUFFERED_RX_INTERFACE_NAMES
+
+
 def install_traffic_activity_callback(callback):
     """Install (or clear, with None) the traffic-activity Kotlin callback.
 
@@ -188,6 +216,9 @@ def install_traffic_activity_callback(callback):
     `process_outgoing` override never delegates to the base method).
     Patching the base `Interface` methods instead would miss those custom
     paths, letting the CPU sleep mid-transfer with duty-cycle mode on.
+
+    RX signals only from lossy interfaces (`_rx_needs_wake`); all TX
+    signals, since outbound activity is user-initiated and rare.
     """
     global _traffic_activity_callback
     _traffic_activity_callback = callback
@@ -207,9 +238,10 @@ def install_traffic_activity_callback(callback):
     _orig_in = transport.inbound
     _orig_out = transport.outbound
 
-    def inbound(raw, *args, **kwargs):
-        _signal_traffic_activity()
-        return _orig_in(raw, *args, **kwargs)
+    def inbound(raw, interface=None, *args, **kwargs):
+        if _rx_needs_wake(interface):
+            _signal_traffic_activity()
+        return _orig_in(raw, interface, *args, **kwargs)
 
     def outbound(packet, *args, **kwargs):
         _signal_traffic_activity()

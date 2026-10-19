@@ -94,5 +94,8 @@ val PYTHON_CAPABILITIES: BackendCapabilities = BackendCapabilities(
         // event_bridge wraps Transport.inbound/outbound and signals the
         // service LockManager, replacing the persistent wake lock.
         dutyCycleWakeLock = Support.FULL,
+        // managesOwnMulticastLock stays false (default): upstream RNS is
+        // pure Python and cannot acquire Android locks, so the service's
+        // LockManager holds the MulticastLock when AutoInterface is enabled.
     ),
 )

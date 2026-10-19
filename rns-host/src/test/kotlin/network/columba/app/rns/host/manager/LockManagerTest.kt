@@ -62,6 +62,38 @@ class LockManagerTest {
     }
 
     @Test
+    fun `applyMulticastLockPolicy false acquires the multicast lock`() {
+        every { multicastLock.isHeld } returns true
+
+        lockManager.applyMulticastLockPolicy(skip = false)
+
+        verify { multicastLock.acquire() }
+        assertFalse(lockManager.skipMulticastLock)
+        assertTrue(lockManager.getLockStatus().multicastHeld)
+    }
+
+    @Test
+    fun `applyMulticastLockPolicy true releases a held multicast lock`() {
+        every { multicastLock.isHeld } returnsMany listOf(true, false)
+
+        lockManager.applyMulticastLockPolicy(skip = false)
+        lockManager.applyMulticastLockPolicy(skip = true)
+
+        verify { multicastLock.acquire() }
+        verify { multicastLock.release() }
+        assertTrue(lockManager.skipMulticastLock)
+    }
+
+    @Test
+    fun `applyMulticastLockPolicy true then acquireAll does not acquire`() {
+        lockManager.applyMulticastLockPolicy(skip = true)
+
+        lockManager.acquireAll()
+
+        verify(exactly = 0) { multicastLock.acquire() }
+    }
+
+    @Test
     fun `acquireAll acquires all locks`() {
         // After acquire, mark locks as held
         every { multicastLock.isHeld } returns true

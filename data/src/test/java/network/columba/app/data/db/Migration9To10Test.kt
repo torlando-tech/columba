@@ -28,8 +28,9 @@ import org.robolectric.annotation.Config
  *      message as a potential forgery).
  *
  * Room's full schema-match validation (column type/affinity vs the
- * `MessageEntity` definition) is covered separately by the current-schema build
- * in [RoomUpgradeValidationTest]; this test pins the migration SQL itself.
+ * `MessageEntity` definition) is covered by [Migration9To10SchemaTest], which
+ * runs this migration through `MigrationTestHelper.runMigrationsAndValidate`;
+ * this test pins the migration SQL itself.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)

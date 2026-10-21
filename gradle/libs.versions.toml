@@ -1,8 +1,8 @@
 [versions]
-kotlin = "2.3.20"
+kotlin = "2.4.21"
 compose = "1.7.5"
 composeBom = "2026.05.01"
-hilt = "2.59.2"
+hilt = "2.60.1"
 room = "2.8.4"
 coroutines = "1.11.0"
 lifecycle = "2.10.0"

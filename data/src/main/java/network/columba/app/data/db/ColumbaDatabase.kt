@@ -70,7 +70,7 @@ import network.columba.app.data.db.entity.RmspServerEntity
         PendingDeliveryStatusEntity::class,
         PreferredPropagationNodeEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
@@ -404,6 +404,22 @@ abstract class ColumbaDatabase : RoomDatabase() {
                         "ALTER TABLE `preferred_propagation_nodes` " +
                             "ADD COLUMN `lastFailureAt` INTEGER",
                     )
+                }
+            }
+
+        /**
+         * v9 → v10: add nullable `messages.signatureVerified INTEGER`.
+         *
+         * Surfaces LXMF signature-verification state per received message so
+         * the UI can warn on unverified senders. Pure additive `ALTER` — no
+         * data transform. Existing rows backfill to NULL, which the UI treats
+         * as "no warning": showing every legacy message as unverified would be
+         * inaccurate (most are from peers we already had on file) and alarming.
+         */
+        val MIGRATION_9_10: Migration =
+            object : Migration(9, 10) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE messages ADD COLUMN signatureVerified INTEGER")
                 }
             }
 

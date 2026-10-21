@@ -298,7 +298,7 @@ class DebugViewModelFetchTest {
     @Test
     fun `error extraction returns null when no errors`() {
         val pythonDebugInfo = mapOf<String, Any>()
-        val status = NetworkStatus.READY
+        val status: NetworkStatus = NetworkStatus.READY
 
         val error =
             pythonDebugInfo["error"] as? String
@@ -440,7 +440,7 @@ class DebugViewModelFetchTest {
         val interfaces = activeInterfaces + failedInterfaceInfos
 
         // Step 4: Build final DebugInfo
-        val status = NetworkStatus.READY
+        val status: NetworkStatus = NetworkStatus.READY
         val wakeLockHeld = pythonDebugInfo["wake_lock_held"] as? Boolean ?: false
 
         val debugInfoResult =
@@ -513,7 +513,7 @@ class DebugViewModelFetchTest {
     @Test
     fun `status string conversion for CONNECTING status`() {
         // Test a status type not previously covered
-        val status = NetworkStatus.CONNECTING
+        val status: NetworkStatus = NetworkStatus.CONNECTING
 
         val statusString =
             when (status) {
@@ -561,7 +561,7 @@ class DebugViewModelFetchTest {
     fun `network status toString fallback for unknown status types`() {
         // Test the else branch in observeNetworkStatus that uses status.toString()
         // Since all known types are handled, this tests the exhaustive when else fallback
-        val status = NetworkStatus.SHUTDOWN
+        val status: NetworkStatus = NetworkStatus.SHUTDOWN
 
         val statusString =
             when (status) {

@@ -64,10 +64,15 @@ class LockManagerTest {
     @Test
     fun `acquireKeepalivePulseWakeLock holds a 5s timed lock in duty-cycle mode`() {
         lockManager.setPersistentWakeLockEnabled(false)
+        every { wakeLock.isHeld } returns true
 
         lockManager.acquireKeepalivePulseWakeLock()
 
         verify { wakeLock.acquire(5_000L) }
+        val tagCaptor = io.mockk.slot<String>()
+        verify { powerManager.newWakeLock(any(), capture(tagCaptor)) }
+        assertEquals("Columba::ReticulumKeepalivePulse", tagCaptor.captured)
+        assertTrue(lockManager.getLockStatus().pulseHeld)
     }
 
     @Test
@@ -75,6 +80,7 @@ class LockManagerTest {
         lockManager.acquireKeepalivePulseWakeLock()
 
         verify(exactly = 0) { wakeLock.acquire(5_000L) }
+        assertFalse("no pulse lock may exist while persistent", lockManager.getLockStatus().pulseHeld)
     }
 
     @Test
@@ -107,6 +113,7 @@ class LockManagerTest {
         lockManager.acquireAll()
 
         verify(exactly = 0) { multicastLock.acquire() }
+        assertFalse(lockManager.getLockStatus().multicastHeld)
     }
 
     @Test

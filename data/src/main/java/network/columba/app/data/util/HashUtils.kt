@@ -25,7 +25,7 @@ object HashUtils {
         val digest = MessageDigest.getInstance("SHA-256")
         val hash = digest.digest(publicKey)
         // Take first 16 bytes and convert to hex
-        return hash.take(16).toHexString()
+        return hash.copyOf(16).toHexString()
     }
 
     /**
@@ -33,12 +33,31 @@ object HashUtils {
      *
      * @return Lowercase hex string representation
      */
-    fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }
+    fun ByteArray.toHexString(): String {
+        val hexChars = CharArray(size * 2)
+        for (i in indices) {
+            val v = this[i].toInt() and 0xFF
+            hexChars[i * 2] = HEX_CHARS[v ushr 4]
+            hexChars[i * 2 + 1] = HEX_CHARS[v and 0x0F]
+        }
+        return String(hexChars)
+    }
 
     /**
      * Convert a list of bytes to a lowercase hex string.
      *
      * @return Lowercase hex string representation
      */
-    fun List<Byte>.toHexString(): String = joinToString("") { "%02x".format(it) }
+    fun List<Byte>.toHexString(): String {
+        val hexChars = CharArray(size * 2)
+        var i = 0
+        for (b in this) {
+            val v = b.toInt() and 0xFF
+            hexChars[i++] = HEX_CHARS[v ushr 4]
+            hexChars[i++] = HEX_CHARS[v and 0x0F]
+        }
+        return String(hexChars)
+    }
+
+    private val HEX_CHARS = "0123456789abcdef".toCharArray()
 }

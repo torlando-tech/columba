@@ -5,7 +5,9 @@ import android.app.Application
 import android.content.Context
 import android.os.SystemClock
 import androidx.test.core.app.ApplicationProvider
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.unmockkAll
 import io.mockk.verify
@@ -44,7 +46,8 @@ class KeepalivePulseManagerTest {
         context = ApplicationProvider.getApplicationContext()
         alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         shadowAlarmManager = shadowOf(alarmManager)
-        lockManager = mockk(relaxed = true)
+        lockManager = mockk()
+        every { lockManager.acquireKeepalivePulseWakeLock() } just Runs
         settingsAccessor = mockk()
         everyPulseSetting(true)
         manager = KeepalivePulseManager(context, lockManager, settingsAccessor)

@@ -61,6 +61,7 @@ class InterfaceManagementViewModelStatusEventTest {
     private lateinit var serviceProtocol: RnsTransportAdmin
     private lateinit var transportObserver: network.columba.app.service.manager.InterfaceTransportObserver
     private lateinit var rnsBackend: RnsBackend
+    private val testContext = mockk<android.content.Context>(relaxed = true)
     private lateinit var interfaceStatusFlow: MutableSharedFlow<String>
     private lateinit var interfaceStatusChanged: MutableSharedFlow<Unit>
     private lateinit var debugInfoFlow: MutableSharedFlow<String>
@@ -158,7 +159,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -189,7 +190,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
             advanceUntilIdle()
             assertFalse(viewModel.state.value.hasPendingChanges)
@@ -212,7 +213,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -233,7 +234,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -257,7 +258,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
             advanceUntilIdle()
 
@@ -293,7 +294,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
             advanceUntilIdle()
             assertEquals(false, viewModel.state.value.interfaceOnlineStatus["Test RNode"])
@@ -328,7 +329,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             runCurrent()
@@ -360,7 +361,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
             advanceUntilIdle()
 
@@ -378,7 +379,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -413,7 +414,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -453,7 +454,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     genericProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -498,7 +499,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -547,7 +548,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -595,7 +596,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -650,7 +651,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -712,7 +713,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -772,7 +773,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -835,7 +836,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -875,7 +876,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -905,7 +906,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -951,7 +952,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -983,7 +984,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1015,7 +1016,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1041,7 +1042,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1090,7 +1091,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1119,7 +1120,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1158,7 +1159,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1199,7 +1200,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1244,7 +1245,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1274,7 +1275,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1303,7 +1304,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1331,7 +1332,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1376,7 +1377,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1406,7 +1407,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1444,7 +1445,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
 
             advanceUntilIdle()
@@ -1495,7 +1496,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
             advanceUntilIdle()
 
@@ -1526,7 +1527,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     serviceProtocol,
                     transportObserver,
                     rnsBackend,
-                    context = mockk(relaxed = true),
+                    context = testContext,
                 )
             advanceUntilIdle()
 

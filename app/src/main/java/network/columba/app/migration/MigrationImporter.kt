@@ -28,6 +28,8 @@ import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.util.HashUtils
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.service.PropagationNodeManager
+import network.columba.app.telemetry.MemoryDiagnosticOperation
+import network.columba.app.telemetry.MemoryDiagnostics
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
@@ -126,6 +128,7 @@ class MigrationImporter
             password: String? = null,
         ): Result<PreviewWithData> =
             withContext(Dispatchers.IO) {
+                val diagnosticSession = MemoryDiagnostics.operationStarted(MemoryDiagnosticOperation.IMPORT)
                 try {
                     val (bundle, localFile) =
                         readMigrationBundle(uri, password)
@@ -156,6 +159,8 @@ class MigrationImporter
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to preview migration", e)
                     Result.failure(e)
+                } finally {
+                    MemoryDiagnostics.operationFinished(MemoryDiagnosticOperation.IMPORT, diagnosticSession)
                 }
             }
 
@@ -175,37 +180,42 @@ class MigrationImporter
             importPassword: CharArray? = null,
         ): ImportResult =
             withContext(Dispatchers.IO) {
-                Log.i(TAG, "Starting migration import...")
-                onProgress(0.05f)
-
-                // Stage the bundle as a local plaintext ZIP: reuse the file
-                // prepared by the preview when available (it is already
-                // decrypted), otherwise copy + decrypt from the URI. The
-                // manifest is parsed in a single streaming pass either way.
-                val (bundle, stagedFile, importerOwnedFile) =
-                    if (cachedZipFile != null && cachedZipFile.exists()) {
-                        // Reuse the preview's local bundle (already a plaintext
-                        // ZIP). The caller still owns this file, so do not
-                        // delete it here.
-                        val parsed = streamBundleFromZipFile(cachedZipFile)
-                            ?: return@withContext ImportResult.Error(
-                                "Failed to read migration file",
-                            )
-                        Triple(parsed.first, parsed.second, false)
-                    } else {
-                        val parsed = readMigrationBundle(uri, password)
-                            ?: return@withContext ImportResult.Error(
-                                "Failed to read migration file",
-                            )
-                        Triple(parsed.first, parsed.second, true)
-                    }
-
+                val diagnosticSession = MemoryDiagnostics.operationStarted(MemoryDiagnosticOperation.IMPORT)
                 try {
-                    importDataInternal(bundle, stagedFile, onProgress, importPassword)
+                    Log.i(TAG, "Starting migration import...")
+                    onProgress(0.05f)
+
+                    // Stage the bundle as a local plaintext ZIP: reuse the file
+                    // prepared by the preview when available (it is already
+                    // decrypted), otherwise copy + decrypt from the URI. The
+                    // manifest is parsed in a single streaming pass either way.
+                    val (bundle, stagedFile, importerOwnedFile) =
+                        if (cachedZipFile != null && cachedZipFile.exists()) {
+                            // Reuse the preview's local bundle (already a plaintext
+                            // ZIP). The caller still owns this file, so do not
+                            // delete it here.
+                            val parsed = streamBundleFromZipFile(cachedZipFile)
+                                ?: return@withContext ImportResult.Error(
+                                    "Failed to read migration file",
+                                )
+                            Triple(parsed.first, parsed.second, false)
+                        } else {
+                            val parsed = readMigrationBundle(uri, password)
+                                ?: return@withContext ImportResult.Error(
+                                    "Failed to read migration file",
+                                )
+                            Triple(parsed.first, parsed.second, true)
+                        }
+
+                    try {
+                        importDataInternal(bundle, stagedFile, onProgress, importPassword)
+                    } finally {
+                        // Only remove files this importer created; the caller
+                        // (ViewModel) owns and re-cleans the preview's cache file.
+                        if (importerOwnedFile) stagedFile.delete()
+                    }
                 } finally {
-                    // Only remove files this importer created; the caller
-                    // (ViewModel) owns and re-cleans the preview's cache file.
-                    if (importerOwnedFile) stagedFile.delete()
+                    MemoryDiagnostics.operationFinished(MemoryDiagnosticOperation.IMPORT, diagnosticSession)
                 }
             }
 

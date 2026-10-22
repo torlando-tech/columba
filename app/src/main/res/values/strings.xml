@@ -333,4 +333,6 @@
     <string name="new_call_invalid_identity_hash">Enter a valid 32-character identity hash</string>
     <string name="new_call_invalid_destination_hash">Enter a valid 32-character destination hash</string>
     <string name="new_call_network_request_failed">Network path request failed</string>
+    <string name="crash_reporting_title">Crash Reports</string>
+    <string name="crash_reporting_privacy_description">With your permission, Columba sends crash types, code locations, app versions and coarse memory diagnostics to Sentry. Message contents, contacts, keys and peer identifiers are excluded. Sentry receives your network IP when reports are uploaded. Off by default; change this anytime in Settings → Advanced.</string>
 </resources>

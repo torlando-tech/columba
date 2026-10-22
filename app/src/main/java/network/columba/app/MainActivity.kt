@@ -185,42 +185,6 @@ class MainActivity : ComponentActivity() {
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
 
-    // Build-time-swappable crash reporter (no-op in the noSentry flavor). Breadcrumbs are
-    // recorded against the global reporting hub initialized by ColumbaApplication.
-    private val crashReporter: network.columba.app.telemetry.CrashReporter =
-        network.columba.app.telemetry.CrashReporterProvider.create()
-
-    // JankStats for performance monitoring (Phase 1 Plan 01-03)
-    private lateinit var jankStats: androidx.metrics.performance.JankStats
-
-    private val jankFrameListener =
-        androidx.metrics.performance.JankStats.OnFrameListener { frameData ->
-            // Report janky frames as breadcrumbs (flavor-gated via crashReporter)
-            if (frameData.isJank) {
-                val durationMs = frameData.frameDurationUiNanos / 1_000_000
-                crashReporter.addBreadcrumb(
-                    network.columba.app.telemetry.CrashBreadcrumb(
-                        category = "performance",
-                        message = "Janky frame: ${durationMs}ms",
-                        level =
-                            if (durationMs > 100) {
-                                network.columba.app.telemetry.CrashReportLevel.WARNING
-                            } else {
-                                network.columba.app.telemetry.CrashReportLevel.INFO
-                            },
-                        data =
-                            mapOf(
-                                "frame_duration_ms" to durationMs,
-                                "states" to frameData.states.joinToString { "${it.key}=${it.value}" },
-                            ),
-                    ),
-                )
-
-                // Log for local debugging
-                Log.w(TAG, "Jank detected: ${durationMs}ms with states ${frameData.states}")
-            }
-        }
-
     // Track last handled USB device to avoid double-processing
     private var lastHandledUsbDeviceId: Int = -1
     private var lastHandledUsbTimestamp: Long = 0
@@ -395,23 +359,10 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-
-        // Initialize JankStats for frame monitoring (Phase 1 Plan 01-03)
-        window.decorView.post {
-            jankStats =
-                androidx.metrics.performance.JankStats
-                    .createAndTrack(window, jankFrameListener)
-            jankStats.isTrackingEnabled = true
-            Log.d(TAG, "JankStats initialized and tracking enabled")
-        }
     }
 
     override fun onResume() {
         super.onResume()
-        if (::jankStats.isInitialized) {
-            jankStats.isTrackingEnabled = true
-        }
-
         // Reinforce foreground notification: on Android 13+ users can swipe it away,
         // and only Service.startForeground() can restore it. Sending ACTION_START
         // triggers onStartCommand which calls startForeground(this).
@@ -423,13 +374,6 @@ class MainActivity : ComponentActivity() {
             ContextCompat.startForegroundService(this, serviceIntent)
         } catch (e: Exception) {
             Log.w(TAG, "Could not reinforce foreground notification", e)
-        }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        if (::jankStats.isInitialized) {
-            jankStats.isTrackingEnabled = false
         }
     }
 

@@ -417,25 +417,19 @@ sentry {
     org.set(System.getenv("SENTRY_ORG") ?: "")
     projectName.set(System.getenv("SENTRY_PROJECT") ?: "columba")
 
-    // Enable uploads only when auth token is available
+    // Only build-level symbol mappings are uploaded, never source-file contents.
     val hasAuth = !System.getenv("SENTRY_AUTH_TOKEN").isNullOrEmpty()
     autoUploadProguardMapping.set(hasAuth)
-    autoUploadSourceContext.set(hasAuth)
-    autoUploadNativeSymbols.set(false) // No native code
+    autoUploadSourceContext.set(false)
+    autoUploadNativeSymbols.set(false)
 
-    // CRITICAL: the io.sentry:sentry-android dependency is declared manually and scoped to
-    // the `sentry` flavor only (see `sentryImplementation` in dependencies). With
-    // autoInstallation enabled the plugin would re-add the SDK to the noSentry flavor
-    // (which has no direct Sentry dependency), defeating the build-time removal.
+    // The core crash SDK is explicitly scoped to the sentry flavor. Auto-installation
+    // would reintroduce Android collectors or add the SDK to noSentry variants.
     autoInstallation {
         enabled.set(false)
     }
 
-    // Exclude all noSentry* variants from bytecode instrumentation, logcat breadcrumbs,
-    // and mapping upload — the Sentry SDK is not present there, so any injected reference
-    // (e.g. SentryLogcatAdapter) would NoClassDefFoundError at runtime. ignoredFlavors
-    // alone did not gate the logcat instrumentation in this plugin version, so the full
-    // noSentry variant names are listed explicitly via ignoredVariants as well.
+    // The noSentry variants must have no SDK, generated SDK references, or mapping uploads.
     ignoredFlavors.set(setOf("noSentry"))
     ignoredVariants.set(
         setOf(
@@ -446,13 +440,11 @@ sentry {
         ),
     )
 
-    // Logcat integration - captures android.util.Log calls as breadcrumbs
+    // Crash-only reporting: do not turn app logs, network calls or UI work into telemetry.
     tracingInstrumentation {
-        enabled.set(true)
-
+        enabled.set(false)
         logcat {
-            enabled.set(true)
-            minLevel.set(io.sentry.android.gradle.instrumentation.logcat.LogcatLevel.WARNING)
+            enabled.set(false)
         }
     }
 }
@@ -522,16 +514,9 @@ dependencies {
     implementation(libs.room)
     ksp(libs.room.compiler)
 
-    // Crash Reporting - GlitchTip (Sentry-compatible)
-    // Phase 4 Task 4.2: Production Observability
-    // Scoped to the `sentry` flavor ONLY so the SDK is entirely absent from the noSentry
-    // APK. The noSentry flavor uses src/noSentry/.../NoOpCrashReporter instead. Requires
-    // autoInstallation.enabled = false in the sentry { } block above.
-    "sentryImplementation"("io.sentry:sentry-android:8.31.0")
-
-    // Performance Monitoring - JankStats for frame monitoring
-    // Phase 1 Plan 01-03: Frame tracking integration with Sentry
-    implementation("androidx.metrics:metrics-performance:1.0.0-beta01")
+    // Core SDK only: no Android auto-collectors, NDK dumps, replay or performance SDKs.
+    // The noSentry flavor contains no SDK; keep autoInstallation disabled above.
+    "sentryImplementation"("io.sentry:sentry:8.31.0")
 
     // QR Code & Camera
     implementation(libs.zxing.core)

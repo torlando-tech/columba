@@ -52,7 +52,8 @@ enum class ImageCompressionPreset(
     // 25MB target
     ORIGINAL(
         displayName = "Original",
-        // 8K resolution - exceeds Android Canvas limit if higher
+        // 8K cap on the sent image; display paths sample to display size, so
+        // Canvas draw limits are handled there, not by shrinking the send (#1209)
         maxDimensionPx = 8192,
         targetSizeBytes = 25 * 1024 * 1024L,
         initialQuality = 95,

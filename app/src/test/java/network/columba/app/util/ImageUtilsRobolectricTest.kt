@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ContentResolver
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
 import network.columba.app.data.model.ImageCompressionPreset
@@ -12,6 +13,7 @@ import io.mockk.mockk
 import io.mockk.unmockkAll
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -359,5 +361,110 @@ class ImageUtilsRobolectricTest {
     @Test
     fun `ORIGINAL preset has 8K max dimension`() {
         assertEquals(8192, ImageCompressionPreset.ORIGINAL.maxDimensionPx)
+    }
+
+    // ========== Issue #1209: previewing ORIGINAL-preset output must stay drawable ==========
+
+    private fun encodeTestJpeg(
+        width: Int,
+        height: Int,
+    ): ByteArray {
+        val source = createTestBitmap(width, height)
+        val jpeg =
+            java.io.ByteArrayOutputStream().use { stream ->
+                source.compress(Bitmap.CompressFormat.JPEG, 95, stream)
+                stream.toByteArray()
+            }
+        source.recycle()
+        return jpeg
+    }
+
+    /** Runs a synthetic photo through the real [ImageUtils.compressImageWithPreset] pipeline. */
+    private fun compressForPreset(
+        width: Int,
+        height: Int,
+        preset: ImageCompressionPreset,
+    ): ImageUtils.CompressionResult {
+        val jpeg = encodeTestJpeg(width, height)
+        val uri = Uri.parse("content://test/photo.jpg")
+        every { mockContentResolver.openInputStream(uri) } answers
+            { java.io.ByteArrayInputStream(jpeg) }
+
+        val result = ImageUtils.compressImageWithPreset(mockContext, uri, preset)
+        assertNotNull("compression failed for preset ${preset.name}", result)
+        return result!!
+    }
+
+    private fun assertDrawableOnHardwareCanvas(bitmap: Bitmap) {
+        // RecordingCanvas.MAX_BITMAP_SIZE: drawing a larger bitmap throws
+        // "Canvas: trying to draw too large(N bytes) bitmap".
+        val maxCanvasBitmapBytes = 100L * 1024 * 1024
+        assertTrue(
+            "bitmap ${bitmap.width}x${bitmap.height} decodes to ${bitmap.byteCount} bytes, " +
+                "exceeding the hardware canvas draw limit of $maxCanvasBitmapBytes bytes",
+            bitmap.byteCount <= maxCanvasBitmapBytes,
+        )
+    }
+
+    @Test
+    fun `ORIGINAL preset preview fits hardware canvas limit`() {
+        // Issue #1209: the reporter's 8160x6144 photo sent at ORIGINAL quality
+        // crashed the composer preview with
+        // "Canvas: trying to draw too large(200540160 bytes) bitmap"
+        // (8160 * 6144 * 4). The preview must decode sampled, like the message
+        // bubble does, never at full resolution.
+        val result = compressForPreset(8160, 6144, ImageCompressionPreset.ORIGINAL)
+        val preview = ImageUtils.decodeSampledBitmap(result.compressedImage.data, 1024)
+        assertNotNull("preview decode failed", preview)
+        preview!!.let {
+            try {
+                assertDrawableOnHardwareCanvas(it)
+            } finally {
+                it.recycle()
+            }
+        }
+    }
+
+    @Test
+    fun `ORIGINAL preset preserves source dimensions on the wire`() {
+        // The preview fix must not shrink what is sent: ORIGINAL keeps the
+        // full 8160x6144 source resolution (bounds-only decode).
+        val result = compressForPreset(8160, 6144, ImageCompressionPreset.ORIGINAL)
+        val data = result.compressedImage.data
+        val bounds =
+            BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+        BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
+        assertEquals(8160, bounds.outWidth)
+        assertEquals(6144, bounds.outHeight)
+    }
+
+    @Test
+    fun `HIGH preset preview fits hardware canvas limit`() {
+        // Control: the reporter reports compressed qualities work fine.
+        val result = compressForPreset(8160, 6144, ImageCompressionPreset.HIGH)
+        val preview = ImageUtils.decodeSampledBitmap(result.compressedImage.data, 1024)
+        assertNotNull("preview decode failed", preview)
+        preview!!.let {
+            try {
+                assertDrawableOnHardwareCanvas(it)
+            } finally {
+                it.recycle()
+            }
+        }
+    }
+
+    @Test
+    fun `decodeSampledBitmap samples large images below twice the target dimension`() {
+        val jpeg = encodeTestJpeg(4000, 3000)
+        val decoded = ImageUtils.decodeSampledBitmap(jpeg, 1024)
+        assertNotNull("decode failed", decoded)
+        decoded!!.let {
+            // Power-of-two sampling keeps each dimension under 2x the target
+            assertTrue("width ${it.width} should be < 2048", it.width < 2048)
+            assertTrue("height ${it.height} should be < 2048", it.height < 2048)
+            it.recycle()
+        }
     }
 }

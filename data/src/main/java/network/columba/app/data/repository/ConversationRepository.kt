@@ -1029,10 +1029,8 @@ class ConversationRepository
          * @return Modified fields JSON with file references for large attachments, or original if no extraction needed
          */
         @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
-        private fun extractLargeAttachments(
-            messageId: String,
-            fieldsJson: String?,
-        ): String? {
+        @androidx.annotation.VisibleForTesting
+        internal fun extractLargeAttachments(messageId: String, fieldsJson: String?): String? {
             if (fieldsJson == null) return null
 
             val totalSize = fieldsJson.length
@@ -1111,6 +1109,10 @@ class ConversationRepository
                 modifiedFields.put("5", extractFileAttachmentsForSent(messageId, value))
                 return true
             }
+            if (key == "6" && value is JSONArray) {
+                modifiedFields.put("6", extractImageAttachmentForStorage(messageId, value))
+                return true
+            }
             if (key != "7") return false
             if (value !is JSONArray) return false
             if (value.length() < 2) return false
@@ -1132,6 +1134,37 @@ class ConversationRepository
                     .put(JSONObject().put(AttachmentStorageManager.FILE_REF_KEY, filePath)),
             )
             return true
+        }
+
+        /**
+         * Extract a large array-format image (`[format, hex]`, the wire shape every
+         * Columba sender produces for LXMF field 6) to disk, keeping the array
+         * shape: `["jpg", {"_file_ref": path}]`.
+         *
+         * Mirrors the audio (field 7) handling. The generic extraction path would
+         * instead store the whole array string and replace the field with a bare
+         * `_file_ref` object; the message mapper hex-decodes file-ref payloads, so
+         * an array payload there fails to decode and the UI shows "not available".
+         */
+        private fun extractImageAttachmentForStorage(
+            messageId: String,
+            imageArray: JSONArray,
+        ): JSONArray {
+            // Anything but a [format, hex] payload (already a file ref, null
+            // payload, or staging-only shape) is kept as received.
+            val hexPayload =
+                if (imageArray.length() >= 2 && imageArray.opt(1) is String) {
+                    imageArray.getString(1)
+                } else {
+                    ""
+                }
+            if (hexPayload.length <= AttachmentStorageManager.SIZE_THRESHOLD) return imageArray
+            val filePath =
+                attachmentStorage.saveAttachment(messageId, "6", hexPayload)
+                    ?: return imageArray
+            return JSONArray()
+                .put(imageArray.opt(0))
+                .put(JSONObject().put(AttachmentStorageManager.FILE_REF_KEY, filePath))
         }
 
         /**

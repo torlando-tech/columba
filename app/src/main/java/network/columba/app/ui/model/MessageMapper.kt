@@ -261,11 +261,15 @@ private fun hasImageField(fieldsJson: String?): Boolean {
         when {
             field6 is JSONObject && (field6.has(FILE_REF_KEY) || field6.has(BINARY_REF_KEY)) -> true
             field6 is String && field6.isNotEmpty() -> true
-            // Handle array format from Python: ["format", "hex_data"] or ["format", null, "staging_path"]
+            // Handle array format from Python: ["format", "hex_data"],
+            // ["format", {"_file_ref": path}] (extracted), or ["format", null, "staging_path"]
             field6 is JSONArray &&
                 field6.length() >= 2 &&
                 (
                     (field6.opt(1) as? String)?.isNotEmpty() == true ||
+                        (field6.opt(1) as? JSONObject)?.let {
+                            it.has(FILE_REF_KEY) || it.has(BINARY_REF_KEY)
+                        } == true ||
                         (field6.length() >= 3 && (field6.opt(2) as? String)?.isNotEmpty() == true)
                 ) -> true
             else -> false
@@ -518,11 +522,11 @@ internal fun loadImageBytes(fieldsJson: String?): ByteArray? {
 
         // Binary ref: raw binary file from Python staging (large images)
         if (field6 is JSONObject && field6.has(BINARY_REF_KEY)) {
-            val filePath = field6.getString(BINARY_REF_KEY)
-            return loadBinaryFromDisk(filePath)
+            val stagingPath = field6.getString(BINARY_REF_KEY)
+            if (stagingPath.isNotEmpty()) return loadBinaryFromDisk(stagingPath)
         }
 
-        // Array format: ["format", "hex_data"] or ["format", null, "staging_path"]
+        // Array format with null payload and staging path: ["format", null, "staging_path"]
         if (field6 is JSONArray && field6.length() >= 3 && field6.isNull(1)) {
             val stagingPath = field6.optString(2, "")
             if (stagingPath.isNotEmpty()) return loadBinaryFromDisk(stagingPath)
@@ -530,12 +534,17 @@ internal fun loadImageBytes(fieldsJson: String?): ByteArray? {
 
         val hexImageData: String =
             when {
-                field6 is JSONObject && field6.has(FILE_REF_KEY) -> {
-                    val filePath = field6.getString(FILE_REF_KEY)
-                    loadAttachmentFromDisk(filePath) ?: return null
-                }
+                // File ref: hex string saved to disk by AttachmentStorageManager
+                field6 is JSONObject && field6.has(FILE_REF_KEY) ->
+                    loadAttachmentFromDisk(field6.optString(FILE_REF_KEY))
+                        ?.let { unwrapArrayPayload(it) } ?: return null
                 field6 is String && field6.isNotEmpty() -> field6
-                // Handle array format from Python: ["format", "hex_data"]
+                // Extracted array shape: ["format", {"_file_ref": path}]
+                field6 is JSONArray && field6.length() >= 2 && field6.opt(1) is JSONObject ->
+                    loadAttachmentFromDisk(
+                        field6.optJSONObject(1)?.optString(FILE_REF_KEY).orEmpty(),
+                    )?.let { unwrapArrayPayload(it) } ?: return null
+                // Inline array format: ["format", "hex_data"]
                 field6 is JSONArray && field6.length() >= 2 -> field6.optString(1, "")
                 else -> return null
             }
@@ -546,6 +555,17 @@ internal fun loadImageBytes(fieldsJson: String?): ByteArray? {
         Log.e(TAG, "Failed to extract image bytes", e)
         null
     }
+}
+
+/**
+ * Recover payloads written by the pre-fix generic extraction path, which stored
+ * the whole `["jpg", "<hex>"]` array string in the attachment file. New
+ * extractions store only the hex payload, so this only affects messages
+ * received before the fix; their bubbles heal on next display.
+ */
+private fun unwrapArrayPayload(content: String): String {
+    if (!content.trimStart().startsWith("[")) return content
+    return runCatching { JSONArray(content).optString(1) }.getOrDefault(content)
 }
 
 /**

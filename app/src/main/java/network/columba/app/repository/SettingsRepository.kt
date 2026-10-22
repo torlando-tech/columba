@@ -207,6 +207,13 @@ class SettingsRepository
         // Cross-process SharedPreferences for service communication
         // DataStore does NOT support multi-process access, so we use SharedPreferences
         // with MODE_MULTI_PROCESS for values written by the service process.
+        //
+        // Two files, one dominant writer each. SharedPreferences flushes its whole
+        // in-memory map on every write and MODE_MULTI_PROCESS does not synchronize
+        // writers, so sharing one file between the processes let the service's
+        // frequent runtime-state writes erase settings keys written by the UI.
+        // Settings keys (this process writes) stay in CROSS_PROCESS_PREFS_NAME;
+        // service runtime state lives in SERVICE_STATE_PREFS_NAME.
         @Suppress("DEPRECATION") // MODE_MULTI_PROCESS is deprecated but necessary for cross-process
         private fun getCrossProcessPrefs(): SharedPreferences =
             context.getSharedPreferences(
@@ -214,14 +221,22 @@ class SettingsRepository
                 Context.MODE_MULTI_PROCESS,
             )
 
+        @Suppress("DEPRECATION") // MODE_MULTI_PROCESS is deprecated but necessary for cross-process
+        private fun getServiceStatePrefs(): SharedPreferences =
+            context.getSharedPreferences(
+                ServiceSettingsAccessor.SERVICE_STATE_PREFS_NAME,
+                Context.MODE_MULTI_PROCESS,
+            )
+
         /**
          * Creates a Flow that observes a Long value from cross-process SharedPreferences.
          * Uses OnSharedPreferenceChangeListener to emit updates reactively.
          */
-        private fun crossProcessLongFlow(key: String): Flow<Long?> =
+        private fun crossProcessLongFlow(
+            key: String,
+            prefs: SharedPreferences = getCrossProcessPrefs(),
+        ): Flow<Long?> =
             callbackFlow {
-                val prefs = getCrossProcessPrefs()
-
                 // Emit initial value
                 val initialValue = prefs.getLong(key, -1L).takeIf { it != -1L }
                 trySend(initialValue)
@@ -635,7 +650,7 @@ class SettingsRepository
          * the service and main app can trigger announces.
          */
         val lastAutoAnnounceTimeFlow: Flow<Long?> =
-            crossProcessLongFlow(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME)
+            crossProcessLongFlow(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, getServiceStatePrefs())
 
         /**
          * Save the last auto-announce timestamp.
@@ -645,7 +660,7 @@ class SettingsRepository
          */
         @Suppress("RedundantSuspendModifier") // Keep suspend for API compatibility
         suspend fun saveLastAutoAnnounceTime(timestamp: Long) {
-            getCrossProcessPrefs()
+            getServiceStatePrefs()
                 .edit()
                 .putLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, timestamp)
                 .apply()
@@ -685,7 +700,7 @@ class SettingsRepository
          * Uses SharedPreferences for cross-process communication.
          */
         val networkChangeAnnounceTimeFlow: Flow<Long?> =
-            crossProcessLongFlow(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME)
+            crossProcessLongFlow(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, getServiceStatePrefs())
 
         /**
          * Save the network change announce timestamp.
@@ -695,7 +710,7 @@ class SettingsRepository
          */
         @Suppress("RedundantSuspendModifier") // Keep suspend for API compatibility
         suspend fun saveNetworkChangeAnnounceTime(timestamp: Long) {
-            getCrossProcessPrefs()
+            getServiceStatePrefs()
                 .edit()
                 .putLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, timestamp)
                 .apply()

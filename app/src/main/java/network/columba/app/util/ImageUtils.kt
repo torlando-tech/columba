@@ -19,7 +19,7 @@ object ImageUtils {
     const val MAX_IMAGE_SIZE_BYTES = 512 * 1024 // 512KB for efficient mesh network transmission
     const val MAX_IMAGE_DIMENSION = 2048 // pixels
     const val HEAVY_COMPRESSION_THRESHOLD = 50 // Quality below this is considered "heavy"
-    private const val MAX_PREVIEW_DIMENSION = 4096 // Max for loading to avoid Canvas limits
+    private const val MAX_PREVIEW_DIMENSION = 4096 // Bounds peak subsampled-decode memory
     val SUPPORTED_IMAGE_FORMATS = setOf("jpg", "jpeg", "png", "webp", "gif")
 
     /**
@@ -278,8 +278,9 @@ object ImageUtils {
         uri: Uri,
         maxDimension: Int = MAX_PREVIEW_DIMENSION,
     ): Bitmap? {
-        // Always cap to MAX_PREVIEW_DIMENSION to prevent Canvas size crashes
-        // even if caller requests larger (e.g., ORIGINAL preset with Int.MAX_VALUE)
+        // Cap the subsampled decode to bound peak memory. The power-of-two
+        // heuristic still decodes at up to 2x this cap; the exact output
+        // dimension is enforced by the caller's scaleDownIfNeeded(maxDimension).
         val effectiveMaxDimension = minOf(maxDimension, MAX_PREVIEW_DIMENSION)
 
         var loadedBitmap: Bitmap? = null
@@ -439,6 +440,35 @@ object ImageUtils {
         }
 
         return sampleSize
+    }
+
+    /**
+     * Decode image [bytes] into a bitmap sampled down during decoding so no
+     * dimension exceeds roughly 2x [maxDimensionPx] (power-of-two sampling).
+     * Bounds-first: oversized sources (e.g. an ORIGINAL-preset 8K photo)
+     * never allocate a full-resolution bitmap, which the hardware canvas
+     * refuses to draw once the bitmap exceeds its ~100MB limit (issue #1209).
+     *
+     * @param bytes Encoded image bytes (JPEG/WebP/PNG...)
+     * @param maxDimensionPx Target maximum display dimension in pixels
+     * @return Sampled bitmap, or null if the bytes are not a decodable image
+     */
+    fun decodeSampledBitmap(
+        bytes: ByteArray,
+        maxDimensionPx: Int,
+    ): Bitmap? {
+        val bounds =
+            BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+
+        val sampleSize = calculateSampleSize(bounds.outWidth, bounds.outHeight, maxDimensionPx)
+        val options =
+            BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+            }
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
     }
 
     fun getImageFormat(

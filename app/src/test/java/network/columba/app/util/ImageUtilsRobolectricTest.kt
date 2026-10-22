@@ -4,7 +4,9 @@ import android.app.Application
 import android.content.ContentResolver
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.media.ExifInterface
 import android.net.Uri
 import network.columba.app.data.model.ImageCompressionPreset
 import io.mockk.every
@@ -12,6 +14,7 @@ import io.mockk.mockk
 import io.mockk.unmockkAll
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -359,5 +362,175 @@ class ImageUtilsRobolectricTest {
     @Test
     fun `ORIGINAL preset has 8K max dimension`() {
         assertEquals(8192, ImageCompressionPreset.ORIGINAL.maxDimensionPx)
+    }
+
+    // ========== Issue #1209: previewing ORIGINAL-preset output must stay drawable ==========
+
+    private fun encodeTestJpeg(
+        width: Int,
+        height: Int,
+    ): ByteArray {
+        val source = createTestBitmap(width, height)
+        val jpeg =
+            java.io.ByteArrayOutputStream().use { stream ->
+                source.compress(Bitmap.CompressFormat.JPEG, 95, stream)
+                stream.toByteArray()
+            }
+        source.recycle()
+        return jpeg
+    }
+
+    /** Runs a synthetic photo through the real [ImageUtils.compressImageWithPreset] pipeline. */
+    private fun compressForPreset(
+        width: Int,
+        height: Int,
+        preset: ImageCompressionPreset,
+    ): ImageUtils.CompressionResult {
+        val jpeg = encodeTestJpeg(width, height)
+        val uri = Uri.parse("content://test/photo.jpg")
+        every { mockContentResolver.openInputStream(uri) } answers
+            { java.io.ByteArrayInputStream(jpeg) }
+
+        val result = ImageUtils.compressImageWithPreset(mockContext, uri, preset)
+        assertNotNull("compression failed for preset ${preset.name}", result)
+        return result!!
+    }
+
+    private fun assertDrawableOnHardwareCanvas(bitmap: Bitmap) {
+        // RecordingCanvas.MAX_BITMAP_SIZE: drawing a larger bitmap throws
+        // "Canvas: trying to draw too large(N bytes) bitmap".
+        val maxCanvasBitmapBytes = 100L * 1024 * 1024
+        assertTrue(
+            "bitmap ${bitmap.width}x${bitmap.height} decodes to ${bitmap.byteCount} bytes, " +
+                "exceeding the hardware canvas draw limit of $maxCanvasBitmapBytes bytes",
+            bitmap.byteCount <= maxCanvasBitmapBytes,
+        )
+    }
+
+    @Test
+    fun `ORIGINAL preset preview fits hardware canvas limit`() {
+        // Issue #1209: the reporter's 8160x6144 photo sent at ORIGINAL quality
+        // crashed the composer preview with
+        // "Canvas: trying to draw too large(200540160 bytes) bitmap"
+        // (8160 * 6144 * 4). The preview must decode sampled, like the message
+        // bubble does, never at full resolution.
+        val result = compressForPreset(8160, 6144, ImageCompressionPreset.ORIGINAL)
+        val preview = ImageUtils.decodeSampledBitmap(result.compressedImage.data, 1024)
+        assertNotNull("preview decode failed", preview)
+        preview!!.let {
+            try {
+                assertDrawableOnHardwareCanvas(it)
+            } finally {
+                it.recycle()
+            }
+        }
+    }
+
+    @Test
+    fun `ORIGINAL preset preserves source dimensions on the wire`() {
+        // The preview fix must not shrink what is sent: ORIGINAL keeps the
+        // full 8160x6144 source resolution (bounds-only decode).
+        val result = compressForPreset(8160, 6144, ImageCompressionPreset.ORIGINAL)
+        val data = result.compressedImage.data
+        val bounds =
+            BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+        BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
+        assertEquals(8160, bounds.outWidth)
+        assertEquals(6144, bounds.outHeight)
+    }
+
+    @Test
+    fun `HIGH preset preview fits hardware canvas limit`() {
+        // Control: the reporter reports compressed qualities work fine.
+        val result = compressForPreset(8160, 6144, ImageCompressionPreset.HIGH)
+        val preview = ImageUtils.decodeSampledBitmap(result.compressedImage.data, 1024)
+        assertNotNull("preview decode failed", preview)
+        preview!!.let {
+            try {
+                assertDrawableOnHardwareCanvas(it)
+            } finally {
+                it.recycle()
+            }
+        }
+    }
+
+    @Test
+    fun `decodeSampledBitmap samples large images below twice the target dimension`() {
+        val jpeg = encodeTestJpeg(4000, 3000)
+        val decoded = ImageUtils.decodeSampledBitmap(jpeg, 1024)
+        assertNotNull("decode failed", decoded)
+        decoded!!.let {
+            // Power-of-two sampling keeps each dimension under 2x the target
+            assertTrue("width ${it.width} should be < 2048", it.width < 2048)
+            assertTrue("height ${it.height} should be < 2048", it.height < 2048)
+            it.recycle()
+        }
+    }
+
+    @Test
+    fun `ORIGINAL preset strips EXIF metadata from the sent image`() {
+        // Privacy invariant: every image leaving the image pipeline is
+        // re-encoded from raw pixels, so camera metadata (GPS, device) never
+        // rides along - even at ORIGINAL quality.
+        val source = createTestBitmap(200, 100)
+        val plain =
+            java.io.ByteArrayOutputStream().use { stream ->
+                source.compress(Bitmap.CompressFormat.JPEG, 95, stream)
+                stream.toByteArray()
+            }
+        source.recycle()
+
+        // Stamp GPS coordinates and a 90-degree rotation into the source JPEG.
+        val taggedFile = java.io.File.createTempFile("tagged", ".jpg")
+        taggedFile.writeBytes(plain)
+        val exif = android.media.ExifInterface(taggedFile.absolutePath)
+        exif.setAttribute(ExifInterface.TAG_GPS_LATITUDE, "37/1,46/1,48000/1000")
+        exif.setAttribute(ExifInterface.TAG_GPS_LATITUDE_REF, "N")
+        exif.setAttribute(ExifInterface.TAG_GPS_LONGITUDE, "122/1,25/1,9000/1000")
+        exif.setAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF, "W")
+        exif.setAttribute(
+            ExifInterface.TAG_ORIENTATION,
+            ExifInterface.ORIENTATION_ROTATE_90.toString(),
+        )
+        exif.saveAttributes()
+        val tagged = taggedFile.readBytes()
+        taggedFile.delete()
+
+        // Sanity: the stamped input really carries the GPS data.
+        val inExif = android.media.ExifInterface(java.io.ByteArrayInputStream(tagged))
+        assertNotNull(
+            "test setup: GPS missing from stamped input",
+            inExif.getAttribute(ExifInterface.TAG_GPS_LATITUDE),
+        )
+
+        val uri = Uri.parse("content://test/photo.jpg")
+        every { mockContentResolver.openInputStream(uri) } answers
+            { java.io.ByteArrayInputStream(tagged) }
+
+        val result = ImageUtils.compressImageWithPreset(mockContext, uri, ImageCompressionPreset.ORIGINAL)
+        assertNotNull(result)
+        val out = result!!.compressedImage.data
+
+        val outExif = android.media.ExifInterface(java.io.ByteArrayInputStream(out))
+        assertNull("GPS latitude survived re-encoding", outExif.getAttribute(ExifInterface.TAG_GPS_LATITUDE))
+        assertNull("GPS longitude survived re-encoding", outExif.getAttribute(ExifInterface.TAG_GPS_LONGITUDE))
+        val outOrientation =
+            outExif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        assertTrue(
+            "rotation should be baked into pixels, not left as metadata (got $outOrientation)",
+            outOrientation == ExifInterface.ORIENTATION_NORMAL ||
+                outOrientation == ExifInterface.ORIENTATION_UNDEFINED,
+        )
+
+        // The 90-degree rotation was applied to the pixels: 200x100 -> 100x200.
+        val bounds =
+            BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+        BitmapFactory.decodeByteArray(out, 0, out.size, bounds)
+        assertEquals(100, bounds.outWidth)
+        assertEquals(200, bounds.outHeight)
     }
 }

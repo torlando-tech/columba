@@ -2,7 +2,6 @@ package network.columba.app.ui.screens
 
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.SystemClock
 import android.provider.Settings
@@ -251,6 +250,9 @@ import java.util.Locale
 
 private const val URL_ANNOTATION_TAG = "url"
 private const val VOICE_PREVIEW_KEY = "voice-recording-preview"
+// Composer image preview is decoded sampled to avoid Canvas size limits (#1209)
+private const val IMAGE_PREVIEW_MAX_DIMENSION_PX = 1024
+
 @Composable
 private fun LinkifiedMessageText(
     text: String,
@@ -2764,8 +2766,8 @@ fun MessageInputBar(
                         // Static image - use decoded bitmap
                         val bitmap =
                             remember(selectedImageData) {
-                                BitmapFactory
-                                    .decodeByteArray(selectedImageData, 0, selectedImageData.size)
+                                ImageUtils
+                                    .decodeSampledBitmap(selectedImageData, IMAGE_PREVIEW_MAX_DIMENSION_PX)
                                     ?.asImageBitmap()
                             }
                         bitmap?.let { imageBitmap ->

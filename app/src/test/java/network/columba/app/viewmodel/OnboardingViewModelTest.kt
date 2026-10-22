@@ -59,13 +59,12 @@ class OnboardingViewModelTest {
         mockInterfaceRepository = mockk()
         mockInterfaceConfigManager = mockk()
         mockCrashReportManager = mockk()
-        every { mockCrashReportManager.setCrashReportingConsentMirror(any()) } returns Unit
+        coEvery { mockCrashReportManager.updateCrashReportingConsent(any(), any(), any()) } returns Unit
 
         // Default stubs for SettingsRepository
         coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
         coEvery { mockSettingsRepository.needsIdentityUnlockFlow } returns MutableStateFlow(false)
         coEvery { mockSettingsRepository.markOnboardingCompleted() } just Runs
-        coEvery { mockSettingsRepository.setCrashReportingConsent(any()) } just Runs
         coEvery { mockSettingsRepository.markCrashReportingPromptSeen() } just Runs
 
         // Default stubs for IdentityRepository

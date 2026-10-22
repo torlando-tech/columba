@@ -1935,17 +1935,15 @@ class SettingsViewModel
         }
 
         /**
-         * Set the anonymous crash reporting opt-in (sentry flavor only).
+         * Set the opt-in crash reporting choice (sentry flavor only).
          * Persists the DataStore source of truth + the synchronous startup mirror, and
          * activates/deactivates reporting immediately (no restart required).
          */
         fun setCrashReportingEnabled(enabled: Boolean) {
             viewModelScope.launch {
-                settingsRepository.setCrashReportingConsent(enabled)
-                crashReportManager.setCrashReportingConsentMirror(enabled)
-                network.columba.app.telemetry.CrashReporterProvider
-                    .create()
-                    .setEnabled(enabled)
+                crashReportManager.updateCrashReportingConsent(enabled) { granted ->
+                    settingsRepository.setCrashReportingConsent(granted)
+                }
                 Log.d(TAG, "Crash reporting ${if (enabled) "enabled" else "disabled"}")
             }
         }

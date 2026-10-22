@@ -28,14 +28,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 
 /**
  * Crash reporting opt-in page (sentry flavor only).
  *
- * Asks the user whether to send anonymous crash reports. Defaults to off; the user must
+ * Asks the user whether to send privacy-minimized crash reports. Defaults to off; the user must
  * explicitly opt in. The choice is persisted when onboarding completes.
  */
 @Composable
@@ -76,10 +78,7 @@ fun CrashReportingPage(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text =
-                "Columba can send anonymous crash and error reports to help the " +
-                    "developer find and fix bugs. No message content, contacts, or " +
-                    "identity information is ever included.",
+            text = stringResource(R.string.crash_reporting_privacy_description),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -117,7 +116,7 @@ fun CrashReportingPage(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Anonymous Crash Reports",
+                        text = stringResource(R.string.crash_reporting_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface,

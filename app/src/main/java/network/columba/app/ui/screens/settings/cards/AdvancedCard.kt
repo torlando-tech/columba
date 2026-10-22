@@ -22,9 +22,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import network.columba.app.BuildConfig
+import network.columba.app.R
 import network.columba.app.ui.components.CollapsibleSettingsCard
 import network.columba.app.ui.components.LocalCapabilities
 
@@ -193,7 +195,7 @@ fun AdvancedCard(
             }
         }
 
-        // Anonymous crash reporting toggle (sentry flavor only — the SDK is stripped from
+        // Opt-in crash reporting toggle (sentry flavor only — the SDK is stripped from
         // the noSentry flavor, so the toggle would do nothing there).
         if (BuildConfig.CRASH_REPORTING_AVAILABLE) {
             Spacer(Modifier.height(16.dp))
@@ -212,7 +214,7 @@ fun AdvancedCard(
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     Text(
-                        text = "Anonymous Crash Reports",
+                        text = stringResource(R.string.crash_reporting_title),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                     )
@@ -223,10 +225,7 @@ fun AdvancedCard(
                 )
             }
             Text(
-                text =
-                    "Send anonymous crash and error reports to help the developer fix bugs. " +
-                        "No message content, contacts, or identity information is ever included. " +
-                        "Off by default; you can change this at any time.",
+                text = stringResource(R.string.crash_reporting_privacy_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

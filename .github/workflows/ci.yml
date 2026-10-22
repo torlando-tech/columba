@@ -249,9 +249,12 @@ jobs:
       - name: Run app unit tests (shard ${{ matrix.shard }})
         # Build cache enabled for faster incremental builds
         # AIDL and JaCoCo caching issues are handled by clean steps above
-        # NOTE: For app module, only run noSentry variant (sentry/noSentry share the same test code,
-        # differing only in SENTRY_DSN buildConfigField which tests don't exercise).
+        # Shared behavior runs on noSentry; the privacy adapter has its own sentry-flavor check below.
         run: ./gradlew :app:testNoSentryKotlinBackendDebugUnitTest -PtestShard=${{ matrix.shard }} -PtestShardTotal=4 --stacktrace --max-workers=4
+
+      - name: Verify Sentry privacy and memory diagnostics
+        if: matrix.shard == 0
+        run: ./gradlew :app:testSentryKotlinBackendDebugUnitTest --tests 'network.columba.app.telemetry.*Test' --stacktrace --max-workers=4
 
       - name: Upload unit test results
         if: always()

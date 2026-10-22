@@ -5,7 +5,12 @@ import android.content.SharedPreferences
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import network.columba.app.telemetry.CrashReporter
+import network.columba.app.telemetry.CrashReporterProvider
+import network.columba.app.telemetry.CrashReportingConsentStore
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -55,11 +60,6 @@ class CrashReportManager
             private const val KEY_STACK_TRACE = "stack_trace"
             private const val KEY_LOGS = "logs"
 
-            // Synchronous mirror of the crash-reporting consent preference (the DataStore
-            // value in SettingsRepository is the source of truth). Mirrored here so it can
-            // be read without coroutines at the top of Application.onCreate().
-            private const val KEY_CRASH_CONSENT = "crash_reporting_consent"
-
             // Privacy filter patterns
             private val HASH_PATTERN = Regex("([a-fA-F0-9]{16,})")
             private val IP_PATTERN = Regex("\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b")
@@ -73,6 +73,12 @@ class CrashReportManager
         }
 
         private var defaultHandler: Thread.UncaughtExceptionHandler? = null
+
+        private val consentLock = Any()
+        private val consentPersistence = Mutex()
+        private var consentRevision = 0L
+
+        private val reportingConsent by lazy { CrashReportingConsentStore(context) }
 
         /**
          * Install the uncaught exception handler.
@@ -109,25 +115,80 @@ class CrashReportManager
         }
 
         /**
-         * Synchronously read whether the user has opted in to anonymous crash reporting.
+         * Synchronously read durable startup permission for opt-in crash reporting.
          * Defaults to false (opt-in). Safe to call from Application.onCreate().
          */
         fun isCrashReportingConsentGranted(): Boolean {
-            return prefs.getBoolean(KEY_CRASH_CONSENT, false)
+            return reportingConsent.granted
         }
 
         /**
-         * Update the synchronous consent mirror. Call this alongside
-         * SettingsRepository.setCrashReportingConsent() (the DataStore source of truth) so
-         * the value is available for the next cold start.
+         * Reconcile the authoritative preference with startup permission before any cached
+         * telemetry can replay. A delayed startup read must not override a newer UI choice.
          */
-        fun setCrashReportingConsentMirror(granted: Boolean) {
-            // commit() (synchronous) rather than apply(): the mirror gates Sentry init at
-            // the next cold start, so a crash between the DataStore write and an async SP
-            // flush must not leave a stale `true` that re-enables reporting after the user
-            // revoked consent. Callers run on a coroutine thread, so the blocking write is
-            // negligible for a single boolean.
-            prefs.edit().putBoolean(KEY_CRASH_CONSENT, granted).commit()
+        suspend fun initializeCrashReportingConsent(
+            reporter: CrashReporter = CrashReporterProvider.create(),
+            readConsent: suspend () -> Boolean,
+        ) {
+            val revision = synchronized(consentLock) { consentRevision }
+            consentPersistence.withLock {
+                val persisted =
+                    try {
+                        readConsent()
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        false
+                    }
+                synchronized(consentLock) {
+                    if (revision != consentRevision) return
+                    val allowed = persisted && isCrashReportingConsentGranted()
+                    try {
+                        if (!allowed) writeStartupConsent(false)
+                    } finally {
+                        reporter.setEnabled(allowed)
+                    }
+                }
+            }
+        }
+
+        /**
+         * Revoke live reporting and durable startup permission before any suspending preference
+         * write. Grants require both stores to succeed. Serialize persistence and reject stale
+         * grant completions so rapid toggles cannot re-enable an obsolete consent request.
+         */
+        suspend fun updateCrashReportingConsent(
+            granted: Boolean,
+            reporter: CrashReporter = CrashReporterProvider.create(),
+            persistConsent: suspend (Boolean) -> Unit,
+        ) {
+            val revision =
+                synchronized(consentLock) {
+                    consentRevision++
+                    if (!granted) {
+                        try {
+                            // Deny the next process before SDK shutdown can block or be interrupted.
+                            writeStartupConsent(false)
+                        } finally {
+                            reporter.setEnabled(false)
+                        }
+                    }
+                    consentRevision
+                }
+            consentPersistence.withLock {
+                if (synchronized(consentLock) { revision != consentRevision }) return
+                persistConsent(granted)
+                synchronized(consentLock) {
+                    if (granted && revision == consentRevision) {
+                        writeStartupConsent(true)
+                        reporter.setEnabled(true)
+                    }
+                }
+            }
+        }
+
+        private fun writeStartupConsent(granted: Boolean) {
+            reportingConsent.writeConsent(granted)
         }
 
         /**

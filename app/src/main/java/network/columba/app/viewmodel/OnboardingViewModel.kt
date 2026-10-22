@@ -22,7 +22,6 @@ import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.service.InterfaceConfigManager
-import network.columba.app.telemetry.CrashReporterProvider
 import network.columba.app.ui.screens.onboarding.OnboardingInterfaceType
 import network.columba.app.ui.screens.onboarding.OnboardingState
 import network.columba.app.util.BatteryOptimizationManager
@@ -284,10 +283,10 @@ class OnboardingViewModel
                     // immediately (no restart). Mark the one-time update prompt seen since
                     // the user has now made an explicit choice during onboarding.
                     val crashReportingEnabled = _state.value.crashReportingEnabled
-                    settingsRepository.setCrashReportingConsent(crashReportingEnabled)
-                    crashReportManager.setCrashReportingConsentMirror(crashReportingEnabled)
+                    crashReportManager.updateCrashReportingConsent(crashReportingEnabled) { granted ->
+                        settingsRepository.setCrashReportingConsent(granted)
+                    }
                     settingsRepository.markCrashReportingPromptSeen()
-                    CrashReporterProvider.create().setEnabled(crashReportingEnabled)
 
                     // Restart service to apply changes. Flip UI to "done" at Step 9
                     // (RNS ready) rather than after the full apply — on a fresh

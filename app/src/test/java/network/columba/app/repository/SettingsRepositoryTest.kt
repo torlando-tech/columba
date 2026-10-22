@@ -2,9 +2,11 @@ package network.columba.app.repository
 
 import android.app.Application
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import network.columba.app.data.repository.CustomThemeRepository
+import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import network.columba.app.ui.theme.ThemeMode
 import io.mockk.clearAllMocks
 import io.mockk.every
@@ -1912,4 +1914,60 @@ class SettingsRepositoryTest {
             assertEquals(0, repository.getAutoconnectDiscoveredCount())
             assertFalse(repository.getPendingDiscoveryRestart())
         }
+
+    @Test
+    fun `repairMirroredSettings restores keys the service process erased`() =
+        runTest {
+            repository.saveBlockUnknownSenders(true)
+            repository.savePersistentWakeLock(false)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // The pre-split bug: the service process flushed its own snapshot
+            // of the shared file and took the UI's mirrored keys with it.
+            mirrorPrefs().edit().clear().apply()
+            assertFalse(mirrorPrefs().contains(ServiceSettingsAccessor.KEY_BLOCK_UNKNOWN_SENDERS))
+
+            repository.repairMirroredSettings()
+
+            val mirror = mirrorPrefs()
+            assertTrue(mirror.getBoolean(ServiceSettingsAccessor.KEY_BLOCK_UNKNOWN_SENDERS, false))
+            assertFalse(mirror.getBoolean(ServiceSettingsAccessor.KEY_PERSISTENT_WAKE_LOCK, true))
+            // Settings the test never touched must still end up mirrored with
+            // their authoritative DataStore value (which other tests in this
+            // class may have changed — DataStore persists across them).
+            assertEquals(
+                repository.allowVoiceCallsFlow.first(),
+                mirror.getBoolean(ServiceSettingsAccessor.KEY_ALLOW_VOICE_CALLS, false),
+            )
+            assertEquals(
+                repository.allowCallsFromContactsOnlyFlow.first(),
+                mirror.getBoolean(ServiceSettingsAccessor.KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY, true),
+            )
+
+            repository.saveBlockUnknownSenders(false)
+            repository.savePersistentWakeLock(true)
+        }
+
+    @Test
+    fun `repairMirroredSettings overwrites a stale mirrored value`() =
+        runTest {
+            // Mirror says unknown senders are blocked; DataStore (the source of
+            // truth) says they are not. Repair must follow DataStore.
+            repository.saveBlockUnknownSenders(false)
+            mirrorPrefs()
+                .edit()
+                .putBoolean(ServiceSettingsAccessor.KEY_BLOCK_UNKNOWN_SENDERS, true)
+                .apply()
+
+            repository.repairMirroredSettings()
+
+            assertFalse(mirrorPrefs().getBoolean(ServiceSettingsAccessor.KEY_BLOCK_UNKNOWN_SENDERS, true))
+        }
+
+    private fun mirrorPrefs(): SharedPreferences =
+        @Suppress("DEPRECATION")
+        context.getSharedPreferences(
+            ServiceSettingsAccessor.CROSS_PROCESS_PREFS_NAME,
+            Context.MODE_MULTI_PROCESS,
+        )
 }

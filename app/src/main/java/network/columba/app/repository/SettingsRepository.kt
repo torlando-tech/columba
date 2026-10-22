@@ -2565,6 +2565,36 @@ class SettingsRepository
                 .apply()
         }
 
+        /**
+         * Re-push every mirrored setting from DataStore into the cross-process
+         * SharedPreferences file.
+         *
+         * Builds predating the prefs split let the `:reticulum` service's
+         * runtime-state writes clobber mirrored keys (whole-map flush plus
+         * unsynchronized `MODE_MULTI_PROCESS` writers), silently reverting the
+         * service's view of these settings to defaults — including
+         * security-relevant ones (`block_unknown_senders`, `allow_voice_calls`)
+         * and `persistent_wake_lock`. DataStore is the source of truth and was
+         * never corrupted, so an upgraded install heals its mirror by
+         * re-pushing the persisted values once at UI-process start.
+         * Idempotent; safe to run on every launch.
+         */
+        suspend fun repairMirroredSettings() {
+            val values =
+                listOf(
+                    blockUnknownSendersFlow.first() to KEY_BLOCK_UNKNOWN_SENDERS,
+                    allowCallsFromContactsOnlyFlow.first() to KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY,
+                    allowVoiceCallsFlow.first() to KEY_ALLOW_VOICE_CALLS,
+                    persistentWakeLockFlow.first() to KEY_PERSISTENT_WAKE_LOCK,
+                )
+            @Suppress("DEPRECATION") // MODE_MULTI_PROCESS needed for cross-process writes
+            context
+                .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+                .edit()
+                .apply { values.forEach { (value, key) -> putBoolean(key, value) } }
+                .apply()
+        }
+
         // Custom theme methods (delegated to CustomThemeRepository)
 
         /**

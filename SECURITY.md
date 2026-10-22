@@ -97,11 +97,13 @@ or establish the root cause of COLUMBA-EE by itself.
 ### Consent, pending reports and privacy limits
 
 Startup resolves both the authoritative preference and durable startup permission
-before enabling the SDK or replaying cached reports. Opt-out durably denies startup
-permission before SDK shutdown and before any suspending preference write, stops
-sampling, clears memory history, and removes pending SDK telemetry. Old consent
-epochs cannot become authorized by a later opt-in. An HTTP request already in flight
-cannot be recalled.
+before enabling the SDK or replaying cached reports. Opt-out atomically records
+startup denial and a durable cache-cleanup requirement before SDK shutdown and
+before any suspending preference write. It stops sampling, clears memory history,
+and removes pending SDK telemetry. The cleanup requirement survives process death
+and later grants; it is cleared only after SDK-cache deletion succeeds, before
+cached-report replay can start. Old consent epochs cannot become authorized by a
+later opt-in. An HTTP request already in flight cannot be recalled.
 
 At most 10 sanitized envelopes are retained in a dedicated app-private SDK cache
 for same-build retry. The old unrestricted SDK cache is deleted before activation.

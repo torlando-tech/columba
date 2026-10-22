@@ -28,6 +28,7 @@ internal class SentryCrashReporter(
     private val transportFactory: ITransportFactory = AsyncHttpTransportFactory(),
 ) : CrashReporter {
     private var appContext: Context? = null
+    private var consentStore: CrashReportingConsentStore? = null
     private var needsCachePurge = false
     private var environment = "production"
 
@@ -40,6 +41,7 @@ internal class SentryCrashReporter(
         environment: String,
     ) {
         appContext = context.applicationContext
+        consentStore = CrashReportingConsentStore(context.applicationContext)
         this.environment = if (environment == "production") "production" else "development"
     }
 
@@ -53,10 +55,20 @@ internal class SentryCrashReporter(
             previous?.revoke()
             consent = null
             MemoryDiagnostics.stop()
-            if (previous != null) Sentry.close()
-            appContext?.let { context ->
-                needsCachePurge = !purgeSdkDirectory(File(context.cacheDir, PRIVATE_CACHE))
-                purgeSdkDirectory(File(context.cacheDir, LEGACY_CACHE))
+            needsCachePurge = true
+            try {
+                // Also journal direct reporter revocations before SDK shutdown can block.
+                consentStore?.requireCachePurge()
+            } finally {
+                if (previous != null) Sentry.close()
+                appContext?.let { context ->
+                    val privateCleared = purgeSdkDirectory(File(context.cacheDir, PRIVATE_CACHE))
+                    val legacyCleared = purgeSdkDirectory(File(context.cacheDir, LEGACY_CACHE))
+                    if (privateCleared && legacyCleared) {
+                        consentStore?.markCachePurged()
+                        needsCachePurge = false
+                    }
+                }
             }
         }
     }
@@ -68,13 +80,19 @@ internal class SentryCrashReporter(
     private fun initSentry() {
         if (consent != null || dsn.isBlank()) return
         val context = appContext ?: return
-        if (needsCachePurge && !purgeSdkDirectory(File(context.cacheDir, PRIVATE_CACHE))) return
-        needsCachePurge = false
+        // A grant never clears this journal. Finish interrupted revocations before
+        // constructing the SDK, whose cached-envelope integration can replay immediately.
+        val pendingPurge = needsCachePurge || consentStore?.cachePurgeRequired == true
+        if (pendingPurge && !purgeSdkDirectory(File(context.cacheDir, PRIVATE_CACHE))) return
         val buildUuid = loadProguardUuid(context)
         // Never replay envelopes from the old unrestricted Android SDK configuration.
         if (!purgeSdkDirectory(File(context.cacheDir, LEGACY_CACHE))) {
             Log.w(TAG, "Crash reporting disabled: unable to clear legacy SDK cache")
             return
+        }
+        if (pendingPurge) {
+            consentStore?.markCachePurged()
+            needsCachePurge = false
         }
         val epoch = SentryConsent()
         val policy =

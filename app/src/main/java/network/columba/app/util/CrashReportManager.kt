@@ -10,6 +10,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import network.columba.app.telemetry.CrashReporter
 import network.columba.app.telemetry.CrashReporterProvider
+import network.columba.app.telemetry.CrashReportingConsentStore
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -59,11 +60,6 @@ class CrashReportManager
             private const val KEY_STACK_TRACE = "stack_trace"
             private const val KEY_LOGS = "logs"
 
-            // Synchronous mirror of the crash-reporting consent preference (the DataStore
-            // value in SettingsRepository is the source of truth). Mirrored here so it can
-            // be read without coroutines at the top of Application.onCreate().
-            private const val KEY_CRASH_CONSENT = "crash_reporting_consent"
-
             // Privacy filter patterns
             private val HASH_PATTERN = Regex("([a-fA-F0-9]{16,})")
             private val IP_PATTERN = Regex("\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b")
@@ -81,6 +77,8 @@ class CrashReportManager
         private val consentLock = Any()
         private val consentPersistence = Mutex()
         private var consentRevision = 0L
+
+        private val reportingConsent by lazy { CrashReportingConsentStore(context) }
 
         /**
          * Install the uncaught exception handler.
@@ -121,7 +119,7 @@ class CrashReportManager
          * Defaults to false (opt-in). Safe to call from Application.onCreate().
          */
         fun isCrashReportingConsentGranted(): Boolean {
-            return prefs.getBoolean(KEY_CRASH_CONSENT, false)
+            return reportingConsent.granted
         }
 
         /**
@@ -190,9 +188,7 @@ class CrashReportManager
         }
 
         private fun writeStartupConsent(granted: Boolean) {
-            check(prefs.edit().putBoolean(KEY_CRASH_CONSENT, granted).commit()) {
-                "Unable to persist crash reporting consent"
-            }
+            reportingConsent.writeConsent(granted)
         }
 
         /**

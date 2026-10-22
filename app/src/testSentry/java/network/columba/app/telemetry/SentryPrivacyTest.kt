@@ -566,6 +566,115 @@ class SentryPrivacyTest {
         }
 
     @Test
+    fun `grant after interrupted opt-out and restart purges revoked cache before SDK creation`() =
+        runBlocking {
+            val firstFactory = RecordingFactory()
+            val first = SentryCrashReporter(TEST_DSN, firstFactory).also { reporter = it }
+            first.configure(context, "production")
+            val manager = CrashReportManager(context)
+            manager.updateCrashReportingConsent(true, first) {}
+            val previousOptions = firstFactory.options.single()
+            Sentry.close()
+            MemoryDiagnostics.stop()
+            val directory = File(requireNotNull(previousOptions.cacheDirPath)).apply { mkdirs() }
+            val disk = EnvelopeCache(previousOptions, directory.absolutePath, 10)
+            disk.storeEnvelope(
+                SentryEnvelope.from(
+                    previousOptions.serializer,
+                    hostileEvent().apply { release = previousOptions.release },
+                    null,
+                ),
+                Hint(),
+            )
+            val revoked = directory.listFiles()!!.single { it.name.endsWith(".envelope") }
+            val interruptedShutdown =
+                mockk<CrashReporter> {
+                    every { setEnabled(false) } throws IllegalStateException("Simulated process death before cleanup")
+                }
+            assertTrue(
+                runCatching {
+                    manager.updateCrashReportingConsent(false, interruptedShutdown) {}
+                }.isFailure,
+            )
+            assertTrue(revoked.exists())
+
+            val recording = RecordingFactory()
+            val afterRestart =
+                SentryCrashReporter(
+                    TEST_DSN,
+                    ITransportFactory { options, details ->
+                        assertFalse("Revoked reports must be deleted before the new SDK can replay", revoked.exists())
+                        recording.create(options, details)
+                    },
+                ).also { reporter = it }
+            afterRestart.configure(context, "production")
+            val restartedManager = CrashReportManager(context)
+            val startupRead = CompletableDeferred<Boolean>()
+            val startup =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    restartedManager.initializeCrashReportingConsent(afterRestart) { startupRead.await() }
+                }
+            val newGrant =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    restartedManager.updateCrashReportingConsent(true, afterRestart) {}
+                }
+            startupRead.complete(true)
+            startup.join()
+            newGrant.join()
+            assertTrue(Sentry.isEnabled())
+            afterRestart.captureException(IllegalArgumentException(SECRET))
+            assertPrivate(recording.transports.single().payloads.single())
+        }
+
+    @Test
+    fun `pending same-build report still replays after restart without revocation`() =
+        runBlocking {
+            val firstFactory = RecordingFactory()
+            val first = SentryCrashReporter(TEST_DSN, firstFactory).also { reporter = it }
+            first.configure(context, "production")
+            val manager = CrashReportManager(context)
+            manager.updateCrashReportingConsent(true, first) {}
+            val previousOptions = firstFactory.options.single()
+            Sentry.close()
+            MemoryDiagnostics.stop()
+            val directory = File(requireNotNull(previousOptions.cacheDirPath)).apply { mkdirs() }
+            EnvelopeCache(previousOptions, directory.absolutePath, 10).storeEnvelope(
+                SentryEnvelope.from(
+                    previousOptions.serializer,
+                    hostileEvent().apply { release = previousOptions.release },
+                    null,
+                ),
+                Hint(),
+            )
+            val received = ArrayBlockingQueue<ByteArray>(1)
+            val recording = RecordingFactory()
+            val restarted =
+                SentryCrashReporter(
+                    TEST_DSN,
+                    ITransportFactory { options, details ->
+                        val delegate = recording.create(options, details)
+                        object : ITransport by delegate {
+                            override fun send(
+                                envelope: SentryEnvelope,
+                                hint: Hint,
+                            ) {
+                                delegate.send(envelope, hint)
+                                received.add(recording.transports.single().payloads.single())
+                            }
+                        }
+                    },
+                ).also { reporter = it }
+            restarted.configure(context, "production")
+            CrashReportManager(context).initializeCrashReportingConsent(restarted) { true }
+            val payload = received.poll(5, TimeUnit.SECONDS)
+            assertNotNull("An unrevoked same-build report must remain eligible for retry", payload)
+            assertPrivate(payload!!)
+            val replayed = previousOptions.serializer.deserializeEnvelope(ByteArrayInputStream(payload))!!
+            val event = replayed.items.single().getEvent(previousOptions.serializer)!!
+            assertEquals("IllegalStateException", event.exceptions!!.single().type)
+        }
+
+    @Test
     fun `SDK cache cleanup accepts aliased parents without following selected links`() {
         val root = Files.createTempDirectory("sentry-cache-alias").toFile()
         val realCache = File(root, "real-cache").apply { mkdirs() }

@@ -16,21 +16,43 @@ class ServiceSettingsAccessor(
     private val context: Context,
 ) {
     companion object {
-        // SharedPreferences file for cross-process communication
+        // SharedPreferences file for cross-process communication.
+        //
+        // WRITER RULE: the UI process is the only writer of this file (settings
+        // dual-writes from SettingsRepository); the service process only reads
+        // it. SharedPreferences flushes its whole in-memory map on every write,
+        // and MODE_MULTI_PROCESS does not synchronize writers — a service-side
+        // write here clobbers UI settings keys written after the service loaded
+        // its snapshot (observed in the field: frequent last_network_status
+        // writes erased persistent_wake_lock, silently forcing the persistent
+        // lock on every service restart). Service-owned runtime state lives in
+        // SERVICE_STATE_PREFS_NAME instead.
         const val CROSS_PROCESS_PREFS_NAME = "cross_process_settings"
+
+        // Runtime state written by the `:reticulum` service and read by the UI
+        // (announce timestamps, last network status). The UI's rare writes to
+        // the two announce timestamps are last-write-wins timestamps — a lost
+        // update only ages the "last announce" display by one cycle, never a
+        // setting.
+        const val SERVICE_STATE_PREFS_NAME = "columba_service_state"
 
         // Keys for cross-process settings
         const val KEY_BLOCK_UNKNOWN_SENDERS = "block_unknown_senders"
         const val KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY = "allow_calls_from_contacts_only"
         const val KEY_ALLOW_VOICE_CALLS = "allow_voice_calls"
+        const val KEY_PERSISTENT_WAKE_LOCK = "persistent_wake_lock"
+
+        // Keys for service-owned runtime state (SERVICE_STATE_PREFS_NAME)
         const val KEY_NETWORK_CHANGE_ANNOUNCE_TIME = "network_change_announce_time"
         const val KEY_LAST_AUTO_ANNOUNCE_TIME = "last_auto_announce_time"
         const val KEY_LAST_NETWORK_STATUS = "last_network_status"
-        const val KEY_PERSISTENT_WAKE_LOCK = "persistent_wake_lock"
+
     }
 
     // Get fresh SharedPreferences each time to avoid caching issues across processes
     private fun getCrossProcessPrefs() = context.getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+
+    private fun getServiceStatePrefs() = context.getSharedPreferences(SERVICE_STATE_PREFS_NAME, Context.MODE_MULTI_PROCESS)
 
     /**
      * Save the network change announce timestamp.
@@ -40,7 +62,7 @@ class ServiceSettingsAccessor(
      * @param timestamp The timestamp in epoch milliseconds
      */
     fun saveNetworkChangeAnnounceTime(timestamp: Long) {
-        getCrossProcessPrefs()
+        getServiceStatePrefs()
             .edit()
             .putLong(KEY_NETWORK_CHANGE_ANNOUNCE_TIME, timestamp)
             .apply()
@@ -53,7 +75,7 @@ class ServiceSettingsAccessor(
      * @param timestamp The timestamp in epoch milliseconds
      */
     fun saveLastAutoAnnounceTime(timestamp: Long) {
-        getCrossProcessPrefs()
+        getServiceStatePrefs()
             .edit()
             .putLong(KEY_LAST_AUTO_ANNOUNCE_TIME, timestamp)
             .apply()
@@ -107,11 +129,12 @@ class ServiceSettingsAccessor(
         getCrossProcessPrefs().getBoolean(KEY_PERSISTENT_WAKE_LOCK, true)
 
     /**
-     * Persist the app process's current network-status string so the service process can
-     * restore the correct initial notification across Android-driven restarts of the
-     * `:reticulum` process. Without this the service comes back with the default "SHUTDOWN"
-     * and the foreground notification flashes (or sticks on) "Disconnected" even though
-     * the native stack in the app process is still READY.
+     * Persist the service's current network-status string (service-state file)
+     * so the service process can restore the correct initial notification
+     * across Android-driven restarts of the `:reticulum` process. Without this
+     * the service comes back with the default "SHUTDOWN" and the foreground
+     * notification flashes (or sticks on) "Disconnected" even though the mesh
+     * stack was READY before the restart.
      *
      * Values follow the same vocabulary the notification already expects: "SHUTDOWN",
      * "INITIALIZING", "CONNECTING", "READY", or "ERROR:message".
@@ -122,7 +145,7 @@ class ServiceSettingsAccessor(
         // that hasn't flushed can lose the transition and leave the notification stale.
         // The disk sync is ~1ms and happens on the networkStatus collector coroutine, not
         // the main thread.
-        getCrossProcessPrefs()
+        getServiceStatePrefs()
             .edit()
             .putString(KEY_LAST_NETWORK_STATUS, status)
             .commit()
@@ -133,5 +156,5 @@ class ServiceSettingsAccessor(
      * has been persisted yet (first install, or before the app process has run) so the
      * caller can fall back to its own default.
      */
-    fun getLastNetworkStatus(): String? = getCrossProcessPrefs().getString(KEY_LAST_NETWORK_STATUS, null)
+    fun getLastNetworkStatus(): String? = getServiceStatePrefs().getString(KEY_LAST_NETWORK_STATUS, null)
 }

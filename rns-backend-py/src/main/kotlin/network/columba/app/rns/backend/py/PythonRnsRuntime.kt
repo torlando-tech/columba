@@ -192,6 +192,16 @@ class PythonRnsRuntime(
     var bleBridge: Any? = null
 
     /**
+     * Mesh RX/TX activity hook for the service's duty-cycle wake-lock mode.
+     * Set by `:rns-host`'s `ReticulumService` (it owns the `LockManager`);
+     * forwarded to `event_bridge.install_traffic_activity_callback` on every
+     * [start] and cleared on [stop]. The Python side throttles signals to at
+     * most one JNI hop per window, so this may be a hot path upstream.
+     */
+    @Volatile
+    var trafficActivityCallback: (() -> Unit)? = null
+
+    /**
      * `KotlinRNodeBridge` instance for the bundled ColumbaRNodeInterface
      * (Classic SPP + BLE GATT to RNode LoRa hardware).
      *
@@ -283,38 +293,29 @@ class PythonRnsRuntime(
     }
 
     /**
-     * Bring the Python RNS/LXMF stack up: write the RNS `config` file from
-     * [config], construct `Reticulum(configdir)`, load the delivery identity,
-     * construct the `LXMRouter`, and register the delivery destination.
+     * Resolve the boot mode against coexisting RNS apps and write the RNS
+     * `config` file for [config]; returns the config directory to hand to
+     * `Reticulum()`.
      *
-     * [wireEventBridge] must be called afterwards to attach the Kotlin event
-     * sinks.
+     * Detects coexisting RNS apps on the device along two axes:
+     *  • TCP 37428 → another RNS is exposed as a shared instance
+     *    (Sideband by default). Join as RPC client and skip
+     *    interfaces — mirrors v0.10.x.
+     *  • UDP bind on AutoInterface data_port → another RNS holds
+     *    the multicast bind even though it's not exposing a
+     *    shared instance (another Columba running standalone).
+     *    Can't join, can't bind — render AutoInterface as disabled
+     *    so RNS doesn't crash trying to compete for the port.
+     *
+     * Resolves "join" before "host": the user's Advanced-settings
+     * toggle (`config.shareInstanceHosting`) expresses intent to
+     * publish ourselves on TCP 37428, but the kernel allows only
+     * one binder. When the probe finds another master, we defer to
+     * it at the wire layer and surface a "hosting conflict" mode to
+     * the UI so the user can see why their toggle didn't take
+     * effect.
      */
-    @Synchronized
-    fun start(config: ReticulumConfig) {
-        if (running.get()) {
-            Log.w(TAG, "start() called while already running — ignoring")
-            return
-        }
-        ensureStarted()
-
-        // Detect coexisting RNS apps on the device along two axes:
-        //  • TCP 37428 → another RNS is exposed as a shared instance
-        //    (Sideband by default). Join as RPC client and skip
-        //    interfaces — mirrors v0.10.x.
-        //  • UDP bind on AutoInterface data_port → another RNS holds
-        //    the multicast bind even though it's not exposing a
-        //    shared instance (another Columba running standalone).
-        //    Can't join, can't bind — render AutoInterface as disabled
-        //    so RNS doesn't crash trying to compete for the port.
-        //
-        // Resolve "join" before "host": the user's Advanced-settings
-        // toggle (`config.shareInstanceHosting`) expresses intent to
-        // publish ourselves on TCP 37428, but the kernel allows only
-        // one binder. When the probe finds another master, we defer to
-        // it at the wire layer and surface a "hosting conflict" mode to
-        // the UI so the user can see why their toggle didn't take
-        // effect.
+    private fun writeRnsConfig(config: ReticulumConfig): File {
         val probe = network.columba.app.rns.api.util.SharedInstanceProbe
         val joinShareInstance = probe.shouldShareInstance(config)
         val hostShareInstance = config.shareInstanceHosting && !joinShareInstance
@@ -348,6 +349,26 @@ class PythonRnsRuntime(
         // baseline (which would treat every interface as "to attach").
         seedAppliedInterfaces(config)
         Log.i(TAG, "Wrote RNS config to ${configDir.absolutePath}/config")
+        return configDir
+    }
+
+    /**
+     * Bring the Python RNS/LXMF stack up: write the RNS `config` file from
+     * [config], construct `Reticulum(configdir)`, load the delivery identity,
+     * construct the `LXMRouter`, and register the delivery destination.
+     *
+     * [wireEventBridge] must be called afterwards to attach the Kotlin event
+     * sinks.
+     */
+    @Synchronized
+    fun start(config: ReticulumConfig) {
+        if (running.get()) {
+            Log.w(TAG, "start() called while already running — ignoring")
+            return
+        }
+        ensureStarted()
+
+        val configDir = writeRnsConfig(config)
 
         // RNS.Transport.find_interfaces() scans <configdir>/interfaces/ for
         // custom interface .py files. Materialise the bundled ones (BLE
@@ -374,13 +395,25 @@ class PythonRnsRuntime(
         // usb_bridge.py via its set_usb_bridge accessor. Same lifecycle
         // requirement as the BLE bridge above — must be set before
         // Reticulum() so the USB-mode interface init can resolve it.
-        val usbBridgeModule = python.getModule("usb_bridge")
-        usbBridgeModule.callAttr("set_usb_bridge", usbBridge)
+        python.getModule("usb_bridge").callAttr("set_usb_bridge", usbBridge)
 
         // A busy AutoInterface data port must not take the whole service down
         // via RNS.panic() (see event_bridge.install_rns_guards). Before
         // Reticulum() so the startup interface bring-up is covered.
         eventBridge.callAttr("install_rns_guards")
+        // A rejecting TCP gateway must never face a flat 5 s retry loop —
+        // anti-flap policy reads that as flooding (see
+        // event_bridge.install_tcp_reconnect_backoff).
+        eventBridge.callAttr("install_tcp_reconnect_backoff")
+        // Install the traffic-activity hook on event_bridge. Unlike the
+        // peripheral bridges this need not precede `Reticulum()` — the hook
+        // only observes packets — but doing it in start() keeps every
+        // restart wired with the current callback (the Python-side class
+        // patch is idempotent).
+        eventBridge.callAttr(
+            "install_traffic_activity_callback",
+            trafficActivityCallback?.let { cb -> PyEventCallback { cb() } },
+        )
 
         // Construct the upstream Reticulum instance. RNS.Reticulum is a process
         // singleton — stop() must fully tear it down before a restart.
@@ -520,6 +553,8 @@ class PythonRnsRuntime(
             .onFailure { Log.w(TAG, "External stamp generator unregister failed", it) }
         runCatching { eventBridge.callAttr("deregister_callbacks") }
             .onFailure { Log.w(TAG, "event_bridge deregister failed", it) }
+        runCatching { eventBridge.callAttr("install_traffic_activity_callback", null as Any?) }
+            .onFailure { Log.w(TAG, "Traffic activity callback clear failed", it) }
         // The destination resolver must outlive the callbacks: the telemetry
         // stream response resolves its outbound destination through it. Clear
         // it only after callbacks can no longer dispatch, so a request arriving

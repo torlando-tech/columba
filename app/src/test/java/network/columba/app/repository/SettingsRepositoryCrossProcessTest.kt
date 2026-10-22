@@ -46,7 +46,7 @@ class SettingsRepositoryCrossProcessTest {
     private lateinit var context: Context
     private lateinit var mockCustomThemeRepository: CustomThemeRepository
     private lateinit var repository: SettingsRepository
-    private lateinit var crossProcessPrefs: SharedPreferences
+    private lateinit var serviceStatePrefs: SharedPreferences
 
     @Before
     fun setup() {
@@ -60,23 +60,25 @@ class SettingsRepositoryCrossProcessTest {
 
         repository = SettingsRepository(context, mockCustomThemeRepository)
 
-        // Get direct access to cross-process SharedPreferences for testing
+        // Announce timestamps live in the service-state file (see
+        // ServiceSettingsAccessor): the UI writes settings, the service writes
+        // runtime state, one dominant writer per file.
         @Suppress("DEPRECATION")
-        crossProcessPrefs =
+        serviceStatePrefs =
             context.getSharedPreferences(
-                ServiceSettingsAccessor.CROSS_PROCESS_PREFS_NAME,
+                ServiceSettingsAccessor.SERVICE_STATE_PREFS_NAME,
                 Context.MODE_MULTI_PROCESS,
             )
 
         // Clear prefs before each test
-        crossProcessPrefs.edit().clear().apply()
+        serviceStatePrefs.edit().clear().apply()
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
         clearAllMocks()
-        crossProcessPrefs.edit().clear().apply()
+        serviceStatePrefs.edit().clear().apply()
     }
 
     // ========== lastAutoAnnounceTimeFlow Tests ==========
@@ -95,7 +97,7 @@ class SettingsRepositoryCrossProcessTest {
     fun `lastAutoAnnounceTimeFlow emits value from SharedPreferences`() =
         runTest {
             val timestamp = 1234567890L
-            crossProcessPrefs
+            serviceStatePrefs
                 .edit()
                 .putLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, timestamp)
                 .apply()
@@ -115,7 +117,7 @@ class SettingsRepositoryCrossProcessTest {
             repository.saveLastAutoAnnounceTime(timestamp)
 
             val savedValue =
-                crossProcessPrefs.getLong(
+                serviceStatePrefs.getLong(
                     ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME,
                     -1L,
                 )
@@ -131,7 +133,7 @@ class SettingsRepositoryCrossProcessTest {
 
             // Verify it's in SharedPreferences
             val sharedPrefsValue =
-                crossProcessPrefs.getLong(
+                serviceStatePrefs.getLong(
                     ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME,
                     -1L,
                 )
@@ -161,7 +163,7 @@ class SettingsRepositoryCrossProcessTest {
     fun `networkChangeAnnounceTimeFlow emits value from SharedPreferences`() =
         runTest {
             val timestamp = 1111111111L
-            crossProcessPrefs
+            serviceStatePrefs
                 .edit()
                 .putLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, timestamp)
                 .apply()
@@ -181,7 +183,7 @@ class SettingsRepositoryCrossProcessTest {
             repository.saveNetworkChangeAnnounceTime(timestamp)
 
             val savedValue =
-                crossProcessPrefs.getLong(
+                serviceStatePrefs.getLong(
                     ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME,
                     -1L,
                 )
@@ -219,7 +221,7 @@ class SettingsRepositoryCrossProcessTest {
             // Note: getBlockUnknownSenders reads from SharedPreferences, confirming the accessor works
             // For timestamps, we verify directly via SharedPreferences
             val savedValue =
-                crossProcessPrefs.getLong(
+                serviceStatePrefs.getLong(
                     ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME,
                     -1L,
                 )
@@ -232,7 +234,7 @@ class SettingsRepositoryCrossProcessTest {
     fun `lastAutoAnnounceTimeFlow emits only on distinct values`() =
         runTest {
             val timestamp = 6666666666L
-            crossProcessPrefs
+            serviceStatePrefs
                 .edit()
                 .putLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, timestamp)
                 .apply()
@@ -242,7 +244,7 @@ class SettingsRepositoryCrossProcessTest {
                 assertEquals(timestamp, awaitItem())
 
                 // Write same value - should NOT emit due to distinctUntilChanged
-                crossProcessPrefs
+                serviceStatePrefs
                     .edit()
                     .putLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, timestamp)
                     .apply()

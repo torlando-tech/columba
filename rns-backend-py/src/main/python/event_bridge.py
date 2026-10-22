@@ -35,6 +35,7 @@ import json
 import queue
 import signal
 import threading
+import time
 
 import LXMF
 import RNS
@@ -123,6 +124,138 @@ def apply_android_env_patches():
             f"connect timeout (non-fatal): {e}",
             RNS.LOG_WARNING,
         )
+
+
+# ----------------------------------------------------------------------------
+# Traffic activity hook — duty-cycle wake lock support.
+#
+# When the user disables the persistent PARTIAL_WAKE_LOCK (Advanced setting),
+# the CPU is free to suspend between mesh traffic. To keep in-flight work
+# (link establishment, propagation syncs, multi-packet exchanges) from being
+# cut short by a suspend, we wrap `RNS.Transport.inbound` /
+# `RNS.Transport.outbound` — every packet on every interface passes
+# through one of them — and signal the Kotlin host, which extends a
+# short timed wake lock.
+#
+# The signal is throttled Python-side so a packet storm costs at most one
+# JNI hop per window; the Kotlin-side lock timeout is longer than the window,
+# so the hold never lapses mid-burst.
+# ----------------------------------------------------------------------------
+
+# Minimum interval between Kotlin signals. Must stay below the Kotlin
+# traffic-lock timeout (LockManager.TRAFFIC_WAKE_LOCK_TIMEOUT_MS, 90s) so a
+# sustained burst keeps refreshing before expiry.
+TRAFFIC_ACTIVITY_MIN_INTERVAL_S = 15.0
+
+# Interfaces whose RX the kernel buffers (and RNS retransmits): TCP sockets
+# and LAN UDP. Their traffic never justifies holding the CPU. Note the
+# AutoInterface data path delivers through the spawned per-peer interface
+# (`AutoInterface.process_incoming` delegates to `AutoInterfacePeer`), so
+# that is the type reaching `Transport.inbound` — the parent class name
+# alone would never match.
+_BUFFERED_RX_INTERFACE_NAMES = frozenset(
+    {
+        "AutoInterface",
+        "AutoInterfacePeer",
+        "TCPClientInterface",
+        "TCPServerInterface",
+        "UDPInterface",
+    }
+)
+
+_traffic_activity_callback = None
+_traffic_activity_last_emit = 0.0
+
+
+def _monotonic():
+    return time.monotonic()
+
+
+def _signal_traffic_activity():
+    """Notify the Kotlin host of mesh RX/TX, at most once per window."""
+    global _traffic_activity_last_emit
+    if _traffic_activity_callback is None:
+        return
+    now = _monotonic()
+    if now - _traffic_activity_last_emit < TRAFFIC_ACTIVITY_MIN_INTERVAL_S:
+        return
+    _traffic_activity_last_emit = now
+    try:
+        _traffic_activity_callback.onEvent({"direction": "traffic"})
+    except Exception as e:  # noqa: BLE001 — must not escape onto the RNS thread
+        RNS.log(
+            f"event_bridge: traffic activity signal failed: {e}",
+            RNS.LOG_ERROR,
+        )
+
+
+def _rx_needs_wake(interface):
+    """True when RX from `interface` justifies holding the CPU awake.
+
+    Kernel-buffered interfaces (TCP sockets, LAN multicast) queue incoming
+    bytes in the OS while the CPU sleeps and retransmit on the RNS layer —
+    a wake lock there buys latency, not delivery. On a busy home network a
+    TCP gateway + AutoInterface announce stream signals every few seconds,
+    saturating the throttle and holding the lock 24/7, which defeats
+    duty-cycle mode entirely. Wireless interfaces (RNode UART, BLE, AX.25)
+    lose bytes from tiny hardware buffers when the CPU suspends, so their
+    RX still signals. Unknown interfaces signal (safe default).
+    """
+    if interface is None:
+        return True
+    return type(interface).__name__ not in _BUFFERED_RX_INTERFACE_NAMES
+
+
+def install_traffic_activity_callback(callback):
+    """Install (or clear, with None) the traffic-activity Kotlin callback.
+
+    Wraps `RNS.Transport.inbound` / `RNS.Transport.outbound` once — the guard
+    attribute rides the wrapper functions, so repeated backend restarts in
+    this process only swap the callback, never double-wrap.
+
+    These are the two choke points every interface reaches: all RX calls
+    `Transport.inbound` (base `Interface.process_incoming`, the RNode
+    interfaces' direct `_process_incoming` calls, and the propagation
+    announce path), and all TX calls `Transport.outbound` (every
+    `Packet.send`, including interfaces like `ColumbaRNodeInterface` whose
+    `process_outgoing` override never delegates to the base method).
+    Patching the base `Interface` methods instead would miss those custom
+    paths, letting the CPU sleep mid-transfer with duty-cycle mode on.
+
+    RX signals only from lossy interfaces (`_rx_needs_wake`); all TX
+    signals, since outbound activity is user-initiated and rare.
+    """
+    global _traffic_activity_callback
+    _traffic_activity_callback = callback
+    try:
+        import RNS
+
+        transport = RNS.Transport
+    except Exception as e:  # noqa: BLE001
+        RNS.log(
+            f"event_bridge: cannot import RNS.Transport for traffic hook (non-fatal): {e}",
+            RNS.LOG_WARNING,
+        )
+        return
+    if getattr(transport.inbound, "_columba_traffic_hooked", False):
+        return
+
+    _orig_in = transport.inbound
+    _orig_out = transport.outbound
+
+    def inbound(raw, interface=None, *args, **kwargs):
+        if _rx_needs_wake(interface):
+            _signal_traffic_activity()
+        return _orig_in(raw, interface, *args, **kwargs)
+
+    def outbound(packet, *args, **kwargs):
+        _signal_traffic_activity()
+        return _orig_out(packet, *args, **kwargs)
+
+    inbound._columba_traffic_hooked = True
+    outbound._columba_traffic_hooked = True
+    transport.inbound = inbound
+    transport.outbound = outbound
 
 
 # Slot for the KotlinBLEBridge instance. Populated by Kotlin via
@@ -339,6 +472,115 @@ def install_rns_guards():
 
     guarded_final_init._columba_guarded = True
     AutoInterface.final_init = guarded_final_init
+
+
+TCP_RECONNECT_BACKOFF_BASE = 5.0
+TCP_RECONNECT_BACKOFF_MAX = 300.0
+# A connection that lived at least this long is "healthy": the server's
+# anti-flap logic (BackboneInterface FAST_FLAP_THRESHOLD, default 20 s)
+# only counts shorter ones, and the reconnect loop's own wait is 5 s.
+TCP_CONNECT_HEALTHY_LIFETIME = 30.0
+# base * 2**16 already exceeds the cap; keeping the exponent small also
+# avoids OverflowError converting 2**n to float on marathon outages.
+_TCP_RECONNECT_BACKOFF_MAX_EXPONENT = 16
+
+
+def _tcp_backoff_delay(failures):
+    return min(
+        TCP_RECONNECT_BACKOFF_BASE * (2 ** min(failures - 1, _TCP_RECONNECT_BACKOFF_MAX_EXPONENT)),
+        TCP_RECONNECT_BACKOFF_MAX,
+    )
+
+
+def install_tcp_reconnect_backoff():
+    """Pace TCP reconnects so a blocking server never sees a flood.
+
+    Upstream `TCPClientInterface.reconnect()` / `BackboneClientInterface
+    .reconnect()` retry every `RECONNECT_WAIT` (5 s) forever
+    (`max_reconnect_tries = None`). Two failure shapes make that flat loop
+    dangerous against `BackboneInterface`'s anti-flap protection (on by
+    default: connections torn down inside 20 s count as flaps, >5 flaps
+    means incoming connections are ignored for 12 h):
+
+    1. Refused connects (server down/unreachable): every attempt raises,
+       a flat 5 s loop hammers the host back into service.
+    2. Blocked clients: the server's kernel still accepts the handshake
+       and its Python layer closes the socket immediately, so connect()
+       *succeeds* and only the sub-second connection lifetime reveals the
+       rejection. A 5 s dial-close loop runs forever.
+
+    We wrap `connect()` — every attempt path funnels through it and it is
+    stable across RNS versions. Consecutive refused connects, and connects
+     following a connection that lived under `TCP_CONNECT_HEALTHY_LIFETIME`,
+    each add an exponential sleep (5 s doubling, capped at 300 s) before
+    the dial; a healthy (long-lived) previous connection or a connect
+    after a long outage clears the counters. Idempotent.
+    """
+    from RNS.Interfaces.TCPInterface import TCPClientInterface
+
+    classes = [TCPClientInterface]
+    try:
+        from RNS.Interfaces.BackboneInterface import BackboneClientInterface
+
+        classes.append(BackboneClientInterface)
+    except ImportError:
+        pass  # RNS without BackboneInterface: TCPClientInterface only.
+
+    for cls in classes:
+        _install_connect_backoff(cls)
+
+
+def _install_connect_backoff(cls):
+    if getattr(cls.connect, "_columba_backoff", False):
+        return
+    original_connect = cls.connect
+
+    def connect(self, *args, **kwargs):
+        if getattr(self, "_columba_last_connect_ok", False):
+            # Consume the previous-success state: the last connection's
+            # lifetime is judged exactly once, so failures in the retry
+            # episode that follows accumulate instead of re-resetting.
+            self._columba_last_connect_ok = False
+            last = getattr(self, "_columba_last_connect_at", None)
+            if last is not None and time.time() - last < TCP_CONNECT_HEALTHY_LIFETIME:
+                # Previous connection died young — against a blocking
+                # backbone this is the accept-then-close shape; connect()
+                # itself will succeed, so pace before dialing.
+                cycles = getattr(self, "_columba_short_cycles", 0) + 1
+                self._columba_short_cycles = cycles
+                delay = _tcp_backoff_delay(cycles)
+                RNS.log(
+                    f"TCP connection to {getattr(self, 'target_ip', '?')}:"
+                    f"{getattr(self, 'target_port', '?')} lived under "
+                    f"{TCP_CONNECT_HEALTHY_LIFETIME:.0f}s ({cycles} in a row); "
+                    f"waiting {delay:.0f}s before redialing",
+                    RNS.LOG_WARNING,
+                )
+                time.sleep(delay)
+            else:
+                self._columba_short_cycles = 0
+                self._columba_connect_failures = 0
+        try:
+            result = original_connect(self, *args, **kwargs)
+        except Exception:
+            failures = getattr(self, "_columba_connect_failures", 0) + 1
+            self._columba_connect_failures = failures
+            delay = _tcp_backoff_delay(failures)
+            RNS.log(
+                f"TCP connect to {getattr(self, 'target_ip', '?')}:"
+                f"{getattr(self, 'target_port', '?')} failed "
+                f"({failures} in a row); waiting {delay:.0f}s before the next attempt",
+                RNS.LOG_WARNING,
+            )
+            time.sleep(delay)
+            raise
+        self._columba_last_connect_ok = True
+        self._columba_last_connect_at = time.time()
+        self._columba_connect_failures = 0
+        return result
+
+    connect._columba_backoff = True
+    cls.connect = connect
 
 
 def reset_reticulum_for_restart():

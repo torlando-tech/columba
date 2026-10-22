@@ -16,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.host.binder.ReticulumServiceBinder
 import network.columba.app.rns.host.di.ServiceModule
@@ -48,7 +49,9 @@ class ReticulumService : Service() {
         const val ACTION_STOP = "network.columba.app.service.STOP"
         const val ACTION_RESTART_BLE = "network.columba.app.RESTART_BLE"
         const val ACTION_UPDATE_NOTIFICATION = "network.columba.app.service.UPDATE_NOTIFICATION"
+        const val ACTION_SET_WAKE_LOCK_MODE = "network.columba.app.service.SET_WAKE_LOCK_MODE"
         const val EXTRA_NETWORK_STATUS = "network_status"
+        const val EXTRA_PERSISTENT_WAKE_LOCK = "persistent_wake_lock"
 
         // Grace window for treating ACTION_STOP as a stale redelivery during an
         // Apply & Restart. The original STOP intent travels at most a few seconds
@@ -260,11 +263,7 @@ class ReticulumService : Service() {
         managers.notificationManager.startForeground(this)
         Log.d(TAG, "Foreground service started in onCreate")
 
-        // CRITICAL: Acquire wake lock early to prevent CPU sleep during initialization
-        // Native stack manages multicast lock per-AutoInterface for battery savings.
-        managers.lockManager.skipMulticastLock = true
-        managers.lockManager.acquireAll()
-        Log.d(TAG, "Wake locks acquired in onCreate")
+        configureWakeLocksAndTrafficHook()
 
         // Clean up stale announces (>30 days old) on each service lifecycle
         managers.persistenceManager.cleanupStaleAnnounces()
@@ -363,69 +362,7 @@ class ReticulumService : Service() {
                 managers.notificationManager.startForeground(this)
             }
             ACTION_STOP -> {
-                // Apply-in-progress gate: when the UI is mid-apply, the ACTION_STOP we
-                // ourselves sent in InterfaceConfigManager.applyInterfaceChanges Step 4
-                // targets the OLD :reticulum pid. Android, however, has no way to drop
-                // an in-flight startForegroundService intent if the receiver dies first
-                // — the intent gets requeued onto whichever :reticulum process spawns
-                // next (via START_STICKY auto-restart of the crashed service). That
-                // stale STOP then System.exits the freshly-spawned process before it
-                // can bind for the UI's pending initialize(), surfacing as the
-                // "Failed to initialize Reticulum: Backend not ready" toast in the
-                // Apply & Restart dialog (punch-list item 10).
-                //
-                // The fix: when is_applying_config is set on a NEWLY-spawned service
-                // (process is younger than the stale STOP could possibly target), treat
-                // ACTION_STOP as a redelivery and consume the startId without exiting.
-                // The UI driving the apply will send its own ACTION_START + initialize()
-                // shortly. The genuine non-apply STOP path (user-initiated shutdown,
-                // user-toggled service kill) is unaffected because is_applying_config
-                // is false in those scenarios.
-                val isApplyingConfig =
-                    getSharedPreferences("columba_prefs", MODE_PRIVATE)
-                        .getBoolean("is_applying_config", false)
-                val processAgeMs = android.os.SystemClock.elapsedRealtime() - processStartElapsedRealtimeMs
-                if (isApplyingConfig && processAgeMs < STALE_STOP_GRACE_MS) {
-                    Log.w(
-                        TAG,
-                        "Ignoring ACTION_STOP: apply-in-progress and process is only " +
-                            "${processAgeMs}ms old (likely a redelivery of the STOP that " +
-                            "killed the prior :reticulum pid during Apply & Restart)",
-                    )
-                    // Consume the startId so Android doesn't see an outstanding start
-                    // request when we eventually do exit. We deliberately do NOT call
-                    // System.exit — the snapshot self-init in onCreate is already in
-                    // flight and the UI will follow up with its own initialize.
-                    return START_STICKY
-                }
-
-                // Shutdown and stop service
-                Log.d(TAG, "Received ACTION_STOP - forcing process exit")
-
-                // Remove notification before anything else so System.exit(0) can't leave a
-                // lingering entry in the shade.
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-
-                // Stop BLE immediately on the Main thread before process exit, since
-                // System.exit(0) will kill the process before any async cleanup runs.
-                if (::managers.isInitialized) {
-                    try {
-                        managers.bleCoordinator.stopImmediate()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Error during BLE immediate shutdown", e)
-                    }
-                }
-
-                try {
-                    binder.shutdown()
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error during shutdown cleanup (process exiting anyway)", e)
-                }
-
-                // Force process exit to ensure service truly stops even with active bindings
-                // This is safe because we're in a separate :reticulum process
-                System.exit(0)
+                if (handleStop()) return START_STICKY
             }
             ACTION_RESTART_BLE -> {
                 // Restart BLE interface after permissions granted
@@ -438,9 +375,133 @@ class ReticulumService : Service() {
                     managers.notificationManager.updateNotification(status)
                 }
             }
+            ACTION_SET_WAKE_LOCK_MODE -> handleSetWakeLockMode(intent)
         }
 
         return START_STICKY
+    }
+
+    /**
+     * Handle ACTION_STOP. Returns true when the stop was a stale redelivery
+     * during an in-flight config apply and was consumed without exiting (the
+     * caller should keep running); otherwise the process exits and nothing
+     * returns.
+     *
+     * Apply-in-progress gate: when the UI is mid-apply, the ACTION_STOP we
+     * ourselves sent in InterfaceConfigManager.applyInterfaceChanges Step 4
+     * targets the OLD :reticulum pid. Android, however, has no way to drop
+     * an in-flight startForegroundService intent if the receiver dies first
+     * — the intent gets requeued onto whichever :reticulum process spawns
+     * next (via START_STICKY auto-restart of the crashed service). That
+     * stale STOP then System.exits the freshly-spawned process before it
+     * can bind for the UI's pending initialize(), surfacing as the
+     * "Failed to initialize Reticulum: Backend not ready" toast in the
+     * Apply & Restart dialog (punch-list item 10).
+     *
+     * The fix: when is_applying_config is set on a NEWLY-spawned service
+     * (process is younger than the stale STOP could possibly target), treat
+     * ACTION_STOP as a redelivery and consume the startId without exiting.
+     * The UI driving the apply will send its own ACTION_START + initialize()
+     * shortly. The genuine non-apply STOP path (user-initiated shutdown,
+     * user-toggled service kill) is unaffected because is_applying_config
+     * is false in those scenarios.
+     */
+    private fun handleStop(): Boolean {
+        val isApplyingConfig =
+            getSharedPreferences("columba_prefs", MODE_PRIVATE)
+                .getBoolean("is_applying_config", false)
+        val processAgeMs = android.os.SystemClock.elapsedRealtime() - processStartElapsedRealtimeMs
+        if (isApplyingConfig && processAgeMs < STALE_STOP_GRACE_MS) {
+            Log.w(
+                TAG,
+                "Ignoring ACTION_STOP: apply-in-progress and process is only " +
+                    "${processAgeMs}ms old (likely a redelivery of the STOP that " +
+                    "killed the prior :reticulum pid during Apply & Restart)",
+            )
+            // Consume the startId so Android doesn't see an outstanding start
+            // request when we eventually do exit. We deliberately do NOT call
+            // System.exit — the snapshot self-init in onCreate is already in
+            // flight and the UI will follow up with its own initialize.
+            return true
+        }
+
+        // Shutdown and stop service
+        Log.d(TAG, "Received ACTION_STOP - forcing process exit")
+
+        // Remove notification before anything else so System.exit(0) can't leave a
+        // lingering entry in the shade.
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+
+        // Stop BLE immediately on the Main thread before process exit, since
+        // System.exit(0) will kill the process before any async cleanup runs.
+        if (::managers.isInitialized) {
+            try {
+                managers.bleCoordinator.stopImmediate()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error during BLE immediate shutdown", e)
+            }
+        }
+
+        try {
+            binder.shutdown()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error during shutdown cleanup (process exiting anyway)", e)
+        }
+
+        // Force process exit to ensure service truly stops even with active bindings
+        // This is safe because we're in a separate :reticulum process
+        System.exit(0)
+        // Unreachable: exit never returns. Present only because System.exit is
+        // typed Unit, not Nothing, in Kotlin.
+        return false
+    }
+
+    /**
+     * Apply the persisted wake-lock mode and install the duty-cycle traffic
+     * hook. Persistent vs duty-cycle mode comes from the user setting
+     * (cross-process mirror; UI pushes ACTION_SET_WAKE_LOCK_MODE for live
+     * changes). In duty-cycle mode the python backend's event_bridge wraps
+     * Transport.inbound/outbound and signals here (throttled
+     * Python-side to one hop per window) so a short timed lock covers active
+     * RX/TX bursts. No-op while the persistent lock is held; the kotlin
+     * backend's default setter is a no-op (it manages its own locks).
+     */
+    private fun configureWakeLocksAndTrafficHook() {
+        // CRITICAL: Acquire wake lock early to prevent CPU sleep during initialization
+        // Native stack manages multicast lock per-AutoInterface for battery savings.
+        managers.lockManager.skipMulticastLock = true
+        // Duty-cycle mode only exists where traffic signals exist: backends
+        // without them (kotlin native) keep the persistent lock regardless of
+        // the stored preference, or transfers would run with no CPU lock.
+        val dutyCycleSupported =
+            rnsBackend.capabilities.value.performance.dutyCycleWakeLock ==
+                BackendCapabilities.Support.FULL
+        val persistent =
+            !dutyCycleSupported || managers.settingsAccessor.getPersistentWakeLockEnabled()
+        if (!persistent) {
+            Log.i(TAG, "Duty-cycle wake-lock mode (persistent lock off)")
+        }
+        managers.lockManager.setPersistentWakeLockEnabled(persistent)
+        Log.d(TAG, "Wake locks acquired in onCreate")
+
+        rnsBackend.setTrafficActivityCallback {
+            managers.lockManager.acquireTrafficWakeLock()
+        }
+    }
+
+    /** Apply a live persistent-wake-lock toggle pushed from the UI process. */
+    private fun handleSetWakeLockMode(intent: Intent?) {
+        val requested = intent?.getBooleanExtra(EXTRA_PERSISTENT_WAKE_LOCK, true) ?: true
+        val dutyCycleSupported =
+            rnsBackend.capabilities.value.performance.dutyCycleWakeLock ==
+                BackendCapabilities.Support.FULL
+        val enabled = !dutyCycleSupported || requested
+        managers.lockManager.setPersistentWakeLockEnabled(enabled)
+        Log.i(
+            TAG,
+            "Persistent wake lock ${if (enabled) "enabled" else "disabled (duty-cycle mode)"} via UI toggle",
+        )
     }
 
     override fun onBind(intent: Intent?): IBinder {

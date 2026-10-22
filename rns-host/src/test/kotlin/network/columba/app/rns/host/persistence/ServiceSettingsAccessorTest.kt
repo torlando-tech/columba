@@ -26,6 +26,7 @@ class ServiceSettingsAccessorTest {
     private lateinit var context: Context
     private lateinit var accessor: ServiceSettingsAccessor
     private lateinit var prefs: SharedPreferences
+    private lateinit var statePrefs: SharedPreferences
 
     @Before
     fun setup() {
@@ -40,13 +41,22 @@ class ServiceSettingsAccessorTest {
                 Context.MODE_MULTI_PROCESS,
             )
 
+        @Suppress("DEPRECATION")
+        statePrefs =
+            context.getSharedPreferences(
+                ServiceSettingsAccessor.SERVICE_STATE_PREFS_NAME,
+                Context.MODE_MULTI_PROCESS,
+            )
+
         // Clear prefs before each test
         prefs.edit().clear().apply()
+        statePrefs.edit().clear().apply()
     }
 
     @After
     fun tearDown() {
         prefs.edit().clear().apply()
+        statePrefs.edit().clear().apply()
     }
 
     // ========== saveNetworkChangeAnnounceTime() Tests ==========
@@ -57,7 +67,7 @@ class ServiceSettingsAccessorTest {
 
         accessor.saveNetworkChangeAnnounceTime(timestamp)
 
-        val savedValue = prefs.getLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, -1L)
+        val savedValue = statePrefs.getLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, -1L)
         assertEquals(timestamp, savedValue)
     }
 
@@ -69,7 +79,7 @@ class ServiceSettingsAccessorTest {
         accessor.saveNetworkChangeAnnounceTime(timestamp1)
         accessor.saveNetworkChangeAnnounceTime(timestamp2)
 
-        val savedValue = prefs.getLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, -1L)
+        val savedValue = statePrefs.getLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, -1L)
         assertEquals(timestamp2, savedValue)
     }
 
@@ -81,7 +91,7 @@ class ServiceSettingsAccessorTest {
 
         accessor.saveLastAutoAnnounceTime(timestamp)
 
-        val savedValue = prefs.getLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, -1L)
+        val savedValue = statePrefs.getLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, -1L)
         assertEquals(timestamp, savedValue)
     }
 
@@ -93,7 +103,7 @@ class ServiceSettingsAccessorTest {
         accessor.saveLastAutoAnnounceTime(timestamp1)
         accessor.saveLastAutoAnnounceTime(timestamp2)
 
-        val savedValue = prefs.getLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, -1L)
+        val savedValue = statePrefs.getLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, -1L)
         assertEquals(timestamp2, savedValue)
     }
 
@@ -193,16 +203,18 @@ class ServiceSettingsAccessorTest {
     }
 
     @Test
-    fun `companion object exposes correct key constants`() {
+    fun `companion object exposes correct key and file constants`() {
         assertEquals("block_unknown_senders", ServiceSettingsAccessor.KEY_BLOCK_UNKNOWN_SENDERS)
         assertEquals("allow_calls_from_contacts_only", ServiceSettingsAccessor.KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY)
         assertEquals("allow_voice_calls", ServiceSettingsAccessor.KEY_ALLOW_VOICE_CALLS)
         assertEquals("network_change_announce_time", ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME)
         assertEquals("last_auto_announce_time", ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME)
+        assertEquals("persistent_wake_lock", ServiceSettingsAccessor.KEY_PERSISTENT_WAKE_LOCK)
+        assertEquals("cross_process_settings", ServiceSettingsAccessor.CROSS_PROCESS_PREFS_NAME)
+        assertEquals("columba_service_state", ServiceSettingsAccessor.SERVICE_STATE_PREFS_NAME)
     }
 
     // ========== Integration Tests ==========
-
     @Test
     fun `multiple settings can be saved independently`() {
         val networkTime = 111L
@@ -212,8 +224,48 @@ class ServiceSettingsAccessorTest {
         accessor.saveLastAutoAnnounceTime(announceTime)
         prefs.edit().putBoolean(ServiceSettingsAccessor.KEY_BLOCK_UNKNOWN_SENDERS, true).apply()
 
-        assertEquals(networkTime, prefs.getLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, -1L))
-        assertEquals(announceTime, prefs.getLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, -1L))
+        assertEquals(networkTime, statePrefs.getLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, -1L))
+        assertEquals(announceTime, statePrefs.getLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, -1L))
         assertTrue(accessor.getBlockUnknownSenders())
+    }
+
+    @Test
+    fun `service runtime writes never touch the settings file`() {
+        // Regression: the service and the UI used to share one SharedPreferences
+        // file. SharedPreferences flushes its whole in-memory map on every
+        // write, so the service's frequent status/announce writes erased
+        // settings keys the UI had written since the service loaded its
+        // snapshot — persistent_wake_lock included, silently forcing the
+        // persistent wake lock on every service restart.
+        prefs.edit().putBoolean(ServiceSettingsAccessor.KEY_PERSISTENT_WAKE_LOCK, false).apply()
+
+        accessor.saveLastNetworkStatus("READY")
+        accessor.saveLastAutoAnnounceTime(4242L)
+
+        assertFalse(
+            "service runtime state must not clobber UI-written settings",
+            accessor.getPersistentWakeLockEnabled(),
+        )
+        assertEquals("READY", statePrefs.getString(ServiceSettingsAccessor.KEY_LAST_NETWORK_STATUS, null))
+        assertEquals(4242L, statePrefs.getLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, -1L))
+        assertFalse(prefs.contains(ServiceSettingsAccessor.KEY_LAST_NETWORK_STATUS))
+        assertFalse(prefs.contains(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME))
+    }
+
+    // ========== Persistent Wake Lock Tests ==========
+
+    @Test
+    fun `getPersistentWakeLockEnabled defaults to true`() {
+        assertTrue(
+            "Duty-cycle mode must be opt-in; default preserves the persistent wake lock",
+            accessor.getPersistentWakeLockEnabled(),
+        )
+    }
+
+    @Test
+    fun `getPersistentWakeLockEnabled reads value written by app process`() {
+        prefs.edit().putBoolean(ServiceSettingsAccessor.KEY_PERSISTENT_WAKE_LOCK, false).apply()
+
+        assertFalse(accessor.getPersistentWakeLockEnabled())
     }
 }

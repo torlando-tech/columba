@@ -172,6 +172,7 @@ class SettingsRepository
             val BLOCK_UNKNOWN_SENDERS = booleanPreferencesKey("block_unknown_senders")
             val ALLOW_CALLS_FROM_CONTACTS_ONLY = booleanPreferencesKey("allow_calls_from_contacts_only")
             val ALLOW_VOICE_CALLS = booleanPreferencesKey("allow_voice_calls")
+            val PERSISTENT_WAKE_LOCK = booleanPreferencesKey("persistent_wake_lock")
 
             // Telemetry collector preferences
             val TELEMETRY_COLLECTOR_ADDRESS = stringPreferencesKey("telemetry_collector_address")
@@ -206,6 +207,13 @@ class SettingsRepository
         // Cross-process SharedPreferences for service communication
         // DataStore does NOT support multi-process access, so we use SharedPreferences
         // with MODE_MULTI_PROCESS for values written by the service process.
+        //
+        // Two files, one dominant writer each. SharedPreferences flushes its whole
+        // in-memory map on every write and MODE_MULTI_PROCESS does not synchronize
+        // writers, so sharing one file between the processes let the service's
+        // frequent runtime-state writes erase settings keys written by the UI.
+        // Settings keys (this process writes) stay in CROSS_PROCESS_PREFS_NAME;
+        // service runtime state lives in SERVICE_STATE_PREFS_NAME.
         @Suppress("DEPRECATION") // MODE_MULTI_PROCESS is deprecated but necessary for cross-process
         private fun getCrossProcessPrefs(): SharedPreferences =
             context.getSharedPreferences(
@@ -213,14 +221,22 @@ class SettingsRepository
                 Context.MODE_MULTI_PROCESS,
             )
 
+        @Suppress("DEPRECATION") // MODE_MULTI_PROCESS is deprecated but necessary for cross-process
+        private fun getServiceStatePrefs(): SharedPreferences =
+            context.getSharedPreferences(
+                ServiceSettingsAccessor.SERVICE_STATE_PREFS_NAME,
+                Context.MODE_MULTI_PROCESS,
+            )
+
         /**
          * Creates a Flow that observes a Long value from cross-process SharedPreferences.
          * Uses OnSharedPreferenceChangeListener to emit updates reactively.
          */
-        private fun crossProcessLongFlow(key: String): Flow<Long?> =
+        private fun crossProcessLongFlow(
+            key: String,
+            prefs: SharedPreferences = getCrossProcessPrefs(),
+        ): Flow<Long?> =
             callbackFlow {
-                val prefs = getCrossProcessPrefs()
-
                 // Emit initial value
                 val initialValue = prefs.getLong(key, -1L).takeIf { it != -1L }
                 trySend(initialValue)
@@ -634,7 +650,7 @@ class SettingsRepository
          * the service and main app can trigger announces.
          */
         val lastAutoAnnounceTimeFlow: Flow<Long?> =
-            crossProcessLongFlow(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME)
+            crossProcessLongFlow(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, getServiceStatePrefs())
 
         /**
          * Save the last auto-announce timestamp.
@@ -644,7 +660,7 @@ class SettingsRepository
          */
         @Suppress("RedundantSuspendModifier") // Keep suspend for API compatibility
         suspend fun saveLastAutoAnnounceTime(timestamp: Long) {
-            getCrossProcessPrefs()
+            getServiceStatePrefs()
                 .edit()
                 .putLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, timestamp)
                 .apply()
@@ -684,7 +700,7 @@ class SettingsRepository
          * Uses SharedPreferences for cross-process communication.
          */
         val networkChangeAnnounceTimeFlow: Flow<Long?> =
-            crossProcessLongFlow(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME)
+            crossProcessLongFlow(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, getServiceStatePrefs())
 
         /**
          * Save the network change announce timestamp.
@@ -694,7 +710,7 @@ class SettingsRepository
          */
         @Suppress("RedundantSuspendModifier") // Keep suspend for API compatibility
         suspend fun saveNetworkChangeAnnounceTime(timestamp: Long) {
-            getCrossProcessPrefs()
+            getServiceStatePrefs()
                 .edit()
                 .putLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, timestamp)
                 .apply()
@@ -2204,6 +2220,7 @@ class SettingsRepository
             const val KEY_BLOCK_UNKNOWN_SENDERS = "block_unknown_senders"
             const val KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY = "allow_calls_from_contacts_only"
             const val KEY_ALLOW_VOICE_CALLS = "allow_voice_calls"
+            const val KEY_PERSISTENT_WAKE_LOCK = "persistent_wake_lock"
 
             /** Default telemetry send interval: 5 minutes */
             const val DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS = 300
@@ -2286,6 +2303,22 @@ class SettingsRepository
                     }
                 }
             }
+            // The :reticulum service reads this key from the cross-process
+            // SharedPreferences mirror (DataStore can't be opened in two
+            // processes), and it only learns of changes through the live
+            // toggle push — which a restore doesn't send. Mirror the
+            // restored value or the service would keep the pre-restore
+            // wake policy across restarts.
+            entries.firstOrNull { it.key == KEY_PERSISTENT_WAKE_LOCK }
+                ?.takeIf { it.type == "boolean" }
+                ?.let { entry ->
+                    context.getSharedPreferences(
+                        CROSS_PROCESS_PREFS_NAME,
+                        Context.MODE_MULTI_PROCESS,
+                    ).edit()
+                        .putBoolean(KEY_PERSISTENT_WAKE_LOCK, entry.value.toBoolean())
+                        .apply()
+                }
         }
 
         /**
@@ -2487,6 +2520,78 @@ class SettingsRepository
                 .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
                 .edit()
                 .putBoolean(KEY_ALLOW_VOICE_CALLS, enabled)
+                .apply()
+        }
+
+        /**
+         * Persistent wake lock setting (Advanced). True (default) = the Reticulum
+         * service holds a PARTIAL_WAKE_LOCK for its whole lifetime so the CPU never
+         * suspends and mesh packets are processed with zero latency. False =
+         * duty-cycle mode: the CPU may sleep between mesh traffic; short timed
+         * locks cover active RX/TX bursts instead.
+         */
+        val persistentWakeLockFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.PERSISTENT_WAKE_LOCK] ?: true
+                }.distinctUntilChanged()
+
+        /** Get the persistent-wake-lock setting (non-flow). */
+        suspend fun getPersistentWakeLock(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.PERSISTENT_WAKE_LOCK] ?: true
+                }.first()
+
+        /**
+         * Save the persistent-wake-lock setting.
+         *
+         * Dual-writes DataStore + MODE_MULTI_PROCESS SharedPreferences so the
+         * `:reticulum` process reads the persisted value at cold-start
+         * (START_STICKY restart / snapshot self-init). Runtime delivery to the
+         * live service happens via the `ACTION_SET_WAKE_LOCK_MODE` intent from
+         * the ViewModel — SharedPreferences listeners do not fire across
+         * processes.
+         */
+        @Suppress("DEPRECATION") // MODE_MULTI_PROCESS needed for cross-process reads
+        suspend fun savePersistentWakeLock(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.PERSISTENT_WAKE_LOCK] = enabled
+            }
+            context
+                .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+                .edit()
+                .putBoolean(KEY_PERSISTENT_WAKE_LOCK, enabled)
+                .apply()
+        }
+
+        /**
+         * Re-push every mirrored setting from DataStore into the cross-process
+         * SharedPreferences file.
+         *
+         * Builds predating the prefs split let the `:reticulum` service's
+         * runtime-state writes clobber mirrored keys (whole-map flush plus
+         * unsynchronized `MODE_MULTI_PROCESS` writers), silently reverting the
+         * service's view of these settings to defaults — including
+         * security-relevant ones (`block_unknown_senders`, `allow_voice_calls`)
+         * and `persistent_wake_lock`. DataStore is the source of truth and was
+         * never corrupted, so an upgraded install heals its mirror by
+         * re-pushing the persisted values once at UI-process start.
+         * Idempotent; safe to run on every launch.
+         */
+        suspend fun repairMirroredSettings() {
+            val values =
+                listOf(
+                    blockUnknownSendersFlow.first() to KEY_BLOCK_UNKNOWN_SENDERS,
+                    allowCallsFromContactsOnlyFlow.first() to KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY,
+                    allowVoiceCallsFlow.first() to KEY_ALLOW_VOICE_CALLS,
+                    persistentWakeLockFlow.first() to KEY_PERSISTENT_WAKE_LOCK,
+                )
+            @Suppress("DEPRECATION") // MODE_MULTI_PROCESS needed for cross-process writes
+            context
+                .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+                .edit()
+                .apply { values.forEach { (value, key) -> putBoolean(key, value) } }
                 .apply()
         }
 

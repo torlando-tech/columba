@@ -213,6 +213,7 @@ class SettingsViewModelTest {
         every { settingsRepository.blockUnknownSendersFlow } returns flowOf(false)
         every { settingsRepository.allowCallsFromContactsOnlyFlow } returns flowOf(false)
         every { settingsRepository.allowVoiceCallsFlow } returns flowOf(true)
+        every { settingsRepository.persistentWakeLockFlow } returns flowOf(true)
         every { settingsRepository.telemetryCollectorEnabledFlow } returns flowOf(false)
         every { settingsRepository.telemetryCollectorAddressFlow } returns flowOf(null)
         every { settingsRepository.telemetrySendIntervalSecondsFlow } returns flowOf(60)
@@ -1992,6 +1993,28 @@ class SettingsViewModelTest {
                 }
 
                 assertEquals(ThemeMode.DARK, state.themeMode)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `state preservesCollectedPersistentWakeLockAcrossCombineEmissions`() =
+        runTest {
+            // Regression: loadSettings() rebuilds SettingsState wholesale; the
+            // wake-lock value collected by loadAdvancedSettings() must survive
+            // every combine emission instead of resetting to the default true.
+            every { settingsRepository.persistentWakeLockFlow } returns MutableStateFlow(false)
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertFalse("Persisted duty-cycle (false) must stick in state", state.persistentWakeLockEnabled)
 
                 cancelAndConsumeRemainingEvents()
             }

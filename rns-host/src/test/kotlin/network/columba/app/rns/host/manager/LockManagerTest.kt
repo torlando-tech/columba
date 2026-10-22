@@ -5,6 +5,7 @@ import android.net.wifi.WifiManager
 import android.os.PowerManager
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -14,7 +15,8 @@ import org.junit.Test
 /**
  * Unit tests for LockManager.
  *
- * Tests Multicast and Wake lock acquisition/release.
+ * Tests Multicast and Wake lock acquisition/release, including the
+ * duty-cycle mode (persistent wake lock disabled + traffic-driven timed lock).
  */
 class LockManagerTest {
     private lateinit var context: Context
@@ -22,6 +24,7 @@ class LockManagerTest {
     private lateinit var powerManager: PowerManager
     private lateinit var multicastLock: WifiManager.MulticastLock
     private lateinit var wakeLock: PowerManager.WakeLock
+    private lateinit var trafficWakeLock: PowerManager.WakeLock
     private lateinit var lockManager: LockManager
 
     @Before
@@ -32,6 +35,7 @@ class LockManagerTest {
         powerManager = mockk()
         multicastLock = mockk()
         wakeLock = mockk()
+        trafficWakeLock = mockk()
 
         // Setup context to return system services
         every { context.applicationContext } returns context
@@ -233,5 +237,82 @@ class LockManagerTest {
 
         // Verify wake lock is held again after re-acquisition
         assertTrue("Wake lock should be held after re-acquisition", lockManager.getLockStatus().wakeHeld)
+    }
+
+    // ==================== Duty-cycle mode (persistent wake lock toggle) ====================
+
+    @Test
+    fun `acquireAll skips wake lock when persistent mode disabled`() {
+        lockManager.setPersistentWakeLockEnabled(false)
+
+        lockManager.acquireAll()
+
+        verify(exactly = 0) { wakeLock.acquire(any<Long>()) }
+        assertFalse(lockManager.getLockStatus().wakeHeld)
+    }
+
+    @Test
+    fun `setPersistentWakeLockEnabled false releases held wake lock`() {
+        every { wakeLock.isHeld } returns true
+        lockManager.acquireAll()
+        assertTrue(lockManager.getLockStatus().wakeHeld)
+
+        lockManager.setPersistentWakeLockEnabled(false)
+
+        verify(exactly = 1) { wakeLock.release() }
+    }
+
+    @Test
+    fun `setPersistentWakeLockEnabled true acquires wake lock`() {
+        lockManager.setPersistentWakeLockEnabled(false)
+        every { wakeLock.isHeld } returns true
+
+        lockManager.setPersistentWakeLockEnabled(true)
+
+        verify(exactly = 1) { wakeLock.acquire(any<Long>()) }
+        assertTrue(lockManager.persistentWakeLockEnabled)
+    }
+
+    @Test
+    fun `acquireTrafficWakeLock acquires timed traffic lock when persistent disabled`() {
+        every { powerManager.newWakeLock(any(), "Columba::ReticulumTraffic") } returns trafficWakeLock
+        every { trafficWakeLock.setReferenceCounted(any()) } returns Unit
+        every { trafficWakeLock.acquire(any()) } returns Unit
+        every { trafficWakeLock.isHeld } returns true
+        lockManager.setPersistentWakeLockEnabled(false)
+
+        lockManager.acquireTrafficWakeLock()
+
+        verify(exactly = 1) {
+            powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Columba::ReticulumTraffic")
+        }
+        verify(exactly = 1) { trafficWakeLock.acquire(90_000L) }
+        assertTrue(lockManager.getLockStatus().trafficHeld)
+    }
+
+    @Test
+    fun `acquireTrafficWakeLock is no-op while persistent mode enabled`() {
+        every { powerManager.newWakeLock(any(), "Columba::ReticulumTraffic") } returns trafficWakeLock
+
+        lockManager.acquireTrafficWakeLock()
+
+        verify(exactly = 0) { powerManager.newWakeLock(any(), "Columba::ReticulumTraffic") }
+        assertFalse(lockManager.getLockStatus().trafficHeld)
+    }
+
+    @Test
+    fun `releaseAll releases traffic wake lock`() {
+        every { powerManager.newWakeLock(any(), "Columba::ReticulumTraffic") } returns trafficWakeLock
+        every { trafficWakeLock.setReferenceCounted(any()) } returns Unit
+        every { trafficWakeLock.acquire(any()) } returns Unit
+        every { trafficWakeLock.release() } returns Unit
+        every { trafficWakeLock.isHeld } returns true
+        lockManager.setPersistentWakeLockEnabled(false)
+        lockManager.acquireTrafficWakeLock()
+
+        lockManager.releaseAll()
+
+        verify(exactly = 1) { trafficWakeLock.release() }
+        assertFalse(lockManager.getLockStatus().trafficHeld)
     }
 }

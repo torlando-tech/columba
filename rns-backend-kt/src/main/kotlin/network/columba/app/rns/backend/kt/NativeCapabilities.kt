@@ -57,5 +57,8 @@ val NATIVE_CAPABILITIES: BackendCapabilities = BackendCapabilities(
         // SharedInstanceServer (RPC over TCP 37428). reticulum-kt has no
         // equivalent server; UI hides the toggle on this backend.
         shareInstanceHosting = false,
+        // dutyCycleWakeLock stays UNSUPPORTED (default): reticulum-kt emits
+        // no traffic-activity signals, so the service keeps the persistent
+        // wake lock and the UI hides the toggle on this backend.
     ),
 )

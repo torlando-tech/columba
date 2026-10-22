@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -31,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -60,6 +63,8 @@ fun BatteryOptimizationCard(
     onExpandedChange: (Boolean) -> Unit,
     batteryProfile: BatteryProfile,
     onBatteryProfileChange: (BatteryProfile) -> Unit,
+    persistentWakeLockEnabled: Boolean = true,
+    onPersistentWakeLockToggle: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -75,6 +80,11 @@ fun BatteryOptimizationCard(
     // both backends.
     val batteryProfileTuningSupported =
         LocalCapabilities.current.performance.batteryProfileTuning == BackendCapabilities.Support.FULL
+    // Duty-cycle wake locking needs backend traffic signals; only the python
+    // backend emits them (event_bridge). On other backends the service keeps
+    // the persistent lock no matter what, so the toggle is hidden.
+    val dutyCycleWakeLockSupported =
+        LocalCapabilities.current.performance.dutyCycleWakeLock == BackendCapabilities.Support.FULL
 
     fun refreshStatus() {
         isExempted = BatteryOptimizationManager.isIgnoringBatteryOptimizations(context)
@@ -225,6 +235,54 @@ fun BatteryOptimizationCard(
                     // then matches the release/v0.10.x layout: just the Android
                     // battery-optimization exemption section below.
 
+                    // Persistent Wake Lock toggle — the mesh daemon's CPU
+                    // wake policy (persistent vs. duty-cycle). Duty-cycle
+                    // needs backend traffic signals (python event_bridge);
+                    // on backends without them the service keeps the
+                    // persistent lock regardless, so the row is hidden.
+                    if (dutyCycleWakeLockSupported) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BatterySaver,
+                                contentDescription = null,
+                                tint = contentColor,
+                            )
+                            Text(
+                                text = "Persistent Wake Lock",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium,
+                                color = contentColor,
+                            )
+                        }
+                        Switch(
+                            checked = persistentWakeLockEnabled,
+                            onCheckedChange = onPersistentWakeLockToggle,
+                            modifier = Modifier.testTag("persistent_wake_lock_toggle"),
+                        )
+                    }
+                    Text(
+                        text =
+                            "Keep the CPU awake so incoming mesh packets are processed the " +
+                                "instant they arrive. On (default) is the most responsive but " +
+                                "drains battery while backgrounded all day. Off lets the CPU " +
+                                "sleep between traffic; a short lock still covers active " +
+                                "transfers, and delivery resumes within seconds of each wake. " +
+                                "While asleep the device also pauses its local AutoInterface " +
+                                "peering, so LAN peers may treat it as offline between wakes. " +
+                                "Changes apply immediately.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = contentColor.copy(alpha = 0.7f),
+                    )
+                    }
+                    HorizontalDivider(color = contentColor.copy(alpha = 0.2f))
                     if (isCheckingStatus) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))
                     } else if (isExempted) {

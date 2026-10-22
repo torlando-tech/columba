@@ -6,6 +6,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.media.ExifInterface
 import android.net.Uri
 import network.columba.app.data.model.ImageCompressionPreset
 import io.mockk.every
@@ -466,5 +467,70 @@ class ImageUtilsRobolectricTest {
             assertTrue("height ${it.height} should be < 2048", it.height < 2048)
             it.recycle()
         }
+    }
+
+    @Test
+    fun `ORIGINAL preset strips EXIF metadata from the sent image`() {
+        // Privacy invariant: every image leaving the image pipeline is
+        // re-encoded from raw pixels, so camera metadata (GPS, device) never
+        // rides along - even at ORIGINAL quality.
+        val source = createTestBitmap(200, 100)
+        val plain =
+            java.io.ByteArrayOutputStream().use { stream ->
+                source.compress(Bitmap.CompressFormat.JPEG, 95, stream)
+                stream.toByteArray()
+            }
+        source.recycle()
+
+        // Stamp GPS coordinates and a 90-degree rotation into the source JPEG.
+        val taggedFile = java.io.File.createTempFile("tagged", ".jpg")
+        taggedFile.writeBytes(plain)
+        val exif = android.media.ExifInterface(taggedFile.absolutePath)
+        exif.setAttribute(ExifInterface.TAG_GPS_LATITUDE, "37/1,46/1,48000/1000")
+        exif.setAttribute(ExifInterface.TAG_GPS_LATITUDE_REF, "N")
+        exif.setAttribute(ExifInterface.TAG_GPS_LONGITUDE, "122/1,25/1,9000/1000")
+        exif.setAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF, "W")
+        exif.setAttribute(
+            ExifInterface.TAG_ORIENTATION,
+            ExifInterface.ORIENTATION_ROTATE_90.toString(),
+        )
+        exif.saveAttributes()
+        val tagged = taggedFile.readBytes()
+        taggedFile.delete()
+
+        // Sanity: the stamped input really carries the GPS data.
+        val inExif = android.media.ExifInterface(java.io.ByteArrayInputStream(tagged))
+        assertNotNull(
+            "test setup: GPS missing from stamped input",
+            inExif.getAttribute(ExifInterface.TAG_GPS_LATITUDE),
+        )
+
+        val uri = Uri.parse("content://test/photo.jpg")
+        every { mockContentResolver.openInputStream(uri) } answers
+            { java.io.ByteArrayInputStream(tagged) }
+
+        val result = ImageUtils.compressImageWithPreset(mockContext, uri, ImageCompressionPreset.ORIGINAL)
+        assertNotNull(result)
+        val out = result!!.compressedImage.data
+
+        val outExif = android.media.ExifInterface(java.io.ByteArrayInputStream(out))
+        assertNull("GPS latitude survived re-encoding", outExif.getAttribute(ExifInterface.TAG_GPS_LATITUDE))
+        assertNull("GPS longitude survived re-encoding", outExif.getAttribute(ExifInterface.TAG_GPS_LONGITUDE))
+        val outOrientation =
+            outExif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        assertTrue(
+            "rotation should be baked into pixels, not left as metadata (got $outOrientation)",
+            outOrientation == ExifInterface.ORIENTATION_NORMAL ||
+                outOrientation == ExifInterface.ORIENTATION_UNDEFINED,
+        )
+
+        // The 90-degree rotation was applied to the pixels: 200x100 -> 100x200.
+        val bounds =
+            BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+        BitmapFactory.decodeByteArray(out, 0, out.size, bounds)
+        assertEquals(100, bounds.outWidth)
+        assertEquals(200, bounds.outHeight)
     }
 }

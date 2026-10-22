@@ -1,7 +1,9 @@
 package network.columba.app.data.util
 
+import java.lang.management.ManagementFactory
 import network.columba.app.data.util.HashUtils.toHexString
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HashUtilsTest {
@@ -86,5 +88,53 @@ class HashUtilsTest {
         val singleZero = byteArrayOf(0x00)
         val result = HashUtils.computeIdentityHash(singleZero)
         assertEquals("6e340b9cffb37a989ca544e6bb780a2c", result)
+    }
+
+    @Test
+    fun `toHexString ByteArray allocation stays bounded relative to output`() {
+        val bytes = ByteArray(64 * 1024) { (it and 0xFF).toByte() }
+        assertAllocationBounded("ByteArray.toHexString", bytes.size * 2) { bytes.toHexString() }
+    }
+
+    @Test
+    fun `toHexString List allocation stays bounded relative to output`() {
+        val list = ByteArray(64 * 1024) { (it and 0xFF).toByte() }.toList()
+        assertAllocationBounded("List<Byte>.toHexString", list.size * 2) { list.toHexString() }
+    }
+
+    /**
+     * Sentry COLUMBA-EE: the Formatter-based implementation (`"%02x".format(it)`)
+     * allocated on the order of a kilobyte of garbage per byte formatted, which
+     * exhausted the 256 MB heap under memory pressure. A lookup-table conversion
+     * allocates ~3x the output (CharArray + String copy); multi-MB allocation for
+     * a 128 KiB hex string means per-byte Formatter churn is back.
+     */
+    private fun assertAllocationBounded(
+        label: String,
+        expectedHexLength: Int,
+        convert: () -> String,
+    ) {
+        val bean = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
+        assertTrue(
+            "JVM must support per-thread allocation counting",
+            bean.isThreadAllocatedMemorySupported,
+        )
+        if (!bean.isThreadAllocatedMemoryEnabled) {
+            bean.isThreadAllocatedMemoryEnabled = true
+        }
+
+        // Warm up so the measured call runs compiled code.
+        repeat(5) { convert() }
+
+        val threadId = Thread.currentThread().id
+        val before = bean.getThreadAllocatedBytes(threadId)
+        val hex = convert()
+        val allocated = bean.getThreadAllocatedBytes(threadId) - before
+
+        assertEquals(expectedHexLength, hex.length)
+        assertTrue(
+            "$label allocated $allocated bytes for ${hex.length} hex chars; budget ${expectedHexLength * 8L}",
+            allocated < expectedHexLength * 8L,
+        )
     }
 }

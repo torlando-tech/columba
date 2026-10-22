@@ -37,7 +37,7 @@ import network.columba.app.R
 /**
  * Crash reporting opt-in page (sentry flavor only).
  *
- * Asks the user whether to send anonymous crash reports. Defaults to off; the user must
+ * Asks the user whether to send privacy-minimized crash reports. Defaults to off; the user must
  * explicitly opt in. The choice is persisted when onboarding completes.
  */
 @Composable
@@ -78,7 +78,7 @@ fun CrashReportingPage(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = stringResource(R.string.onboarding_crash_body),
+            text = stringResource(R.string.crash_reporting_privacy_description),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -116,7 +116,7 @@ fun CrashReportingPage(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(R.string.onboarding_crash_toggle_title),
+                        text = stringResource(R.string.crash_reporting_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface,

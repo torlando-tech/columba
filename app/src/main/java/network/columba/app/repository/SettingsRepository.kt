@@ -508,9 +508,9 @@ class SettingsRepository
         // Crash reporting (sentry flavor only)
 
         /**
-         * Flow of the anonymous crash reporting consent. Opt-in: defaults to false.
-         * This is the source of truth; [CrashReportManager.setCrashReportingConsentMirror]
-         * mirrors it into SharedPreferences for synchronous reads at app startup.
+         * Flow of the opt-in crash reporting consent. Defaults to false.
+         * [CrashReportManager.updateCrashReportingConsent] coordinates this preference with
+         * durable startup permission and the live reporter.
          */
         val crashReportingConsentFlow: Flow<Boolean> =
             context.dataStore.data
@@ -519,8 +519,8 @@ class SettingsRepository
                 }.distinctUntilChanged()
 
         /**
-         * Persist the anonymous crash reporting consent. Callers should also update the
-         * synchronous mirror via CrashReportManager and call CrashReporter.setEnabled().
+         * Persist the crash reporting preference. User-facing changes must go through
+         * [CrashReportManager.updateCrashReportingConsent] to coordinate revocation safely.
          */
         suspend fun setCrashReportingConsent(enabled: Boolean) {
             context.dataStore.edit { preferences ->

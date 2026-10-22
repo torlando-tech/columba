@@ -19,6 +19,8 @@ import network.columba.app.notifications.NotificationHelper
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.host.util.PeerNameResolver
+import network.columba.app.telemetry.MemoryDiagnosticCounter
+import network.columba.app.telemetry.MemoryDiagnostics
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -64,6 +66,11 @@ class MessageCollector
 
         // Map of peer hashes to names (populated from announces)
         private val peerNames = ConcurrentHashMap<String, String>()
+
+        init {
+            MemoryDiagnostics.registerCounter(MemoryDiagnosticCounter.PROCESSED_MESSAGE_IDS) { processedMessageIds.size }
+            MemoryDiagnostics.registerCounter(MemoryDiagnosticCounter.PEER_NAMES) { peerNames.size }
+        }
 
         // Statistics for monitoring
         private val _messagesCollected = MutableStateFlow(0)
@@ -219,6 +226,12 @@ class MessageCollector
                                 deliveryMethod = receivedMessage.deliveryMethod,
                                 // Local reception time for sort ordering
                                 receivedAt = now,
+                                // LXMF signature-verification state from the backend.
+                                // false = sender identity was unknown to our RNS at
+                                // receive time (potential forgery — see MessageEntity
+                                // for full semantics); the UI renders an "unverified
+                                // sender" warning on these.
+                                signatureVerified = receivedMessage.signatureVerified,
                             )
 
                         // Get peer name from cache, existing conversation, or use formatted hash

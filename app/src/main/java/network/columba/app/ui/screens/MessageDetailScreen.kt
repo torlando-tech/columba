@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -197,6 +199,31 @@ fun MessageDetailScreen(
                     }
                 } else {
                     // Received message info: delivery method, hop count, receiving interface.
+
+                    // Signature verification card. Only emitted for received
+                    // messages where the flag is non-null. Null (sent messages,
+                    // legacy rows) renders no card — we don't claim a
+                    // verification state either way for those, matching the
+                    // bubble behavior in MessagingScreen.
+                    msg.signatureVerified?.let { verified ->
+                        if (verified) {
+                            MessageInfoCard(
+                                icon = Icons.Default.VerifiedUser,
+                                title = stringResource(R.string.message_detail_signature_title),
+                                content = stringResource(R.string.message_detail_signature_verified),
+                                subtitle = stringResource(R.string.message_detail_signature_verified_subtitle),
+                            )
+                        } else {
+                            MessageInfoCard(
+                                icon = Icons.Default.Warning,
+                                iconTint = MaterialTheme.colorScheme.error,
+                                title = stringResource(R.string.message_detail_signature_title),
+                                content = stringResource(R.string.message_detail_signature_unverified),
+                                subtitle = stringResource(R.string.message_detail_signature_unverified_subtitle),
+                                contentColor = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
 
                     // Delivery method card. Especially important for propagation-fetched
                     // messages — hop count / interface / signal metrics are all null for

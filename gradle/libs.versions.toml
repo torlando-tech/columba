@@ -1,8 +1,8 @@
 [versions]
-kotlin = "2.3.20"
+kotlin = "2.4.21"
 compose = "1.7.5"
 composeBom = "2026.05.01"
-hilt = "2.59.2"
+hilt = "2.60.1"
 room = "2.8.4"
 coroutines = "1.11.0"
 lifecycle = "2.10.0"
@@ -107,8 +107,8 @@ cameraX-view = { module = "androidx.camera:camera-view", version.ref = "cameraX"
 # Testing
 junit = { module = "junit:junit", version = "4.13.2" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version = "5.11.4" }
-mockk = { module = "io.mockk:mockk", version = "1.14.9" }
-mockk-android = { module = "io.mockk:mockk-android", version = "1.14.9" }
+mockk = { module = "io.mockk:mockk", version = "1.14.11" }
+mockk-android = { module = "io.mockk:mockk-android", version = "1.14.11" }
 turbine = { module = "app.cash.turbine:turbine", version = "1.2.1" }
 arch-core-testing = { module = "androidx.arch.core:core-testing", version = "2.2.0" }
 robolectric = { module = "org.robolectric:robolectric", version = "4.16.1" }

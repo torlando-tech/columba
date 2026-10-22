@@ -183,7 +183,7 @@ fun AdvancedCard(
             }
         }
 
-        // Anonymous crash reporting toggle (sentry flavor only — the SDK is stripped from
+        // Opt-in crash reporting toggle (sentry flavor only — the SDK is stripped from
         // the noSentry flavor, so the toggle would do nothing there).
         if (BuildConfig.CRASH_REPORTING_AVAILABLE) {
             Spacer(Modifier.height(16.dp))
@@ -202,7 +202,7 @@ fun AdvancedCard(
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     Text(
-                        text = stringResource(R.string.settings_advanced_crash_title),
+                        text = stringResource(R.string.crash_reporting_title),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                     )
@@ -213,7 +213,7 @@ fun AdvancedCard(
                 )
             }
             Text(
-                text = stringResource(R.string.settings_advanced_crash_description),
+                text = stringResource(R.string.crash_reporting_privacy_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

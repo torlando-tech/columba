@@ -71,4 +71,17 @@ data class MessageEntity(
     val receivedAt: Long? = null,
     // Interface name through which message was sent (null for received messages or pre-feature messages)
     val sentInterface: String? = null,
+    // For received messages: whether the LXMF signature was verified against
+    // the sender's known identity.
+    //   true  = signature checked against a known source identity, valid.
+    //   false = the sender's signature could not be verified — could be a
+    //           forgery; the UI must warn. Kotlin backend: always
+    //           SOURCE_UNKNOWN (we don't hold the sender's identity yet;
+    //           LXMF-kt drops SIGNATURE_INVALID at the router). Python backend:
+    //           may also be a failed signature check (python LXMF delivers
+    //           those to the app).
+    //   null  = sent by us (signed locally — implicitly authentic) or legacy
+    //           rows from before this column (migration backfills null). Treat
+    //           as "no warning" to preserve historical display.
+    val signatureVerified: Boolean? = null,
 )

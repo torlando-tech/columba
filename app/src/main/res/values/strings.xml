@@ -1855,6 +1855,13 @@
         <item quantity="one">Message traveled through %1$d relay</item>
         <item quantity="other">Message traveled through %1$d relays</item>
     </plurals>
+    <!-- Signature verification card (PR #876) -->
+    <string name="message_detail_signature_title">Signature</string>
+    <string name="message_detail_signature_verified">Verified</string>
+    <string name="message_detail_signature_unverified">Unverified</string>
+    <string name="message_detail_signature_verified_subtitle">The sender\'s identity was confirmed against their announce.</string>
+    <string name="message_detail_signature_unverified_subtitle">The sender\'s signature could not be verified. Their identity may be unknown to your node, or the signature check may have failed. The message could be forged. Treat with caution.</string>
+    <string name="message_unverified_sender_chip">Unverified sender — may be forged</string>
     <!-- ChatsScreen -->
     <string name="chats_saved_contact">Saved contact</string>
     <string name="chats_removed_contact">Removed contact</string>
@@ -2333,7 +2340,6 @@
     <string name="settings_crash_report_bug">Report Bug</string>
     <string name="settings_crash_dismiss">Dismiss</string>
     <string name="settings_crash_optin_title">Help improve Columba?</string>
-    <string name="settings_crash_optin_body">Columba can send anonymous crash and error reports so the developer can find and fix bugs. No message content, contacts, or identity information is ever included. You can change this anytime in Settings → Advanced.</string>
     <string name="settings_crash_optin_enable">Enable</string>
     <string name="settings_crash_optin_not_now">Not now</string>
     <!-- i18n ticket 16: notification settings screen -->
@@ -2535,8 +2541,6 @@
     <string name="settings_advanced_restart_pending">Change pending — restart Reticulum to apply.</string>
     <string name="settings_advanced_restarting">Restarting…</string>
     <string name="settings_advanced_restart">Restart</string>
-    <string name="settings_advanced_crash_title">Anonymous Crash Reports</string>
-    <string name="settings_advanced_crash_description">Send anonymous crash and error reports to help the developer fix bugs. No message content, contacts, or identity information is ever included. Off by default; you can change this at any time.</string>
     <string name="settings_announce_title">Auto Announce</string>
     <string name="settings_announce_description">Automatically announce your presence on the network at regular intervals. This helps other peers discover you.</string>
     <plurals name="settings_announce_interval">
@@ -2793,8 +2797,6 @@
     <string name="onboarding_perms_granted_cd">Granted</string>
     <string name="onboarding_perms_enable">Enable</string>
     <string name="onboarding_crash_title">Help Us Improve</string>
-    <string name="onboarding_crash_body">Columba can send anonymous crash and error reports to help the developer find and fix bugs. No message content, contacts, or identity information is ever included.</string>
-    <string name="onboarding_crash_toggle_title">Anonymous Crash Reports</string>
     <string name="onboarding_crash_toggle_helper">You can change this anytime in Settings → Advanced</string>
     <string name="onboarding_complete_title">You\'re all set!</string>
     <string name="onboarding_complete_summary">Summary</string>
@@ -3087,4 +3089,6 @@
     <string name="flasher_source_microreticulum">microReticulum</string>
     <string name="flasher_source_community_edition">RNode Community Edition</string>
     <string name="flasher_source_custom">Custom</string>
+    <string name="crash_reporting_title">Crash Reports</string>
+    <string name="crash_reporting_privacy_description">With your permission, Columba sends crash types, code locations, app versions and coarse memory diagnostics to Sentry. Message contents, contacts, keys and peer identifiers are excluded. Sentry receives your network IP when reports are uploaded. Off by default; change this anytime in Settings → Advanced.</string>
 </resources>

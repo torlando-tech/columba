@@ -8,9 +8,7 @@ package network.columba.app.telemetry
  * the correct implementation at compile time per flavor.
  */
 object CrashReporterProvider {
-    // Process-wide singleton so that ColumbaApplication.initialize(...) and a later
-    // setEnabled(...) from settings/onboarding act on the same instance (the latter can
-    // then lazily initialize Sentry using the args captured at startup).
+    // Configuration at startup and consent changes from settings/onboarding share one reporter.
     private val instance: CrashReporter by lazy { SentryCrashReporter() }
 
     fun create(): CrashReporter = instance

@@ -37,6 +37,7 @@ class PartialManager(
         val status: Status,
         val document: MicronDocument?,
         val refreshInterval: Int?,
+        val fieldNames: List<String> = emptyList(),
     ) {
         enum class Status { LOADING, LOADED, ERROR }
     }
@@ -138,6 +139,7 @@ class PartialManager(
                                 status = PartialState.Status.LOADING,
                                 document = null,
                                 refreshInterval = partial.refreshInterval,
+                                fieldNames = partial.fieldNames,
                             )
                     )
                 }
@@ -174,7 +176,7 @@ class PartialManager(
 
         jobs[key] =
             scope.launch(Dispatchers.IO) {
-                fetchAndUpdate(key, existing.url, existing.refreshInterval)
+                fetchAndUpdate(key, existing.url, existing.refreshInterval, existing.fieldNames)
             }
     }
 
@@ -191,13 +193,14 @@ class PartialManager(
         key: String,
         partial: MicronElement.Partial,
     ) {
-        fetchAndUpdate(key, partial.url, partial.refreshInterval)
+        fetchAndUpdate(key, partial.url, partial.refreshInterval, partial.fieldNames)
     }
 
     private suspend fun fetchAndUpdate(
         key: String,
         url: String,
         refreshInterval: Int?,
+        allowedFields: List<String> = emptyList(),
     ) {
         var consecutiveErrors = 0
         try {
@@ -205,7 +208,7 @@ class PartialManager(
                 fetchSemaphore.withPermit {
                     val (nodeHash, path) = resolveNomadNetUrl(url, currentNodeHash())
 
-                    val formDataJson = buildFormDataJson()
+                    val formDataJson = buildFormDataJson(allowedFields)
 
                     val result =
                         protocol.requestNomadnetPage(
@@ -228,6 +231,7 @@ class PartialManager(
                                             status = PartialState.Status.LOADED,
                                             document = doc,
                                             refreshInterval = refreshInterval,
+                                            fieldNames = allowedFields,
                                         )
                                 )
                             }
@@ -244,6 +248,7 @@ class PartialManager(
                                             status = PartialState.Status.ERROR,
                                             document = null,
                                             refreshInterval = refreshInterval,
+                                            fieldNames = allowedFields,
                                         )
                                 )
                             }
@@ -273,17 +278,27 @@ class PartialManager(
                             status = PartialState.Status.ERROR,
                             document = null,
                             refreshInterval = refreshInterval,
+                            fieldNames = allowedFields,
                         )
                 )
             }
         }
     }
 
-    private fun buildFormDataJson(): String? {
+    private fun buildFormDataJson(allowedFields: List<String>): String? {
         val fields = formFields()
         if (fields.isEmpty()) return null
+        // Match NomadNet TUI: only forward fields declared by the partial.
+        // "*" means all fields; empty list means no fields.
+        val filtered =
+            when {
+                "*" in allowedFields -> fields
+                allowedFields.isEmpty() -> emptyMap()
+                else -> fields.filterKeys { it in allowedFields }
+            }
+        if (filtered.isEmpty()) return null
         val json = JSONObject()
-        for ((k, v) in fields) {
+        for ((k, v) in filtered) {
             json.put(k, v)
         }
         return json.toString()

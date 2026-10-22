@@ -10,16 +10,12 @@ import android.content.Context
  * `noSentry` APK. Every method is intentionally empty.
  */
 internal class NoOpCrashReporter : CrashReporter {
-    override fun initialize(
+    override fun configure(
         context: Context,
         environment: String,
-        isDebug: Boolean,
-        consentGranted: Boolean,
     ) = Unit
 
     override fun setEnabled(enabled: Boolean) = Unit
-
-    override fun addBreadcrumb(breadcrumb: CrashBreadcrumb) = Unit
 
     override fun captureException(throwable: Throwable) = Unit
 }

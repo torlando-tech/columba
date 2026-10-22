@@ -12,7 +12,7 @@ import network.columba.app.R
 
 /**
  * One-time opt-in dialog shown on launch to existing users (those who completed onboarding
- * before anonymous crash reporting existed). Only used in the sentry flavor. Either choice
+ * before opt-in crash reporting existed). Only used in the sentry flavor. Either choice
  * marks the prompt seen so it never reappears.
  */
 @Composable
@@ -31,7 +31,7 @@ fun CrashReportingOptInDialog(
         title = { Text(stringResource(R.string.settings_crash_optin_title)) },
         text = {
             Text(
-                stringResource(R.string.settings_crash_optin_body),
+                stringResource(R.string.crash_reporting_privacy_description),
             )
         },
         confirmButton = {

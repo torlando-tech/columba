@@ -20,6 +20,8 @@ import network.columba.app.rns.host.manager.PreferredNode
 import network.columba.app.rns.host.manager.PreferredNodePolicy
 import network.columba.app.rns.host.manager.PropagationNodeSelection
 import network.columba.app.service.manager.InterfaceTransportObserver
+import network.columba.app.telemetry.MemoryDiagnosticCounter
+import network.columba.app.telemetry.MemoryDiagnostics
 import network.columba.app.util.HexUtils.toHexString
 import network.columba.app.viewmodel.UiMessage
 import network.columba.app.viewmodel.toUiMessage
@@ -303,6 +305,12 @@ class PropagationNodeManager
          */
         private val retryQueueLock = Any()
         private val pendingRelayRetries = mutableListOf<Pair<String, suspend () -> Unit>>()
+
+        init {
+            MemoryDiagnostics.registerCounter(MemoryDiagnosticCounter.PENDING_RELAY_RETRIES) {
+                synchronized(retryQueueLock) { pendingRelayRetries.size }
+            }
+        }
 
         /**
          * Recheck token for the preferred-list writer. The writer's `combine(enabled,

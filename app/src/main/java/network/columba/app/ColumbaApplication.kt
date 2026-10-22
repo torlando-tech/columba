@@ -137,15 +137,20 @@ class ColumbaApplication : Application() {
         // Install crash handler FIRST (before anything else that might crash)
         // This ensures we capture crashes from any subsequent initialization
         crashReportManager.installCrashHandler()
-        // Initialize crash reporting (Sentry flavor only). Consent is read synchronously
-        // from the SharedPreferences mirror so we never block the main thread on DataStore.
-        // When consent is not granted, the reporter does not initialize or upload anything.
-        crashReporter.initialize(
-            context = this,
-            environment = if (BuildConfig.DEBUG) "debug" else "production",
-            isDebug = BuildConfig.DEBUG,
-            consentGranted = crashReportManager.isCrashReportingConsentGranted(),
-        )
+        // Only the app process reports: its settings UI owns the live consent lifecycle.
+        // A service-process SDK would retain stale consent after an in-app opt-out.
+        // Unknown process identity fails closed. This never changes service startup.
+        if (BuildConfig.CRASH_REPORTING_AVAILABLE && getCurrentProcessName() == packageName) {
+            crashReporter.configure(
+                context = this,
+                environment = if (BuildConfig.DEBUG) "debug" else "production",
+            )
+            applicationScope.launch {
+                crashReportManager.initializeCrashReportingConsent(crashReporter) {
+                    settingsRepository.crashReportingConsentFlow.first()
+                }
+            }
+        }
 
         // Phase 4 Task 4.1: StrictMode for debug builds
         // Detect threading violations during development

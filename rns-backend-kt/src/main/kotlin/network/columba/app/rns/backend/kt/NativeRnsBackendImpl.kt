@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
@@ -233,6 +235,13 @@ class NativeRnsBackendImpl(
     // When true, auto-connect ignores discovered interfaces that did not
     // advertise an IFAC network name. Set via setAutoconnectIfacOnly().
     @Volatile private var autoconnectIfacOnly: Boolean = false
+
+    // Serializes initialize()/shutdown(). The :reticulum service self-initializes
+    // from its config snapshot (BackendInitializer) while the UI process may call
+    // initialize() over IPC at the same moment; without this, the second caller hits
+    // "Reticulum is already started" and its failure cleanup tears down the stack the
+    // first caller just brought up.
+    private val lifecycleMutex = Mutex()
 
     // Native reticulum-kt / lxmf-kt instances
     private var reticulum: Reticulum? = null
@@ -487,7 +496,23 @@ class NativeRnsBackendImpl(
                 displayName = config.displayName,
             )
 
+        // Surface the LXMF signature-verification state to the UI. LXMF-kt's
+        // router has already dropped SIGNATURE_INVALID deliveries (tampered
+        // payloads claiming a known sender) before this callback fires, so an
+        // unverified message here is the SOURCE_UNKNOWN case: we don't yet
+        // hold the sender's identity, so the signature can't be checked — it
+        // could be a legitimate first-contact OR a forgery. We ingest it
+        // anyway (Sideband-style warn-and-ingest, so genuine first-contact
+        // isn't lost). `buildReceivedMessage` reads `message.signatureValidated`
+        // onto the ReceivedMessage so the UI can warn.
         router!!.registerDeliveryCallback { message ->
+            if (!message.signatureValidated) {
+                Log.w(
+                    TAG,
+                    "Unverified inbound message from ${message.sourceHash.toHex()} " +
+                        "(${message.unverifiedReason}) — ingesting with warning per Sideband-style policy",
+                )
+            }
             handleIncomingMessage(message)
         }
 
@@ -615,6 +640,21 @@ class NativeRnsBackendImpl(
 
     override suspend fun initialize(config: ReticulumConfig): Result<Unit> =
         withContext(Dispatchers.IO) {
+            lifecycleMutex.withLock {
+                if (_networkStatus.value is NetworkStatus.READY && reticulum != null) {
+                    // Lost a race with the other initializer (UI vs. service self-init):
+                    // the stack is already up, so this is a no-op — same contract as
+                    // PythonRnsRuntime.start() and what BackendInitializer documents.
+                    Log.i(TAG, "initialize() called while already running — ignoring")
+                    Result.success(Unit)
+                } else {
+                    initializeLocked(config)
+                }
+            }
+        }
+
+    private suspend fun initializeLocked(config: ReticulumConfig): Result<Unit> =
+        run {
             runCatching {
                 _networkStatus.value = NetworkStatus.INITIALIZING
                 // Cancel any coroutines from a previous init cycle before replacing the scope.
@@ -752,6 +792,11 @@ class NativeRnsBackendImpl(
 
     override suspend fun shutdown(): Result<Unit> =
         withContext(Dispatchers.IO) {
+            lifecycleMutex.withLock { shutdownLocked() }
+        }
+
+    private suspend fun shutdownLocked(): Result<Unit> =
+        run {
             runCatching {
                 Log.i(TAG, "Shutting down native Reticulum stack")
                 _networkStatus.value = NetworkStatus.SHUTDOWN
@@ -1091,6 +1136,10 @@ class NativeRnsBackendImpl(
             receivedRssi = message.receivedRssi,
             receivedSnr = message.receivedSnr,
             deliveryMethod = nativeDeliveryMethodName(message.method),
+            // Read directly off the message — LXMF-kt sets `signatureValidated`
+            // false only for SOURCE_UNKNOWN here (SIGNATURE_INVALID is dropped
+            // at the router). Surfaced so the UI can warn on unverified senders.
+            signatureVerified = message.signatureValidated,
         )
     }
 

@@ -11,6 +11,8 @@ import network.columba.app.data.crypto.IdentityKeyProvider
 import network.columba.app.data.database.InterfaceDatabase
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.repository.SettingsRepository
+import network.columba.app.telemetry.MemoryDiagnosticOperation
+import network.columba.app.telemetry.MemoryDiagnostics
 import network.columba.app.viewmodel.UiMessage
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +82,7 @@ class MigrationExporter
             exportPassword: CharArray? = null,
         ): Result<Uri> =
             withContext(Dispatchers.IO) {
+                val diagnosticSession = MemoryDiagnostics.operationStarted(MemoryDiagnosticOperation.EXPORT)
                 try {
                     Log.i(TAG, "Starting migration export (encrypted: ${exportPassword != null})...")
                     onProgress(0.05f)
@@ -159,6 +162,8 @@ class MigrationExporter
                 } catch (e: Exception) {
                     Log.e(TAG, "Export failed", e)
                     Result.failure(e)
+                } finally {
+                    MemoryDiagnostics.operationFinished(MemoryDiagnosticOperation.EXPORT, diagnosticSession)
                 }
             }
 

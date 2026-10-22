@@ -62,6 +62,11 @@ data class Message(
     val receivedAt: Long? = null,
     // Interface name through which message was sent (null for received messages or pre-feature messages)
     val sentInterface: String? = null,
+    // For received messages: whether the LXMF signature was verified against
+    // the sender's known identity. false = potential forgery (sender identity
+    // unknown to us at receive time); null = sent by us, legacy rows, or the
+    // Python backend. See MessageEntity.signatureVerified for full semantics.
+    val signatureVerified: Boolean? = null,
     // DB-local per-target-message reactions aggregation. Flat shape:
     //   {"👍": ["sender_hex_1", ...], "❤️": [...]}
     // Never appears on the wire — the LXMF reaction wire format is
@@ -313,29 +318,12 @@ class ConversationRepository
                 val processedFieldsJson = extractLargeAttachments(message.id, message.fieldsJson)
 
                 val messageEntity =
-                    MessageEntity(
-                        id = message.id,
+                    buildMessageEntity(
+                        message = message,
                         conversationHash = peerHash,
                         identityHash = identityHash,
-                        content = sanitizedContent, // Store SANITIZED content
-                        timestamp = message.timestamp,
-                        isFromMe = message.isFromMe,
-                        status = message.status,
-                        isRead = message.isFromMe, // Our own messages are always "read"
-                        fieldsJson = processedFieldsJson, // LXMF fields with large attachments extracted
-                        deliveryMethod = message.deliveryMethod,
-                        errorMessage = message.errorMessage,
-                        replyToMessageId = message.replyToMessageId, // Reply reference
-                        // Received-side routing / signal metadata. Previously these
-                        // were dropped here, which meant the message-details screen
-                        // never rendered RSSI/SNR/hopcount/receiving-interface even
-                        // when the upstream producer populated them.
-                        receivedHopCount = message.receivedHopCount,
-                        receivedInterface = message.receivedInterface,
-                        receivedRssi = message.receivedRssi,
-                        receivedSnr = message.receivedSnr,
-                        receivedAt = message.receivedAt,
-                        sentInterface = message.sentInterface,
+                        sanitizedContent = sanitizedContent,
+                        processedFieldsJson = processedFieldsJson,
                     )
                 messageDao.insertMessage(messageEntity)
 
@@ -637,8 +625,45 @@ class ConversationRepository
                 receivedInterface = receivedInterface,
                 receivedAt = receivedAt,
                 sentInterface = sentInterface,
+                signatureVerified = signatureVerified,
                 reactionsJson = reactionsJson,
             )
+
+        /**
+         * Build a [MessageEntity] for persistence. Extracted from [saveMessage]
+         * (which is at the detekt LongMethod budget) — the caller supplies the
+         * resolved conversation/identity hashes plus the already-sanitized
+         * content and attachment-extracted fieldsJson. Received-side routing /
+         * signal metadata and `signatureVerified` are carried straight through
+         * so the message-details screen and unverified-sender warning render.
+         */
+        private fun buildMessageEntity(
+            message: Message,
+            conversationHash: String,
+            identityHash: String,
+            sanitizedContent: String,
+            processedFieldsJson: String?,
+        ) = MessageEntity(
+            id = message.id,
+            conversationHash = conversationHash,
+            identityHash = identityHash,
+            content = sanitizedContent,
+            timestamp = message.timestamp,
+            isFromMe = message.isFromMe,
+            status = message.status,
+            isRead = message.isFromMe, // Our own messages are always "read"
+            fieldsJson = processedFieldsJson,
+            deliveryMethod = message.deliveryMethod,
+            errorMessage = message.errorMessage,
+            replyToMessageId = message.replyToMessageId,
+            receivedHopCount = message.receivedHopCount,
+            receivedInterface = message.receivedInterface,
+            receivedRssi = message.receivedRssi,
+            receivedSnr = message.receivedSnr,
+            receivedAt = message.receivedAt,
+            sentInterface = message.sentInterface,
+            signatureVerified = message.signatureVerified,
+        )
 
         /**
          * Update the sent interface name for a message (active identity scoped).
@@ -1004,10 +1029,8 @@ class ConversationRepository
          * @return Modified fields JSON with file references for large attachments, or original if no extraction needed
          */
         @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
-        private fun extractLargeAttachments(
-            messageId: String,
-            fieldsJson: String?,
-        ): String? {
+        @androidx.annotation.VisibleForTesting
+        internal fun extractLargeAttachments(messageId: String, fieldsJson: String?): String? {
             if (fieldsJson == null) return null
 
             val totalSize = fieldsJson.length
@@ -1086,6 +1109,10 @@ class ConversationRepository
                 modifiedFields.put("5", extractFileAttachmentsForSent(messageId, value))
                 return true
             }
+            if (key == "6" && value is JSONArray) {
+                modifiedFields.put("6", extractImageAttachmentForStorage(messageId, value))
+                return true
+            }
             if (key != "7") return false
             if (value !is JSONArray) return false
             if (value.length() < 2) return false
@@ -1107,6 +1134,37 @@ class ConversationRepository
                     .put(JSONObject().put(AttachmentStorageManager.FILE_REF_KEY, filePath)),
             )
             return true
+        }
+
+        /**
+         * Extract a large array-format image (`[format, hex]`, the wire shape every
+         * Columba sender produces for LXMF field 6) to disk, keeping the array
+         * shape: `["jpg", {"_file_ref": path}]`.
+         *
+         * Mirrors the audio (field 7) handling. The generic extraction path would
+         * instead store the whole array string and replace the field with a bare
+         * `_file_ref` object; the message mapper hex-decodes file-ref payloads, so
+         * an array payload there fails to decode and the UI shows "not available".
+         */
+        private fun extractImageAttachmentForStorage(
+            messageId: String,
+            imageArray: JSONArray,
+        ): JSONArray {
+            // Anything but a [format, hex] payload (already a file ref, null
+            // payload, or staging-only shape) is kept as received.
+            val hexPayload =
+                if (imageArray.length() >= 2 && imageArray.opt(1) is String) {
+                    imageArray.getString(1)
+                } else {
+                    ""
+                }
+            if (hexPayload.length <= AttachmentStorageManager.SIZE_THRESHOLD) return imageArray
+            val filePath =
+                attachmentStorage.saveAttachment(messageId, "6", hexPayload)
+                    ?: return imageArray
+            return JSONArray()
+                .put(imageArray.opt(0))
+                .put(JSONObject().put(AttachmentStorageManager.FILE_REF_KEY, filePath))
         }
 
         /**

@@ -140,7 +140,7 @@ class SettingsViewModelTest {
         contactRepository = mockk()
         updateChecker = mockk()
         crashReportManager = mockk()
-        every { crashReportManager.setCrashReportingConsentMirror(any()) } returns Unit
+        coEvery { crashReportManager.updateCrashReportingConsent(any(), any(), any()) } returns Unit
         context =
             mockk {
                 val mockEditor =

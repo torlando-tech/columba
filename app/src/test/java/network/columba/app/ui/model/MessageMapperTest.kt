@@ -7,6 +7,7 @@ import network.columba.app.data.repository.Message
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -3095,5 +3096,62 @@ class MessageMapperTest {
         assertNotNull(result)
         // Not enough bytes to verify WEBP fully
         assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `loadImageBytes decodes inline array format`() {
+        val fieldsJson = """{"6": ["jpg", "010203ff"]}"""
+
+        assertArrayEquals(byteArrayOf(1, 2, 3, -1), loadImageBytes(fieldsJson))
+    }
+
+    @Test
+    fun `loadImageBytes resolves extracted array field with nested file ref`() {
+        val payloadFile = tempFolder.newFile("image.hex").apply { writeText("010203ff") }
+        val fieldsJson =
+            JSONObject()
+                .put(
+                    "6",
+                    JSONArray()
+                        .put("jpg")
+                        .put(JSONObject().put("_file_ref", payloadFile.absolutePath)),
+                )
+                .toString()
+
+        assertArrayEquals(byteArrayOf(1, 2, 3, -1), loadImageBytes(fieldsJson))
+    }
+
+    @Test
+    fun `loadImageBytes recovers legacy file ref containing whole array payload`() {
+        // Pre-fix extraction stored the entire ["jpg", "<hex>"] array string in
+        // the attachment file; existing "not available" bubbles must heal.
+        val payloadFile =
+            tempFolder.newFile("legacy.hex").apply { writeText("""["jpg","010203ff"]""") }
+        val fieldsJson = """{"6": {"_file_ref": "${payloadFile.absolutePath}"}}"""
+
+        assertArrayEquals(byteArrayOf(1, 2, 3, -1), loadImageBytes(fieldsJson))
+    }
+
+    @Test
+    fun `loadImageBytes falls back to staging path when array payload is null`() {
+        val staged = tempFolder.newFile("staged.bin").apply { writeBytes(byteArrayOf(1, 2, 3, -1)) }
+        val fieldsJson = """{"6": ["jpg", null, "${staged.absolutePath}"]}"""
+
+        assertArrayEquals(byteArrayOf(1, 2, 3, -1), loadImageBytes(fieldsJson))
+    }
+
+    @Test
+    fun `toMessageUi sets hasImageAttachment true for extracted array file ref`() {
+        val message =
+            createMessage(
+                TestMessageConfig(
+                    fieldsJson = """{"6": ["jpg", {"_file_ref": "/path/to/image.dat"}]}""",
+                ),
+            )
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasImageAttachment)
+        assertNull(result.decodedImage)
     }
 }

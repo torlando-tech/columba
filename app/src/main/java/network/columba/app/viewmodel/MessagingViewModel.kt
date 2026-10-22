@@ -1694,15 +1694,16 @@ class MessagingViewModel
                             voiceMode = voiceMode,
                             replyToMessageId = replyToMessageId,
                             cacheDir = applicationContext.cacheDir,
+                            ioDispatcher = attachmentIoDispatcher,
                         )
                     }
-                    if (voiceBytes != null) withContext(attachmentIoDispatcher) { buildFields() } else buildFields()
+                    buildFields()
                 } catch (e: java.io.IOException) {
                     attachmentFieldsPersisted = imageData == null && fileAttachments.isEmpty() && voiceBytes == null
                     Log.e(TAG, "Failed to build fieldsJson (attachment I/O error), saving message without attachments", e)
                     // Keep the delivered text in conversation history, but report incomplete local
                     // persistence so the composer retains the original attachment for recovery.
-                    buildFieldsJson(null, null, emptyList(), null, null, replyToMessageId)
+                    buildFieldsJson(null, null, emptyList(), null, null, replyToMessageId, ioDispatcher = attachmentIoDispatcher)
                 }
             val actualDestHash = resolveActualDestHash(receipt, destinationHash)
             Log.d(TAG, "Original dest hash: $destinationHash, Actual LXMF dest hash: $actualDestHash")
@@ -1788,9 +1789,10 @@ class MessagingViewModel
                             voiceMode = voiceMode,
                             replyToMessageId = replyToMessageId,
                             cacheDir = applicationContext.cacheDir,
+                            ioDispatcher = attachmentIoDispatcher,
                         )
                     }
-                    if (voiceBytes != null) withContext(attachmentIoDispatcher) { buildFields() } else buildFields()
+                    buildFields()
                 }.getOrNull()
             val requiresFields =
                 imageData != null ||
@@ -2757,6 +2759,11 @@ class MessagingViewModel
                 when {
                     field6 is org.json.JSONObject && field6.has("_file_ref") -> true
                     field6 is String && field6.isNotEmpty() -> true
+                    field6 is org.json.JSONArray && field6.length() >= 2 &&
+                        (
+                            (field6.opt(1) as? String)?.isNotEmpty() == true ||
+                                (field6.opt(1) as? org.json.JSONObject)?.has("_file_ref") == true
+                        ) -> true
                     else -> false
                 }
             } catch (e: Exception) {
@@ -3421,6 +3428,7 @@ internal suspend fun buildFieldsJson(
     replyToMessageId: String? = null,
     reactions: Map<String, List<String>>? = null,
     cacheDir: java.io.File? = null,
+    ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO,
 ): String? {
     val hasImage = imageData != null && imageFormat != null
     val hasFiles = fileAttachments.isNotEmpty()
@@ -3432,7 +3440,7 @@ internal suspend fun buildFieldsJson(
     if (!hasAnyContent) return null
 
     // Move hex encoding + file I/O (streamHexToFile) to background thread
-    return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    return kotlinx.coroutines.withContext(ioDispatcher) {
         val json = org.json.JSONObject()
 
         // Add image field (Field 6)

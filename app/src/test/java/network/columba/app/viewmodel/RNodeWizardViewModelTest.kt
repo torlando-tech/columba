@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
+import network.columba.app.R
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.BluetoothType
 import network.columba.app.data.model.DiscoveredRNode
@@ -335,7 +336,7 @@ class RNodeWizardViewModelTest {
                     spreadingFactor = 9,
                     codingRate = 5,
                     txPower = 17,
-                    description = "Test preset",
+                    descriptionRes = R.string.region_desc_us_915,
                 )
             viewModel.selectPreset(testPreset)
             advanceUntilIdle()
@@ -362,7 +363,7 @@ class RNodeWizardViewModelTest {
                     spreadingFactor = 9,
                     codingRate = 5,
                     txPower = 17,
-                    description = "Test preset",
+                    descriptionRes = R.string.region_desc_us_915,
                 )
             viewModel.selectPreset(testPreset)
             advanceUntilIdle()
@@ -393,7 +394,7 @@ class RNodeWizardViewModelTest {
                     spreadingFactor = 9,
                     codingRate = 5,
                     txPower = 17,
-                    description = "Test preset",
+                    descriptionRes = R.string.region_desc_us_915,
                 )
             viewModel.selectPreset(testPreset)
             advanceUntilIdle()
@@ -605,7 +606,7 @@ class RNodeWizardViewModelTest {
 
                 val state = awaitItem()
                 assertNotNull(state.frequencyError)
-                assertTrue(state.frequencyError!!.contains("MHz"))
+                assertEquals(R.string.rnode_val_frequency_range, (state.frequencyError as UiMessage.Text).id)
             }
         }
 
@@ -659,7 +660,7 @@ class RNodeWizardViewModelTest {
             // Verify the error is set
             val stateWithError = viewModel.state.value
             assertNotNull(stateWithError.frequencyError)
-            assertTrue(stateWithError.frequencyError!!.contains("MHz"))
+            assertEquals(R.string.rnode_val_frequency_range, (stateWithError.frequencyError as UiMessage.Text).id)
 
             // Now change to EU 868 L region
             viewModel.selectFrequencyRegion(euRegionL)
@@ -782,7 +783,7 @@ class RNodeWizardViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertNotNull(state.txPowerError)
-                assertTrue(state.txPowerError!!.contains("30"))
+                assertEquals(R.string.rnode_val_tx_power_max, (state.txPowerError as UiMessage.Text).id)
             }
         }
 
@@ -834,7 +835,7 @@ class RNodeWizardViewModelTest {
                     spreadingFactor = 8,
                     codingRate = 5,
                     txPower = 17,
-                    description = "Explicit TX test preset",
+                    descriptionRes = R.string.region_desc_eu_868_p,
                 )
             viewModel.selectPreset(preset)
             advanceUntilIdle()
@@ -878,7 +879,7 @@ class RNodeWizardViewModelTest {
 
                 val state = awaitItem()
                 assertNotNull(state.stAlockError)
-                assertTrue(state.stAlockError!!.contains("regional"))
+                assertEquals(R.string.rnode_val_airtime_regional_max, (state.stAlockError as UiMessage.Text).id)
             }
         }
 
@@ -985,7 +986,7 @@ class RNodeWizardViewModelTest {
             viewModel.selectDevice(testBleDevice)
             advanceUntilIdle()
 
-            assertEquals("RNode A1B2", viewModel.getEffectiveDeviceName())
+            assertEquals(UiMessage.Raw("RNode A1B2"), viewModel.getEffectiveDeviceName())
         }
 
     @Test
@@ -997,7 +998,7 @@ class RNodeWizardViewModelTest {
             viewModel.updateManualDeviceName("Custom RNode")
             advanceUntilIdle()
 
-            assertEquals("Custom RNode", viewModel.getEffectiveDeviceName())
+            assertEquals(UiMessage.Raw("Custom RNode"), viewModel.getEffectiveDeviceName())
         }
 
     @Test
@@ -1005,7 +1006,7 @@ class RNodeWizardViewModelTest {
         runViewModelTest {
             advanceUntilIdle()
 
-            assertEquals("No device selected", viewModel.getEffectiveDeviceName())
+            assertEquals(UiMessage.Text(R.string.rnode_wizard_no_device), viewModel.getEffectiveDeviceName())
         }
 
     @Test
@@ -1102,14 +1103,12 @@ class RNodeWizardViewModelTest {
                 // Directly access setScanError method via reflection to test error handling
                 // In production, this is called from onScanFailed callback
                 val setScanErrorMethod =
-                    RNodeWizardViewModel::class.java.getDeclaredMethod("setScanError", String::class.java)
+                    RNodeWizardViewModel::class.java.getDeclaredMethod("setScanError", UiMessage::class.java)
                 setScanErrorMethod.isAccessible = true
-                setScanErrorMethod.invoke(viewModel, "BLE scan failed: 1")
-                advanceUntilIdle()
+                setScanErrorMethod.invoke(viewModel, UiMessage.Raw("BLE scan failed: 1"))
 
                 val stateWithError = awaitItem()
-                assertEquals("BLE scan failed: 1", stateWithError.scanError)
-                assertFalse("Scanning should be stopped on error", stateWithError.isScanning)
+                assertEquals(UiMessage.Raw("BLE scan failed: 1"), stateWithError.scanError)
             }
         }
 
@@ -1130,7 +1129,7 @@ class RNodeWizardViewModelTest {
                 val state = awaitItem()
                 assertNotNull(state.tcpValidationError)
                 assertEquals(false, state.tcpValidationSuccess)
-                assertTrue(state.tcpValidationError!!.contains("empty"))
+                assertEquals(R.string.rnode_wizard_tcp_host_empty, (state.tcpValidationError as UiMessage.Text).id)
             }
         }
 
@@ -1150,7 +1149,7 @@ class RNodeWizardViewModelTest {
                 val state = awaitItem()
                 assertNotNull(state.tcpValidationError)
                 assertEquals(false, state.tcpValidationSuccess)
-                assertTrue(state.tcpValidationError!!.contains("between 1 and 65535"))
+                assertEquals(R.string.rnode_wizard_tcp_port_range, (state.tcpValidationError as UiMessage.Text).id)
             }
         }
 
@@ -1170,7 +1169,7 @@ class RNodeWizardViewModelTest {
                 val state = awaitItem()
                 assertNotNull(state.tcpValidationError)
                 assertEquals(false, state.tcpValidationSuccess)
-                assertTrue(state.tcpValidationError!!.contains("between 1 and 65535"))
+                assertEquals(R.string.rnode_wizard_tcp_port_range, (state.tcpValidationError as UiMessage.Text).id)
             }
         }
 
@@ -1245,7 +1244,7 @@ class RNodeWizardViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertNotNull(state.manualDeviceNameError)
-                assertTrue(state.manualDeviceNameError!!.contains("32 characters"))
+                assertEquals(R.string.rnode_device_name_too_long, (state.manualDeviceNameError as UiMessage.Text).id)
             }
         }
 
@@ -1261,7 +1260,7 @@ class RNodeWizardViewModelTest {
                 val state = awaitItem()
                 assertNull(state.manualDeviceNameError)
                 assertNotNull(state.manualDeviceNameWarning)
-                assertTrue(state.manualDeviceNameWarning!!.contains("not be an RNode"))
+                assertEquals(R.string.rnode_device_name_not_rnode, (state.manualDeviceNameWarning as UiMessage.Text).id)
             }
         }
 
@@ -1334,8 +1333,7 @@ class RNodeWizardViewModelTest {
                 stateField.isAccessible = true
                 @Suppress("UNCHECKED_CAST")
                 val stateFlow = stateField.get(viewModel) as kotlinx.coroutines.flow.MutableStateFlow<RNodeWizardState>
-                stateFlow.update { it.copy(pairingError = "Test pairing error") }
-
+                stateFlow.update { it.copy(pairingError = UiMessage.Raw("Test pairing error")) }
                 awaitItem() // State with error
 
                 viewModel.clearPairingError()
@@ -2198,7 +2196,7 @@ class RNodeWizardViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertNotNull(state.tcpValidationError)
-                assertTrue(state.tcpValidationError!!.contains("empty", ignoreCase = true))
+                assertEquals(R.string.rnode_wizard_tcp_host_empty, (state.tcpValidationError as UiMessage.Text).id)
             }
         }
 
@@ -2592,7 +2590,7 @@ class RNodeWizardViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertNotNull(state.saveError)
-                assertTrue(state.saveError!!.contains("Database error"))
+                assertEquals(UiMessage.Raw("Database error"), state.saveError)
                 assertFalse(state.isSaving)
                 assertFalse(state.saveSuccess)
             }
@@ -2634,7 +2632,7 @@ class RNodeWizardViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertNotNull(state.nameError)
-                assertTrue(state.nameError!!.contains("already exists"))
+                assertEquals(R.string.validation_interface_name_duplicate, (state.nameError as UiMessage.Text).id)
                 assertFalse(state.isSaving)
                 assertFalse(state.saveSuccess)
             }
@@ -2674,7 +2672,7 @@ class RNodeWizardViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertNotNull(state.nameError)
-                assertTrue(state.nameError!!.contains("already exists"))
+                assertEquals(R.string.validation_interface_name_duplicate, (state.nameError as UiMessage.Text).id)
             }
         }
 

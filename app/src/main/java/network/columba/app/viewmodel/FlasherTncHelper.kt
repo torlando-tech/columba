@@ -2,6 +2,9 @@ package network.columba.app.viewmodel
 
 import android.content.Context
 import android.util.Log
+import network.columba.app.R
+import network.columba.app.rns.host.R as RnsHostR
+import network.columba.app.rns.host.flasher.FlashText
 import network.columba.app.rns.host.flasher.FirmwareDownloader
 import network.columba.app.rns.host.flasher.FirmwareSource
 import network.columba.app.rns.host.flasher.FrequencyBand
@@ -110,7 +113,11 @@ internal class FlasherTncHelper(
                             state.update {
                                 it.copy(
                                     flashProgress = percent,
-                                    flashMessage = "Downloading: ${bytesDownloaded / 1024}KB / ${totalBytes / 1024}KB",
+                                    flashMessage =
+                                        FlashText.Resource(
+                                            RnsHostR.string.rnode_downloading_progress,
+                                            listOf(bytesDownloaded / 1024, totalBytes / 1024),
+                                        ),
                                 )
                             }
                         }
@@ -119,7 +126,7 @@ internal class FlasherTncHelper(
                             downloaded = data
                         }
 
-                        override fun onError(error: String) {
+                        override fun onError(error: FlashText) {
                             Log.e(TAG, "Custom URL download error: $error")
                         }
                     },
@@ -134,7 +141,7 @@ internal class FlasherTncHelper(
                 it.copy(
                     currentStep = FlasherStep.COMPLETE,
                     isFlashing = false,
-                    flashResult = FlashResult.Failure("Failed to read custom firmware"),
+                    flashResult = FlashResult.Failure(FlashText.Resource(R.string.flasher_custom_read_failed)),
                 )
             }
             return false
@@ -154,7 +161,7 @@ internal class FlasherTncHelper(
                 it.copy(
                     currentStep = FlasherStep.COMPLETE,
                     isFlashing = false,
-                    flashResult = FlashResult.Failure("Failed to save custom firmware"),
+                    flashResult = FlashResult.Failure(FlashText.Resource(R.string.flasher_custom_save_failed)),
                 )
             }
             return false

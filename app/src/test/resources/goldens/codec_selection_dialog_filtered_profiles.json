@@ -1,0 +1,14 @@
+[
+  "Select Call Quality",
+  "Choose a codec profile based on your connection speed",
+  "Ultra Low Bandwidth",
+  "Recommended",
+  "Codec2 700C - Best for very slow connections",
+  "High Quality",
+  "Opus - Higher fidelity audio",
+  "Low Latency",
+  "Experimental",
+  "Opus - Reduced delay, 20ms frames",
+  "Cancel",
+  "Call"
+]

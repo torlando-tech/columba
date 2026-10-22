@@ -4,7 +4,9 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
+import network.columba.app.R
 
 /**
  * Manages location permissions for the Map feature.
@@ -177,50 +179,20 @@ object LocationPermissionManager {
     }
 
     /**
-     * Get a human-readable description of why location permission is needed.
-     * This should be shown to users before requesting permissions.
+     * Resource id of a human-readable description of why location permission
+     * is needed. This should be shown to users before requesting permissions.
      */
-    fun getPermissionRationale(): String {
-        return buildString {
-            appendLine("Columba needs location access to:")
-            appendLine()
-            appendLine("Share your location with chosen contacts")
-            appendLine("Help friends find you at events")
-            appendLine("Calculate distance to contacts")
-            appendLine()
-            appendLine(
-                "You control who can see your location and for how long. " +
-                    "Location data is only shared peer-to-peer with contacts you choose. " +
-                    "Location data, like all data on Columba, is encrypted end to end, " +
-                    "never stored on a central server, and is only readable by the contacts you send it to.",
-            )
-            appendLine()
-            appendLine(
-                "Columba will not and can not share your location with anyone until you actively " +
-                    "send it to someone. Your location is always encrypted safely over Reticulum.",
-            )
-        }
-    }
+    @StringRes
+    fun getPermissionRationale(): Int = R.string.location_permission_rationale
 
     /**
-     * Rationale shown when prompting a user who has selected precise location
-     * sharing but doesn't hold precise (fine) access — whether that's
-     * approximate-only or no location permission at all (issue #855).
+     * Resource id of the rationale shown when prompting a user who has
+     * selected precise location sharing but doesn't hold precise (fine)
+     * access — whether that's approximate-only or no location permission at
+     * all (issue #855).
      */
-    fun getPreciseLocationRationale(): String {
-        return buildString {
-            appendLine(
-                "Location sharing is set to Precise, but Columba doesn't have precise " +
-                    "location access.",
-            )
-            appendLine()
-            appendLine(
-                "Without it, a shared position is unavailable or only approximate — off by a " +
-                    "kilometre or more. Enable precise location for accurate sharing, or set a " +
-                    "coarser precision in Location Sharing settings if that's intended.",
-            )
-        }
-    }
+    @StringRes
+    fun getPreciseLocationRationale(): Int = R.string.location_precise_rationale
 
     /**
      * Check if location services are available on this device.

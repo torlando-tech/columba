@@ -1,0 +1,8 @@
+[
+  "Network restriction",
+  "Active On Network",
+  "Any",
+  "Cellular only",
+  "Wi-Fi only",
+  "Skip starting this interface when the device's active network doesn't match. Wi-Fi/Ethernet are bucketed together; cellular includes mobile data."
+]

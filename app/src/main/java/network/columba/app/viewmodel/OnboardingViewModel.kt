@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import network.columba.app.R
 import network.columba.app.data.model.TcpCommunityServers
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.InterfaceRepository
@@ -331,7 +332,7 @@ class OnboardingViewModel
                     _state.value =
                         _state.value.copy(
                             isSaving = false,
-                            error = e.message ?: "Failed to save",
+                            error = e.toUiMessage(R.string.onboarding_save_failed),
                         )
                 }
             }
@@ -497,7 +498,7 @@ class OnboardingViewModel
                     _state.value =
                         _state.value.copy(
                             isSaving = false,
-                            error = e.message,
+                            error = e.message?.let { UiMessage.Raw(it) },
                         )
                 }
             }

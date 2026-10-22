@@ -10,6 +10,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import network.columba.app.R
 import network.columba.app.ui.components.CollapsibleSettingsCard
 
 @Composable
@@ -21,7 +23,7 @@ fun NotificationSettingsCard(
     onManageClick: () -> Unit,
 ) {
     CollapsibleSettingsCard(
-        title = "Notifications",
+        title = stringResource(R.string.settings_notif_card_title),
         icon = Icons.Default.Notifications,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
@@ -36,9 +38,9 @@ fun NotificationSettingsCard(
         Text(
             text =
                 if (notificationsEnabled) {
-                    "Manage notification preferences for messages, announces, and Bluetooth events."
+                    stringResource(R.string.settings_notif_card_enabled_hint)
                 } else {
-                    "All notifications are disabled. Enable to receive alerts for messages and events."
+                    stringResource(R.string.settings_notif_card_disabled_hint)
                 },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -53,7 +55,7 @@ fun NotificationSettingsCard(
                     containerColor = MaterialTheme.colorScheme.primary,
                 ),
         ) {
-            Text("Manage Notifications")
+            Text(stringResource(R.string.settings_notif_card_manage))
         }
     }
 }

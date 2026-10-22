@@ -45,7 +45,7 @@ data class ApkSharingState(
     /** The device's local IP address */
     val localIp: String? = null,
     /** Error message if something went wrong */
-    val errorMessage: String? = null,
+    val errorMessage: UiMessage? = null,
     /** The APK file size in bytes for display */
     val apkSizeBytes: Long = 0,
     /** How sharing is happening (WiFi or hotspot) */
@@ -144,7 +144,7 @@ class ApkSharingViewModel
                     if (apkFile == null) {
                         _state.value =
                             _state.value.copy(
-                                errorMessage = "Could not prepare APK file for sharing",
+                                errorMessage = UiMessage.Text(R.string.apk_sharing_prepare_failed),
                             )
                         return@launch
                     }
@@ -169,10 +169,7 @@ class ApkSharingViewModel
                         // API < 26 and no WiFi
                         _state.value =
                             _state.value.copy(
-                                errorMessage =
-                                    "No WiFi connection detected. " +
-                                        "Both devices must be on the same WiFi network, " +
-                                        "or use the \"Share via...\" option below.",
+                                errorMessage = UiMessage.Text(R.string.apk_sharing_no_wifi),
                             )
                     }
                 }
@@ -224,9 +221,7 @@ class ApkSharingViewModel
                     serverJob = null
                     _state.value =
                         ApkSharingState(
-                            errorMessage =
-                                "WiFi hotspot was stopped by the system. " +
-                                    "Please start sharing again.",
+                            errorMessage = UiMessage.Text(R.string.apk_sharing_hotspot_stopped),
                         )
                 },
             ) { result ->
@@ -244,9 +239,7 @@ class ApkSharingViewModel
                                     _state.value =
                                         _state.value.copy(
                                             isHotspotStarting = false,
-                                            errorMessage =
-                                                "Hotspot started but could not determine IP address. " +
-                                                    "Please try again.",
+                                            errorMessage = UiMessage.Text(R.string.apk_sharing_hotspot_no_ip),
                                         )
                                     hotspotManager.stop()
                                     return@launch
@@ -266,11 +259,12 @@ class ApkSharingViewModel
                                 isHotspotStarting = false,
                                 errorMessage =
                                     when (error) {
+                                        is LocalHotspotManager.HotspotException ->
+                                            error.uiMessage
                                         is SecurityException ->
-                                            "Permission required to create a WiFi hotspot. " +
-                                                "Please grant the permission and try again."
+                                            UiMessage.Text(R.string.apk_sharing_hotspot_permission)
                                         else ->
-                                            error.message ?: "Could not start WiFi hotspot"
+                                            error.toUiMessage(R.string.apk_sharing_hotspot_start_failed)
                                     },
                             )
                     }
@@ -294,7 +288,7 @@ class ApkSharingViewModel
             if (port == 0) {
                 _state.value =
                     _state.value.copy(
-                        errorMessage = "Failed to start sharing server",
+                        errorMessage = UiMessage.Text(R.string.apk_sharing_server_start_failed),
                     )
                 return
             }

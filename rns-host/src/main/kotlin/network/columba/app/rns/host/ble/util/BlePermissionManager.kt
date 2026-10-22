@@ -95,25 +95,6 @@ object BlePermissionManager {
     }
 
     /**
-     * Get a human-readable description of why BLE permissions are needed.
-     * This should be shown to users before requesting permissions.
-     */
-    fun getPermissionRationale(): String {
-        return buildString {
-            appendLine("Columba needs Bluetooth permissions to:")
-            appendLine("• Discover and connect to nearby Reticulum nodes")
-            appendLine("• Create a mesh network for decentralized messaging")
-            appendLine("• Send and receive encrypted messages over BLE")
-            appendLine()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                appendLine("Note: Location access is NOT required. BLE is used only for mesh networking.")
-            } else {
-                appendLine("Note: Location permission is required by Android for BLE scanning, but Columba does not use your location.")
-            }
-        }
-    }
-
-    /**
      * Check if BLE hardware is available on this device.
      */
     fun isBleSupported(context: Context): Boolean {

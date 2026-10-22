@@ -1,0 +1,20 @@
+[
+  "TCP Client Configuration",
+  "4242",
+  "Target Port",
+  "IFAC (Network Access)",
+  "Leave blank unless the remote interface requires an IFAC network name and passphrase. Auto-filled when adding from a discovered interface.",
+  "ifac-net",
+  "Network Name",
+  "•••••••••••",
+  "Passphrase",
+  "Show passphrase",
+  "SOCKS5 Proxy",
+  "Route through a SOCKS5 proxy (e.g., Orbot for Tor). Required for .onion addresses.",
+  "127.0.0.1",
+  "Proxy Host",
+  "SOCKS5 proxy address. Use 127.0.0.1 for Orbot running on this device.",
+  "9050",
+  "Proxy Port",
+  "Orbot default: 9050."
+]

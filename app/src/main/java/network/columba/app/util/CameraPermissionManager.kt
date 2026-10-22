@@ -3,7 +3,9 @@ package network.columba.app.util
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
+import network.columba.app.R
 
 /**
  * Manages camera permissions for QR code scanning.
@@ -71,18 +73,11 @@ object CameraPermissionManager {
     }
 
     /**
-     * Get a human-readable description of why camera permission is needed.
-     * This should be shown to users before requesting permissions.
+     * Resource id of a human-readable description of why camera permission is
+     * needed. This should be shown to users before requesting permissions.
      */
-    fun getPermissionRationale(): String {
-        return buildString {
-            appendLine("Columba needs camera access to:")
-            appendLine("• Scan QR codes to add contacts")
-            appendLine("• Read identity information from QR codes")
-            appendLine()
-            appendLine("Your camera is only used for QR code scanning and no photos are stored.")
-        }
-    }
+    @StringRes
+    fun getPermissionRationale(): Int = R.string.camera_permission_rationale
 
     /**
      * Check if camera hardware is available on this device.

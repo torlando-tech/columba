@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Foreground / alert notifications (ServiceNotificationManager) -->
+    <string name="notif_channel_reticulum_name">Reticulum Network Service</string>
+    <string name="notif_channel_reticulum_description">Keeps Reticulum network running in background</string>
+    <string name="notif_channel_rnode_name">RNode Connection Alerts</string>
+    <string name="notif_channel_rnode_description">Alerts when an RNode radio loses connection</string>
+    <string name="notif_foreground_title">Columba Mesh Network</string>
+    <string name="notif_rnode_alert_title">RNode Disconnected</string>
+    <string name="notif_rnode_alert_text">%1$s lost connection. Attempting to reconnect...</string>
+    <string name="notif_sync_title">Syncing with relay...</string>
+    <string name="notif_sync_path_requested">Discovering network path...</string>
+    <string name="notif_sync_link_establishing">Establishing connection...</string>
+    <string name="notif_sync_link_established">Connected, preparing request...</string>
+    <string name="notif_sync_request_sent">Requesting messages...</string>
+    <string name="notif_sync_downloading">Downloading: %1$d%%</string>
+    <string name="notif_sync_downloading_messages">Downloading messages...</string>
+    <string name="notif_sync_response_received">Processing response...</string>
+    <string name="notif_sync_processing">Processing...</string>
+    <string name="notif_status_connected">Connected - Mesh network active</string>
+    <string name="notif_status_initializing">Starting mesh network...</string>
+    <string name="notif_status_reconnecting">Reconnecting...</string>
+    <string name="notif_status_error">Error - Tap to view</string>
+    <string name="notif_status_disconnected">Disconnected</string>
+    <string name="notif_detail_running">Background service running. Keep battery optimization disabled for reliable message delivery.</string>
+    <string name="notif_detail_initializing">Connecting to mesh network...</string>
+    <string name="notif_detail_reconnecting">Service was interrupted. Attempting to reconnect...</string>
+    <string name="notif_detail_rnode_disconnected">" (RNode disconnected)"</string>
+    <string name="notif_detail_rnode_battery">" (RNode battery %1$d%%)"</string>
+    <string name="notif_error_foreground_not_allowed">Foreground service not allowed - battery optimization may kill the service</string>
+
+    <!-- Shared flasher progress text -->
+    <string name="flash_parsing_package">Parsing firmware package...</string>
+    <string name="flash_connecting_device">Connecting to device...</string>
+    <string name="flash_connect_failed">Failed to connect to device</string>
+    <string name="flash_starting">Starting flash...</string>
+    <string name="flash_failed_error">Flash failed: %1$s</string>
+    <string name="flash_finalizing">Finalizing...</string>
+    <string name="flash_resetting_device">Resetting device...</string>
+
+    <!-- ESPTool flasher (ESPToolFlasher) -->
+    <string name="esptool_invalid_package">Invalid firmware package</string>
+    <string name="esptool_syncing_bootloader">Syncing with bootloader...</string>
+    <string name="esptool_entering_bootloader">Entering bootloader...</string>
+    <string name="esptool_enter_bootloader_failed">Failed to enter bootloader mode</string>
+    <string name="esptool_sync_failed">Failed to sync with bootloader</string>
+    <string name="esptool_detecting_chip">Detecting chip...</string>
+    <string name="esptool_setting_baud">Switching to high-speed mode...</string>
+    <string name="esptool_attaching_flash">Attaching SPI flash...</string>
+    <string name="esptool_attach_failed">Failed to attach SPI flash: %1$s</string>
+    <string name="esptool_configuring_flash">Configuring %1$d MiB flash...</string>
+    <string name="esptool_configure_flash_failed">Failed to configure %1$d MiB SPI flash: %2$s</string>
+    <string name="esptool_flashing_bootloader">Flashing bootloader...</string>
+    <string name="esptool_flashing_partition_table">Flashing partition table...</string>
+    <string name="esptool_flashing_application">Flashing application...</string>
+    <string name="esptool_flashing_console">Flashing console image...</string>
+    <string name="esptool_reboot_command_failed">Failed to submit final reboot command: %1$s</string>
+    <string name="esptool_flash_complete">Flash complete!</string>
+    <string name="esptool_manual_boot_instructions">Could not sync with bootloader. This device uses native USB (ESP32-S3) which requires manual bootloader entry for initial flashing.\n\nPlease enter boot mode manually:\n1. Hold the PRG (or BOOT) button\n2. Press and release the RST button\n3. Release the PRG (or BOOT) button\n4. Try flashing again\n\nNote: Once RNode firmware is installed, future updates will work automatically.</string>
+    <string name="esptool_progress_bootloader">Flashing bootloader: %1$d/%2$d</string>
+    <string name="esptool_progress_partition_table">Flashing partition table: %1$d/%2$d</string>
+    <string name="esptool_progress_boot_app0">Flashing boot app0: %1$d/%2$d</string>
+    <string name="esptool_progress_application">Flashing application: %1$d/%2$d</string>
+    <string name="esptool_progress_console">Flashing console: %1$d/%2$d</string>
+    <string name="esptool_start_failed_bootloader">Failed to start bootloader transfer at 0x%1$s: %2$s</string>
+    <string name="esptool_start_failed_partition_table">Failed to start partition table transfer at 0x%1$s: %2$s</string>
+    <string name="esptool_start_failed_boot_app0">Failed to start boot app0 transfer at 0x%1$s: %2$s</string>
+    <string name="esptool_start_failed_application">Failed to start application transfer at 0x%1$s: %2$s</string>
+    <string name="esptool_start_failed_console">Failed to start console transfer at 0x%1$s: %2$s</string>
+    <string name="esptool_block_failed_bootloader">Failed to transfer bootloader block %1$d/%2$d at 0x%3$s: %4$s</string>
+    <string name="esptool_block_failed_partition_table">Failed to transfer partition table block %1$d/%2$d at 0x%3$s: %4$s</string>
+    <string name="esptool_block_failed_boot_app0">Failed to transfer boot app0 block %1$d/%2$d at 0x%3$s: %4$s</string>
+    <string name="esptool_block_failed_application">Failed to transfer application block %1$d/%2$d at 0x%3$s: %4$s</string>
+    <string name="esptool_block_failed_console">Failed to transfer console block %1$d/%2$d at 0x%3$s: %4$s</string>
+    <string name="esptool_verify_failed_bootloader">Flash verification failed for bootloader at 0x%1$s: %2$s</string>
+    <string name="esptool_verify_failed_partition_table">Flash verification failed for partition table at 0x%1$s: %2$s</string>
+    <string name="esptool_verify_failed_boot_app0">Flash verification failed for boot app0 at 0x%1$s: %2$s</string>
+    <string name="esptool_verify_failed_application">Flash verification failed for application at 0x%1$s: %2$s</string>
+    <string name="esptool_verify_failed_console">Flash verification failed for console at 0x%1$s: %2$s</string>
+
+    <!-- Nordic DFU flasher (NordicDFUFlasher) -->
+    <string name="nordic_invalid_package">Invalid firmware package: missing required files</string>
+    <string name="nordic_entering_dfu">Entering DFU mode...</string>
+    <string name="nordic_enter_dfu_failed">Failed to enter DFU mode</string>
+    <string name="nordic_connecting_bootloader">Connecting to bootloader...</string>
+    <string name="nordic_bootloader_not_found">Failed to find bootloader device after reset</string>
+    <string name="nordic_connect_bootloader_failed">Failed to connect to bootloader</string>
+    <string name="nordic_starting_transfer">Starting DFU transfer...</string>
+    <string name="nordic_start_packet_failed">Failed to send DFU start packet</string>
+    <string name="nordic_sending_init">Sending init packet...</string>
+    <string name="nordic_init_packet_failed">Failed to send DFU init packet</string>
+    <string name="nordic_sending_firmware">Sending firmware...</string>
+    <string name="nordic_firmware_data_failed">Failed to send firmware data</string>
+    <string name="nordic_flash_complete">Flashing complete!</string>
+    <string name="nordic_sending_firmware_progress">Sending firmware: %1$d/%2$d</string>
+
+    <!-- Unified RNode flasher (RNodeFlasher) -->
+    <string name="rnode_detecting">Detecting RNode...</string>
+    <string name="rnode_not_rnode">Device is not an RNode</string>
+    <string name="rnode_detection_failed">Detection failed: %1$s</string>
+    <string name="rnode_firmware_corrupted">Firmware file is corrupted</string>
+    <string name="rnode_unsupported_platform">Unsupported platform: %1$s</string>
+    <string name="rnode_verifying">Verifying firmware...</string>
+    <string name="rnode_waiting_reboot">Waiting for device reboot...</string>
+    <string name="rnode_preparing">Preparing...</string>
+    <string name="rnode_could_not_detect">Could not detect device type</string>
+    <string name="rnode_preparing_device">Preparing device for update...</string>
+    <string name="rnode_checking_firmware">Checking for firmware...</string>
+    <string name="rnode_release_not_found">Could not find firmware release</string>
+    <string name="rnode_no_firmware_found">No firmware found for %1$s (%2$s)</string>
+    <string name="rnode_downloading_firmware">Downloading firmware...</string>
+    <string name="rnode_downloading_progress">Downloading: %1$dKB / %2$dKB</string>
+    <string name="rnode_saving_firmware">Saving firmware...</string>
+    <string name="rnode_save_firmware_failed">Failed to save firmware</string>
+    <string name="rnode_failed_error">Failed: %1$s</string>
+    <string name="rnode_prov_waiting">Waiting for device...</string>
+    <string name="rnode_prov_connecting">Connecting to device (attempt %1$d)...</string>
+    <string name="rnode_prov_connect_failed">Failed to connect for provisioning. Make sure the device is connected and has been reset.</string>
+    <string name="rnode_prov_checking">Checking provisioning status...</string>
+    <string name="rnode_prov_version_mismatch">Flash verification failed: device reports firmware %1$s but expected %2$s. The device may not have rebooted after flashing. Try manually resetting the device and re-flashing.</string>
+    <string name="rnode_prov_setting_hash">Setting firmware hash...</string>
+    <string name="rnode_prov_hash_mismatch">Flash verification failed: firmware hash does not match expected value. The device may not have rebooted after flashing. Try manually resetting the device and re-flashing.</string>
+    <string name="rnode_prov_preparing_eeprom">Preparing EEPROM...</string>
+    <string name="rnode_prov_wipe_failed">Failed to wipe EEPROM</string>
+    <string name="rnode_prov_waiting_reset">Waiting for device reset...</string>
+    <string name="rnode_prov_reconnecting">Reconnecting (attempt %1$d)...</string>
+    <string name="rnode_prov_reconnect_failed">Failed to reconnect after EEPROM wipe. Try unplugging and re-plugging the device.</string>
+    <string name="rnode_prov_writing">Writing device information...</string>
+    <string name="rnode_prov_failed">Failed to provision device EEPROM</string>
+    <string name="rnode_prov_verifying">Verifying provisioning...</string>
+    <string name="rnode_prov_failed_error">Provisioning failed: %1$s</string>
+    <string name="rnode_reset_instructions">Flashing complete! Please press the RESET button on your %1$s to continue.</string>
+
+    <!-- TNC mode controller (TncModeController) -->
+    <string name="tnc_configuring">Configuring radio parameters...</string>
+    <string name="tnc_config_failed">Failed to configure radio parameters</string>
+    <string name="tnc_config_failed_error">Configuration failed: %1$s</string>
+    <string name="tnc_disabling_transport">Disabling transport mode...</string>
+    <string name="tnc_disable_failed">Failed to disable transport mode</string>
+    <string name="tnc_disable_failed_error">Failed to disable transport: %1$s</string>
+
+    <!-- Pyxis flash core (PyxisFlashCore) -->
+    <string name="pyxis_starting">Starting Pyxis flash...</string>
+    <string name="pyxis_device_disconnected">USB device is not connected</string>
+    <string name="pyxis_flash_failed">Pyxis flash failed</string>
+    <string name="pyxis_manual_boot">Could not enter the Pyxis bootloader automatically. Put the T-Deck Plus into ESP32-S3 download mode manually, then try again.</string>
+    <string name="pyxis_flash_failed_error">Pyxis flash failed: %1$s</string>
+
+    <!-- Firmware downloader (FirmwareDownloader) -->
+    <string name="download_failed_http">Download failed: HTTP %1$d</string>
+    <string name="download_failed_error">Download failed: %1$s</string>
+</resources>

@@ -32,11 +32,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.rns.host.flasher.FrequencyBand
 import network.columba.app.rns.host.flasher.RNodeDeviceInfo
+import network.columba.app.ui.screens.flasher.asString
 import network.columba.app.viewmodel.FlashResult
 
 /**
@@ -74,7 +77,7 @@ fun FlashCompleteStep(
                 )
             is FlashResult.Failure ->
                 FailureContent(
-                    error = result.error,
+                    error = result.error.asString(),
                     onFlashAnother = onFlashAnother,
                     onDone = onDone,
                 )
@@ -85,7 +88,7 @@ fun FlashCompleteStep(
                 )
             null -> {
                 // Should not happen
-                Text("Unknown state")
+                Text(stringResource(R.string.flasher_unknown_state))
             }
         }
     }
@@ -113,14 +116,14 @@ private fun SuccessContent(
         )
 
         Text(
-            text = "Flash Successful!",
+            text = stringResource(R.string.flasher_flash_success_heading),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
         )
 
         Text(
-            text = "Your RNode has been updated successfully",
+            text = stringResource(R.string.flasher_updated_successfully),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -143,7 +146,7 @@ private fun SuccessContent(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Device Information",
+                            text = stringResource(R.string.flasher_device_information),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                         )
@@ -151,13 +154,13 @@ private fun SuccessContent(
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                    DeviceInfoRow("Board", deviceInfo.board.displayName)
+                    DeviceInfoRow(label = stringResource(R.string.flasher_label_board), value = deviceInfo.board.displayName)
                     deviceInfo.firmwareVersion?.let { version ->
-                        DeviceInfoRow("Firmware", "v$version")
+                        DeviceInfoRow(label = stringResource(R.string.flasher_label_firmware), value = "v$version")
                     }
                     val band = FrequencyBand.fromModelCode(deviceInfo.model)
                     if (band != FrequencyBand.UNKNOWN) {
-                        DeviceInfoRow("Band", band.displayName)
+                        DeviceInfoRow(label = stringResource(R.string.flasher_label_band), value = band.displayName)
                     }
                 }
             }
@@ -176,7 +179,7 @@ private fun SuccessContent(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Configure RNode")
+            Text(stringResource(R.string.flasher_btn_configure_rnode))
         }
 
         OutlinedButton(
@@ -189,13 +192,13 @@ private fun SuccessContent(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Flash Another Device")
+            Text(stringResource(R.string.flasher_btn_flash_another))
         }
 
         TextButton(
             onClick = onDone,
         ) {
-            Text("Done")
+            Text(stringResource(R.string.flasher_btn_done))
         }
     }
 }
@@ -227,7 +230,7 @@ private fun FailureContent(
         )
 
         Text(
-            text = "Flash Failed",
+            text = stringResource(R.string.flasher_flash_failed),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.error,
@@ -243,7 +246,7 @@ private fun FailureContent(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "Error Details",
+                    text = stringResource(R.string.flasher_error_details),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onErrorContainer,
@@ -263,17 +266,13 @@ private fun FailureContent(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "Recovery Tips",
+                    text = stringResource(R.string.flasher_recovery_tips),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text =
-                        "1. Try disconnecting and reconnecting the device\n" +
-                            "2. Ensure the USB cable supports data transfer\n" +
-                            "3. Put the device into bootloader mode manually\n" +
-                            "4. Try using a different USB port",
+                    text = stringResource(R.string.flasher_recovery_tips_list),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -293,13 +292,13 @@ private fun FailureContent(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Try Again")
+            Text(stringResource(R.string.flasher_btn_try_again))
         }
 
         TextButton(
             onClick = onDone,
         ) {
-            Text("Done")
+            Text(stringResource(R.string.flasher_btn_done))
         }
     }
 }
@@ -324,13 +323,13 @@ private fun CancelledContent(
         )
 
         Text(
-            text = "Flash Cancelled",
+            text = stringResource(R.string.flasher_flash_cancelled),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
         )
 
         Text(
-            text = "The flash operation was cancelled before completion",
+            text = stringResource(R.string.flasher_cancelled_note),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -345,9 +344,7 @@ private fun CancelledContent(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text =
-                    "Your device may be in an inconsistent state. " +
-                        "Consider reflashing to ensure proper operation.",
+                text = stringResource(R.string.flasher_inconsistent_warning),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
                 modifier = Modifier.padding(16.dp),
@@ -367,13 +364,13 @@ private fun CancelledContent(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Try Again")
+            Text(stringResource(R.string.flasher_btn_try_again))
         }
 
         TextButton(
             onClick = onDone,
         ) {
-            Text("Done")
+            Text(stringResource(R.string.flasher_btn_done))
         }
     }
 }

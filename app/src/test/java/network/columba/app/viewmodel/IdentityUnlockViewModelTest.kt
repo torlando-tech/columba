@@ -22,6 +22,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
+import network.columba.app.R
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.SettingsRepository
@@ -101,7 +102,10 @@ class IdentityUnlockViewModelTest {
 
         val state = viewModel.awaitTerminalState()
         assertTrue(state is IdentityUnlockUiState.Error)
-        assertEquals("Couldn't save identity key: keystore unavailable", (state as IdentityUnlockUiState.Error).message)
+        assertEquals(
+            UiMessage.Text(R.string.identity_unlock_save_key_failed, listOf("keystore unavailable")),
+            (state as IdentityUnlockUiState.Error).message,
+        )
         coVerify(exactly = 0) { settingsRepository.setNeedsIdentityUnlock(false) }
         verifyNoDestructiveIdentityCalls()
     }
@@ -141,7 +145,7 @@ class IdentityUnlockViewModelTest {
         val state = viewModel.awaitTerminalState()
         assertTrue(state is IdentityUnlockUiState.Error)
         assertEquals(
-            "Invalid identity file: expected 64 bytes, got 63 bytes",
+            UiMessage.Text(R.string.identity_file_error_wrong_size, listOf(63)),
             (state as IdentityUnlockUiState.Error).message,
         )
         coVerify(exactly = 0) { rnsCore.importIdentityFile(any(), any()) }
@@ -159,7 +163,7 @@ class IdentityUnlockViewModelTest {
         val state = viewModel.awaitTerminalState()
         assertTrue(state is IdentityUnlockUiState.Error)
         assertEquals(
-            "Invalid identity file: expected 64 bytes, file is larger than 64 bytes",
+            UiMessage.Text(R.string.identity_file_error_too_large),
             (state as IdentityUnlockUiState.Error).message,
         )
         coVerify(exactly = 0) { rnsCore.importIdentityFile(any(), any()) }
@@ -179,7 +183,7 @@ class IdentityUnlockViewModelTest {
 
         val state = viewModel.awaitTerminalState()
         assertTrue(state is IdentityUnlockUiState.Error)
-        assertEquals("Invalid private key data", (state as IdentityUnlockUiState.Error).message)
+        assertEquals(UiMessage.Raw("Invalid private key data"), (state as IdentityUnlockUiState.Error).message)
         verifyNoPersistenceCalls()
     }
 
@@ -192,7 +196,7 @@ class IdentityUnlockViewModelTest {
 
         val state = viewModel.awaitTerminalState()
         assertTrue(state is IdentityUnlockUiState.Error)
-        assertEquals("No active identity to restore into", (state as IdentityUnlockUiState.Error).message)
+        assertEquals(UiMessage.Text(R.string.identity_unlock_no_active), (state as IdentityUnlockUiState.Error).message)
         verify(exactly = 0) { contentResolver.openInputStream(any()) }
         coVerify(exactly = 0) { rnsCore.importIdentityFile(any(), any()) }
         verifyNoPersistenceCalls()

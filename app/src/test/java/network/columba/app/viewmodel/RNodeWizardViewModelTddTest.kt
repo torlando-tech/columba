@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
+import network.columba.app.R
 import network.columba.app.data.model.BluetoothType
 import network.columba.app.data.model.DiscoveredRNode
 import network.columba.app.data.model.FrequencyRegions
@@ -124,7 +125,8 @@ class RNodeWizardViewModelTddTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertNotNull("Should have error for name over 32 characters", state.manualDeviceNameError)
-                assertEquals("Device name must be 32 characters or less", state.manualDeviceNameError)
+                assertEquals(R.string.rnode_device_name_too_long, (state.manualDeviceNameError as UiMessage.Text).id)
+                assertEquals(listOf(32), (state.manualDeviceNameError as UiMessage.Text).args)
             }
         }
 
@@ -208,7 +210,7 @@ class RNodeWizardViewModelTddTest {
                 val state = awaitItem()
                 assertTrue("Should show regulatory warning in custom mode", state.showRegulatoryWarning)
                 assertEquals(
-                    "No region selected. You are responsible for ensuring compliance with local regulations.",
+                    UiMessage.Text(R.string.rnode_wizard_reg_no_region),
                     state.regulatoryWarningMessage,
                 )
             }
@@ -243,9 +245,9 @@ class RNodeWizardViewModelTddTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertTrue("Should show regulatory warning when airtime limits cleared for EU", state.showRegulatoryWarning)
-                assertTrue(
-                    "Warning should mention duty cycle",
-                    state.regulatoryWarningMessage?.contains("duty cycle") == true,
+                assertEquals(
+                    R.string.rnode_wizard_reg_duty_cycle,
+                    (state.regulatoryWarningMessage as UiMessage.Text).id,
                 )
             }
         }

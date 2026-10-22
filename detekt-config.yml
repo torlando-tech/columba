@@ -128,6 +128,51 @@ columba:
     active: true
   DiscardedConcurrencyReturn:
     active: true
+  NoHardcodedUiString:
+    active: true
+    excludes: ['**/test/**', '**/androidTest/**']
+    # Ratified DO-NOT-TRANSLATE literals (exact source text, incl. quotes) per
+    # the DNT policy in docs/translation-workflow.md. This config allowlist is
+    # the sanctioned zero-tolerance
+    # mechanism: the detekt baseline and the @Suppress count are both ratcheted
+    # to zero, so DNT literals live HERE, not in code. Each entry cites its DNT
+    # category. Adding an entry requires the same ratification as the checklist.
+    doNotTranslateLiterals:
+      # Telemetry (DNT checklist §1): Sentry jank breadcrumb, never rendered.
+      - '"Janky frame: ${durationMs}ms"'
+      # Animation API labels (DNT checklist §3): dev-only, never rendered.
+      - '"flasher_step"'
+      - '"wizard_step"'
+      - '"tcp_wizard_step"'
+      # Persisted/wire display-name fallbacks (policy 1): stored values must
+      # not change with locale (IdentityRepository default identity,
+      # FrequencyBand.UNKNOWN / RNodeBoard.UNKNOWN fallback labels).
+      - '"Anonymous Peer"'
+      - '"Unknown"'
+      # Hardware product identifiers (proper nouns, same class as
+      # TcpCommunityServer server names): users match these against the label
+      # printed on the device; also used in logs and firmware lookups.
+      - '"RAK4631"'
+      - '"Heltec T114"'
+      - '"Heltec LoRa32 v2"'
+      - '"Heltec LoRa32 v3"'
+      - '"Heltec LoRa32 v4"'
+      - '"LilyGO T-Echo"'
+      - '"LilyGO T-Beam"'
+      - '"LilyGO T-Beam Supreme"'
+      - '"LilyGO T-Deck"'
+      - '"TTGO LoRa32 v2.0"'
+      - '"TTGO LoRa32 v2.1"'
+      - '"RNode (Original)"'
+      - '"Homebrew ESP32"'
+      # Exception diagnostic text (DNT checklist §2): RnsError.Generic message,
+      # never rendered (render sites switch on the sealed type).
+      - '"No delivery destination to apply display name to"'
+      # Font-size preview glyph (MessagingScreen min/max slider labels): the
+      # letter "A" rendered at two sizes, not translatable prose.
+      - '"A"'
+      # I2P destination display: a b32 address literal, not prose.
+      - '"$b32Address.b32.i2p"'
   NoRelaxedMocks:
     active: true
   NoVerifyOnlyTests:

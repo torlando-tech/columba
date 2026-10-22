@@ -9,6 +9,7 @@ import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.RNodeConnectionType
 import network.columba.app.viewmodel.RNodeWizardState
 import network.columba.app.viewmodel.RNodeWizardViewModel
+import network.columba.app.viewmodel.UiMessage
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -546,7 +547,7 @@ class DeviceDiscoveryStepTest {
             RNodeWizardState(
                 connectionType = RNodeConnectionType.TCP_WIFI,
                 tcpHost = "10.0.0.1",
-                tcpValidationError = "Connection timeout. Please check the IP address and ensure the device is online.",
+                tcpValidationError = UiMessage.Raw("Connection timeout. Please check the IP address and ensure the device is online."),
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
 
@@ -599,7 +600,7 @@ class DeviceDiscoveryStepTest {
                 connectionType = RNodeConnectionType.BLUETOOTH,
                 showManualEntry = true,
                 manualDeviceName = "X",
-                manualDeviceNameError = "Device name must be at least 3 characters",
+                manualDeviceNameError = UiMessage.Raw("Device name must be at least 3 characters"),
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
 
@@ -621,7 +622,7 @@ class DeviceDiscoveryStepTest {
                 connectionType = RNodeConnectionType.BLUETOOTH,
                 showManualEntry = true,
                 manualDeviceName = "MyDevice",
-                manualDeviceNameWarning = "This doesn't look like a typical RNode name (e.g., 'RNode 1234')",
+                manualDeviceNameWarning = UiMessage.Raw("This doesn't look like a typical RNode name (e.g., 'RNode 1234')"),
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
 
@@ -888,7 +889,7 @@ class DeviceDiscoveryStepTest {
                 connectionType = RNodeConnectionType.USB_SERIAL,
                 isUsbPairingMode = true,
                 usbBluetoothPin = "1234",
-                usbPairingStatus = "Enter this PIN when prompted",
+                usbPairingStatus = UiMessage.Raw("Enter this PIN when prompted"),
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
 
@@ -948,7 +949,7 @@ class DeviceDiscoveryStepTest {
                 isUsbPairingMode = true,
                 showManualPinEntry = true,
                 manualPinInput = "",
-                usbPairingStatus = "Enter the PIN shown on your RNode's display",
+                usbPairingStatus = UiMessage.Raw("Enter the PIN shown on your RNode's display"),
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
 
@@ -969,7 +970,7 @@ class DeviceDiscoveryStepTest {
             RNodeWizardState(
                 connectionType = RNodeConnectionType.USB_SERIAL,
                 isUsbPairingMode = true,
-                usbPairingStatus = "Scanning for RNode...",
+                usbPairingStatus = UiMessage.Raw("Scanning for RNode..."),
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
 

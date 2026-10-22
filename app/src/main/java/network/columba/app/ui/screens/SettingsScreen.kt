@@ -47,12 +47,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
+import network.columba.app.R
 import network.columba.app.ui.components.BackgroundLocationPermissionBottomSheet
 import network.columba.app.ui.components.LocationPermissionBottomSheet
 import network.columba.app.ui.components.ServiceRestartBanner
@@ -90,6 +92,7 @@ import network.columba.app.viewmodel.DebugViewModel
 import network.columba.app.viewmodel.SettingsCardId
 import network.columba.app.viewmodel.SettingsViewModel
 import network.columba.app.viewmodel.SharedInstanceAccessEvent
+import network.columba.app.viewmodel.messageResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -202,7 +205,7 @@ fun SettingsScreen(
     // belt-and-suspenders for any other path that hits the gate.
     LaunchedEffect(Unit) {
         viewModel.telemetryCollectorMessage.collect { message ->
-            snackbarHostState.showSnackbar(message)
+            snackbarHostState.showSnackbar(message.resolve(context))
         }
     }
 
@@ -211,7 +214,7 @@ fun SettingsScreen(
             when (event) {
                 is SharedInstanceAccessEvent.Copy -> {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("Shared instance access configuration", event.configuration)
+                    val clip = ClipData.newPlainText(context.getString(R.string.settings_shared_instance_clip_label), event.configuration)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         clip.description.extras = PersistableBundle().apply {
                             putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
@@ -219,12 +222,12 @@ fun SettingsScreen(
                     }
                     clipboard.setPrimaryClip(clip)
                     snackbarHostState.showSnackbar(
-                        message = "Access configuration copied to clipboard",
+                        message = context.getString(R.string.settings_access_config_copied),
                         duration = SnackbarDuration.Short,
                     )
                 }
                 SharedInstanceAccessEvent.Unavailable -> snackbarHostState.showSnackbar(
-                    message = "Host access configuration is unavailable",
+                    message = context.getString(R.string.settings_host_config_unavailable),
                     duration = SnackbarDuration.Short,
                 )
             }
@@ -236,8 +239,8 @@ fun SettingsScreen(
         if (state.sharedInstanceAvailable && !state.preferOwnInstance) {
             val result =
                 snackbarHostState.showSnackbar(
-                    message = "Shared instance available",
-                    actionLabel = "Switch",
+                    message = context.getString(R.string.settings_shared_instance_available),
+                    actionLabel = context.getString(R.string.settings_switch),
                     duration = SnackbarDuration.Indefinite,
                 )
             when (result) {
@@ -251,7 +254,7 @@ fun SettingsScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.settings_title)) },
                 colors =
                     TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -362,7 +365,8 @@ fun SettingsScreen(
                     nextAnnounceTime = state.nextAutoAnnounceTime,
                     isManualAnnouncing = state.isManualAnnouncing,
                     showManualAnnounceSuccess = state.showManualAnnounceSuccess,
-                    manualAnnounceError = state.manualAnnounceError,
+                    manualAnnounceError =
+                        state.manualAnnounceError?.let { it.detail ?: stringResource(it.reason.messageResource()) },
                     onToggle = { viewModel.toggleAutoAnnounce(it) },
                     onIntervalChange = { viewModel.setAnnounceInterval(it) },
                     onManualAnnounce = { viewModel.triggerManualAnnounce() },
@@ -445,7 +449,7 @@ fun SettingsScreen(
                             Toast
                                 .makeText(
                                     context,
-                                    "Go to Permissions > Location to change",
+                                    context.getString(R.string.settings_location_permission_toast),
                                     Toast.LENGTH_LONG,
                                 ).show()
                             val intent =
@@ -609,13 +613,13 @@ fun SettingsScreen(
                     onSetIncludePrereleaseUpdates = { viewModel.setIncludePrereleaseUpdates(it) },
                     onCopySystemInfo = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("System Info", DeviceInfoUtil.formatForClipboard(systemInfo))
+                        val clip = ClipData.newPlainText(context.getString(R.string.settings_system_info_clip_label), DeviceInfoUtil.formatForClipboard(systemInfo))
                         clipboard.setPrimaryClip(clip)
 
                         // Show snackbar confirmation
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar(
-                                message = "System info copied to clipboard",
+                                message = context.getString(R.string.settings_system_info_copied),
                                 duration = SnackbarDuration.Short,
                             )
                         }
@@ -624,7 +628,7 @@ fun SettingsScreen(
                         coroutineScope.launch {
                             val report = crashReportManager.generateBugReport(systemInfo)
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val clip = ClipData.newPlainText("Bug Report", report)
+                            val clip = ClipData.newPlainText(context.getString(R.string.settings_bug_report_clip_label), report)
                             clipboard.setPrimaryClip(clip)
 
                             // Open GitHub Issues in browser (safe: device may have no web handler)
@@ -632,9 +636,9 @@ fun SettingsScreen(
 
                             snackbarHostState.showSnackbar(
                                 message = if (opened) {
-                                    "Bug report copied to clipboard — browser opened"
+                                    context.getString(R.string.settings_bug_report_copied_browser)
                                 } else {
-                                    "No browser found — bug report copied to clipboard"
+                                    context.getString(R.string.settings_bug_report_copied_no_browser)
                                 },
                                 duration = SnackbarDuration.Short,
                             )
@@ -664,7 +668,7 @@ fun SettingsScreen(
                                 putExtra(Intent.EXTRA_TEXT, shareText)
                                 type = "text/plain"
                             }
-                        val shareIntent = Intent.createChooser(sendIntent, "Share Identity")
+                        val shareIntent = Intent.createChooser(sendIntent, context.getString(R.string.identity_share_identity))
                         context.startActivity(shareIntent)
                     }
                 },
@@ -697,7 +701,7 @@ fun SettingsScreen(
                     coroutineScope.launch {
                         val report = crashReportManager.generateBugReport(systemInfo, pendingCrashReport)
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("Bug Report", report)
+                        val clip = ClipData.newPlainText(context.getString(R.string.settings_bug_report_clip_label), report)
                         clipboard.setPrimaryClip(clip)
 
                         // Open GitHub Issues in browser (safe: device may have no web handler)
@@ -709,9 +713,9 @@ fun SettingsScreen(
 
                         snackbarHostState.showSnackbar(
                             message = if (opened) {
-                                "Bug report copied to clipboard — browser opened"
+                                context.getString(R.string.settings_bug_report_copied_browser)
                             } else {
-                                "No browser found — bug report copied to clipboard"
+                                context.getString(R.string.settings_bug_report_copied_no_browser)
                             },
                             duration = SnackbarDuration.Short,
                         )
@@ -750,11 +754,8 @@ fun SettingsScreen(
                     )
                 },
                 sheetState = telemetryPermissionSheetState,
-                rationale =
-                    "Group Tracker shares your location with a group host " +
-                        "so everyone can see where each other is.\n\n" +
-                        "Your location is encrypted and only readable by the group host you configure.",
-                primaryActionLabel = "Grant Location Access",
+                rationale = R.string.location_group_tracker_rationale,
+                primaryActionLabel = stringResource(R.string.settings_grant_location_access),
             )
         }
     }

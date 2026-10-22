@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import network.columba.app.R
 import network.columba.app.data.crypto.IdentityKeyEncryptor
 import network.columba.app.data.crypto.WrongPasswordException
 import network.columba.app.data.database.InterfaceDatabase
@@ -30,6 +31,7 @@ import network.columba.app.repository.SettingsRepository
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.telemetry.MemoryDiagnosticOperation
 import network.columba.app.telemetry.MemoryDiagnostics
+import network.columba.app.viewmodel.UiMessage
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
@@ -92,13 +94,15 @@ class MigrationImporter
                 try {
                     val inputStream =
                         context.contentResolver.openInputStream(uri)
-                            ?: return@withContext Result.failure(Exception("Cannot open file"))
+                            ?: return@withContext Result.failure(
+                                MigrationLocalizedException(UiMessage.Text(R.string.migration_cannot_open_file)),
+                            )
                     inputStream.use { stream ->
                         val header = ByteArray(2)
                         val bytesRead = stream.read(header)
                         if (bytesRead < 1) {
                             return@withContext Result.failure(
-                                InvalidExportFileException("Export file is empty"),
+                                MigrationLocalizedException(UiMessage.Text(R.string.migration_export_file_empty)),
                             )
                         }
                         Result.success(MigrationCrypto.isEncrypted(header))
@@ -133,7 +137,7 @@ class MigrationImporter
                     val (bundle, localFile) =
                         readMigrationBundle(uri, password)
                             ?: return@withContext Result.failure(
-                                Exception("Failed to read migration file"),
+                                MigrationLocalizedException(UiMessage.Text(R.string.migration_failed_to_read_file)),
                             )
 
                     Result.success(
@@ -196,13 +200,13 @@ class MigrationImporter
                             // delete it here.
                             val parsed = streamBundleFromZipFile(cachedZipFile)
                                 ?: return@withContext ImportResult.Error(
-                                    "Failed to read migration file",
+                                    UiMessage.Text(R.string.migration_failed_to_read_file),
                                 )
                             Triple(parsed.first, parsed.second, false)
                         } else {
                             val parsed = readMigrationBundle(uri, password)
                                 ?: return@withContext ImportResult.Error(
-                                    "Failed to read migration file",
+                                    UiMessage.Text(R.string.migration_failed_to_read_file),
                                 )
                             Triple(parsed.first, parsed.second, true)
                         }
@@ -229,29 +233,30 @@ class MigrationImporter
             return try {
                     if (bundle.version > MigrationBundle.CURRENT_VERSION) {
                         return ImportResult.Error(
-                            "Migration file is from a newer version (${bundle.version}). " +
-                                "Please update the app first.",
+                            UiMessage.Text(R.string.migration_file_newer_version, listOf(bundle.version)),
                         )
                     }
 
                     // Check minimum supported version for backwards compatibility
                     if (bundle.version < MigrationBundle.MINIMUM_VERSION) {
                         return ImportResult.Error(
-                            "Migration file is from an old version (${bundle.version}). " +
-                                "Minimum supported version is ${MigrationBundle.MINIMUM_VERSION}.",
+                            UiMessage.Text(
+                                R.string.migration_file_old_version,
+                                listOf(bundle.version, MigrationBundle.MINIMUM_VERSION),
+                            ),
                         )
                     }
 
                     if (bundle.version < 8 && bundle.callHistoryDeletions.isNotEmpty()) {
                         return ImportResult.Error(
-                            "Call-history deletion authority requires migration format version 8.",
+                            UiMessage.Text(R.string.migration_call_history_requires_v8),
                         )
                     }
 
                     // Check if password is required but not provided
                     if (bundle.keysEncrypted && importPassword == null) {
                         return ImportResult.Error(
-                            "This export file is password-protected. Please provide the password.",
+                            UiMessage.Text(R.string.migration_password_required),
                         )
                     }
                     onProgress(0.1f)
@@ -297,7 +302,7 @@ class MigrationImporter
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Migration import failed", e)
-                    ImportResult.Error("Import failed: ${e.message}", e)
+                    ImportResult.Error(UiMessage.Text(R.string.migration_import_failed, listOf(e.message ?: "null")), e)
                 }
             }
 

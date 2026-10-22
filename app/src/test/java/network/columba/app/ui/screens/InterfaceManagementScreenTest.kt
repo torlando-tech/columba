@@ -1,12 +1,14 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import android.content.Context
 import android.bluetooth.BluetoothAdapter
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.rns.host.manager.CurrentTransport
@@ -30,6 +32,7 @@ class InterfaceManagementScreenTest {
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
     val composeTestRule get() = composeRule
+    private val context: Context = ApplicationProvider.getApplicationContext()
 
     @Test
     fun `RNode card exposes repair action when pairing is required`() {
@@ -218,49 +221,49 @@ class InterfaceManagementScreenTest {
 
     @Test
     fun `formatAddressWithPort with IPv4 address does not use brackets`() {
-        val result = formatAddressWithPort("192.168.1.100", 4242, isIpv6 = false)
+        val result = formatAddressWithPort(context, "192.168.1.100", 4242, isIpv6 = false)
         assertEquals("192.168.1.100:4242", result)
     }
 
     @Test
     fun `formatAddressWithPort with IPv6 address uses brackets`() {
-        val result = formatAddressWithPort("2001:db8::1", 4242, isIpv6 = true)
+        val result = formatAddressWithPort(context, "2001:db8::1", 4242, isIpv6 = true)
         assertEquals("[2001:db8::1]:4242", result)
     }
 
     @Test
     fun `formatAddressWithPort with Yggdrasil address uses brackets`() {
-        val result = formatAddressWithPort("200:abcd:1234::1", 4242, isIpv6 = true)
+        val result = formatAddressWithPort(context, "200:abcd:1234::1", 4242, isIpv6 = true)
         assertEquals("[200:abcd:1234::1]:4242", result)
     }
 
     @Test
     fun `formatAddressWithPort detects IPv6 by colon even if isIpv6 is false`() {
-        val result = formatAddressWithPort("fe80::1", 8080, isIpv6 = false)
+        val result = formatAddressWithPort(context, "fe80::1", 8080, isIpv6 = false)
         assertEquals("[fe80::1]:8080", result)
     }
 
     @Test
     fun `formatAddressWithPort with null IP returns no network`() {
-        val result = formatAddressWithPort(null, 4242, isIpv6 = false)
+        val result = formatAddressWithPort(context, null, 4242, isIpv6 = false)
         assertEquals("no network:4242", result)
     }
 
     @Test
     fun `formatAddressWithPort with custom port`() {
-        val result = formatAddressWithPort("10.0.0.1", 8080, isIpv6 = false)
+        val result = formatAddressWithPort(context, "10.0.0.1", 8080, isIpv6 = false)
         assertEquals("10.0.0.1:8080", result)
     }
 
     @Test
     fun `formatAddressWithPort with localhost IPv4`() {
-        val result = formatAddressWithPort("127.0.0.1", 3000, isIpv6 = false)
+        val result = formatAddressWithPort(context, "127.0.0.1", 3000, isIpv6 = false)
         assertEquals("127.0.0.1:3000", result)
     }
 
     @Test
     fun `formatAddressWithPort with all zeros bind address`() {
-        val result = formatAddressWithPort("0.0.0.0", 4242, isIpv6 = false)
+        val result = formatAddressWithPort(context, "0.0.0.0", 4242, isIpv6 = false)
         assertEquals("0.0.0.0:4242", result)
     }
 
@@ -268,43 +271,43 @@ class InterfaceManagementScreenTest {
 
     @Test
     fun `getInterfaceTypeLabel returns correct label for TCPServer`() {
-        val result = getInterfaceTypeLabel("TCPServer")
+        val result = getInterfaceTypeLabel(context, "TCPServer")
         assertEquals("TCP Server", result)
     }
 
     @Test
     fun `getInterfaceTypeLabel returns correct label for TCPClient`() {
-        val result = getInterfaceTypeLabel("TCPClient")
+        val result = getInterfaceTypeLabel(context, "TCPClient")
         assertEquals("TCP Client", result)
     }
 
     @Test
     fun `getInterfaceTypeLabel returns correct label for AutoInterface`() {
-        val result = getInterfaceTypeLabel("AutoInterface")
+        val result = getInterfaceTypeLabel(context, "AutoInterface")
         assertEquals("Auto Discovery", result)
     }
 
     @Test
     fun `getInterfaceTypeLabel returns correct label for AndroidBLE`() {
-        val result = getInterfaceTypeLabel("AndroidBLE")
+        val result = getInterfaceTypeLabel(context, "AndroidBLE")
         assertEquals("Bluetooth LE", result)
     }
 
     @Test
     fun `getInterfaceTypeLabel returns correct label for RNode`() {
-        val result = getInterfaceTypeLabel("RNode")
+        val result = getInterfaceTypeLabel(context, "RNode")
         assertEquals("RNode LoRa", result)
     }
 
     @Test
     fun `getInterfaceTypeLabel returns correct label for UDP`() {
-        val result = getInterfaceTypeLabel("UDP")
+        val result = getInterfaceTypeLabel(context, "UDP")
         assertEquals("UDP Interface", result)
     }
 
     @Test
     fun `getInterfaceTypeLabel returns unknown type as-is`() {
-        val result = getInterfaceTypeLabel("UnknownType")
+        val result = getInterfaceTypeLabel(context, "UnknownType")
         assertEquals("UnknownType", result)
     }
 

@@ -8,6 +8,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
+import network.columba.app.R
 import network.columba.app.data.repository.OfflineMapRegion
 import network.columba.app.test.RegisterComponentActivityRule
 import org.junit.Rule
@@ -38,6 +40,9 @@ class OfflineMapsScreenTest {
 
     private val composeTestRule get() = composeRule
 
+    private fun resText(id: Int, vararg args: Any): String =
+        ApplicationProvider.getApplicationContext<Application>().getString(id, *args)
+
     // ========== EmptyOfflineMapsState Tests ==========
 
     @Test
@@ -46,7 +51,7 @@ class OfflineMapsScreenTest {
             EmptyOfflineMapsState()
         }
 
-        composeTestRule.onNodeWithText("No Offline Maps").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_empty_title)).assertIsDisplayed()
     }
 
     @Test
@@ -55,8 +60,8 @@ class OfflineMapsScreenTest {
             EmptyOfflineMapsState()
         }
 
-        composeTestRule.onNodeWithText("Download or import map regions for offline use").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Tap + to download, or use the import button to load an MBTiles file").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_empty_subtitle)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_empty_hint)).assertIsDisplayed()
     }
 
     // ========== StorageSummaryCard Tests ==========
@@ -70,7 +75,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Total Storage").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_total_storage)).assertIsDisplayed()
         composeTestRule.onNodeWithText("150 MB").assertIsDisplayed()
     }
 
@@ -83,7 +88,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Regions").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_regions)).assertIsDisplayed()
         composeTestRule.onNodeWithText("5").assertIsDisplayed()
     }
 
@@ -121,7 +126,7 @@ class OfflineMapsScreenTest {
             StatusChip(status = OfflineMapRegion.Status.PENDING)
         }
 
-        composeTestRule.onNodeWithText("Pending").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.message_detail_status_pending)).assertIsDisplayed()
     }
 
     @Test
@@ -130,7 +135,7 @@ class OfflineMapsScreenTest {
             StatusChip(status = OfflineMapRegion.Status.DOWNLOADING)
         }
 
-        composeTestRule.onNodeWithText("Downloading").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_status_downloading)).assertIsDisplayed()
     }
 
     @Test
@@ -139,7 +144,7 @@ class OfflineMapsScreenTest {
             StatusChip(status = OfflineMapRegion.Status.COMPLETE)
         }
 
-        composeTestRule.onNodeWithText("Complete").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.flasher_title_complete)).assertIsDisplayed()
     }
 
     @Test
@@ -148,7 +153,7 @@ class OfflineMapsScreenTest {
             StatusChip(status = OfflineMapRegion.Status.ERROR)
         }
 
-        composeTestRule.onNodeWithText("Error").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.iface_error)).assertIsDisplayed()
     }
 
     // ========== OfflineMapRegionCard Tests ==========
@@ -195,7 +200,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("10 km radius - Zoom 5-14").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_radius_zoom, 10, 5, 14)).assertIsDisplayed()
     }
 
     @Test
@@ -210,7 +215,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Complete").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.flasher_title_complete)).assertIsDisplayed()
     }
 
     @Test
@@ -230,8 +235,8 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Downloading").assertIsDisplayed()
-        composeTestRule.onNodeWithText("50% - 1000 tiles").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_status_downloading)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_download_progress, 50, 1000)).assertIsDisplayed()
     }
 
     @Test
@@ -250,7 +255,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Error").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.iface_error)).assertIsDisplayed()
         composeTestRule.onNodeWithText("Network error occurred").assertIsDisplayed()
     }
 
@@ -266,8 +271,8 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Delete").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Delete").assertIsEnabled()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.delete)).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.delete)).assertIsEnabled()
     }
 
     @Test
@@ -282,7 +287,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Delete").assertIsNotEnabled()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.delete)).assertIsNotEnabled()
     }
 
     @Test
@@ -297,11 +302,11 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Delete").performClick()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.delete)).performClick()
 
-        composeTestRule.onNodeWithText("Delete Offline Map").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_delete_title)).assertIsDisplayed()
         composeTestRule
-            .onNodeWithText("Are you sure you want to delete \"Test Region\"? This will free up 15 MB of storage.")
+            .onNodeWithText(resText(R.string.offline_maps_delete_confirm, "Test Region", "15 MB"))
             .assertIsDisplayed()
     }
 
@@ -317,8 +322,8 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Delete").performClick()
-        composeTestRule.onNodeWithText("Cancel").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.delete)).performClick()
+        composeTestRule.onNodeWithText(resText(R.string.cancel)).assertIsDisplayed()
     }
 
     @Test
@@ -333,12 +338,12 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Delete").performClick()
-        composeTestRule.onNodeWithText("Delete Offline Map").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.delete)).performClick()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_delete_title)).assertIsDisplayed()
 
-        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.onNodeWithText(resText(R.string.cancel)).performClick()
 
-        composeTestRule.onNodeWithText("Delete Offline Map").assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_delete_title)).assertDoesNotExist()
     }
 
     @Test
@@ -354,9 +359,9 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Delete").performClick()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.delete)).performClick()
         composeTestRule
-            .onNodeWithText("Delete", useUnmergedTree = true)
+            .onNodeWithText(resText(R.string.delete), useUnmergedTree = true)
             .performClick()
 
         assert(deleteCalled) { "onDelete should have been called" }
@@ -399,7 +404,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Pending").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.message_detail_status_pending)).assertIsDisplayed()
         composeTestRule.onNodeWithText("Downloaded", substring = true).assertDoesNotExist()
     }
 
@@ -419,7 +424,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Check for Updates", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.about_check_for_updates), useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -435,7 +440,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Check for Updates", useUnmergedTree = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.about_check_for_updates), useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test
@@ -458,7 +463,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Checking...", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_checking), useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -481,8 +486,8 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Update available", useUnmergedTree = true).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Update Now", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_update_available), useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_update_now), useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -505,7 +510,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Up to date", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_up_to_date), useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -523,7 +528,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Check for Updates", useUnmergedTree = true).performClick()
+        composeTestRule.onNodeWithText(resText(R.string.about_check_for_updates), useUnmergedTree = true).performClick()
 
         assert(callbackCalled) { "onCheckForUpdates should have been called" }
     }
@@ -548,10 +553,10 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Update Now", useUnmergedTree = true).performClick()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_update_now), useUnmergedTree = true).performClick()
 
-        composeTestRule.onNodeWithText("Update Offline Map").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Download the latest map data", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_update_title)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_update_confirm, "Test Region")).assertIsDisplayed()
     }
 
     @Test
@@ -574,12 +579,12 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Update Now", useUnmergedTree = true).performClick()
-        composeTestRule.onNodeWithText("Update Offline Map").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_update_now), useUnmergedTree = true).performClick()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_update_title)).assertIsDisplayed()
 
-        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.onNodeWithText(resText(R.string.cancel)).performClick()
 
-        composeTestRule.onNodeWithText("Update Offline Map").assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_update_title)).assertDoesNotExist()
     }
 
     @Test
@@ -604,8 +609,8 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Update Now", useUnmergedTree = true).performClick()
-        composeTestRule.onNodeWithText("Update", useUnmergedTree = true).performClick()
+        composeTestRule.onNodeWithText(resText(R.string.offline_maps_update_now), useUnmergedTree = true).performClick()
+        composeTestRule.onNodeWithText(resText(R.string.iface_cfg_update), useUnmergedTree = true).performClick()
 
         assert(callbackCalled) { "onUpdateNow should have been called" }
     }
@@ -641,7 +646,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Check for Updates", useUnmergedTree = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.about_check_for_updates), useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test
@@ -660,7 +665,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Check for Updates", useUnmergedTree = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.about_check_for_updates), useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test
@@ -672,7 +677,7 @@ class OfflineMapsScreenTest {
                 currentVersion = null,
                 latestVersion = null,
                 isChecking = false,
-                error = "Could not reach update server",
+                error = network.columba.app.viewmodel.UiMessage.Raw("Could not reach update server"),
             )
 
         composeTestRule.setContent {
@@ -685,7 +690,7 @@ class OfflineMapsScreenTest {
         }
 
         composeTestRule.onNodeWithText("Could not reach update server", useUnmergedTree = true).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Retry", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.call_history_retry), useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -698,7 +703,7 @@ class OfflineMapsScreenTest {
                 currentVersion = null,
                 latestVersion = null,
                 isChecking = false,
-                error = "Could not reach update server",
+                error = network.columba.app.viewmodel.UiMessage.Raw("Could not reach update server"),
             )
 
         composeTestRule.setContent {
@@ -711,7 +716,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Retry", useUnmergedTree = true).performClick()
+        composeTestRule.onNodeWithText(resText(R.string.call_history_retry), useUnmergedTree = true).performClick()
 
         assert(callbackCalled) { "onCheckForUpdates should have been called on retry" }
     }
@@ -732,7 +737,7 @@ class OfflineMapsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Check for Updates", useUnmergedTree = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.about_check_for_updates), useUnmergedTree = true).assertDoesNotExist()
     }
 
     // ========== Helper Functions ==========

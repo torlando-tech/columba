@@ -1,6 +1,7 @@
 package network.columba.app.rns.host.flasher
 
 import android.util.Log
+import network.columba.app.rns.host.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -45,7 +46,7 @@ class FirmwareDownloader {
 
         fun onComplete(data: ByteArray)
 
-        fun onError(error: String)
+        fun onError(error: FlashText)
     }
 
     /**
@@ -176,7 +177,7 @@ class FirmwareDownloader {
                 connection.readTimeout = READ_TIMEOUT_MS
 
                 if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                    callback.onError("Download failed: HTTP ${connection.responseCode}")
+                    callback.onError(flashText(R.string.download_failed_http, connection.responseCode))
                     return@withContext null
                 }
 
@@ -191,7 +192,7 @@ class FirmwareDownloader {
                 data
             } catch (e: Exception) {
                 Log.e(TAG, "Download failed", e)
-                callback.onError("Download failed: ${e.message}")
+                callback.onError(flashText(R.string.download_failed_error, e.message ?: "null"))
                 null
             }
         }
@@ -217,7 +218,7 @@ class FirmwareDownloader {
                 connection.instanceFollowRedirects = true
 
                 if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                    callback.onError("Download failed: HTTP ${connection.responseCode}")
+                    callback.onError(flashText(R.string.download_failed_http, connection.responseCode))
                     return@withContext null
                 }
 
@@ -232,7 +233,7 @@ class FirmwareDownloader {
                 data
             } catch (e: Exception) {
                 Log.e(TAG, "Download failed", e)
-                callback.onError("Download failed: ${e.message}")
+                callback.onError(flashText(R.string.download_failed_error, e.message ?: "null"))
                 null
             }
         }

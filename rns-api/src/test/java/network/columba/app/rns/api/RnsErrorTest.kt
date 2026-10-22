@@ -3,6 +3,7 @@ package network.columba.app.rns.api
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -98,5 +99,16 @@ class RnsErrorTest {
         val ex = RnsException(RnsError.TimeoutExceeded("sendLxmfMessage", 5000))
         assertTrue("sendLxmfMessage" in ex.message!!)
         assertTrue("5000" in ex.message!!)
+    }
+
+    @Test
+    fun `CallManagerNotInitialized is a singleton`() {
+        assertSame(RnsError.CallManagerNotInitialized, RnsError.CallManagerNotInitialized)
+    }
+
+    @Test
+    fun `RnsException describes CallManagerNotInitialized`() {
+        val ex = RnsException(RnsError.CallManagerNotInitialized)
+        assertTrue("Call manager not initialized" in ex.message!!)
     }
 }

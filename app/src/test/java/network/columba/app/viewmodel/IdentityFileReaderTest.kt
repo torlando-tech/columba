@@ -1,5 +1,6 @@
 package network.columba.app.viewmodel
 
+import network.columba.app.R
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -24,8 +25,8 @@ class IdentityFileReaderTest {
 
         assertTrue(result.isFailure)
         assertEquals(
-            "Invalid identity file: expected 64 bytes, got 32 bytes",
-            result.exceptionOrNull()?.message,
+            UiMessage.Text(R.string.identity_file_error_wrong_size, listOf(32)),
+            (result.exceptionOrNull() as IdentityFileInvalidException).uiMessage,
         )
     }
 
@@ -38,8 +39,8 @@ class IdentityFileReaderTest {
         assertTrue(result.isFailure)
         assertEquals(65L, input.bytesRead)
         assertEquals(
-            "Invalid identity file: expected 64 bytes, file is larger than 64 bytes",
-            result.exceptionOrNull()?.message,
+            UiMessage.Text(R.string.identity_file_error_too_large),
+            (result.exceptionOrNull() as IdentityFileInvalidException).uiMessage,
         )
     }
 

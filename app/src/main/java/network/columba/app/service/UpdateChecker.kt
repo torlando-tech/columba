@@ -1,6 +1,7 @@
 package network.columba.app.service
 
 import android.util.Log
+import network.columba.app.R
 import network.columba.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -9,6 +10,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
+import network.columba.app.viewmodel.UiMessage
+import network.columba.app.viewmodel.toUiMessage
 
 sealed class AppUpdateResult {
     data object Idle : AppUpdateResult()
@@ -27,7 +30,7 @@ sealed class AppUpdateResult {
     ) : AppUpdateResult()
 
     data class Error(
-        val message: String,
+        val message: UiMessage,
     ) : AppUpdateResult()
 }
 
@@ -57,20 +60,20 @@ class UpdateChecker
                     // When includePrerelease, API returns an array — unwrap first element
                     val releaseJson =
                         if (includePrerelease) {
-                            unwrapFirstArrayElement(json) ?: return@withContext AppUpdateResult.Error("No releases found")
+                            unwrapFirstArrayElement(json) ?: return@withContext AppUpdateResult.Error(UiMessage.Text(R.string.update_no_releases))
                         } else {
                             json
                         }
 
-                    val tagName = parseStringField(releaseJson, "tag_name") ?: return@withContext AppUpdateResult.Error("Could not parse release info")
-                    val htmlUrl = parseStringField(releaseJson, "html_url") ?: return@withContext AppUpdateResult.Error("Could not parse release info")
+                    val tagName = parseStringField(releaseJson, "tag_name") ?: return@withContext AppUpdateResult.Error(UiMessage.Text(R.string.update_parse_release_failed))
+                    val htmlUrl = parseStringField(releaseJson, "html_url") ?: return@withContext AppUpdateResult.Error(UiMessage.Text(R.string.update_parse_release_failed))
                     val isPrerelease = parseBooleanField(releaseJson, "prerelease") ?: false
 
                     val currentVersion = parseVersionTriple(BuildConfig.VERSION_NAME)
                     val remoteVersion = parseVersionTriple(tagName.removePrefix("v"))
 
                     if (currentVersion == null || remoteVersion == null) {
-                        return@withContext AppUpdateResult.Error("Could not parse version numbers")
+                        return@withContext AppUpdateResult.Error(UiMessage.Text(R.string.update_parse_version_failed))
                     }
 
                     Log.d(TAG, "Current: $currentVersion, Remote: $remoteVersion (tag=$tagName)")
@@ -87,7 +90,7 @@ class UpdateChecker
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Update check failed", e)
-                    AppUpdateResult.Error(e.message ?: "Network error")
+                    AppUpdateResult.Error(e.toUiMessage(R.string.update_network_error))
                 }
             }
 

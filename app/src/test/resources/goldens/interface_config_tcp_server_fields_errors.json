@@ -1,0 +1,17 @@
+[
+  "TCP Server Configuration",
+  "Allows other Reticulum nodes to connect to this device. Useful for Yggdrasil connectivity or when this device should act as a hub.",
+  "0.0.0.0",
+  "Listen IP",
+  "Invalid IP address",
+  "IP address to bind to. Use 0.0.0.0 to listen on all interfaces.",
+  "4242",
+  "Listen Port",
+  "Port must be between 1 and 65535",
+  "TCP port to listen on for incoming connections.",
+  "IFAC (Network Access)",
+  "Leave blank unless inbound clients must authenticate with an IFAC network name and passphrase. Only clients with matching credentials will be able to connect.",
+  "Network Name",
+  "Passphrase",
+  "Show passphrase"
+]

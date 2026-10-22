@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.location.Location
 import android.net.Uri
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,8 +37,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.viewmodel.ContactMarker
 import network.columba.app.viewmodel.MarkerState
 
@@ -106,7 +109,7 @@ fun ContactLocationBottomSheet(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = marker.displayName,
+                            text = marker.displayName.resolve(context),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
@@ -155,7 +158,7 @@ fun ContactLocationBottomSheet(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Directions")
+                    Text(stringResource(R.string.contact_loc_directions))
                 }
 
                 Button(
@@ -168,7 +171,7 @@ fun ContactLocationBottomSheet(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Message")
+                    Text(stringResource(R.string.contact_loc_message))
                 }
             }
 
@@ -187,7 +190,7 @@ fun ContactLocationBottomSheet(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        "Remove from map",
+                        stringResource(R.string.contact_loc_remove_from_map),
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
@@ -206,12 +209,13 @@ fun ContactLocationBottomSheet(
  * @param markerLng Marker longitude
  * @return Formatted string like "450m southeast" or "Location unknown"
  */
+@Composable
 internal fun formatDistanceAndDirection(
     userLocation: Location?,
     markerLat: Double,
     markerLng: Double,
 ): String {
-    if (userLocation == null) return "Location unknown"
+    if (userLocation == null) return stringResource(R.string.contact_loc_location_unknown)
 
     val results = FloatArray(2)
     Location.distanceBetween(
@@ -230,7 +234,7 @@ internal fun formatDistanceAndDirection(
             else -> "%.1fkm".format(distance / 1000)
         }
 
-    val direction = bearingToDirection(bearing)
+    val direction = stringResource(bearingToDirection(bearing))
     return "$distanceText $direction"
 }
 
@@ -238,19 +242,20 @@ internal fun formatDistanceAndDirection(
  * Convert a bearing angle to a cardinal/intercardinal direction.
  *
  * @param bearing Bearing in degrees (0-360)
- * @return Direction string like "north", "southeast", etc.
+ * @return String resource id of the direction, e.g. "north", "southeast"
  */
-internal fun bearingToDirection(bearing: Float): String {
+@StringRes
+internal fun bearingToDirection(bearing: Float): Int {
     val normalized = (bearing + 360) % 360
     return when {
-        normalized < 22.5 || normalized >= 337.5 -> "north"
-        normalized < 67.5 -> "northeast"
-        normalized < 112.5 -> "east"
-        normalized < 157.5 -> "southeast"
-        normalized < 202.5 -> "south"
-        normalized < 247.5 -> "southwest"
-        normalized < 292.5 -> "west"
-        else -> "northwest"
+        normalized < 22.5 || normalized >= 337.5 -> R.string.contact_loc_dir_north
+        normalized < 67.5 -> R.string.contact_loc_dir_northeast
+        normalized < 112.5 -> R.string.contact_loc_dir_east
+        normalized < 157.5 -> R.string.contact_loc_dir_southeast
+        normalized < 202.5 -> R.string.contact_loc_dir_south
+        normalized < 247.5 -> R.string.contact_loc_dir_southwest
+        normalized < 292.5 -> R.string.contact_loc_dir_west
+        else -> R.string.contact_loc_dir_northwest
     }
 }
 
@@ -260,16 +265,17 @@ internal fun bearingToDirection(bearing: Float): String {
  * @param timestamp Timestamp in milliseconds since epoch
  * @return Formatted string like "Updated just now", "Updated 30s ago", "Updated 5m ago"
  */
+@Composable
 internal fun formatUpdatedTime(timestamp: Long): String {
     val now = System.currentTimeMillis()
     val diff = now - timestamp
 
     return when {
-        diff < 10_000 -> "Updated just now"
-        diff < 60_000 -> "Updated ${diff / 1000}s ago"
-        diff < 3600_000 -> "Updated ${diff / 60_000}m ago"
-        diff < 86400_000 -> "Updated ${diff / 3600_000}h ago"
-        else -> "Updated ${diff / 86400_000}d ago"
+        diff < 10_000 -> stringResource(R.string.contact_loc_updated_just_now)
+        diff < 60_000 -> stringResource(R.string.contact_loc_updated_seconds_ago, diff / 1000)
+        diff < 3600_000 -> stringResource(R.string.contact_loc_updated_minutes_ago, diff / 60_000)
+        diff < 86400_000 -> stringResource(R.string.contact_loc_updated_hours_ago, diff / 3600_000)
+        else -> stringResource(R.string.contact_loc_updated_days_ago, diff / 86400_000)
     }
 }
 
@@ -302,7 +308,7 @@ internal fun openDirectionsInMaps(
         }
     } catch (_: android.content.ActivityNotFoundException) {
         android.widget.Toast
-            .makeText(context, "No maps application found", android.widget.Toast.LENGTH_SHORT)
+            .makeText(context, context.getString(R.string.contact_loc_no_maps_app_found), android.widget.Toast.LENGTH_SHORT)
             .show()
     }
 }
@@ -318,8 +324,8 @@ private fun StaleLocationBadge(state: MarkerState) {
 
     val (text, color) =
         when (state) {
-            MarkerState.STALE -> "Stale" to MaterialTheme.colorScheme.outline
-            MarkerState.EXPIRED_GRACE_PERIOD -> "Last known" to MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+            MarkerState.STALE -> stringResource(R.string.contact_loc_stale) to MaterialTheme.colorScheme.outline
+            MarkerState.EXPIRED_GRACE_PERIOD -> stringResource(R.string.contact_loc_last_known) to MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
             else -> return
         }
 

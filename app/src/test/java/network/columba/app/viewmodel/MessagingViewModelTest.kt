@@ -3263,9 +3263,9 @@ class MessagingViewModelTest {
             viewModel.toggleContact()
             advanceUntilIdle()
 
-            // Assert: ContactToggleResult.Error was emitted with appropriate message
+            // Assert: ContactToggleResult.Error was emitted with the typed reason
             assert(emittedResult is ContactToggleResult.Error)
-            assert((emittedResult as ContactToggleResult.Error).message.contains("Identity not available"))
+            assert((emittedResult as ContactToggleResult.Error).reason == ContactToggleErrorReason.IDENTITY_NOT_AVAILABLE)
             collectJob.cancel()
         }
 
@@ -3290,9 +3290,11 @@ class MessagingViewModelTest {
             viewModel.toggleContact()
             advanceUntilIdle()
 
-            // Assert: ContactToggleResult.Error was emitted
+            // Assert: ContactToggleResult.Error was emitted with typed reason + detail
             assert(emittedResult is ContactToggleResult.Error)
-            assert((emittedResult as ContactToggleResult.Error).message.contains("Database error"))
+            val error = emittedResult as ContactToggleResult.Error
+            assert(error.reason == ContactToggleErrorReason.UPDATE_FAILED)
+            assert(error.detail == "Database error")
             collectJob.cancel()
         }
 
@@ -4625,7 +4627,7 @@ class MessagingViewModelTest {
             val cachedPreview = cache["current-msg"]
             assertNotNull(cachedPreview)
             assertEquals("deleted-msg", cachedPreview!!.messageId)
-            assertEquals("Message deleted", cachedPreview.contentPreview)
+            assertTrue(cachedPreview!!.isDeletedPlaceholder)
         }
 
     @Test
@@ -6638,7 +6640,8 @@ class MessagingViewModelTest {
             // Assert: cached reply preview is replaced with "Message deleted" placeholder
             val cachedAfter = viewModel.replyPreviewCache.value["reply-msg"]
             assertNotNull(cachedAfter)
-            assertEquals("Message deleted", cachedAfter!!.contentPreview)
+            assertEquals("", cachedAfter!!.contentPreview)
+            assertTrue(cachedAfter.isDeletedPlaceholder)
             assertEquals("", cachedAfter.senderName)
         }
 

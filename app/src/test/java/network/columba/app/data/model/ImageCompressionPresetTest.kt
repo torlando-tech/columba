@@ -1,7 +1,6 @@
 package network.columba.app.data.model
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -113,15 +112,13 @@ class ImageCompressionPresetTest {
     @Test
     fun `all presets have non-empty displayName and description`() {
         ImageCompressionPreset.entries.forEach { preset ->
-            assertNotNull("Preset ${preset.name} should have displayName", preset.displayName)
             assertTrue(
-                "Preset ${preset.name} displayName should not be empty",
-                preset.displayName.isNotEmpty(),
+                "Preset ${preset.name} should have a displayName resource",
+                preset.displayNameRes != 0,
             )
-            assertNotNull("Preset ${preset.name} should have description", preset.description)
             assertTrue(
-                "Preset ${preset.name} description should not be empty",
-                preset.description.isNotEmpty(),
+                "Preset ${preset.name} should have a description resource",
+                preset.descriptionRes != 0,
             )
         }
     }

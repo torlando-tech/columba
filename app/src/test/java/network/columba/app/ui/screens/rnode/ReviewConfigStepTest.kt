@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import network.columba.app.R
 import network.columba.app.data.model.BluetoothType
 import network.columba.app.data.model.DiscoveredRNode
 import network.columba.app.data.model.FrequencyRegion
@@ -15,6 +16,7 @@ import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.RNodeConnectionType
 import network.columba.app.viewmodel.RNodeWizardState
 import network.columba.app.viewmodel.RNodeWizardViewModel
+import network.columba.app.viewmodel.UiMessage
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -51,7 +53,7 @@ class ReviewConfigStepTest {
             maxTxPower = 30,
             defaultTxPower = 17,
             dutyCycle = 100,
-            description = "902-928 MHz ISM band",
+            descriptionRes = R.string.region_desc_us_915,
         )
 
     private val restrictedRegion =
@@ -63,7 +65,7 @@ class ReviewConfigStepTest {
             maxTxPower = 14,
             defaultTxPower = 14,
             dutyCycle = 1,
-            description = "Sub-band M: 1% duty cycle, 25 mW (LoRaWAN default)",
+            descriptionRes = R.string.region_desc_eu_868_m,
         )
 
     private val testDevice =
@@ -87,9 +89,9 @@ class ReviewConfigStepTest {
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns true
         every { mockViewModel.isUsbMode() } returns false
-        every { mockViewModel.getEffectiveDeviceName() } returns "10.0.0.1"
+        every { mockViewModel.getEffectiveDeviceName() } returns UiMessage.Raw("10.0.0.1")
         every { mockViewModel.getEffectiveBluetoothType() } returns null
-        every { mockViewModel.getConnectionTypeString() } returns "WiFi / TCP"
+        every { mockViewModel.getConnectionTypeString() } returns UiMessage.Text(R.string.rnode_wizard_conn_tcp)
         every { mockViewModel.getRegionLimits() } returns null
 
         // When
@@ -114,9 +116,9 @@ class ReviewConfigStepTest {
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
         every { mockViewModel.isUsbMode() } returns false
-        every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
+        every { mockViewModel.getEffectiveDeviceName() } returns UiMessage.Raw("RNode 1234")
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
-        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getConnectionTypeString() } returns UiMessage.Text(R.string.rnode_wizard_conn_bt_le)
         every { mockViewModel.getRegionLimits() } returns null
 
         // When
@@ -141,9 +143,9 @@ class ReviewConfigStepTest {
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
         every { mockViewModel.isUsbMode() } returns false
-        every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
+        every { mockViewModel.getEffectiveDeviceName() } returns UiMessage.Raw("RNode 1234")
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
-        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getConnectionTypeString() } returns UiMessage.Text(R.string.rnode_wizard_conn_bt_le)
         every { mockViewModel.getRegionLimits() } returns null
 
         // When
@@ -171,9 +173,9 @@ class ReviewConfigStepTest {
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
         every { mockViewModel.isUsbMode() } returns false
-        every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
+        every { mockViewModel.getEffectiveDeviceName() } returns UiMessage.Raw("RNode 1234")
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
-        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getConnectionTypeString() } returns UiMessage.Text(R.string.rnode_wizard_conn_bt_le)
         every { mockViewModel.getFrequencyForSlot(20) } returns 914875000L
         every { mockViewModel.getRegionLimits() } returns null
 
@@ -202,9 +204,9 @@ class ReviewConfigStepTest {
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
         every { mockViewModel.isUsbMode() } returns false
-        every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
+        every { mockViewModel.getEffectiveDeviceName() } returns UiMessage.Raw("RNode 1234")
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
-        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getConnectionTypeString() } returns UiMessage.Text(R.string.rnode_wizard_conn_bt_le)
         every { mockViewModel.getRegionLimits() } returns null
 
         // When
@@ -232,9 +234,9 @@ class ReviewConfigStepTest {
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
         every { mockViewModel.isUsbMode() } returns false
-        every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
+        every { mockViewModel.getEffectiveDeviceName() } returns UiMessage.Raw("RNode 1234")
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
-        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getConnectionTypeString() } returns UiMessage.Text(R.string.rnode_wizard_conn_bt_le)
         every { mockViewModel.getFrequencyForSlot(1) } returns 868125000L
         every { mockViewModel.getRegionLimits() } returns null
 
@@ -261,9 +263,9 @@ class ReviewConfigStepTest {
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
         every { mockViewModel.isUsbMode() } returns false
-        every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
+        every { mockViewModel.getEffectiveDeviceName() } returns UiMessage.Raw("RNode 1234")
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
-        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getConnectionTypeString() } returns UiMessage.Text(R.string.rnode_wizard_conn_bt_le)
         every { mockViewModel.getRegionLimits() } returns null
         every { mockViewModel.toggleAdvancedSettings() } answers { toggleCalled = true }
 
@@ -294,9 +296,9 @@ class ReviewConfigStepTest {
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
         every { mockViewModel.isUsbMode() } returns false
-        every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
+        every { mockViewModel.getEffectiveDeviceName() } returns UiMessage.Raw("RNode 1234")
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
-        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getConnectionTypeString() } returns UiMessage.Text(R.string.rnode_wizard_conn_bt_le)
         every { mockViewModel.getRegionLimits() } returns null
 
         // When
@@ -333,9 +335,9 @@ class ReviewConfigStepTest {
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
         every { mockViewModel.isUsbMode() } returns false
-        every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
+        every { mockViewModel.getEffectiveDeviceName() } returns UiMessage.Raw("RNode 1234")
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
-        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getConnectionTypeString() } returns UiMessage.Text(R.string.rnode_wizard_conn_bt_le)
         every { mockViewModel.getRegionLimits() } returns null
 
         // When
@@ -365,9 +367,9 @@ class ReviewConfigStepTest {
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
         every { mockViewModel.isUsbMode() } returns false
-        every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
+        every { mockViewModel.getEffectiveDeviceName() } returns UiMessage.Raw("RNode 1234")
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
-        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getConnectionTypeString() } returns UiMessage.Text(R.string.rnode_wizard_conn_bt_le)
         every { mockViewModel.getRegionLimits() } returns null
 
         // When

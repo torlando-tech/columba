@@ -60,11 +60,11 @@ fun main(args: Array<String>) {
     val sb = StringBuilder()
     for (file in files) {
         val rel = file.relativeTo(root).path
-        if (!file.isFile) {
-            sb.appendLine("### $rel")
-            sb.appendLine("!! file missing")
-            continue
-        }
+        // A file missing from this tree (added or deleted between the compared
+        // trees) simply has no text entries here. Emitting a presence marker
+        // would diff every file add/delete even when no displayed text
+        // changes, so compare entries only.
+        if (!file.isFile) continue
         val module = rel.substringBefore('/')
         val entries =
             try {
@@ -74,6 +74,7 @@ fun main(args: Array<String>) {
                 sb.appendLine("!! dump failed: ${e.message}")
                 continue
             }
+        if (entries.isEmpty()) continue
         sb.appendLine("### $rel")
         entries.forEach { sb.appendLine("%03d %-45s | %s".format(it.ordinal, it.kind, it.skeleton)) }
     }

@@ -291,4 +291,65 @@ class UiTextDumperTest {
             """.trimIndent()
         assertEquals(listOf("Outer"), dump("a", code).map { it.skeleton })
     }
+
+    @Test
+    fun `ui message text constructor emits resolved entry`() {
+        module("a", "com.test.a", """<string name="bt_unavailable">Bluetooth unavailable</string>""")
+        val entries = dump("a", "fun s() { val m = UiMessage.Text(R.string.bt_unavailable) }")
+        assertEquals(listOf("UiMessage.Text" to "Bluetooth unavailable"), entries.map { it.kind to it.skeleton })
+    }
+
+    @Test
+    fun `ui message text substitutes listOf args`() {
+        module("a", "com.test.a", """<string name="failed">Failed: %1${'$'}s</string>""")
+        val entries = dump("a", "fun s(d: String) { val m = UiMessage.Text(R.string.failed, listOf(d)) }")
+        assertEquals(listOf("Failed: {}"), entries.map { it.skeleton })
+    }
+
+    @Test
+    fun `ui message plural emits one and other`() {
+        module(
+            "a",
+            "com.test.a",
+            """<plurals name="msgs"><item quantity="one">%d message</item><item quantity="other">%d messages</item></plurals>""",
+        )
+        val entries = dump("a", "fun s(n: Int) { val m = UiMessage.Plural(R.plurals.msgs, n) }")
+        assertEquals(
+            listOf("UiMessage.Plural[one]", "UiMessage.Plural[other]"),
+            entries.map { it.kind },
+        )
+        assertEquals(listOf("{} message", "{} messages"), entries.map { it.skeleton })
+    }
+
+    @Test
+    fun `flash text resource emits entry`() {
+        module("a", "com.test.a", """<string name="erasing">Erasing %1${'$'}d KB</string>""")
+        val entries = dump("a", "fun s(k: Int) { val t = FlashText.Resource(R.string.erasing, listOf(k)) }")
+        assertEquals(listOf("Erasing {} KB"), entries.map { it.skeleton })
+    }
+
+    @Test
+    fun `nested ui message argument resolves inside wrapper`() {
+        module(
+            "a",
+            "com.test.a",
+            """<string name="wrapper">Something failed: %1${'$'}s</string><string name="inner">inner text</string>""",
+        )
+        val code =
+            """
+            fun s() {
+                val m = UiMessage.Text(R.string.wrapper, listOf(UiMessage.Text(R.string.inner)))
+            }
+            """.trimIndent()
+        // children visit first: inner entry, then the wrapper with it substituted
+        assertEquals(listOf("inner text", "Something failed: inner text"), dump("a", code).map { it.skeleton })
+    }
+
+    @Test
+    fun `plain Text call with non-resource first arg emits no carrier entry`() {
+        module("a", "com.test.a", """<string name="outer">Outer</string>""")
+        val entries = dump("a", "fun s() { val label = stringResource(R.string.outer); Text(label) }")
+        assertEquals(1, entries.size)
+        assertEquals("Text arg0", entries[0].kind)
+    }
 }

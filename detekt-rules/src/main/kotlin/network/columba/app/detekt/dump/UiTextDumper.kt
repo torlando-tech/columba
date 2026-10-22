@@ -82,6 +82,19 @@ class UiTextDumper(
                 val callee = expression.calleeExpression?.text ?: return
                 val args = expression.valueArguments
 
+                // ViewModel-side message carriers: `UiMessage.Text(R.string.x, …)`
+                // constructed here is displayed later via `resolve(...)` at a
+                // render site, so the construction site is the only place the
+                // text is statically visible. Match on the qualified name:
+                // the bare callee of `UiMessage.Text(…)` is just `Text`, which
+                // would collide with the Compose `Text` sink.
+                carrierName(expression)?.let { name ->
+                    uiMessageSkeleton(name, expression)?.forEach { (subKind, skeleton) ->
+                        add("$name$subKind", skeleton)
+                    }
+                    return
+                }
+
                 UiSinkTable.positionalSinks[callee]?.let { sinkIndices ->
                     args.forEachIndexed { index, arg ->
                         if (index in sinkIndices && arg.getArgumentName() == null) {
@@ -214,6 +227,7 @@ class UiTextDumper(
                 else -> null
             } ?: return null
         val callee = call.calleeExpression?.text ?: return null
+        carrierName(call)?.let { return uiMessageSkeleton(it, call) }
         val ref =
             call.valueArguments
                 .mapNotNull { rRefOf(it.getArgumentExpression()) }
@@ -238,6 +252,61 @@ class UiTextDumper(
                 }
             }
             else -> null
+        }
+    }
+
+    /**
+     * Qualified name of a message-carrier constructor call — `UiMessage.Text`,
+     * `UiMessage.Plural`, `FlashText.Resource`, or the `flashText` factory —
+     * or null. The bare callee of `UiMessage.Text(…)` is just `Text`, so the
+     * dot-qualified receiver is required to tell carriers apart from Compose
+     * sinks with colliding names (`Text`, `Resource`).
+     */
+    private fun carrierName(call: KtCallExpression): String? {
+        val callee = call.calleeExpression?.text ?: return null
+        if (callee == "flashText") return "flashText"
+        val receiver = (call.parent as? KtDotQualifiedExpression)?.receiverExpression?.text ?: return null
+        return "$receiver.$callee".takeIf { it in UIMESSAGE_CONSTRUCTORS }
+    }
+
+    /**
+     * Resolved text of a carrier construction. Only fires when the first
+     * positional argument is an `R.string`/`R.plurals` reference, so an
+     * unrelated constructor with a matching name never matches. Format args
+     * come from a `listOf(…)` literal; anything else contributes none.
+     */
+    private fun uiMessageSkeleton(
+        name: String,
+        call: KtCallExpression,
+    ): List<Pair<String, String>>? {
+        val positional = call.valueArguments.filter { it.getArgumentName() == null }
+        val plural = name in PLURAL_CONSTRUCTORS
+        val (pkg, type, resName) = rRefOf(positional.firstOrNull()?.getArgumentExpression()) ?: return null
+        if (type != if (plural) "plurals" else "string") return null
+        val fmtArgs =
+            if (name == "flashText") {
+                // `flashText(id, vararg args)` — format args are positional.
+                positional.drop(1).map { argSkeleton(it.getArgumentExpression()) }
+            } else {
+                formatArgsOf(positional.getOrNull(if (plural) 2 else 1)?.getArgumentExpression())
+            }
+        return if (plural) {
+            res.resolvePlurals(pkg, moduleName, resName)?.let { quantities ->
+                listOf("one", "other").mapNotNull { q ->
+                    quantities[q]?.let { "[$q]" to normalizeText(substituteFmt(it, fmtArgs)) }
+                }.ifEmpty { null }
+            }
+        } else {
+            res.resolveString(pkg, moduleName, resName)?.let { listOf("" to normalizeText(substituteFmt(it, fmtArgs))) }
+        }
+    }
+
+    private fun formatArgsOf(expr: KtExpression?): List<String> {
+        val call = expr as? KtCallExpression ?: return emptyList()
+        return when (call.calleeExpression?.text) {
+            "emptyList" -> emptyList()
+            "listOf", "listOfNotNull" -> call.valueArguments.map { argSkeleton(it.getArgumentExpression()) }
+            else -> emptyList()
         }
     }
 
@@ -331,6 +400,8 @@ class UiTextDumper(
     private companion object {
         val STRING_CALLERS = setOf("stringResource", "getString")
         val PLURAL_CALLERS = setOf("pluralStringResource", "getQuantityString")
+        val UIMESSAGE_CONSTRUCTORS = setOf("UiMessage.Text", "UiMessage.Plural", "FlashText.Resource")
+        val PLURAL_CONSTRUCTORS = setOf("UiMessage.Plural")
         val R_REF_REGEX = Regex("""^(?:(\w[\w.]*)\.)?R\.(string|plurals)\.(\w+)$""")
         val ALIAS_REF_REGEX = Regex("""^(\w+R)\.(string|plurals)\.(\w+)$""")
         val AMBIGUOUS = "\u0000"

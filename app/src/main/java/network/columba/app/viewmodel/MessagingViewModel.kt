@@ -2466,6 +2466,11 @@ class MessagingViewModel
                 when {
                     field6 is org.json.JSONObject && field6.has("_file_ref") -> true
                     field6 is String && field6.isNotEmpty() -> true
+                    field6 is org.json.JSONArray && field6.length() >= 2 &&
+                        (
+                            (field6.opt(1) as? String)?.isNotEmpty() == true ||
+                                (field6.opt(1) as? org.json.JSONObject)?.has("_file_ref") == true
+                        ) -> true
                     else -> false
                 }
             } catch (e: Exception) {

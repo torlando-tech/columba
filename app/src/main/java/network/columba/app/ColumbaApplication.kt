@@ -200,6 +200,24 @@ class ColumbaApplication : Application() {
             }
         }
 
+        // Heal the cross-process settings mirror. Builds before the prefs
+        // split let the service process's runtime-state writes erase mirrored
+        // keys, so the service could be running with defaults (accepting
+        // unknown senders, holding the persistent wake lock) while DataStore
+        // said otherwise. Re-push the authoritative values on every UI-process
+        // start; idempotent, and the service re-reads them at its next start
+        // or via the live ACTION_SET_* intents.
+        applicationScope.launch {
+            try {
+                settingsRepository.repairMirroredSettings()
+            } catch (e: Exception) {
+                android.util.Log.w(
+                    "ColumbaApplication",
+                    "Failed to repair cross-process settings mirror: ${e.message}",
+                )
+            }
+        }
+
         // Clean up old temp files from previous sessions (attachments, share_images)
         // Run on IO dispatcher to avoid blocking main thread with file operations
         applicationScope.launch(Dispatchers.IO) {

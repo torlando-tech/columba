@@ -67,6 +67,7 @@ fun BatteryOptimizationCard(
     onPersistentWakeLockToggle: (Boolean) -> Unit = {},
     keepalivePulseEnabled: Boolean = false,
     onKeepalivePulseToggle: (Boolean) -> Unit = {},
+    onResumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -102,6 +103,10 @@ fun BatteryOptimizationCard(
             LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_RESUME) {
                     refreshStatus()
+                    // Granting the battery exemption in system settings starts
+                    // nothing on its own; re-push the pulse policy so a wanted
+                    // pulse schedules once exact alarms are allowed.
+                    onResumed()
                 }
             }
         lifecycleOwner.lifecycle.addObserver(observer)

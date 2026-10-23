@@ -2017,6 +2017,31 @@ class SettingsViewModel
             }
         }
 
+        /**
+         * Re-push the lock/pulse policy to the `:reticulum` service without a
+         * setting change. The pulse's exact alarm is skipped while the
+         * battery-optimization exemption (or SCHEDULE_EXACT_ALARM) is missing,
+         * and granting it in system settings starts nothing on its own — this
+         * re-runs the policy so a wanted pulse gets scheduled. No extras: the
+         * service reuses the live AutoInterface flag and re-reads the mirrored
+         * prefs.
+         */
+        fun reevaluateServiceLocks() {
+            runCatching {
+                val intent =
+                    android.content.Intent(
+                        context,
+                        network.columba.app.rns.host.ReticulumService::class.java,
+                    ).apply {
+                        action =
+                            network.columba.app.rns.host
+                                .ReticulumService.ACTION_REEVALUATE_LOCKS
+                    }
+                androidx.core.content.ContextCompat
+                    .startForegroundService(context, intent)
+            }.onFailure { Log.w(TAG, "reevaluateServiceLocks service intent failed", it) }
+        }
+
         // Transport node methods
 
         /**

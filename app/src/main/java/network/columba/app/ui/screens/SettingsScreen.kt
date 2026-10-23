@@ -548,6 +548,7 @@ fun SettingsScreen(
                     onPersistentWakeLockToggle = { viewModel.setPersistentWakeLockEnabled(it) },
                     keepalivePulseEnabled = state.keepalivePulseEnabled,
                     onKeepalivePulseToggle = { viewModel.setKeepalivePulseEnabled(it) },
+                    onResumed = { viewModel.reevaluateServiceLocks() },
                 )
 
                 DataMigrationCard(

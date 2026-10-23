@@ -2028,6 +2028,14 @@ class SettingsViewModel
          */
         fun reevaluateServiceLocks() {
             runCatching {
+                // A service the user stopped stays stopped: starting it here
+                // would briefly show the foreground notification and acquire
+                // locks before onStartCommand sees the flag and stops again.
+                val userShutdown =
+                    context
+                        .getSharedPreferences("columba_prefs", android.content.Context.MODE_PRIVATE)
+                        .getBoolean("is_user_shutdown", false)
+                if (userShutdown) return@runCatching
                 val intent =
                     android.content.Intent(
                         context,

@@ -52,6 +52,7 @@ class InterfaceManagementViewModelNetworkRestrictionTest {
     private lateinit var transportAdmin: RnsTransportAdmin
     private lateinit var transportObserver: InterfaceTransportObserver
     private lateinit var rnsBackend: RnsBackend
+    private val testContext = mockk<android.content.Context>(relaxed = true)
     private lateinit var viewModel: InterfaceManagementViewModel
 
     @Before
@@ -101,6 +102,7 @@ class InterfaceManagementViewModelNetworkRestrictionTest {
                 transportAdmin,
                 transportObserver,
                 rnsBackend,
+                context = testContext,
             )
     }
 

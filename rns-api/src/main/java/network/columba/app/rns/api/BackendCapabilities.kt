@@ -141,6 +141,13 @@ data class BackendCapabilities(
      * on backends without signals the service must keep the persistent
      * lock regardless of the stored preference, and the UI hides the
      * toggle.
+     *
+     * `managesOwnMulticastLock` reports whether the backend acquires the
+     * Android `MulticastLock` itself for its AutoInterface (kotlin native:
+     * `NativeInterfaceFactory`). Backends reporting `false` rely on the
+     * `:reticulum` service's `LockManager` to hold it, otherwise the Wi-Fi
+     * firmware's screen-off multicast filter silently drops AutoInterface
+     * peering tokens.
      */
     @Parcelize
     data class PerformanceCaps(
@@ -148,6 +155,7 @@ data class BackendCapabilities(
         val sharedInstanceAvailabilityChecks: Boolean,
         val shareInstanceHosting: Boolean = false,
         val dutyCycleWakeLock: Support = Support.UNSUPPORTED,
+        val managesOwnMulticastLock: Boolean = false,
     ) : Parcelable
 
     /**

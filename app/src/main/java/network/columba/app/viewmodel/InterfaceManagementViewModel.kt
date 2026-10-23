@@ -31,6 +31,7 @@ import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.host.manager.CurrentTransport
 import network.columba.app.rns.host.manager.filterByTransport
 import network.columba.app.service.InterfaceConfigManager
+import network.columba.app.service.notifyServiceLockPolicy
 import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationResult
@@ -206,6 +207,7 @@ class InterfaceManagementViewModel
         private val transportAdmin: RnsTransportAdmin,
         private val transportObserver: InterfaceTransportObserver,
         private val rnsBackend: RnsBackend,
+        @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     ) : ViewModel() {
         companion object {
             private const val TAG = "InterfaceMgmtVM"
@@ -1247,6 +1249,11 @@ class InterfaceManagementViewModel
                         val configs = interfaceRepository.enabledInterfaces.first()
                         val filtered = filterByTransport(configs, transportObserver.snapshotTransport())
                         transportAdmin.reloadInterfaces(filtered)
+                        // The service-held MulticastLock and keepalive pulse
+                        // follow the interfaces actually running: hot-reload
+                        // does not rewrite the config snapshot, so push the
+                        // live value (post-transport-filter) to :reticulum.
+                        notifyServiceLockPolicy(context, filtered, TAG)
                         kotlinx.coroutines.delay(1000)
                         fetchInterfaceStatus()
                         kotlinx.coroutines.delay(4000)

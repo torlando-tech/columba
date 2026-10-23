@@ -41,6 +41,7 @@ class ServiceSettingsAccessor(
         const val KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY = "allow_calls_from_contacts_only"
         const val KEY_ALLOW_VOICE_CALLS = "allow_voice_calls"
         const val KEY_PERSISTENT_WAKE_LOCK = "persistent_wake_lock"
+        const val KEY_KEEPALIVE_PULSE = "autointerface_keepalive_pulse"
 
         // Keys for service-owned runtime state (SERVICE_STATE_PREFS_NAME)
         const val KEY_NETWORK_CHANGE_ANNOUNCE_TIME = "network_change_announce_time"
@@ -127,6 +128,19 @@ class ServiceSettingsAccessor(
      */
     fun getPersistentWakeLockEnabled(): Boolean =
         getCrossProcessPrefs().getBoolean(KEY_PERSISTENT_WAKE_LOCK, true)
+
+    /**
+     * Get the AutoInterface keepalive-pulse setting. When true, the service
+     * wakes the CPU briefly every ~22 s in duty-cycle mode so LAN peers keep
+     * this device in their AutoInterface peering tables (their
+     * PEERING_TIMEOUT is 27.5 s). Written by the app process
+     * (SettingsRepository dual-write); read here at service start and on
+     * every pulse-policy re-evaluation. Defaults to false until measured.
+     *
+     * @return true to run the keepalive pulse in duty-cycle mode
+     */
+    fun getKeepalivePulseEnabled(): Boolean =
+        getCrossProcessPrefs().getBoolean(KEY_KEEPALIVE_PULSE, false)
 
     /**
      * Persist the service's current network-status string (service-state file)

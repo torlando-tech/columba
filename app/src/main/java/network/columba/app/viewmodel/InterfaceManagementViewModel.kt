@@ -31,6 +31,7 @@ import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.host.manager.CurrentTransport
 import network.columba.app.rns.host.manager.filterByTransport
 import network.columba.app.service.InterfaceConfigManager
+import network.columba.app.service.notifyServiceLockPolicy
 import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationResult
@@ -1248,10 +1249,11 @@ class InterfaceManagementViewModel
                         val configs = interfaceRepository.enabledInterfaces.first()
                         val filtered = filterByTransport(configs, transportObserver.snapshotTransport())
                         transportAdmin.reloadInterfaces(filtered)
-                        // The service-held MulticastLock follows AutoInterface
-                        // enablement; hot-reload does not rewrite the config
-                        // snapshot, so push the live value to :reticulum.
-                        notifyServiceLockPolicy(configs)
+                        // The service-held MulticastLock and keepalive pulse
+                        // follow the interfaces actually running: hot-reload
+                        // does not rewrite the config snapshot, so push the
+                        // live value (post-transport-filter) to :reticulum.
+                        notifyServiceLockPolicy(context, filtered, TAG)
                         kotlinx.coroutines.delay(1000)
                         fetchInterfaceStatus()
                         kotlinx.coroutines.delay(4000)
@@ -1275,40 +1277,6 @@ class InterfaceManagementViewModel
                         }
                     }
                 }
-        }
-
-        /**
-         * Push the live AutoInterface-enabled state to the `:reticulum`
-         * service so its MulticastLock policy tracks the interface the user
-         * actually enabled (the config snapshot is only rewritten on full
-         * initialize, not on hot-reload). Failures are logged; the service
-         * re-reads the snapshot at its next cold start regardless.
-         */
-        private fun notifyServiceLockPolicy(configs: List<InterfaceConfig>) {
-            val autoInterfaceEnabled =
-                configs.any { it is InterfaceConfig.AutoInterface && it.enabled }
-            runCatching {
-                val intent =
-                    android.content.Intent(
-                        context,
-                        network.columba.app.rns.host.ReticulumService::class.java,
-                    ).apply {
-                        action =
-                            network.columba.app.rns.host
-                                .ReticulumService.ACTION_REEVALUATE_LOCKS
-                        putExtra(
-                            network.columba.app.rns.host
-                                .ReticulumService.EXTRA_AUTO_INTERFACE_ENABLED,
-                            autoInterfaceEnabled,
-                        )
-                    }
-                androidx.core.content.ContextCompat
-                    .startForegroundService(context, intent)
-            }.onFailure { e ->
-                // Plain-JVM unit tests have no Android framework: Intent/Log
-                // throw "Stub!" there. Logging must never outlive the guard.
-                runCatching { Log.w(TAG, "notifyServiceLockPolicy intent failed", e) }
-            }
         }
 
         fun applyChanges() {

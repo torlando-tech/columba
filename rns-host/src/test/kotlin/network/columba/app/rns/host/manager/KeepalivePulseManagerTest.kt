@@ -130,6 +130,21 @@ class KeepalivePulseManagerTest {
     }
 
     @Test
+    fun `reevaluate retries scheduling after the exact-alarm exemption is granted`() {
+        // Enabling the pulse before granting the battery exemption skips
+        // scheduling; the settings screen re-pushes the policy on resume, so
+        // a reevaluate with alarms now allowed must actually schedule.
+        ShadowAlarmManager.setCanScheduleExactAlarms(false)
+        manager.reevaluate(dutyCycleActive = true, autoInterfaceEnabled = true)
+        assertNull("no alarm may be scheduled without exact-alarm permission", shadowAlarmManager.nextScheduledAlarm)
+
+        ShadowAlarmManager.setCanScheduleExactAlarms(true)
+        manager.reevaluate(dutyCycleActive = true, autoInterfaceEnabled = true)
+
+        assertNotNull("expected the retry to schedule the pulse", shadowAlarmManager.nextScheduledAlarm)
+    }
+
+    @Test
     fun `onPulseFired holds the pulse lock and queues the next pulse`() {
         manager.reevaluate(dutyCycleActive = true, autoInterfaceEnabled = true)
         val firstTrigger = shadowAlarmManager.nextScheduledAlarm!!.triggerAtTime

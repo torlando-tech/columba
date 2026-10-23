@@ -2030,12 +2030,14 @@ class SettingsViewModel
             runCatching {
                 // A service the user stopped stays stopped: starting it here
                 // would briefly show the foreground notification and acquire
-                // locks before onStartCommand sees the flag and stops again.
-                val userShutdown =
-                    context
-                        .getSharedPreferences("columba_prefs", android.content.Context.MODE_PRIVATE)
-                        .getBoolean("is_user_shutdown", false)
-                if (userShutdown) return@runCatching
+                // locks before onStartCommand sees the shutdown flag and
+                // stops again. Trust the live binding state, not the
+                // is_user_shutdown pref: that flag is written in this process
+                // and cleared in the service process, so a MODE_PRIVATE read
+                // here can keep seeing a stale true after a stop+restart.
+                if (rnsCore.networkStatus.value is network.columba.app.rns.api.model.NetworkStatus.SHUTDOWN) {
+                    return@runCatching
+                }
                 val intent =
                     android.content.Intent(
                         context,

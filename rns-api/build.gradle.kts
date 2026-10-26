@@ -74,7 +74,7 @@ dependencies {
     // NoSuchMethodError (e.g. JSONObject.optInt) and breaking Chaquopy's
     // build.json walk (isinstance mismatch), which crashed the minified
     // pythonBackend release. Keep it off the runtime classpath.
-    compileOnly("org.json:json:20240303")
+    compileOnly("org.json:json:20260814")
 
     // msgpack-core powers `util.AppDataParser` — the announce app_data
     // parser is consumed by every backend (kotlin native + python flavor)
@@ -89,7 +89,7 @@ dependencies {
     // org.json is compileOnly above (Android provides it at runtime), so the
     // real impl must be on the JVM unit-test classpath — otherwise toJsonString()
     // hits the android.jar "Stub!" org.json. Matches the other modules' test deps.
-    testImplementation("org.json:json:20240303")
+    testImplementation("org.json:json:20260814")
     testImplementation(libs.robolectric)
     testImplementation(libs.test.core)
 }

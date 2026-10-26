@@ -11,7 +11,7 @@ plugins {
     // pythonBackend flavor builds regardless of the developer's default JDK — its
     // Hilt-generated Java makes javac read LXST-kt's Java 21 bytecode, which a
     // JDK <21 javac can't load. CI uses JDK 25; 21 is the local floor.
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.10.0"
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
 dependencyResolutionManagement {

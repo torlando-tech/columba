@@ -1,7 +1,10 @@
 package network.columba.app.util
 
 import android.content.ActivityNotFoundException
+import android.content.Context
+import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
+import network.columba.app.R
 
 /**
  * Launches a document/file picker with [input], never throwing when no
@@ -23,3 +26,11 @@ fun <I> ActivityResultLauncher<I>.launchSafely(input: I): Boolean =
     } catch (_: ActivityNotFoundException) {
         false
     }
+
+/**
+ * Shows the standard user-visible fallback for an unresolvable document
+ * picker (Sentry COLUMBA-EG) on screens without a snackbar host.
+ */
+fun Context.showNoFileManagerToast() {
+    Toast.makeText(this, getString(R.string.error_no_file_manager), Toast.LENGTH_SHORT).show()
+}

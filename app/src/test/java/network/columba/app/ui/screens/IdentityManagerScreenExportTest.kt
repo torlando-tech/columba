@@ -46,15 +46,15 @@ class IdentityManagerScreenExportTest {
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
-    private val identities = MutableStateFlow<List<LocalIdentityEntity>>(emptyList())
-    private val activeIdentity = MutableStateFlow<LocalIdentityEntity?>(null)
-    private val uiState = MutableStateFlow<IdentityManagerUiState>(IdentityManagerUiState.Idle)
+    private val identitiesFlow = MutableStateFlow<List<LocalIdentityEntity>>(emptyList())
+    private val activeIdentityFlow = MutableStateFlow<LocalIdentityEntity?>(null)
+    private val uiStateFlow = MutableStateFlow<IdentityManagerUiState>(IdentityManagerUiState.Idle)
 
     private fun createViewModelMock(): IdentityManagerViewModel =
         mockk<IdentityManagerViewModel> {
-            every { this@mockk.identities } returns identities
-            every { this@mockk.activeIdentity } returns activeIdentity
-            every { this@mockk.uiState } returns uiState
+            every { this@mockk.identities } returns identitiesFlow
+            every { this@mockk.activeIdentity } returns activeIdentityFlow
+            every { this@mockk.uiState } returns uiStateFlow
             every { this@mockk.resetUiState() } returns Unit
         }
 
@@ -75,7 +75,7 @@ class IdentityManagerScreenExportTest {
 
         // Export finished in the ViewModel; the screen now tries to open the
         // SAF save dialog, which no activity on this device can handle.
-        uiState.value =
+        uiStateFlow.value =
             IdentityManagerUiState.ExportReady(Uri.parse("content://exported/identity.rnsidentity"))
 
         composeRule.waitForIdle()

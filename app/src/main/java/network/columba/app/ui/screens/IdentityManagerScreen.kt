@@ -61,6 +61,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,7 +71,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
+import network.columba.app.R
 import network.columba.app.data.db.entity.LocalIdentityEntity
+import network.columba.app.util.launchSafely
 import network.columba.app.viewmodel.IdentityManagerUiState
 import network.columba.app.viewmodel.IdentityManagerViewModel
 import java.text.SimpleDateFormat
@@ -153,6 +157,9 @@ fun IdentityManagerScreen(
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Surfaces the "no file manager" snackbar from picker callbacks
+    val snackbarScope = rememberCoroutineScope()
+
     // Handle UI state changes
     LaunchedEffect(uiState) {
         when (val state = uiState) {
@@ -169,7 +176,11 @@ fun IdentityManagerScreen(
             }
             is IdentityManagerUiState.ExportReady -> {
                 // Launch SAF file save dialog for binary export
-                exportSaveLauncher.launch("identity.rnsidentity")
+                if (!exportSaveLauncher.launchSafely("identity.rnsidentity")) {
+                    snackbarScope.launch {
+                        snackbarHostState.showSnackbar(context.getString(R.string.error_no_file_manager))
+                    }
+                }
                 viewModel.resetUiState()
             }
             is IdentityManagerUiState.ExportTextReady -> {
@@ -351,11 +362,19 @@ fun IdentityManagerScreen(
             onDismiss = { showImportTypeDialog = false },
             onImportFromFile = {
                 showImportTypeDialog = false
-                importLauncher.launch("*/*")
+                if (!importLauncher.launchSafely("*/*")) {
+                    snackbarScope.launch {
+                        snackbarHostState.showSnackbar(context.getString(R.string.error_no_file_manager))
+                    }
+                }
             },
             onImportFromBackup = {
                 showImportTypeDialog = false
-                backupImportLauncher.launch("*/*")
+                if (!backupImportLauncher.launchSafely("*/*")) {
+                    snackbarScope.launch {
+                        snackbarHostState.showSnackbar(context.getString(R.string.error_no_file_manager))
+                    }
+                }
             },
             onPasteKey = {
                 showImportTypeDialog = false

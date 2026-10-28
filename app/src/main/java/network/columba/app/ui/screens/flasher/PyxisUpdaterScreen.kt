@@ -48,12 +48,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import network.columba.app.R
 import network.columba.app.rns.host.usb.UsbDeviceInfo
+import network.columba.app.util.launchSafely
+import network.columba.app.util.showNoFileManagerToast
 import network.columba.app.viewmodel.PyxisUpdaterViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,6 +67,7 @@ fun PyxisUpdaterScreen(
     initialDeviceId: Int? = null,
     viewModel: PyxisUpdaterViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     var showConfirmation by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
@@ -122,7 +126,11 @@ fun PyxisUpdaterScreen(
                 packageError = state.packageError,
                 isLoading = state.isLoadingPackage,
                 enabled = !state.isFlashing,
-                onPickPackage = { packagePicker.launch("*/*") },
+                onPickPackage = {
+                    if (!packagePicker.launchSafely("*/*")) {
+                        context.showNoFileManagerToast()
+                    }
+                },
             )
 
             WarningCard()

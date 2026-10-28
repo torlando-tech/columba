@@ -51,6 +51,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,10 +66,13 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
+import network.columba.app.R
 import network.columba.app.migration.ExportResult
 import network.columba.app.migration.MigrationPreview
 import network.columba.app.viewmodel.MigrationUiState
 import network.columba.app.viewmodel.MigrationViewModel
+import network.columba.app.util.launchSafely
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -98,6 +102,9 @@ fun MigrationScreen(
     var pendingImportComplete by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Surfaces the "no file manager" snackbar from picker callbacks
+    val snackbarScope = rememberCoroutineScope()
 
     // Notification permission launcher for Android 13+
     val notificationPermissionLauncher =
@@ -149,7 +156,11 @@ fun MigrationScreen(
                         "yyyy-MM-dd_HHmmss",
                         Locale.US,
                     ).format(Date())
-                exportSaveLauncher.launch("columba_export_$timestamp.columba")
+                if (!exportSaveLauncher.launchSafely("columba_export_$timestamp.columba")) {
+                    snackbarScope.launch {
+                        snackbarHostState.showSnackbar(context.getString(R.string.error_no_file_manager))
+                    }
+                }
                 viewModel.onExportSaveDialogLaunched()
             }
             is MigrationUiState.ExportSaved -> {
@@ -218,7 +229,13 @@ fun MigrationScreen(
             ImportSection(
                 uiState = uiState,
                 importProgress = importProgress,
-                onSelectFile = { importLauncher.launch("*/*") },
+                onSelectFile = {
+                    if (!importLauncher.launchSafely("*/*")) {
+                        snackbarScope.launch {
+                            snackbarHostState.showSnackbar(context.getString(R.string.error_no_file_manager))
+                        }
+                    }
+                },
                 onImportComplete = {
                     // After import, check if notification permission is needed
                     if (needsNotificationPermission()) {

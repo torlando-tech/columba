@@ -9,8 +9,12 @@ package network.columba.app.data.util
  *
  * Sanitization removes:
  * - Leading/trailing whitespace
- * - Control characters (except newlines)
+ * - C0/C1 control characters (category Cc, except newlines and tabs)
  * - Excessive spaces/tabs (normalized to single space)
+ *
+ * Format characters (category Cf, e.g. ZWJ U+200D, LRM/RLM, ZWSP) are
+ * legitimate text content and are preserved; stripping them corrupts
+ * ZWJ emoji sequences (🤦‍♀️ -> 🤦♀️) and bidirectional text.
  *
  * This prevents:
  * - UI rendering issues from control characters
@@ -34,9 +38,11 @@ object TextSanitizer {
     const val MAX_PREVIEW_LENGTH = 100
 
     // Pre-compiled regex patterns for performance
-    // Note: Excludes \n, \r (newlines) and \t (tabs) from control char removal
-    // so tabs can be normalized to spaces by WHITESPACE_PATTERN
-    private val CONTROL_CHARS_PATTERN = Regex("[\\p{C}&&[^\n\r\t]]")
+    // Note: \p{Cc} matches only C0/C1 control chars. \p{C} must NOT be used:
+    // it also matches Cf format chars (ZWJ, LRM/RLM, ZWSP), corrupting ZWJ
+    // emoji sequences and bidi text. \n, \r, \t are carved out so tabs can
+    // be normalized to spaces by WHITESPACE_PATTERN
+    private val CONTROL_CHARS_PATTERN = Regex("[\\p{Cc}&&[^\n\r\t]]")
     private val WHITESPACE_PATTERN = Regex("[ \\t]+")
 
     /**

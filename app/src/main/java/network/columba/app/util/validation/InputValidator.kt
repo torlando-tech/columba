@@ -497,7 +497,8 @@ object InputValidator {
      *
      * Operations performed:
      * - Trim whitespace from start and end
-     * - Remove all control characters (including null bytes)
+     * - Remove C0/C1 control characters (category Cc, including null bytes);
+     *   Cf format characters (ZWJ, LRM/RLM, ZWSP) are preserved
      * - Normalize multiple spaces to single space
      * - Truncate to maximum length
      *
@@ -511,7 +512,7 @@ object InputValidator {
     ): String =
         text
             .trim()
-            .replace(Regex("\\p{C}"), "") // Remove control characters
+            .replace(Regex("\\p{Cc}"), "") // Remove control chars (Cc only; \p{C} would strip ZWJ/bidi marks)
             .replace(Regex("\\s+"), " ") // Normalize whitespace
             .take(maxLength)
 

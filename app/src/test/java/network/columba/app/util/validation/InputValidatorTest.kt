@@ -617,6 +617,18 @@ class InputValidatorTest {
     }
 
     @Test
+    fun `sanitizeText preserves ZWJ emoji and bidi marks`() {
+        // Regression for TOR-21: \p{C} stripped ZWJ (Cf), corrupting 🤦‍♀️ to 🤦♀️
+        val facepalm = "\uD83E\uDD26\u200D\u2640\uFE0F"
+        assertEquals(facepalm, InputValidator.sanitizeText(facepalm, 100))
+        val family = "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67"
+        assertEquals(family, InputValidator.sanitizeText(family, 100))
+        // RTL mark survives
+        val rtl = "\u200Fمرحبا"
+        assertEquals(rtl, InputValidator.sanitizeText(rtl, 100))
+    }
+
+    @Test
     fun `sanitizeText - normalizes multiple spaces`() {
         val result = InputValidator.sanitizeText("hello    world", 100)
         assertEquals("hello world", result)

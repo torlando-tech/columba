@@ -1,0 +1,9 @@
+[
+  "Close sheet",
+  "Drag handle",
+  "Bluetooth Permissions Required",
+  "Columba uses Bluetooth Low Energy (BLE) to communicate with nearby devices in a mesh network.\n\nTo enable this functionality, we need the following permissions:\n\n• Bluetooth Scan: To discover nearby Reticulum peers\n• Bluetooth Connect: To establish connections with peers\n• Bluetooth Advertise: To broadcast your presence to other devices\n\nThese permissions allow Columba to create a decentralized, off-grid communication network.",
+  "Not Now",
+  "Grant Permissions",
+  "Drag handle"
+]

@@ -42,12 +42,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.util.formatRelativeTime
+import network.columba.app.viewmodel.UiMessage
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -61,7 +65,7 @@ import kotlin.math.roundToInt
  *   carried as a raw string and mapped to the enum on the `:app` side.
  * @property isActive Whether this is the currently-active relay (drives the
  *   "currently active" indicator and hides the redundant "Set active now" action).
- * @property failureReason Human-readable reason the relay was last seen unreachable
+ * @property failureReason Localized reason the relay was last seen unreachable
  *   (e.g. "No path to relay"), or null if it has never failed. Shown as a compact,
  *   non-dismissible warning on the row.
  * @property failureAtMs Epoch millis of the last recorded failure (for the "when"), or null.
@@ -73,17 +77,18 @@ data class PropagationNodeRow(
     val displayName: String,
     val networkRestriction: String,
     val isActive: Boolean = false,
-    val failureReason: String? = null,
+    val failureReason: UiMessage? = null,
     val failureAtMs: Long? = null,
     val failureCode: Int? = null,
 )
 
 /** Display label for a raw `NetworkRestriction` name. */
+@Composable
 fun networkRestrictionLabel(restriction: String): String =
     when (restriction.uppercase()) {
-        "WIFI_ONLY" -> "Wi-Fi only"
-        "CELLULAR_ONLY" -> "Cellular only"
-        else -> "Any"
+        "WIFI_ONLY" -> stringResource(R.string.interface_restriction_wifi_only)
+        "CELLULAR_ONLY" -> stringResource(R.string.interface_restriction_cellular_only)
+        else -> stringResource(R.string.prop_reorder_restriction_any)
     }
 
 /** Cycle to the next restriction: ANY -> WIFI_ONLY -> CELLULAR_ONLY -> ANY. */
@@ -200,6 +205,7 @@ private fun PropagationNodeRowContent(
     onRemove: () -> Unit,
     onSetActiveNow: () -> Unit,
 ) {
+    val context = LocalContext.current
     var isDragging by remember { mutableStateOf(false) }
     // Measured in px by onSizeChanged (reports the full Card height).
     var rowHeightPx by remember { mutableFloatStateOf(0f) }
@@ -272,7 +278,7 @@ private fun PropagationNodeRowContent(
             ) {
                 Icon(
                     imageVector = Icons.Filled.DragHandle,
-                    contentDescription = "Reorder ${row.displayName}",
+                    contentDescription = stringResource(R.string.prop_reorder_reorder_node, row.displayName),
                     modifier = Modifier.size(20.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -310,7 +316,7 @@ private fun PropagationNodeRowContent(
                         Spacer(modifier = Modifier.size(6.dp))
                         Icon(
                             imageVector = Icons.Filled.CheckCircle,
-                            contentDescription = "Current relay",
+                            contentDescription = stringResource(R.string.prop_reorder_current_relay),
                             modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.primary,
                         )
@@ -336,7 +342,7 @@ private fun PropagationNodeRowContent(
                         text = buildString {
                             // Explanation + decoded state code + when, e.g.
                             // "No path to relay (NO_PATH) · 5 minutes ago".
-                            append(row.failureReason)
+                            append(row.failureReason.resolve(context))
                             val code = row.failureCode
                             if (code != null) {
                                 append(" (")
@@ -346,7 +352,7 @@ private fun PropagationNodeRowContent(
                             val at = row.failureAtMs
                             if (at != null) {
                                 append(" · ")
-                                append(formatRelativeTime(at))
+                                append(formatRelativeTime(context, at))
                             }
                         },
                         style = MaterialTheme.typography.bodySmall,
@@ -383,7 +389,7 @@ private fun PropagationNodeRowContent(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.PlayArrow,
-                                contentDescription = "Set active now",
+                                contentDescription = stringResource(R.string.prop_reorder_set_active_now),
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         }
@@ -396,7 +402,7 @@ private fun PropagationNodeRowContent(
                         onClick = onRemove,
                         modifier = Modifier.testTag("prop_node_remove_${row.destinationHash}"),
                     ) {
-                        Text("Remove")
+                        Text(stringResource(R.string.prop_reorder_remove))
                     }
                 }
             }

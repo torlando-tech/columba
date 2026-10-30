@@ -1,5 +1,6 @@
 package network.columba.app.data.model
 
+import network.columba.app.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -90,11 +91,11 @@ class CommunitySlotsTest {
 
         assertTrue(
             "Meshtastic slot description should warn about interference",
-            meshtasticDefault!!.description.contains("⚠️"),
+            meshtasticDefault!!.descriptionRes == R.string.community_slot_desc_default,
         )
         assertTrue(
             "NoVa slot description should warn about interference",
-            novaSlot!!.description.contains("⚠️"),
+            novaSlot!!.descriptionRes == R.string.community_slot_desc_nova,
         )
     }
 
@@ -118,7 +119,7 @@ class CommunitySlotsTest {
             assertTrue("Slot name should not be blank", slot.name.isNotBlank())
             assertTrue("Slot region should not be blank", slot.regionId.isNotBlank())
             assertTrue("Slot number should be >= 0", slot.slot >= 0)
-            assertTrue("Slot description should not be blank", slot.description.isNotBlank())
+            assertTrue("Slot description should have a resource", slot.descriptionRes != 0)
         }
     }
 

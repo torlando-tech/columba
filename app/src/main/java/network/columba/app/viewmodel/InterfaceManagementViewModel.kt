@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import network.columba.app.R
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.repository.BleStatusRepository
@@ -33,6 +34,7 @@ import network.columba.app.rns.host.manager.filterByTransport
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.util.validation.InputValidator
+import network.columba.app.util.validation.messageResource
 import network.columba.app.util.validation.ValidationResult
 import org.json.JSONObject
 import javax.inject.Inject
@@ -48,19 +50,19 @@ data class InterfaceManagementState(
     val isLoading: Boolean = true,
     val showAddDialog: Boolean = false,
     val editingInterface: InterfaceEntity? = null,
-    val errorMessage: String? = null,
-    val successMessage: String? = null,
+    val errorMessage: UiMessage? = null,
+    val successMessage: UiMessage? = null,
     val hasPendingChanges: Boolean = false,
     val pendingInterfaceIds: Set<Long> = emptySet(),
     val isApplyingChanges: Boolean = false,
-    val applyChangesError: String? = null,
+    val applyChangesError: UiMessage? = null,
     val showBlePermissionRequest: Boolean = false,
     // Bluetooth state for BLE interface management
     // Assume on initially
     val bluetoothState: Int = BluetoothAdapter.STATE_ON,
     val blePermissionsGranted: Boolean = false,
     // Info message for transient notifications (lighter than error/success)
-    val infoMessage: String? = null,
+    val infoMessage: UiMessage? = null,
     // Interface online status from Python/RNS (interface name -> online status)
     val interfaceOnlineStatus: Map<String, Boolean> = emptyMap(),
     // Live RNode battery percent by configured interface name. Entries are present
@@ -154,23 +156,23 @@ data class InterfaceConfigState(
     // while edit state and explicit selector choices remain non-null.
     val networkRestriction: String? = null,
     // Validation
-    val nameError: String? = null,
-    val targetHostError: String? = null,
-    val targetPortError: String? = null,
-    val discoveryPortError: String? = null,
-    val dataPortError: String? = null,
-    val deviceNameError: String? = null,
-    val maxConnectionsError: String? = null,
+    val nameError: UiMessage? = null,
+    val targetHostError: UiMessage? = null,
+    val targetPortError: UiMessage? = null,
+    val discoveryPortError: UiMessage? = null,
+    val dataPortError: UiMessage? = null,
+    val deviceNameError: UiMessage? = null,
+    val maxConnectionsError: UiMessage? = null,
     val targetDeviceNameError: String? = null,
     val frequencyError: String? = null,
     val bandwidthError: String? = null,
     val txPowerError: String? = null,
     val spreadingFactorError: String? = null,
     val codingRateError: String? = null,
-    val listenIpError: String? = null,
-    val listenPortError: String? = null,
-    val socksProxyHostError: String? = null,
-    val socksProxyPortError: String? = null,
+    val listenIpError: UiMessage? = null,
+    val listenPortError: UiMessage? = null,
+    val socksProxyHostError: UiMessage? = null,
+    val socksProxyPortError: UiMessage? = null,
 ) {
     /**
      * Whether the network-restriction selector should render for this state's interface
@@ -582,13 +584,13 @@ class InterfaceManagementViewModel
                 // Bluetooth turned off while it was on
                 previousBluetoothState == BluetoothAdapter.STATE_ON &&
                     newState == BluetoothAdapter.STATE_OFF -> {
-                    showInfo("Bluetooth turned off - BLE interface paused")
+                    showInfo(UiMessage.Text(R.string.iface_ble_paused))
                 }
 
                 // Bluetooth turned back on while it was off
                 previousBluetoothState == BluetoothAdapter.STATE_OFF &&
                     newState == BluetoothAdapter.STATE_ON -> {
-                    showInfo("Bluetooth enabled - BLE interface resuming")
+                    showInfo(UiMessage.Text(R.string.iface_ble_resuming))
                 }
             }
 
@@ -620,7 +622,7 @@ class InterfaceManagementViewModel
                     )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load interface config for '${interfaceEntity.name}': ${e.message}", e)
-                showError("Failed to load interface: ${e.message}")
+                showError(UiMessage.Text(R.string.iface_load_failed, listOf(e.message ?: "null")))
             }
         }
 
@@ -659,11 +661,11 @@ class InterfaceManagementViewModel
                     if (editingId != null) {
                         // Update existing interface
                         interfaceRepository.updateInterface(editingId, config)
-                        showSuccess("Interface updated successfully")
+                        showSuccess(UiMessage.Text(R.string.iface_updated))
                     } else {
                         // Insert new interface
                         interfaceRepository.insertInterface(config)
-                        showSuccess("Interface added successfully")
+                        showSuccess(UiMessage.Text(R.string.iface_added))
                     }
 
                     // Hot-reload interfaces on native stack
@@ -671,7 +673,7 @@ class InterfaceManagementViewModel
 
                     hideDialog()
                 } catch (e: Exception) {
-                    showError("Failed to save interface: ${e.message}")
+                    showError(UiMessage.Text(R.string.iface_save_failed, listOf(e.message ?: "null")))
                 }
             }
         }
@@ -683,12 +685,12 @@ class InterfaceManagementViewModel
             viewModelScope.launch {
                 try {
                     interfaceRepository.deleteInterface(id)
-                    showSuccess("Interface deleted successfully")
+                    showSuccess(UiMessage.Text(R.string.iface_deleted))
 
                     // Hot-reload interfaces on native stack
                     syncNativeInterfaces()
                 } catch (e: Exception) {
-                    showError("Failed to delete interface: ${e.message}")
+                    showError(UiMessage.Text(R.string.iface_delete_failed, listOf(e.message ?: "null")))
                 }
             }
         }
@@ -725,7 +727,7 @@ class InterfaceManagementViewModel
                     // Hot-reload interfaces on native stack
                     syncNativeInterfaces()
                 } catch (e: Exception) {
-                    showError("Failed to toggle interface: ${e.message}")
+                    showError(UiMessage.Text(R.string.iface_toggle_failed, listOf(e.message ?: "null")))
                 }
             }
         }
@@ -792,21 +794,21 @@ class InterfaceManagementViewModel
         /**
          * Show error message.
          */
-        private fun showError(message: String) {
+        private fun showError(message: UiMessage) {
             _state.value = _state.value.copy(errorMessage = message)
         }
 
         /**
          * Show success message.
          */
-        private fun showSuccess(message: String) {
+        private fun showSuccess(message: UiMessage) {
             _state.value = _state.value.copy(successMessage = message)
         }
 
         /**
          * Show info message (for transient notifications like BT state changes).
          */
-        private fun showInfo(message: String) {
+        private fun showInfo(message: UiMessage) {
             _state.value = _state.value.copy(infoMessage = message)
         }
 
@@ -821,7 +823,7 @@ class InterfaceManagementViewModel
             // VALIDATION: Validate interface name with InputValidator
             when (val nameResult = InputValidator.validateInterfaceName(config.name)) {
                 is ValidationResult.Error -> {
-                    _configState.value = config.copy(nameError = nameResult.message)
+                    _configState.value = config.copy(nameError = nameResult.toUiMessage())
                     isValid = false
                 }
                 is ValidationResult.Success -> {
@@ -843,7 +845,7 @@ class InterfaceManagementViewModel
                         )
                 ) {
                     is ValidationResult.Error -> {
-                        _configState.value = _configState.value.copy(nameError = uniqueResult.message)
+                        _configState.value = _configState.value.copy(nameError = uniqueResult.toUiMessage())
                         isValid = false
                     }
                     is ValidationResult.Success -> {
@@ -858,7 +860,7 @@ class InterfaceManagementViewModel
                     // VALIDATION: Validate target host with proper hostname/IP validation
                     when (val hostResult = InputValidator.validateHostname(config.targetHost)) {
                         is ValidationResult.Error -> {
-                            _configState.value = _configState.value.copy(targetHostError = hostResult.message)
+                            _configState.value = _configState.value.copy(targetHostError = hostResult.toUiMessage())
                             isValid = false
                         }
                         is ValidationResult.Success -> {
@@ -874,7 +876,7 @@ class InterfaceManagementViewModel
                     // VALIDATION: Validate target port with proper range checking
                     when (val portResult = InputValidator.validatePort(config.targetPort)) {
                         is ValidationResult.Error -> {
-                            _configState.value = _configState.value.copy(targetPortError = portResult.message)
+                            _configState.value = _configState.value.copy(targetPortError = portResult.toUiMessage())
                             isValid = false
                         }
                         is ValidationResult.Success -> {
@@ -886,7 +888,7 @@ class InterfaceManagementViewModel
                     if (config.socksProxyEnabled) {
                         when (val proxyHostResult = InputValidator.validateHostname(config.socksProxyHost)) {
                             is ValidationResult.Error -> {
-                                _configState.value = _configState.value.copy(socksProxyHostError = proxyHostResult.message)
+                                _configState.value = _configState.value.copy(socksProxyHostError = proxyHostResult.toUiMessage())
                                 isValid = false
                             }
                             is ValidationResult.Success -> {
@@ -896,7 +898,7 @@ class InterfaceManagementViewModel
 
                         when (val proxyPortResult = InputValidator.validatePort(config.socksProxyPort)) {
                             is ValidationResult.Error -> {
-                                _configState.value = _configState.value.copy(socksProxyPortError = proxyPortResult.message)
+                                _configState.value = _configState.value.copy(socksProxyPortError = proxyPortResult.toUiMessage())
                                 isValid = false
                             }
                             is ValidationResult.Success -> {
@@ -913,7 +915,7 @@ class InterfaceManagementViewModel
                     if (config.discoveryPort.isNotBlank()) {
                         when (val portResult = InputValidator.validatePort(config.discoveryPort)) {
                             is ValidationResult.Error -> {
-                                _configState.value = _configState.value.copy(discoveryPortError = portResult.message)
+                                _configState.value = _configState.value.copy(discoveryPortError = portResult.toUiMessage())
                                 isValid = false
                             }
                             is ValidationResult.Success -> {
@@ -928,7 +930,7 @@ class InterfaceManagementViewModel
                     if (config.dataPort.isNotBlank()) {
                         when (val portResult = InputValidator.validatePort(config.dataPort)) {
                             is ValidationResult.Error -> {
-                                _configState.value = _configState.value.copy(dataPortError = portResult.message)
+                                _configState.value = _configState.value.copy(dataPortError = portResult.toUiMessage())
                                 isValid = false
                             }
                             is ValidationResult.Success -> {
@@ -945,7 +947,7 @@ class InterfaceManagementViewModel
                     if (config.deviceName.isNotBlank()) {
                         when (val deviceNameResult = InputValidator.validateDeviceName(config.deviceName)) {
                             is ValidationResult.Error -> {
-                                _configState.value = _configState.value.copy(deviceNameError = deviceNameResult.message)
+                                _configState.value = _configState.value.copy(deviceNameError = deviceNameResult.toUiMessage())
                                 isValid = false
                             }
                             is ValidationResult.Success -> {
@@ -959,7 +961,7 @@ class InterfaceManagementViewModel
                     // Validate max connections
                     val maxConn = config.maxConnections.toIntOrNull()
                     if (maxConn == null || maxConn !in 1..7) {
-                        _configState.value = _configState.value.copy(maxConnectionsError = "Max connections must be 1-7")
+                        _configState.value = _configState.value.copy(maxConnectionsError = UiMessage.Text(R.string.iface_max_connections_range))
                         isValid = false
                     } else {
                         _configState.value = _configState.value.copy(maxConnectionsError = null)
@@ -970,7 +972,7 @@ class InterfaceManagementViewModel
                     // VALIDATION: Validate listen IP (0.0.0.0 or valid IP/hostname)
                     when (val ipResult = InputValidator.validateHostname(config.listenIp)) {
                         is ValidationResult.Error -> {
-                            _configState.value = _configState.value.copy(listenIpError = ipResult.message)
+                            _configState.value = _configState.value.copy(listenIpError = ipResult.toUiMessage())
                             isValid = false
                         }
                         is ValidationResult.Success -> {
@@ -985,7 +987,7 @@ class InterfaceManagementViewModel
                     // VALIDATION: Validate listen port
                     when (val portResult = InputValidator.validatePort(config.listenPort)) {
                         is ValidationResult.Error -> {
-                            _configState.value = _configState.value.copy(listenPortError = portResult.message)
+                            _configState.value = _configState.value.copy(listenPortError = portResult.toUiMessage())
                             isValid = false
                         }
                         is ValidationResult.Success -> {
@@ -1265,7 +1267,7 @@ class InterfaceManagementViewModel
                         _state.update {
                             it.copy(
                                 hasPendingChanges = true,
-                                applyChangesError = e.message ?: "Failed to apply changes to the running stack",
+                                applyChangesError = e.toUiMessage(R.string.iface_apply_stack_failed),
                             )
                         }
                     }
@@ -1345,12 +1347,12 @@ class InterfaceManagementViewModel
                                 pendingInterfaceIds = emptySet(),
                                 isApplyingChanges = false,
                             )
-                        showSuccess("Configuration applied successfully")
+                        showSuccess(UiMessage.Text(R.string.iface_apply_success))
                     }.onFailure { error ->
                         _state.value =
                             _state.value.copy(
                                 isApplyingChanges = false,
-                                applyChangesError = error.message ?: "Failed to apply changes",
+                                applyChangesError = error.toUiMessage(R.string.iface_apply_failed),
                             )
                     }
                 } catch (e: Exception) {
@@ -1358,7 +1360,7 @@ class InterfaceManagementViewModel
                     _state.value =
                         _state.value.copy(
                             isApplyingChanges = false,
-                            applyChangesError = e.message ?: "Unexpected error occurred",
+                            applyChangesError = e.toUiMessage(R.string.iface_unexpected_error),
                         )
                 }
             }
@@ -1386,3 +1388,7 @@ class InterfaceManagementViewModel
             }
         }
     }
+
+/** Maps a validation failure to its localized message for UI state. */
+private fun ValidationResult.Error.toUiMessage(): UiMessage =
+    UiMessage.Text(reason.messageResource(), args)

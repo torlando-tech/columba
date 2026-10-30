@@ -23,8 +23,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 
 /**
  * Card displaying a message when Bluetooth permissions are permanently denied,
@@ -67,7 +69,7 @@ fun PermissionDeniedCard(
                     modifier = Modifier.padding(end = 12.dp),
                 )
                 Text(
-                    text = "Permissions Required",
+                    text = stringResource(R.string.perm_denied_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onErrorContainer,
@@ -94,7 +96,7 @@ fun PermissionDeniedCard(
                     Button(
                         onClick = { openAppSettings(context) },
                     ) {
-                        Text("Open Settings")
+                        Text(stringResource(R.string.perm_denied_open_settings))
                     }
                 }
             }
@@ -105,12 +107,9 @@ fun PermissionDeniedCard(
 /**
  * Default message for permanently denied permissions.
  */
+@Composable
 private fun getDefaultPermissionDeniedMessage(): String {
-    return """
-        Bluetooth permissions have been denied. To use BLE features in Columba, please grant Bluetooth permissions in your device settings.
-
-        Without these permissions, Columba cannot discover or connect to nearby devices via Bluetooth.
-        """.trimIndent()
+    return stringResource(R.string.perm_denied_default_message)
 }
 
 /**

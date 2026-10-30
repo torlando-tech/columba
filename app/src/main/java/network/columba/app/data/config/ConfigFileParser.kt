@@ -135,7 +135,7 @@ object ConfigFileParser {
                             "target_port", "listen_port", "forward_port", "discovery_port", "data_port" -> {
                                 when (val portResult = InputValidator.validatePort(value)) {
                                     is ValidationResult.Error -> {
-                                        Log.w(TAG, "Invalid port value for $key: $value - ${portResult.message}")
+                                        Log.w(TAG, "Invalid port value for $key: $value - ${portResult.reason}")
                                         continue
                                     }
                                     is ValidationResult.Success -> value
@@ -144,7 +144,7 @@ object ConfigFileParser {
                             "target_host", "listen_ip", "forward_ip" -> {
                                 when (val hostResult = InputValidator.validateHostname(value)) {
                                     is ValidationResult.Error -> {
-                                        Log.w(TAG, "Invalid hostname/IP for $key: $value - ${hostResult.message}")
+                                        Log.w(TAG, "Invalid hostname/IP for $key: $value - ${hostResult.reason}")
                                         continue
                                     }
                                     is ValidationResult.Success -> value
@@ -153,7 +153,7 @@ object ConfigFileParser {
                             "device_name" -> {
                                 when (val nameResult = InputValidator.validateDeviceName(value)) {
                                     is ValidationResult.Error -> {
-                                        Log.w(TAG, "Invalid device name: $value - ${nameResult.message}")
+                                        Log.w(TAG, "Invalid device name: $value - ${nameResult.reason}")
                                         continue
                                     }
                                     is ValidationResult.Success -> value

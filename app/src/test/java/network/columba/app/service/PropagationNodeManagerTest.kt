@@ -1,11 +1,13 @@
 package network.columba.app.service
 
 import app.cash.turbine.test
+import network.columba.app.R
 import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.PreferredPropagationNodeRepository
+import network.columba.app.viewmodel.UiMessage
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.api.model.NetworkStatus
@@ -1087,7 +1089,7 @@ class PropagationNodeManagerTest {
                 val result = awaitItem()
                 assert(result is SyncResult.Error) { "Expected SyncResult.Error, got $result" }
                 assertEquals(
-                    "Relay configuration not available yet",
+                    UiMessage.Text(R.string.propagation_relay_config_unavailable),
                     (result as SyncResult.Error).message,
                 )
 
@@ -1241,10 +1243,10 @@ class PropagationNodeManagerTest {
                 assert(result is SyncResult.Error) { "Expected SyncResult.Error, got $result" }
                 assertNotEquals(
                     "Should not be timeout message",
-                    "Relay configuration not available yet",
+                    UiMessage.Text(R.string.propagation_relay_config_unavailable),
                     (result as SyncResult.Error).message,
                 )
-                assertEquals("test", result.message)
+                assertEquals(UiMessage.Raw("test"), result.message)
                 cancelAndConsumeRemainingEvents()
             }
         }
@@ -1715,8 +1717,8 @@ class PropagationNodeManagerTest {
                 assert(result is SyncResult.Error) {
                     "Should emit Error on protocol failure, got $result"
                 }
-                assert((result as SyncResult.Error).message == "Network error") {
-                    "Error message should be 'Network error', got ${result.message}"
+                assert((result as SyncResult.Error).message == UiMessage.Raw("Network error")) {
+                    "Error message should carry the exception text, got ${result.message}"
                 }
                 cancelAndConsumeRemainingEvents()
             }
@@ -1756,9 +1758,10 @@ class PropagationNodeManagerTest {
             manager.triggerSync(silent = true)
             advanceUntilIdle()
 
-            // The failure reason was recorded on the active relay: 0xf0 no-path → "No path to relay".
+            // The failure reason was recorded on the active relay: 0xf0 no-path → the
+            // stable storage token for the no-path explanation.
             assertEquals(0xf0, codeSlot.captured)
-            assertEquals("No path to relay", reasonSlot.captured)
+            assertEquals("pf:no_path", reasonSlot.captured)
             assertTrue(tsSlot.captured > 0L)
             manager.stop()
         }
@@ -3027,7 +3030,7 @@ class PropagationNodeManagerTest {
 
             // The failure is recorded on the relay that failed (A).
             coVerify(exactly = 1) {
-                preferredRepository.recordFailure(aHash, 9, "No path to relay", any())
+                preferredRepository.recordFailure(aHash, 9, "pf:no_path", any())
             }
             coVerify(exactly = 0) { preferredRepository.recordFailure(bHash, any(), any(), any()) }
 
@@ -3062,7 +3065,7 @@ class PropagationNodeManagerTest {
             runCurrent()
 
             // Failure recorded, but no relay change occurred → the retry never fires.
-            coVerify(exactly = 1) { preferredRepository.recordFailure(aHash, 9, "No path to relay", any()) }
+            coVerify(exactly = 1) { preferredRepository.recordFailure(aHash, 9, "pf:no_path", any()) }
             assertEquals(aHash, manager.currentRelay.value?.destinationHash)
             assertEquals(0, retryInvocations)
             manager.stop()
@@ -3140,8 +3143,8 @@ class PropagationNodeManagerTest {
                 retryAction = { retryInvocations++ },
             )
             runCurrent()
-            coVerify(exactly = 1) { preferredRepository.recordFailure(bHash, 9, "No path to relay", any()) }
-            coVerify(exactly = 0) { preferredRepository.recordFailure(aHash, 9, "No path to relay", any()) }
+            coVerify(exactly = 1) { preferredRepository.recordFailure(bHash, 9, "pf:no_path", any()) }
+            coVerify(exactly = 0) { preferredRepository.recordFailure(aHash, 9, "pf:no_path", any()) }
             syncJob.cancel()
             manager.stop()
         }

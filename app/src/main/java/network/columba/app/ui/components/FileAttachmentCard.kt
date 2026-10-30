@@ -15,9 +15,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.ui.model.FileAttachmentUi
 import network.columba.app.ui.theme.ColumbaTheme
 import network.columba.app.util.FileUtils
@@ -66,7 +68,7 @@ fun FileAttachmentCard(
             // File type icon
             Icon(
                 imageVector = FileUtils.getFileIconForMimeType(attachment.mimeType),
-                contentDescription = "File type: ${attachment.mimeType}",
+                contentDescription = stringResource(R.string.file_attach_card_file_type, attachment.mimeType),
                 modifier = Modifier.size(24.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )

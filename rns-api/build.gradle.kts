@@ -60,6 +60,11 @@ dependencies {
     // Flow / StateFlow / suspend types appear in the seam contract.
     implementation(libs.coroutines.core)
 
+    // @StringRes on BatteryProfile's label fields. Other modules get
+    // androidx.annotation transitively via Compose/core-ktx; :rns-api
+    // deliberately has no Compose dep, so declare it directly.
+    implementation("androidx.annotation:annotation:1.9.1")
+
     // org.json.JSONObject is used by InterfaceConfigExt.toJsonString() — the
     // serialization concern lives with the type rather than with the storage
     // layer (:data) so consumers don't need a separate dep just to round-trip

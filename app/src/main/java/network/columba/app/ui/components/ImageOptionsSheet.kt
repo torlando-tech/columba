@@ -19,8 +19,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 
 /**
  * Bottom sheet that shows options for an image attachment.
@@ -54,7 +56,7 @@ fun ImageOptionsSheet(
         ) {
             // Header
             Text(
-                text = "Image",
+                text = stringResource(R.string.image_opts_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
@@ -64,8 +66,8 @@ fun ImageOptionsSheet(
 
             // Save to device option
             ListItem(
-                headlineContent = { Text("Save to device") },
-                supportingContent = { Text("Save to a folder on your device") },
+                headlineContent = { Text(stringResource(R.string.image_opts_save_to_device)) },
+                supportingContent = { Text(stringResource(R.string.image_opts_save_description)) },
                 leadingContent = {
                     Icon(
                         Icons.Default.Save,
@@ -78,8 +80,8 @@ fun ImageOptionsSheet(
 
             // Share option
             ListItem(
-                headlineContent = { Text("Share") },
-                supportingContent = { Text("Share via another app") },
+                headlineContent = { Text(stringResource(R.string.image_opts_share)) },
+                supportingContent = { Text(stringResource(R.string.image_opts_share_description)) },
                 leadingContent = {
                     Icon(
                         Icons.Default.Share,

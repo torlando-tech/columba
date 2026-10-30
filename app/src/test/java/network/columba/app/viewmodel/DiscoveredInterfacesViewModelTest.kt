@@ -5,6 +5,7 @@ package network.columba.app.viewmodel
 import android.util.Log
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
+import network.columba.app.R
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.BackendCapabilities
@@ -225,7 +226,7 @@ class DiscoveredInterfacesViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertTrue(state.autoconnectedEndpoints.isEmpty())
-                assertTrue(state.errorMessage?.contains("Failed to load") == true)
+                assertEquals(R.string.discovered_load_failed, (state.errorMessage as UiMessage.Text).id)
             }
         }
 
@@ -493,7 +494,7 @@ class DiscoveredInterfacesViewModelTest {
             // Then
             viewModel.state.test {
                 val state = awaitItem()
-                assertTrue(state.errorMessage?.contains("Failed to load discovered interfaces") == true)
+                assertEquals(R.string.discovered_load_failed, (state.errorMessage as UiMessage.Text).id)
                 assertFalse(state.isLoading)
             }
         }
@@ -709,9 +710,9 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             // Then
-            assertTrue(
-                viewModel.state.value.errorMessage
-                    ?.contains("Failed to update autoconnect count") == true,
+            assertEquals(
+                R.string.discovered_update_autoconnect_failed,
+                (viewModel.state.value.errorMessage as UiMessage.Text).id,
             )
             assertFalse(viewModel.state.value.isRestarting)
         }
@@ -892,9 +893,9 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             // Then
-            assertTrue(
-                viewModel.state.value.errorMessage
-                    ?.contains("Failed to update discovery settings") == true,
+            assertEquals(
+                R.string.discovered_update_settings_failed,
+                (viewModel.state.value.errorMessage as UiMessage.Text).id,
             )
             assertFalse(viewModel.state.value.isRestarting)
         }
@@ -1497,9 +1498,9 @@ class DiscoveredInterfacesViewModelTest {
             // method-specific error message ("Failed to update discovery settings")
             // and the subsequent loadDiscoveredInterfaces() refresh is skipped
             // (which would otherwise clear errorMessage).
-            assertTrue(
-                viewModel.state.value.errorMessage
-                    ?.contains("Failed to update discovery settings") == true,
+            assertEquals(
+                R.string.discovered_update_settings_failed,
+                (viewModel.state.value.errorMessage as UiMessage.Text).id,
             )
             assertFalse(viewModel.state.value.isRestarting)
         }
@@ -1638,9 +1639,9 @@ class DiscoveredInterfacesViewModelTest {
             // Failed: pending stays so the Apply button remains for retry.
             assertTrue(viewModel.state.value.pendingDiscoveryRestart)
             assertFalse(viewModel.state.value.isRestarting)
-            assertTrue(
-                viewModel.state.value.errorMessage
-                    ?.contains("Failed to apply discovery settings") == true,
+            assertEquals(
+                R.string.discovered_apply_settings_failed,
+                (viewModel.state.value.errorMessage as UiMessage.Text).id,
             )
         }
 

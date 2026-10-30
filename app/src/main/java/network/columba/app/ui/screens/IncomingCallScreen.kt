@@ -44,11 +44,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import network.columba.app.R
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.viewmodel.CallViewModel
 
@@ -213,7 +215,7 @@ fun IncomingCallScreen(
 
                 // "Incoming Voice Call" label
                 Text(
-                    text = "Incoming Voice Call",
+                    text = stringResource(R.string.incoming_voice_call),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -239,7 +241,7 @@ fun IncomingCallScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.CallEnd,
-                            contentDescription = "Decline call",
+                            contentDescription = stringResource(R.string.call_decline_content_description),
                             modifier = Modifier.size(32.dp),
                             tint = MaterialTheme.colorScheme.onError,
                         )
@@ -248,7 +250,7 @@ fun IncomingCallScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Decline",
+                        text = stringResource(R.string.call_decline),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -272,7 +274,7 @@ fun IncomingCallScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Call,
-                            contentDescription = "Answer call",
+                            contentDescription = stringResource(R.string.call_answer_content_description),
                             modifier = Modifier.size(32.dp),
                             tint = Color.White,
                         )
@@ -281,7 +283,7 @@ fun IncomingCallScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Answer",
+                        text = stringResource(R.string.call_answer),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

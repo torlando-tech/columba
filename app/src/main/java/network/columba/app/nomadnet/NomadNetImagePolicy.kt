@@ -1,6 +1,7 @@
 package network.columba.app.nomadnet
 
 import android.util.Log
+import network.columba.app.viewmodel.UiMessage
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -100,7 +101,7 @@ data class PageImageState(
     val speedBps: Long? = null,
     val receivedBytes: Long = 0L,
     val totalBytes: Long = 0L,
-    val error: String? = null,
+    val error: UiMessage? = null,
     val ref: ParsedImageRef? = null,
 )
 

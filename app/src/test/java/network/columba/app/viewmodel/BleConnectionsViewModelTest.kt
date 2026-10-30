@@ -127,7 +127,7 @@ class BleConnectionsViewModelTest {
             viewModel.uiState.test(timeout = 5.seconds) {
                 val state = awaitItem()
                 assertTrue(state is BleConnectionsUiState.Error)
-                assertEquals("Test error", (state as BleConnectionsUiState.Error).message)
+                assertEquals("Test error", (state as BleConnectionsUiState.Error).detail)
                 cancelAndIgnoreRemainingEvents()
             }
         }
@@ -365,7 +365,8 @@ class BleConnectionsViewModelTest {
             viewModel.uiState.test(timeout = 5.seconds) {
                 val state = awaitItem()
                 assertTrue(state is BleConnectionsUiState.Error)
-                assertEquals("Refresh failed", (state as BleConnectionsUiState.Error).message)
+                assertEquals("Refresh failed", (state as BleConnectionsUiState.Error).detail)
+                assertEquals(BleConnectionsErrorReason.REFRESH_FAILED, (state as BleConnectionsUiState.Error).reason)
                 cancelAndIgnoreRemainingEvents()
             }
         }
@@ -579,7 +580,7 @@ class BleConnectionsViewModelTest {
             // Then
             viewModel.uiState.test(timeout = 5.seconds) {
                 val state = awaitItem() as BleConnectionsUiState.Error
-                assertEquals(errorMessage, state.message)
+                assertEquals(errorMessage, state.detail)
                 cancelAndIgnoreRemainingEvents()
             }
         }
@@ -600,7 +601,8 @@ class BleConnectionsViewModelTest {
             // Then
             viewModel.uiState.test(timeout = 5.seconds) {
                 val state = awaitItem() as BleConnectionsUiState.Error
-                assertEquals("Unknown error", state.message)
+                assertEquals(null, state.detail)
+                assertEquals(BleConnectionsErrorReason.UNKNOWN, state.reason)
                 cancelAndIgnoreRemainingEvents()
             }
         }

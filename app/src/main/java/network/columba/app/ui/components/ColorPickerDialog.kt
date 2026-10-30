@@ -35,9 +35,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
+import network.columba.app.R
 import network.columba.app.util.ThemeColorGenerator
 
 /**
@@ -77,7 +79,7 @@ private val roygbivPresets =
 @Composable
 fun ColorPickerDialog(
     initialColor: Color,
-    title: String = "Pick a Color",
+    title: String? = null,
     onConfirm: (Color) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -109,7 +111,7 @@ fun ColorPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { Text(title ?: stringResource(R.string.color_picker_title)) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -177,7 +179,7 @@ fun ColorPickerDialog(
                             lightness = hsl[2]
                         }
                     },
-                    label = { Text("Hex Color") },
+                    label = { Text(stringResource(R.string.color_picker_hex_color)) },
                     placeholder = { Text("#RRGGBB") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
@@ -198,7 +200,7 @@ fun ColorPickerDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
-                            text = "Hue",
+                            text = stringResource(R.string.color_picker_hue),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -228,7 +230,7 @@ fun ColorPickerDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
-                            text = "Saturation",
+                            text = stringResource(R.string.color_picker_saturation),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -258,7 +260,7 @@ fun ColorPickerDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
-                            text = "Lightness",
+                            text = stringResource(R.string.color_picker_lightness),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -289,12 +291,12 @@ fun ColorPickerDialog(
                     onDismiss()
                 },
             ) {
-                Text("Confirm")
+                Text(stringResource(R.string.color_picker_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         },
     )

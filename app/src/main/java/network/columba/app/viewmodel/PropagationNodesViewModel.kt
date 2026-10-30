@@ -15,7 +15,9 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.data.repository.PreferredPropagationNodeRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.NetworkRestriction
+import network.columba.app.service.PropagationFailureReason
 import network.columba.app.service.PropagationNodeManager
+import network.columba.app.service.messageResource
 import network.columba.app.ui.components.PropagationNodeRow
 import network.columba.app.util.HexUtils.toHexString
 import javax.inject.Inject
@@ -71,7 +73,7 @@ class PropagationNodesViewModel
                             displayName = it.displayName ?: it.destinationHash.take(12),
                             networkRestriction = it.networkRestriction,
                             isActive = it.destinationHash == activeHash,
-                            failureReason = it.lastFailureExplanation,
+                            failureReason = decodeFailureExplanation(it.lastFailureExplanation),
                             failureAtMs = it.lastFailureAt,
                             failureCode = it.lastFailureCode,
                         )
@@ -165,5 +167,17 @@ class PropagationNodesViewModel
             val identity = identityRepository.activeIdentity.first() ?: return emptyList()
             return announceRepository.getSavedPropagationNodes(identity.identityHash).first()
         }
+    }
+
+/**
+ * Decodes a stored `lastFailureExplanation` into a localized [UiMessage]. Rows written as
+ * `pf:` tokens resolve through [PropagationFailureReason]; older rows hold plain English and
+ * are shown verbatim.
+ */
+private fun decodeFailureExplanation(stored: String?): UiMessage? =
+    stored?.let { raw ->
+        PropagationFailureReason.Explanation.decode(raw)
+            ?.let { UiMessage.Text(it.reason.messageResource(), it.args) }
+            ?: UiMessage.Raw(raw)
     }
 

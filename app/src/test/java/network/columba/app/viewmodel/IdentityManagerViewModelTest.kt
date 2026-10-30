@@ -20,6 +20,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
+import network.columba.app.R
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.rns.api.RnsCore
@@ -220,7 +221,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val successState = awaitItem()
                 assertTrue(successState is IdentityManagerUiState.Success)
-                assertEquals("Identity created successfully", (successState as IdentityManagerUiState.Success).message)
+                assertEquals(
+                    UiMessage.Text(R.string.identity_created),
+                    (successState as IdentityManagerUiState.Success).message,
+                )
             }
         }
 
@@ -243,7 +247,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("Python error occurred", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals(
+                    UiMessage.Raw("Python error occurred"),
+                    (errorState as IdentityManagerUiState.Error).message,
+                )
             }
         }
 
@@ -270,7 +277,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("identity_hash"))
+                assertTrue(
+                    ((errorState as IdentityManagerUiState.Error).message as UiMessage.Raw)
+                        .text.contains("identity_hash"),
+                )
             }
         }
 
@@ -297,7 +307,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("DB error", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals(
+                    UiMessage.Raw("DB error"),
+                    (errorState as IdentityManagerUiState.Error).message,
+                )
             }
         }
 
@@ -354,7 +367,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("Switch failed", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals(
+                    UiMessage.Raw("Switch failed"),
+                    (errorState as IdentityManagerUiState.Error).message,
+                )
             }
         }
 
@@ -381,7 +397,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val successState = awaitItem()
                 assertTrue(successState is IdentityManagerUiState.Success)
-                assertEquals("Identity deleted successfully", (successState as IdentityManagerUiState.Success).message)
+                assertEquals(
+                    UiMessage.Text(R.string.identity_deleted),
+                    (successState as IdentityManagerUiState.Success).message,
+                )
             }
         }
 
@@ -419,7 +438,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("active identity"))
+                assertEquals(
+                    R.string.identity_delete_active_blocked,
+                    ((errorState as IdentityManagerUiState.Error).message as UiMessage.Text).id,
+                )
             }
 
             identityJob.cancel()
@@ -453,7 +475,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("DB error", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals(
+                    UiMessage.Raw("DB error"),
+                    (errorState as IdentityManagerUiState.Error).message,
+                )
             }
         }
 
@@ -478,7 +503,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val successState = awaitItem()
                 assertTrue(successState is IdentityManagerUiState.Success)
-                assertEquals("Identity renamed successfully", (successState as IdentityManagerUiState.Success).message)
+                assertEquals(
+                    UiMessage.Text(R.string.identity_renamed),
+                    (successState as IdentityManagerUiState.Success).message,
+                )
             }
         }
 
@@ -504,7 +532,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("Rename failed", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals(
+                    UiMessage.Raw("Rename failed"),
+                    (errorState as IdentityManagerUiState.Error).message,
+                )
             }
         }
 
@@ -547,7 +578,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val successState = awaitItem()
                 assertTrue(successState is IdentityManagerUiState.Success)
-                assertEquals("Identity imported successfully", (successState as IdentityManagerUiState.Success).message)
+                assertEquals(
+                    UiMessage.Text(R.string.identity_imported),
+                    (successState as IdentityManagerUiState.Success).message,
+                )
             }
         }
 
@@ -574,7 +608,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("Failed to read file"))
+                assertEquals(
+                    R.string.identity_read_file_failed,
+                    ((errorState as IdentityManagerUiState.Error).message as UiMessage.Text).id,
+                )
             }
         }
 
@@ -604,7 +641,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("Python error occurred", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals(
+                    UiMessage.Raw("Python error occurred"),
+                    (errorState as IdentityManagerUiState.Error).message,
+                )
             }
         }
 
@@ -656,7 +696,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("Failed to export identity", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals(
+                    UiMessage.Text(R.string.identity_export_failed),
+                    (errorState as IdentityManagerUiState.Error).message,
+                )
             }
         }
 
@@ -684,7 +727,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("FileProvider error", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals(
+                    UiMessage.Raw("FileProvider error"),
+                    (errorState as IdentityManagerUiState.Error).message,
+                )
             }
         }
 
@@ -723,7 +769,7 @@ class IdentityManagerViewModelTest {
                 val successState = awaitItem()
                 assertTrue(successState is IdentityManagerUiState.Success)
                 assertEquals(
-                    "Identity imported successfully",
+                    UiMessage.Text(R.string.identity_imported),
                     (successState as IdentityManagerUiState.Success).message,
                 )
             }
@@ -745,7 +791,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("Invalid Base32"))
+                assertEquals(
+                    R.string.identity_invalid_base32_key,
+                    ((errorState as IdentityManagerUiState.Error).message as UiMessage.Text).id,
+                )
             }
         }
 
@@ -770,7 +819,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("expected 64 bytes"))
+                assertEquals(
+                    R.string.identity_invalid_key_size,
+                    ((errorState as IdentityManagerUiState.Error).message as UiMessage.Text).id,
+                )
             }
         }
 
@@ -793,7 +845,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("Python error occurred", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals(
+                    UiMessage.Raw("Python error occurred"),
+                    (errorState as IdentityManagerUiState.Error).message,
+                )
             }
         }
 
@@ -827,8 +882,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("already exists"))
-                assertTrue(errorState.message.contains("My Key"))
+                assertEquals(
+                    UiMessage.Text(R.string.identity_already_exists, listOf("My Key")),
+                    (errorState as IdentityManagerUiState.Error).message,
+                )
             }
 
             identitiesJob.cancel()
@@ -860,7 +917,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("DB write failed", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals(
+                    UiMessage.Raw("DB write failed"),
+                    (errorState as IdentityManagerUiState.Error).message,
+                )
             }
         }
 
@@ -915,7 +975,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("Failed to export identity", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals(
+                    UiMessage.Text(R.string.identity_export_failed),
+                    (errorState as IdentityManagerUiState.Error).message,
+                )
             }
         }
 
@@ -939,7 +1002,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("Service not connected", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals(
+                    UiMessage.Raw("Service not connected"),
+                    (errorState as IdentityManagerUiState.Error).message,
+                )
             }
         }
 
@@ -983,7 +1049,7 @@ class IdentityManagerViewModelTest {
                 val successState = awaitItem()
                 assertTrue(successState is IdentityManagerUiState.Success)
                 assertEquals(
-                    "Identity imported from backup successfully",
+                    UiMessage.Text(R.string.identity_imported_from_backup),
                     (successState as IdentityManagerUiState.Success).message,
                 )
             }
@@ -1015,7 +1081,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("expected 64 bytes"))
+                assertEquals(
+                    R.string.identity_invalid_backup_key_size,
+                    ((errorState as IdentityManagerUiState.Error).message as UiMessage.Text).id,
+                )
             }
         }
 
@@ -1041,7 +1110,10 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("Failed"))
+                assertEquals(
+                    R.string.identity_open_backup_failed,
+                    ((errorState as IdentityManagerUiState.Error).message as UiMessage.Text).id,
+                )
             }
         }
 
@@ -1140,7 +1212,7 @@ class IdentityManagerViewModelTest {
                 val state = awaitItem()
                 assertTrue("Expected Success but was $state", state is IdentityManagerUiState.Success)
                 assertEquals(
-                    "Identity exported successfully",
+                    UiMessage.Text(R.string.identity_exported),
                     (state as IdentityManagerUiState.Success).message,
                 )
             }
@@ -1178,7 +1250,10 @@ class IdentityManagerViewModelTest {
             viewModel.uiState.test {
                 val state = awaitItem()
                 assertTrue("Expected Error but was $state", state is IdentityManagerUiState.Error)
-                assertTrue((state as IdentityManagerUiState.Error).message.contains("Failed to save identity"))
+                assertEquals(
+                    R.string.identity_open_file_failed,
+                    ((state as IdentityManagerUiState.Error).message as UiMessage.Text).id,
+                )
             }
         }
 

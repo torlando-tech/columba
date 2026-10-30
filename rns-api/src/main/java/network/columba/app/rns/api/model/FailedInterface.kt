@@ -23,8 +23,11 @@ data class FailedInterface(
                 val item = jsonArray.getJSONObject(i)
                 failedList.add(
                     FailedInterface(
-                        name = item.optString("name", "Unknown"),
-                        error = item.optString("error", "Unknown error"),
+                        // Empty defaults: the UI fallback text ("Unknown" /
+                        // "Unknown error") is resolved from string resources at
+                        // the consumer (DebugViewModel), not baked in here.
+                        name = item.optString("name"),
+                        error = item.optString("error"),
                         recoverable = item.optBoolean("recoverable", true),
                     ),
                 )

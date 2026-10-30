@@ -68,7 +68,7 @@ fun CrashReportingPage(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "Help Us Improve",
+            text = stringResource(R.string.onboarding_crash_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -122,7 +122,7 @@ fun CrashReportingPage(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text = "You can change this anytime in Settings → Advanced",
+                        text = stringResource(R.string.onboarding_crash_toggle_helper),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -149,7 +149,7 @@ fun CrashReportingPage(
                         .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
-                Text("Back")
+                Text(stringResource(R.string.onboarding_back))
             }
 
             Button(
@@ -160,7 +160,7 @@ fun CrashReportingPage(
                         .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
-                Text("Continue")
+                Text(stringResource(R.string.onboarding_continue))
             }
         }
 

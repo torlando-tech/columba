@@ -3,6 +3,7 @@ package network.columba.app.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import network.columba.app.R
 import network.columba.app.data.model.TcpCommunityServer
 import network.columba.app.data.model.TcpCommunityServers
 import network.columba.app.repository.InterfaceRepository
@@ -11,6 +12,7 @@ import network.columba.app.rns.api.model.InterfaceMode
 import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.util.validation.InputValidator
+import network.columba.app.util.validation.messageResource
 import network.columba.app.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,7 +65,7 @@ data class TcpClientWizardState(
     val networkRestriction: String = NetworkRestriction.ANY.value,
     // Save state
     val isSaving: Boolean = false,
-    val saveError: String? = null,
+    val saveError: UiMessage? = null,
     val saveSuccess: Boolean = false,
 )
 
@@ -395,7 +397,7 @@ class TcpClientWizardViewModel
                             _state.update {
                                 it.copy(
                                     isSaving = false,
-                                    saveError = uniqueResult.message,
+                                    saveError = UiMessage.Text(uniqueResult.reason.messageResource(), uniqueResult.args),
                                 )
                             }
                             return@launch
@@ -439,7 +441,9 @@ class TcpClientWizardViewModel
                     _state.update {
                         it.copy(
                             isSaving = false,
-                            saveError = e.message ?: "Failed to save configuration",
+                            saveError =
+                                e.message?.let { UiMessage.Raw(it) }
+                                    ?: UiMessage.Text(R.string.tcp_client_save_failed),
                         )
                     }
                 }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import network.columba.app.R
 import network.columba.app.micron.MicronDocument
 import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronParser
@@ -57,7 +58,7 @@ class NomadNetBrowserViewModel
             data object Initial : BrowserState()
 
             data class Loading(
-                val statusMessage: String,
+                val statusMessage: UiMessage,
             ) : BrowserState()
 
             data class PageLoaded(
@@ -68,7 +69,7 @@ class NomadNetBrowserViewModel
             ) : BrowserState()
 
             data class Error(
-                val message: String,
+                val message: UiMessage,
             ) : BrowserState()
         }
 
@@ -148,8 +149,8 @@ class NomadNetBrowserViewModel
         private val _identifyInProgress = MutableStateFlow(false)
         val identifyInProgress: StateFlow<Boolean> = _identifyInProgress.asStateFlow()
 
-        private val _identifyError = MutableStateFlow<String?>(null)
-        val identifyError: StateFlow<String?> = _identifyError.asStateFlow()
+        private val _identifyError = MutableStateFlow<UiMessage?>(null)
+        val identifyError: StateFlow<UiMessage?> = _identifyError.asStateFlow()
 
         private val _isPullRefreshing = MutableStateFlow(false)
         val isPullRefreshing: StateFlow<Boolean> = _isPullRefreshing.asStateFlow()
@@ -160,7 +161,7 @@ class NomadNetBrowserViewModel
             val fileName: String = "",
             val filePath: String? = null,
             val fileSize: Long = 0L,
-            val error: String? = null,
+            val error: UiMessage? = null,
         )
 
         private val _downloadState = MutableStateFlow(DownloadState())
@@ -623,7 +624,7 @@ class NomadNetBrowserViewModel
             lastFetchPath = path
             lastFetchFormDataJson = formDataJson
             lastFetchFieldTokens = fieldTokens
-            _browserState.value = BrowserState.Loading("Requesting page...")
+            _browserState.value = BrowserState.Loading(UiMessage.Text(R.string.nomadnet_status_requesting_page))
             startStatusCollection(epoch)
             viewModelScope.launch(Dispatchers.IO) {
                 try {
@@ -648,7 +649,7 @@ class NomadNetBrowserViewModel
                         onFailure = { error ->
                             _browserState.value =
                                 BrowserState.Error(
-                                    error.message ?: "Unknown error",
+                                    error.toUiMessage(R.string.error_unknown),
                                 )
                         },
                     )
@@ -656,7 +657,7 @@ class NomadNetBrowserViewModel
                     stopStatusCollection(epoch)
                     if (fetchEpoch != epoch) return@launch
                     Log.e(TAG, "Error navigating", e)
-                    _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
+                    _browserState.value = BrowserState.Error(e.toUiMessage(R.string.error_unknown))
                 }
             }
         }
@@ -704,7 +705,7 @@ class NomadNetBrowserViewModel
                         },
                         onFailure = { error ->
                             _downloadState.update {
-                                it.copy(isActive = false, error = error.message ?: "Download failed")
+                                it.copy(isActive = false, error = error.toUiMessage(R.string.nomadnet_download_failed))
                             }
                         },
                     )
@@ -712,7 +713,7 @@ class NomadNetBrowserViewModel
                     stopProgressCollection(downloadEpoch)
                     Log.e(TAG, "Error downloading file", e)
                     _downloadState.update {
-                        it.copy(isActive = false, error = e.message ?: "Download failed")
+                        it.copy(isActive = false, error = e.toUiMessage(R.string.nomadnet_download_failed))
                     }
                 }
             }
@@ -880,7 +881,7 @@ class NomadNetBrowserViewModel
             val epoch = ++fetchEpoch
             stopStatusCollection()
             stopProgressCollection()
-            _browserState.value = BrowserState.Error("Cancelled")
+            _browserState.value = BrowserState.Error(UiMessage.Text(R.string.nomadnet_status_cancelled))
             _isPullRefreshing.value = false
             viewModelScope.launch(Dispatchers.IO) {
                 // Only send cancel if no new fetch has started since we were called
@@ -958,12 +959,12 @@ class NomadNetBrowserViewModel
                             // already left must not surface as an error for the
                             // current node.
                             if (currentNodeHash != nodeHash) return@fold
-                            _identifyError.value = it.message ?: "Unknown error"
+                            _identifyError.value = it.toUiMessage(R.string.error_unknown)
                         },
                     )
                 } catch (e: Exception) {
                     if (currentNodeHash == nodeHash) {
-                        _identifyError.value = e.message ?: "Unknown error"
+                        _identifyError.value = e.toUiMessage(R.string.error_unknown)
                     }
                 } finally {
                     _identifyInProgress.value = false
@@ -1115,18 +1116,18 @@ class NomadNetBrowserViewModel
             return seeded
         }
 
-        private fun formatNomadnetStatus(status: String): String =
+        private fun formatNomadnetStatus(status: String): UiMessage =
             when (status) {
-                "idle" -> "Requesting page..."
-                "connecting" -> "Connecting..."
-                "looking up path" -> "Looking up path..."
-                "establishing link" -> "Establishing link..."
-                "requesting page" -> "Requesting page..."
-                "downloading" -> "Downloading..."
-                "complete" -> "Finishing..."
-                "failed" -> "Request failed"
-                "cancelled" -> "Cancelled"
-                else -> status.replaceFirstChar { it.uppercase() }
+                "idle" -> UiMessage.Text(R.string.nomadnet_status_requesting_page)
+                "connecting" -> UiMessage.Text(R.string.nomadnet_status_connecting)
+                "looking up path" -> UiMessage.Text(R.string.nomadnet_status_looking_up_path)
+                "establishing link" -> UiMessage.Text(R.string.nomadnet_status_establishing_link)
+                "requesting page" -> UiMessage.Text(R.string.nomadnet_status_requesting_page)
+                "downloading" -> UiMessage.Text(R.string.nomadnet_status_downloading)
+                "complete" -> UiMessage.Text(R.string.nomadnet_status_finishing)
+                "failed" -> UiMessage.Text(R.string.nomadnet_status_request_failed)
+                "cancelled" -> UiMessage.Text(R.string.nomadnet_status_cancelled)
+                else -> UiMessage.Raw(status.replaceFirstChar { it.uppercase() })
             }
 
         /**
@@ -1203,7 +1204,7 @@ class NomadNetBrowserViewModel
             lastFetchPath = path
             lastFetchFormDataJson = null
             lastFetchFieldTokens = emptyList()
-            _browserState.value = BrowserState.Loading("Requesting page...")
+            _browserState.value = BrowserState.Loading(UiMessage.Text(R.string.nomadnet_status_requesting_page))
             startStatusCollection(epoch)
 
             // Wall-clock fetch timing feeds the image auto-gate's fallback
@@ -1234,7 +1235,7 @@ class NomadNetBrowserViewModel
                                 // clear loading state so screen doesn't get stuck
                                 _isPullRefreshing.value = false
                                 _browserState.value =
-                                    BrowserState.Error("Server returned a file instead of a page")
+                                    BrowserState.Error(UiMessage.Text(R.string.nomadnet_file_instead_of_page))
                                 _downloadState.value =
                                     DownloadState(
                                         isActive = false,
@@ -1256,7 +1257,7 @@ class NomadNetBrowserViewModel
                             _isPullRefreshing.value = false
                             _browserState.value =
                                 BrowserState.Error(
-                                    error.message ?: "Unknown error",
+                                    error.toUiMessage(R.string.error_unknown),
                                 )
                         },
                     )
@@ -1265,7 +1266,7 @@ class NomadNetBrowserViewModel
                     if (fetchEpoch != epoch) return@launch
                     _isPullRefreshing.value = false
                     Log.e(TAG, "Error loading page", e)
-                    _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
+                    _browserState.value = BrowserState.Error(e.toUiMessage(R.string.error_unknown))
                 }
             }
         }

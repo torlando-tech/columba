@@ -113,4 +113,31 @@ class TextSanitizerTest {
         assertEquals(100, TextSanitizer.MAX_PEER_NAME_LENGTH)
         assertEquals(100, TextSanitizer.MAX_PREVIEW_LENGTH)
     }
+
+    @Test
+    fun `sanitize preserves ZWJ emoji sequences`() {
+        // Female sign person (🤦‍♀️): person + ZWJ + female sign + VS16
+        val facepalm = "\uD83E\uDD26\u200D\u2640\uFE0F"
+        assertEquals(facepalm, TextSanitizer.sanitize(facepalm, 100))
+        assertEquals(facepalm, TextSanitizer.sanitizeMessage(facepalm))
+        // Family (👨‍👩‍👧‍👦): four codepoints joined by ZWJ
+        val family = "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67\u200D\uD83D\uDC66"
+        assertEquals(family, TextSanitizer.sanitize(family, 100))
+        // Skin-tone modifier + ZWJ (👩🏽💻 woman technologist)
+        val technologist = "\uD83D\uDC69\uD83C\uDFFD\u200D\uD83D\uDCBB"
+        assertEquals(technologist, TextSanitizer.sanitize(technologist, 100))
+    }
+
+    @Test
+    fun `sanitize preserves bidi marks and zero-width format characters`() {
+        // RTL mark U+200F inside Arabic text
+        val arabic = "\u200Fمرحبا بالعالم"
+        assertEquals(arabic, TextSanitizer.sanitize(arabic, 100))
+        // LRM U+200E inside Hebrew text
+        val hebrew = "\u200Eשלום עולם"
+        assertEquals(hebrew, TextSanitizer.sanitize(hebrew, 100))
+        // Zero-width space U+200B
+        val zwsp = "a\u200Bb"
+        assertEquals(zwsp, TextSanitizer.sanitize(zwsp, 100))
+    }
 }

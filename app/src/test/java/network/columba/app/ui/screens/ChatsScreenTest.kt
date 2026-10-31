@@ -10,6 +10,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.test.TestFactories
+import network.columba.app.ui.model.ChatCardThreadsUi
 import network.columba.app.viewmodel.ChatsViewModel
 import io.mockk.every
 import io.mockk.mockk
@@ -980,6 +981,11 @@ class ChatsScreenTest {
 
         // Default: contacts are not saved
         every { mockViewModel.isContactSaved(any()) } returns MutableStateFlow(false)
+
+        // Threads (P2) defaults: flag off, nothing expanded, empty bundle
+        every { mockViewModel.threadsEnabled } returns MutableStateFlow(false)
+        every { mockViewModel.expandedCards } returns MutableStateFlow(emptySet())
+        every { mockViewModel.cardThreads(any()) } returns MutableStateFlow(ChatCardThreadsUi())
 
         return mockViewModel
     }

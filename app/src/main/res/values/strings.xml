@@ -335,4 +335,45 @@
     <string name="new_call_network_request_failed">Network path request failed</string>
     <string name="crash_reporting_title">Crash Reports</string>
     <string name="crash_reporting_privacy_description">With your permission, Columba sends crash types, code locations, app versions and coarse memory diagnostics to Sentry. Message contents, contacts, keys and peer identifiers are excluded. Sentry receives your network IP when reports are uploaded. Off by default; change this anytime in Settings → Advanced.</string>
+
+    <!-- Threads P2 (threads-spec §6) -->
+    <string name="thread_chip_main">Main</string>
+    <string name="thread_chip_new">+ New</string>
+    <string name="thread_chip_more_threads">More threads</string>
+    <string name="thread_untitled">New thread</string>
+    <string name="thread_sheet_title">Threads</string>
+    <string name="thread_sheet_section_active">Active</string>
+    <string name="thread_sheet_section_dormant">Dormant</string>
+    <string name="thread_sheet_section_archived">Archived</string>
+    <string name="thread_sheet_empty">No threads yet \u2014 long-press a message to start one.</string>
+    <string name="thread_sheet_new_thread">+ New</string>
+    <string name="thread_view_all">View all (%1$d)</string>
+    <plurals name="thread_card_thread_count">
+        <item quantity="one">%1$d thread</item>
+        <item quantity="other">%1$d threads</item>
+    </plurals>
+    <plurals name="thread_replies_count">
+        <item quantity="one">%1$d reply</item>
+        <item quantity="other">%1$d replies</item>
+    </plurals>
+    <string name="thread_offscreen_placeholder">Thread started off-screen</string>
+    <string name="thread_from_here">Thread from here</string>
+    <string name="thread_reply_placeholder">Reply in thread\u2026</string>
+    <string name="thread_rename_title">Rename thread</string>
+    <string name="thread_rename_hint">Thread name</string>
+    <string name="thread_rename_save">Save</string>
+    <string name="thread_action_rename">Rename</string>
+    <string name="thread_action_archive">Archive</string>
+    <string name="thread_action_unarchive">Un-archive</string>
+    <string name="thread_action_delete">Delete</string>
+    <string name="thread_action_cancel">Cancel</string>
+    <string name="thread_delete_title">Delete thread?</string>
+    <string name="thread_delete_message">This removes the thread and its messages from this device. Messages already delivered to your peer are not affected.</string>
+    <string name="thread_expand_threads">Show threads</string>
+    <string name="thread_collapse_threads">Hide threads</string>
+    <string name="thread_row_main">Main conversation</string>
+    <string name="thread_unread_indicator">Unread messages in thread</string>
+    <string name="settings_threads_title">Threads</string>
+    <string name="settings_threads_description">Group conversations with a contact into topic threads: chip bar in chats, expanding cards in the chat list, and a thread sheet. Experimental — off by default.</string>
+    <string name="thread_open_thread">Open thread</string>
 </resources>

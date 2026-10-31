@@ -122,6 +122,7 @@ class SettingsViewModelTest {
         SettingsViewModel.sharedInstanceProbe = { _, _, _ -> false }
 
         settingsRepository = mockk()
+        every { settingsRepository.threadsEnabledFlow } returns flowOf(false)
         identityRepository = mockk()
         rnsBackend = mockk()
         rnsCore = mockk()

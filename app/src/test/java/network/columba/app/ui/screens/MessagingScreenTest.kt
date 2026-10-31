@@ -35,6 +35,7 @@ import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
 import network.columba.app.ui.model.ReplyPreviewUi
+import network.columba.app.ui.model.ThreadSheetUiState
 import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.MessagingViewModel
 import network.columba.app.viewmodel.ComposerSendResult
@@ -171,6 +172,14 @@ class MessagingScreenTest {
         every { mockViewModel.voiceRecordingState } returns MutableStateFlow(VoiceMessageRecordingState())
         every { mockViewModel.isVoiceMessageSupported } returns true
         every { mockViewModel.isVoiceRecordingBlockedByCall } returns MutableStateFlow(false)
+        // Threads (P2) mocks
+        every { mockViewModel.threadsEnabled } returns MutableStateFlow(false)
+        every { mockViewModel.selectedThread } returns MutableStateFlow(null)
+        every { mockViewModel.threadChips } returns MutableStateFlow(emptyList())
+        every { mockViewModel.threadSheetState } returns MutableStateFlow(ThreadSheetUiState())
+        every { mockViewModel.threadHooks } returns MutableStateFlow(emptyMap())
+        every { mockViewModel.threadView } returns MutableStateFlow(null)
+        every { mockViewModel.threadComposerPrefill } returns MutableSharedFlow()
     }
 
     // ========== Empty State Tests ==========

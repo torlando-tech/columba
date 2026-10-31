@@ -1,0 +1,25 @@
+# 00-enable-threads.yaml
+#
+# Turns on the threads_enabled feature flag (Settings > Advanced > Threads).
+# Every other flow in this suite assumes it ran first; the runner does that.
+#
+# Params: APP_ID.
+appId: ${APP_ID}
+---
+- launchApp
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element:
+      text: "Advanced"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Advanced"
+- scrollUntilVisible:
+    element:
+      id: "threads_enabled_toggle"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "threads_enabled_toggle"
+# The flag flips live (no restart): the chip bar appears in any open chat.
+- takeScreenshot: threads-flag-enabled

@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Hub
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ButtonDefaults
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import network.columba.app.BuildConfig
 import network.columba.app.R
@@ -39,6 +41,8 @@ import network.columba.app.ui.components.LocalCapabilities
  * @param onExpandedChange Callback when expansion state changes
  * @param transportNodeEnabled Whether transport node mode is enabled (forwards mesh traffic)
  * @param onTransportNodeToggle Callback when transport node toggle is changed
+ * @param threadsEnabled Threads P2 feature flag (`threads_enabled`, default off).
+ * @param onThreadsToggle Callback when the Threads toggle is changed.
  * @param shareInstanceHostingEnabled Persisted "Share Instance" toggle state
  *   (python backend only; capability-gated). True means the daemon will publish itself
  *   as an RNS shared instance on TCP 37428 after the next restart.
@@ -66,6 +70,8 @@ fun AdvancedCard(
     isRestarting: Boolean = false,
     crashReportingEnabled: Boolean = false,
     onCrashReportingToggle: (Boolean) -> Unit = {},
+    threadsEnabled: Boolean = false,
+    onThreadsToggle: (Boolean) -> Unit = {},
 ) {
     val canHostShareInstance = LocalCapabilities.current.performance.shareInstanceHosting
     CollapsibleSettingsCard(
@@ -98,6 +104,7 @@ fun AdvancedCard(
             Switch(
                 checked = transportNodeEnabled,
                 onCheckedChange = onTransportNodeToggle,
+                modifier = Modifier.testTag("transport_node_toggle"),
             )
         }
         Text(
@@ -230,5 +237,40 @@ fun AdvancedCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+
+        // Threads P2 feature flag (threads-spec rollout: ships behind
+        // threads_enabled through one beta cycle; default off).
+        Spacer(Modifier.height(16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Forum,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(R.string.settings_threads_title),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+            Switch(
+                checked = threadsEnabled,
+                onCheckedChange = onThreadsToggle,
+                modifier = Modifier.testTag("threads_enabled_toggle"),
+            )
+        }
+        Text(
+            text = stringResource(R.string.settings_threads_description),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

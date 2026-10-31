@@ -1949,6 +1949,28 @@ class SettingsViewModel
         }
 
         /**
+         * Threads P2 feature flag (`threads_enabled`, default off). Exposed as a
+         * separate flow rather than through the big combined UiState so toggling
+         * it does not recompose the whole settings screen.
+         */
+        val threadsEnabled: StateFlow<Boolean> =
+            settingsRepository
+                .threadsEnabledFlow
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = false,
+                )
+
+        /** Persist the Threads P2 feature flag. */
+        fun setThreadsEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveThreadsEnabled(enabled)
+                Log.d(TAG, "Threads ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
          * Whether to show the one-time crash-reporting opt-in dialog. True only for an
          * existing user (onboarding complete) on the sentry flavor who has neither seen the
          * prompt nor already opted in. New users make this choice during onboarding.

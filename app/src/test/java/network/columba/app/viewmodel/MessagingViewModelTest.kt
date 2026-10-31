@@ -244,6 +244,7 @@ class MessagingViewModelTest {
         contactRepository = mockk()
         activeConversationManager = mockk()
         settingsRepository = mockk()
+        every { settingsRepository.threadsEnabledFlow } returns flowOf(false)
         propagationNodeManager = mockk()
         locationSharingManager = mockk()
         identityRepository = mockk()
@@ -966,6 +967,7 @@ class MessagingViewModelTest {
             coEvery { failingSettingsRepository.getIncomingMessageSizeLimitKb() } returns 500
             every { failingSettingsRepository.messageFontScaleFlow } returns flowOf(1.0f)
             every { failingSettingsRepository.sortMessagesBySentTime } returns flowOf(false)
+            every { failingSettingsRepository.threadsEnabledFlow } returns flowOf(false)
 
             val failingPropagationNodeManager: PropagationNodeManager = mockk()
             every { failingPropagationNodeManager.isSyncing } returns MutableStateFlow(false)

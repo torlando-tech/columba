@@ -1260,6 +1260,17 @@ fun ColumbaNavigation(
                 val encodedName = Uri.encode(peerName)
                 navController.navigate("messaging/$encodedHash/$encodedName")
             },
+            onThreadClick = { destinationHash, peerName, threadIdHex ->
+                navController.navigate(
+                    network.columba.app.navigation.ConversationNavigation.routeFor(
+                        encodedDestinationHash = Uri.encode(destinationHash),
+                        encodedPeerName = Uri.encode(peerName),
+                        fromNotification = false,
+                        notificationEventId = 0L,
+                        threadId = threadIdHex,
+                    ),
+                )
+            },
             onViewPeerDetails = { peerHash ->
                 val encodedHash = Uri.encode(peerHash)
                 navController.navigate("announce_detail/$encodedHash")
@@ -2291,6 +2302,11 @@ fun ColumbaNavigation(
                                             type = NavType.LongType
                                             defaultValue = 0L
                                         },
+                                        navArgument("threadId") {
+                                            type = NavType.StringType
+                                            nullable = true
+                                            defaultValue = null
+                                        },
                                     ),
                             ) { backStackEntry ->
                                 val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
@@ -2298,12 +2314,15 @@ fun ColumbaNavigation(
                                 val fromNotification = backStackEntry.arguments?.getBoolean("fromNotification") == true
                                 val notificationEventId =
                                     backStackEntry.arguments?.getLong("notificationEventId") ?: 0L
+                                val initialThreadId =
+                                    backStackEntry.arguments?.getString("threadId")?.takeIf { it.isNotEmpty() }
 
                                 MessagingScreen(
                                     destinationHash = destinationHash,
                                     peerName = peerName,
                                     fromNotification = fromNotification,
                                     notificationEventId = notificationEventId,
+                                    initialThreadId = initialThreadId,
                                     onBackClick = { navController.popBackStack() },
                                     onPeerClick = {
                                         val encodedHash = Uri.encode(destinationHash)

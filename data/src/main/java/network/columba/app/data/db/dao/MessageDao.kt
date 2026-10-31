@@ -458,6 +458,104 @@ interface MessageDao {
         identityHash: String,
         threadId: ByteArray,
     )
+
+    /** Paged Main-conversation messages only (threads enabled): newest first, `threadId IS NULL`. */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NULL
+        ORDER BY COALESCE(receivedAt, timestamp) DESC
+        """,
+    )
+    fun getMainMessagesPaged(
+        peerHash: String,
+        identityHash: String,
+    ): PagingSource<Int, MessageEntity>
+
+    /**
+     * Total message counts grouped by thread ID (the "N replies" hook count).
+     * The row with `threadId == null` is Main's count.
+     */
+    @Query(
+        """
+        SELECT threadId, COUNT(*) AS messageCount FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        GROUP BY threadId
+        """,
+    )
+    fun observeMessageCountsPerThread(
+        peerHash: String,
+        identityHash: String,
+    ): Flow<List<ThreadMessageCount>>
+
+    /**
+     * Newest message per thread (title preview row in the thread sheet /
+     * expanding chat card). SQLite's bare-column-with-MAX special case makes
+     * `content` come from the max-timestamp row of each group. Main
+     * (`threadId IS NULL`) is excluded — the conversation row already carries
+     * Main's last message.
+     */
+    @Query(
+        """
+        SELECT threadId, content, MAX(COALESCE(receivedAt, timestamp)) AS timestamp
+        FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NOT NULL
+        GROUP BY threadId
+        """,
+    )
+    fun observeLastMessagesPerThread(
+        peerHash: String,
+        identityHash: String,
+    ): Flow<List<ThreadLastMessage>>
+
+    /**
+     * Newest Main message of one conversation (the expanding chat card's
+     * Main-row preview — the conversation row's `lastMessage` may be a
+     * thread message, so Main needs its own lookup). Empty blob threadId:
+     * Main rows store NULL.
+     */
+    @Query(
+        """
+        SELECT IFNULL(threadId, x'') AS threadId, content, COALESCE(receivedAt, timestamp) AS timestamp
+        FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NULL
+        ORDER BY COALESCE(receivedAt, timestamp) DESC LIMIT 1
+        """,
+    )
+    fun observeMainLastMessage(
+        peerHash: String,
+        identityHash: String,
+    ): Flow<ThreadLastMessage?>
+
+    /** Mark Main (threadId IS NULL) received messages read — thread-aware read path. */
+    @Query(
+        """
+        UPDATE messages SET isRead = 1
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NULL AND isFromMe = 0
+        """,
+    )
+    suspend fun markMainMessagesAsRead(
+        peerHash: String,
+        identityHash: String,
+    )
+
+    /** Delete a thread's messages (local thread delete; Main rows untouched). */
+    @Query(
+        """
+        DELETE FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId = :threadId
+        """,
+    )
+    suspend fun deleteMessagesForThread(
+        peerHash: String,
+        identityHash: String,
+        threadId: ByteArray,
+    )
 }
 
 /** One row of [MessageDao.observeUnreadCountsPerThread]; null [threadId] = Main. */
@@ -472,6 +570,43 @@ data class ThreadUnreadCount(
                 threadId.contentEquals(other.threadId))
 
     override fun hashCode(): Int = 31 * (threadId?.contentHashCode() ?: 0) + unreadCount
+}
+
+/** One row of [MessageDao.observeMessageCountsPerThread]; null [threadId] = Main. */
+data class ThreadMessageCount(
+    val threadId: ByteArray?,
+    val messageCount: Int,
+) {
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            (other is ThreadMessageCount &&
+                messageCount == other.messageCount &&
+                threadId.contentEquals(other.threadId))
+
+    override fun hashCode(): Int = 31 * (threadId?.contentHashCode() ?: 0) + messageCount
+}
+
+/** One row of [MessageDao.observeLastMessagesPerThread] (newest message per thread). */
+data class ThreadLastMessage(
+    val threadId: ByteArray,
+    val content: String,
+    val timestamp: Long,
+) {
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            (
+                other is ThreadLastMessage &&
+                    content == other.content &&
+                    timestamp == other.timestamp &&
+                    threadId.contentEquals(other.threadId)
+            )
+
+    override fun hashCode(): Int {
+        var result = content.hashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + threadId.contentHashCode()
+        return result
+    }
 }
 
 /**

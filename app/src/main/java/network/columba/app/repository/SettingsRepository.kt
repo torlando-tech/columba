@@ -179,6 +179,11 @@ class SettingsRepository
             // persistence.
             val THREADS_ENABLED = booleanPreferencesKey("threads_enabled")
 
+            // Per-card expansion state in the chat list (threads-spec §6.1:
+            // "expansion state is per-card local preference"). Set of expanded
+            // peer hashes.
+            val EXPANDED_CHAT_CARDS = stringSetPreferencesKey("expanded_chat_cards")
+
             // Telemetry collector preferences
             val TELEMETRY_COLLECTOR_ADDRESS = stringPreferencesKey("telemetry_collector_address")
             val TELEMETRY_COLLECTOR_ENABLED = booleanPreferencesKey("telemetry_collector_enabled")
@@ -2433,6 +2438,27 @@ class SettingsRepository
         suspend fun saveThreadsEnabled(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.THREADS_ENABLED] = enabled
+            }
+        }
+
+        // Chat-list expanding cards (threads-spec §6.1)
+
+        /** Peer hashes whose chat card is expanded. Per-card local preference. */
+        val expandedChatCardsFlow: Flow<Set<String>> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.EXPANDED_CHAT_CARDS] ?: emptySet()
+                }.distinctUntilChanged()
+
+        /** Expand/collapse one chat card (persisted local preference). */
+        suspend fun setChatCardExpanded(
+            peerHash: String,
+            expanded: Boolean,
+        ) {
+            context.dataStore.edit { preferences ->
+                val current = preferences[PreferencesKeys.EXPANDED_CHAT_CARDS] ?: emptySet()
+                preferences[PreferencesKeys.EXPANDED_CHAT_CARDS] =
+                    if (expanded) current + peerHash else current - peerHash
             }
         }
 

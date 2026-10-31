@@ -18,6 +18,10 @@ object ConversationNavigation {
     private const val MESSAGING_NOTIFICATION_EVENT_ROUTE_PATTERN =
         "messaging/{destinationHash}/{peerName}?fromNotification={fromNotification}" +
             "&notificationEventId={notificationEventId}"
+    private const val MESSAGING_THREAD_SUFFIX = "&threadId={threadId}"
+
+    /** `threadId` navigation argument meaning "start a fresh thread (case 1)". */
+    const val NEW_THREAD_ARG = "new"
 
     enum class Action {
         NAVIGATE,
@@ -30,13 +34,17 @@ object ConversationNavigation {
         encodedPeerName: String,
         fromNotification: Boolean,
         notificationEventId: Long,
+        threadId: String? = null,
     ): String {
         val notificationParameters = if (fromNotification) {
             "?fromNotification=true&notificationEventId=$notificationEventId"
         } else {
             ""
         }
-        return "messaging/$encodedDestinationHash/$encodedPeerName$notificationParameters"
+        val threadParameter = if (threadId.isNullOrEmpty()) "" else {
+            if (notificationParameters.isEmpty()) "?threadId=$threadId" else "&threadId=$threadId"
+        }
+        return "messaging/$encodedDestinationHash/$encodedPeerName$notificationParameters$threadParameter"
     }
 
     fun actionFor(
@@ -47,7 +55,10 @@ object ConversationNavigation {
     ): Action {
         val isOnMessagingScreen = currentRoute == MESSAGING_ROUTE_PATTERN ||
             currentRoute == MESSAGING_NOTIFICATION_ROUTE_PATTERN ||
-            currentRoute == MESSAGING_NOTIFICATION_EVENT_ROUTE_PATTERN
+            currentRoute == MESSAGING_NOTIFICATION_EVENT_ROUTE_PATTERN ||
+            currentRoute == MESSAGING_ROUTE_PATTERN + MESSAGING_THREAD_SUFFIX ||
+            currentRoute == MESSAGING_NOTIFICATION_ROUTE_PATTERN + MESSAGING_THREAD_SUFFIX ||
+            currentRoute == MESSAGING_NOTIFICATION_EVENT_ROUTE_PATTERN + MESSAGING_THREAD_SUFFIX
         val isSameConversation = isOnMessagingScreen &&
             currentDestinationHash == targetDestinationHash
 

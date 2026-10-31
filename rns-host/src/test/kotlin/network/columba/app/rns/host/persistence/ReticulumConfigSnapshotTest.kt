@@ -2,15 +2,18 @@ package network.columba.app.rns.host.persistence
 
 import android.content.Context
 import android.os.Build
+import android.os.Parcel
 import androidx.test.core.app.ApplicationProvider
 import network.columba.app.rns.api.model.ReticulumConfig
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
 
 /**
  * Regression test for the COLUMBA-AT crash.
@@ -86,6 +89,26 @@ class ReticulumConfigSnapshotTest {
             snap.configWithoutKey,
         )
         assertNull(snap.configWithoutKey.deliveryIdentityKey)
+    }
+
+    @Test
+    fun `read returns null and discards a snapshot that fails to unmarshal`() {
+        ReticulumConfigSnapshot.clear(context)
+        val file = File(context.filesDir, "rns_config_snapshot.bin")
+        val parcel = Parcel.obtain()
+        try {
+            // Valid header (current version + identity hash) followed by a Parcelable
+            // class name that can't be resolved, so readParcelable throws.
+            parcel.writeInt(4)
+            parcel.writeString("deadbeefcafe")
+            parcel.writeString("network.columba.app.DoesNotExist")
+            file.writeBytes(parcel.marshall())
+        } finally {
+            parcel.recycle()
+        }
+
+        assertNull(ReticulumConfigSnapshot.read(context))
+        assertFalse("unreadable snapshot must be deleted to avoid a restart loop", file.exists())
     }
 
     @Test

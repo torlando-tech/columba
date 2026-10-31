@@ -74,7 +74,7 @@ dependencies {
     testImplementation(libs.test.core)
     testImplementation(libs.turbine)
     testImplementation("androidx.room:room-testing:${libs.versions.room.get()}")
-    testImplementation("org.json:json:20240303") // Real JSON implementation for unit tests
+    testImplementation("org.json:json:20260814") // Real JSON implementation for unit tests
     androidTestImplementation(libs.junit.android)
     androidTestImplementation(libs.test.core)
     androidTestImplementation("androidx.test:runner:1.5.2")

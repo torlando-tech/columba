@@ -51,6 +51,7 @@ oneway interface IRnsLxmf {
         in @nullable String replyQuotedContent,
         in @nullable IconAppearance iconAppearance,
         in @nullable Bundle extraFields,
+        in @nullable byte[] threadId,
         in IRnsResultCallback cb);
 
     void sendReaction(

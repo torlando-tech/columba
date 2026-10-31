@@ -10,18 +10,23 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import network.columba.app.data.db.ThreadGrouping
 import network.columba.app.data.db.dao.ConversationDao
 import network.columba.app.data.db.dao.DraftDao
 import network.columba.app.data.db.dao.LocalIdentityDao
 import network.columba.app.data.db.dao.MessageDao
 import network.columba.app.data.db.dao.PeerIdentityDao
+import network.columba.app.data.db.dao.ThreadDao
+import network.columba.app.data.db.dao.ThreadUnreadCount
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.DraftEntity
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.db.entity.PeerIdentityEntity
+import network.columba.app.data.db.entity.ThreadEntity
 import network.columba.app.data.model.EnrichedConversation
 import network.columba.app.data.storage.AttachmentStorageManager
 import network.columba.app.data.util.TextSanitizer
+import network.columba.app.data.util.ThreadPolicy
 import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
@@ -73,6 +78,10 @@ data class Message(
     // a per-event `fields[0x10] = {reaction_to, emoji, sender}` that
     // the receiver routes into this field on the *target* message.
     val reactionsJson: String? = null,
+    // LXMF FIELD_THREAD (0x08) raw bytes; null = Main conversation.
+    // Producers parse it from `fieldsJson` key "8" (ThreadFieldCodec);
+    // `saveMessage` persists it and applies the §4.3 grouping algorithm.
+    val threadId: ByteArray? = null,
 )
 
 /**
@@ -99,6 +108,7 @@ class ConversationRepository
         private val localIdentityDao: LocalIdentityDao,
         private val attachmentStorage: AttachmentStorageManager,
         private val draftDao: DraftDao,
+        private val threadDao: ThreadDao,
     ) {
         /**
          * Get all conversations for the active identity, sorted by most recent activity.
@@ -326,6 +336,22 @@ class ConversationRepository
                         processedFieldsJson = processedFieldsJson,
                     )
                 messageDao.insertMessage(messageEntity)
+
+                // Threads-spec §4.3: implicit thread creation / activity bump
+                // / first-sighting root hook, inside this transaction so the
+                // first-sighting check is race-free. Null threadId (Main) is
+                // a no-op; an unresolved 0x30 target degrades to no root and
+                // never affects message persistence (already committed above).
+                ThreadGrouping.applyMessageActivity(
+                    threadDao = threadDao,
+                    messageDao = messageDao,
+                    identityHash = identityHash,
+                    conversationHash = peerHash,
+                    threadId = message.threadId,
+                    replyToMessageId = message.replyToMessageId,
+                    content = sanitizedContent,
+                    activityAt = conversationTimestamp,
+                )
 
                 // Check if this message has file attachments and should supersede a pending notification
                 if (!message.isFromMe && message.fieldsJson != null) {
@@ -627,6 +653,7 @@ class ConversationRepository
                 sentInterface = sentInterface,
                 signatureVerified = signatureVerified,
                 reactionsJson = reactionsJson,
+                threadId = threadId,
             )
 
         /**
@@ -663,6 +690,7 @@ class ConversationRepository
             receivedAt = message.receivedAt,
             sentInterface = message.sentInterface,
             signatureVerified = message.signatureVerified,
+            threadId = message.threadId, // FIELD_THREAD bytes; null = Main
         )
 
         /**
@@ -1346,5 +1374,101 @@ class ConversationRepository
             } catch (e: Exception) {
                 null
             }
+        // --- Threads (P1, threads-spec §5) ---
+
+        /**
+         * Threads of one contact's conversation, most recent activity first
+         * (chip bar / thread sheet order). Archived threads excluded unless
+         * [includeArchived]. Main is not a row here — it is always the first
+         * chip by construction (P2 invariant).
+         */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
+        suspend fun threadsForConversation(
+            peerHash: String,
+            includeArchived: Boolean = false,
+        ): Flow<List<ThreadEntity>> {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
+                ?: return flowOf(emptyList())
+            return threadDao.threadsForConversation(identityHash, peerHash, includeArchived)
+        }
+
+        /** Messages of one thread, oldest first (pinned-root thread view). */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
+        suspend fun messagesForThread(
+            peerHash: String,
+            threadId: ByteArray,
+        ): Flow<List<MessageEntity>> {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
+                ?: return flowOf(emptyList())
+            return messageDao.getMessagesForThread(peerHash, identityHash, threadId)
+        }
+
+        /** Paged thread messages (newest first), mirroring [getMessagesPaged] for Main. */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
+        suspend fun getThreadMessagesPaged(
+            peerHash: String,
+            threadId: ByteArray,
+        ): Flow<PagingData<MessageEntity>> {
+            val identityHash =
+                localIdentityDao.getActiveIdentitySync()?.identityHash
+                    ?: return emptyFlow()
+            return Pager(
+                config =
+                    PagingConfig(
+                        pageSize = 30,
+                        initialLoadSize = 30,
+                        prefetchDistance = 20,
+                        enablePlaceholders = false,
+                    ),
+                pagingSourceFactory = {
+                    messageDao.getMessagesForThreadPaged(peerHash, identityHash, threadId)
+                },
+            ).flow
+        }
+
+        /** Unread received-message count for one thread (chip unread dot). */
+        suspend fun unreadCountForThread(
+            peerHash: String,
+            threadId: ByteArray,
+        ): Int {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return 0
+            return messageDao.getUnreadCountForThread(peerHash, identityHash, threadId)
+        }
+
+        /** Unread received-message count for Main (`threadId IS NULL`). */
+        suspend fun unreadCountForMain(peerHash: String): Int {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return 0
+            return messageDao.getUnreadCountForMain(peerHash, identityHash)
+        }
+
+        /** Per-thread unread counts for a conversation; the null-threadId row is Main. */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
+        suspend fun observeUnreadCountsPerThread(peerHash: String): Flow<List<ThreadUnreadCount>> {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
+                ?: return flowOf(emptyList())
+            return messageDao.observeUnreadCountsPerThread(peerHash, identityHash)
+        }
+
+        /**
+         * Dormancy sweep (spec §5): non-archived threads idle beyond
+         * [ThreadPolicy.DORMANCY_WINDOW_MS]. Derived state — the sweep only
+         * reports; any new message revives a thread via [ThreadGrouping].
+         */
+        suspend fun dormantThreads(
+            peerHash: String,
+            now: Long = System.currentTimeMillis(),
+        ): List<ThreadEntity> {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
+                ?: return emptyList()
+            return threadDao.dormantThreads(identityHash, now - ThreadPolicy.DORMANCY_WINDOW_MS)
+        }
+
+        /** Mark one thread's received messages read (opening a thread view). */
+        suspend fun markThreadAsRead(
+            peerHash: String,
+            threadId: ByteArray,
+        ) {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
+            messageDao.markThreadMessagesAsRead(peerHash, identityHash, threadId)
         }
     }

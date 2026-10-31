@@ -35,6 +35,7 @@ object ThreadGrouping {
      * @param content message content used for the implicit title
      * @param activityAt activity watermark (local receive/send time)
      */
+    @Suppress("LongParameterList") // DAO pair + full message-activity context; grouping needs all of it atomically
     suspend fun applyMessageActivity(
         threadDao: ThreadDao,
         messageDao: MessageDao,

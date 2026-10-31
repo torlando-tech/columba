@@ -1,0 +1,79 @@
+# 03-chip-switch.yaml
+#
+# Spec §6.2 + §6.7: chip tap swaps the message list in place (Main shows only
+# Main rows, the thread chip only thread rows) and the composer retargets —
+# per-thread drafts mean text typed in one target is gone in the other and
+# restored on the way back.
+#
+# The thread gets TWO messages: THREAD_TOKEN titles the chip (so it stays
+# visible in the chip bar on both targets and cannot prove list membership),
+# THREAD_MSG2 is a plain reply that is only ever visible inside the thread —
+# its presence/absence is what proves the list swap.
+#
+# Params: APP_ID, PEER_HASH, PEER_NAME, MAIN_TOKEN, THREAD_TOKEN, THREAD_MSG2,
+#         DRAFT_TOKEN.
+appId: ${APP_ID}
+---
+- runFlow:
+    file: lib/open-self-chat.yaml
+    env:
+      APP_ID: ${APP_ID}
+      PEER_HASH: ${PEER_HASH}
+      PEER_NAME: ${PEER_NAME}
+
+- extendedWaitUntil:
+    visible: "Main"
+    timeout: 10000
+
+# Seed: one Main message + one thread with two messages.
+- tapOn: "Main"
+- tapOn: "Type a message..."
+- inputText: ${MAIN_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${MAIN_TOKEN}
+- tapOn: "More threads"
+- extendedWaitUntil:
+    visible: "Threads"
+    timeout: 10000
+- tapOn: "+ New"
+- tapOn: "Reply in thread…"
+- inputText: ${THREAD_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${THREAD_TOKEN}
+    timeout: 30000
+- tapOn: "Reply in thread…"
+- inputText: ${THREAD_MSG2}
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${THREAD_MSG2}
+    timeout: 30000
+
+# In the thread: thread rows only — the Main message is not in this list.
+- assertNotVisible: ${MAIN_TOKEN}
+
+# Switch to Main: Main rows only (THREAD_MSG2 is nowhere on Main; the chip
+# label carries THREAD_TOKEN by design, so it is not used for membership).
+- tapOn: "Main"
+- assertVisible: ${MAIN_TOKEN}
+- assertNotVisible: ${THREAD_MSG2}
+
+# Composer retarget: an unsent draft typed in the thread does not follow the
+# composer to Main, and is restored when the thread chip is tapped again.
+- tapOn:
+    text: ".*${THREAD_TOKEN}.*"
+- tapOn: "Reply in thread…"
+- inputText: ${DRAFT_TOKEN}
+- tapOn: "Main"
+- assertNotVisible: ${DRAFT_TOKEN}
+- tapOn:
+    text: ".*${THREAD_TOKEN}.*"
+- extendedWaitUntil:
+    visible: ${DRAFT_TOKEN}
+    timeout: 10000
+- assertVisible: ${THREAD_MSG2}
+- takeScreenshot: threads-chip-switch

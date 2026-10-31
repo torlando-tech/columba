@@ -329,6 +329,23 @@ class TestReceiver : BroadcastReceiver() {
             )
             return
         }
-        TestController.handleSend(app, method, to, text, tryPropagationOnFail = tryProp)
+        // Optional thread fields (threads P1 device smoke): `thread` = hex
+        // FIELD_THREAD bytes, `reply_to` = hex target message hash, `quote` =
+        // quoted text. Together they reproduce wire cases 1-4 from adb:
+        //   case 1/3: --es thread T
+        //   case 2/4: --es thread T --es reply_to H --es quote Q
+        val threadHex = intent.getStringExtra("thread")?.takeIf { it.isNotEmpty() }
+        val replyToHex = intent.getStringExtra("reply_to")?.takeIf { it.isNotEmpty() }
+        val quote = intent.getStringExtra("quote")?.takeIf { it.isNotEmpty() }
+        TestController.handleSend(
+            app,
+            method,
+            to,
+            text,
+            tryPropagationOnFail = tryProp,
+            threadHex = threadHex,
+            replyToMessageId = replyToHex,
+            replyQuotedContent = quote,
+        )
     }
 }

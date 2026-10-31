@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.service.ActiveConversationManagerTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:21:09.199Z" hostname="hermes-agent" time="0.373">
+  <properties/>
+  <testcase name="setActive can switch between conversations" classname="network.columba.app.service.ActiveConversationManagerTest" time="0.358"/>
+  <testcase name="initial state is null" classname="network.columba.app.service.ActiveConversationManagerTest" time="0.002"/>
+  <testcase name="setActive with null clears state" classname="network.columba.app.service.ActiveConversationManagerTest" time="0.002"/>
+  <testcase name="StateFlow emits updates" classname="network.columba.app.service.ActiveConversationManagerTest" time="0.004"/>
+  <testcase name="setActive updates state correctly" classname="network.columba.app.service.ActiveConversationManagerTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.model.InterfaceTypeTest" tests="22" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:18.901Z" hostname="hermes-agent" time="0.012">
+  <properties/>
+  <testcase name="fromName returns TCP_CLIENT for BackboneInterface names" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.008"/>
+  <testcase name="fromName returns TCP_SERVER for TCPServerInterface names" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns BLE for AndroidBLE interface names" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns UNKNOWN for unrecognized names" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns UNKNOWN for None string" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="enum values are correct" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns RNODE for RNode interface names" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns TCP_CLIENT for TCPInterface names" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns AUTO for AutoInterface names" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName recognises legacy stored values for backwards compat" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns AUTO for Auto Discovery string" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns UNKNOWN for null" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns TCP_CLIENT for TCPClientInterface names" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="shared instance classifier matches the labelLocalInterface output" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns BLE for BLE interface names" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="deprecated fromInterfaceName delegates to fromName" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns BLE for BLEPeerInterface names" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns AUTO for AutoInterfacePeer names" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns RNODE for BLE-connected RNode interfaces" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.001"/>
+  <testcase name="fromName is case insensitive" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName returns UNKNOWN for blank string" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <testcase name="fromName detects embedded interface type names" classname="network.columba.app.data.model.InterfaceTypeTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

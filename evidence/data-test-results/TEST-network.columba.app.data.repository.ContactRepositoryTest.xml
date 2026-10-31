@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.repository.ContactRepositoryTest" tests="40" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:19.132Z" hostname="hermes-agent" time="7.376">
+  <properties/>
+  <testcase name="updateContactStatus - database error returns failure" classname="network.columba.app.data.repository.ContactRepositoryTest" time="1.068"/>
+  <testcase name="setAsMyRelay - clearOther false does not clear existing relay" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.321"/>
+  <testcase name="setAsMyRelay - clearOther true clears existing relay" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.18"/>
+  <testcase name="addPendingContact - announce with empty public key adds as pending" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.271"/>
+  <testcase name="getMyRelay - no relay returns null" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.13"/>
+  <testcase name="getAnyRelay - calls DAO without identity filter" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.13"/>
+  <testcase name="resetContactForRetry - database error returns failure" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.129"/>
+  <testcase name="setAsMyRelay - updates contact in dao" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.127"/>
+  <testcase name="getContactsByStatus - returns contacts matching statuses" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.377"/>
+  <testcase name="clearMyRelay - calls dao with identity hash" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.133"/>
+  <testcase name="addPendingContact - existing announce resolves immediately" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.141"/>
+  <testcase name="hasContact - contact exists returns true" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.126"/>
+  <testcase name="addPendingContact - no active identity returns failure" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.123"/>
+  <testcase name="resetContactForRetry - no active identity returns failure" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.125"/>
+  <testcase name="addPendingContact - database error returns failure" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.131"/>
+  <testcase name="setAsMyRelay - no active identity returns early" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.129"/>
+  <testcase name="getContact - returns null when not found" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.132"/>
+  <testcase name="getContactsByStatusForActiveIdentity - returns contacts for active identity" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.119"/>
+  <testcase name="updateContactWithIdentity - database error returns failure" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.125"/>
+  <testcase name="clearMyRelay - no active identity returns early" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.122"/>
+  <testcase name="resetContactForRetry - success updates status and timestamp" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.137"/>
+  <testcase name="updateContactStatus - no active identity returns failure" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.131"/>
+  <testcase name="hasContact - contact does not exist returns false" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.144"/>
+  <testcase name="getContactsByStatus - returns empty list when no matches" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.133"/>
+  <testcase name="getContact - returns contact from dao" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.13"/>
+  <testcase name="getMyRelay - has relay returns contact" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.143"/>
+  <testcase name="addPendingContact - no announce adds as pending" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.204"/>
+  <testcase name="getAnyRelay vs getMyRelay - getAnyRelay works without active identity" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.313"/>
+  <testcase name="getContact - no active identity returns null" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.241"/>
+  <testcase name="getContactsByStatusForActiveIdentity - no active identity returns empty" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.241"/>
+  <testcase name="getAnyRelay - returns first relay regardless of identity" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.19"/>
+  <testcase name="hasContact - no active identity returns false" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.171"/>
+  <testcase name="updateContactWithIdentity - success updates dao" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.153"/>
+  <testcase name="getMyRelay - no active identity returns null" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.129"/>
+  <testcase name="getAnyRelay - does not require active identity" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.118"/>
+  <testcase name="updateContactStatus - success updates to PENDING_IDENTITY" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.12"/>
+  <testcase name="getAnyRelay - returns null when no relay exists" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.136"/>
+  <testcase name="updateContactStatus - success updates to UNRESOLVED" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.124"/>
+  <testcase name="updateContactWithIdentity - no active identity returns failure" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.127"/>
+  <testcase name="getAnyRelay - returns relay contact when exists" classname="network.columba.app.data.repository.ContactRepositoryTest" time="0.144"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

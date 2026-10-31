@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.service.MessageCollectorTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:21:35.188Z" hostname="hermes-agent" time="6.554">
+  <properties/>
+  <testcase name="pre-seeded message IDs prevent duplicate notifications on restart" classname="network.columba.app.service.MessageCollectorTest" time="4.136"/>
+  <testcase name="processMessage handles announce lookup failure gracefully for notifications" classname="network.columba.app.service.MessageCollectorTest" time="0.306"/>
+  <testcase name="updatePeerName ignores blank names" classname="network.columba.app.service.MessageCollectorTest" time="0.13"/>
+  <testcase name="processMessage uses favorite status from announce for notification" classname="network.columba.app.service.MessageCollectorTest" time="0.317"/>
+  <testcase name="processMessage uses cached peer name for notification" classname="network.columba.app.service.MessageCollectorTest" time="0.389"/>
+  <testcase name="processMessage truncates long message preview for notification" classname="network.columba.app.service.MessageCollectorTest" time="0.285"/>
+  <testcase name="processMessage skips in-memory duplicate" classname="network.columba.app.service.MessageCollectorTest" time="0.493"/>
+  <testcase name="startCollecting is idempotent" classname="network.columba.app.service.MessageCollectorTest" time="0.018"/>
+  <testcase name="updatePeerName caches peer name" classname="network.columba.app.service.MessageCollectorTest" time="0.12"/>
+  <testcase name="stopCollecting clears caches" classname="network.columba.app.service.MessageCollectorTest" time="0.066"/>
+  <testcase name="processMessage shows notification for broadcast message" classname="network.columba.app.service.MessageCollectorTest" time="0.287"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

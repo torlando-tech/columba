@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.model.CodecProfileTest" tests="30" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:27:39.415Z" hostname="hermes-agent" time="3.861">
+  <properties/>
+  <testcase name="recommendFromProbe returns DEFAULT for failed probe" classname="network.columba.app.ui.model.CodecProfileTest" time="2.811"/>
+  <testcase name="getConservativeBandwidthBps ignores zero values" classname="network.columba.app.ui.model.CodecProfileTest" time="0.036"/>
+  <testcase name="recommendFromProbe returns BANDWIDTH_VERY_LOW for slow links" classname="network.columba.app.ui.model.CodecProfileTest" time="0.034"/>
+  <testcase name="recommendFromProbe returns BANDWIDTH_ULTRA_LOW for very slow links" classname="network.columba.app.ui.model.CodecProfileTest" time="0.04"/>
+  <testcase name="getConservativeBandwidthBps returns null when no metrics" classname="network.columba.app.ui.model.CodecProfileTest" time="0.04"/>
+  <testcase name="CodecProfile fromCode returns null for invalid code" classname="network.columba.app.ui.model.CodecProfileTest" time="0.033"/>
+  <testcase name="CodecProfile DEFAULT is QUALITY_MEDIUM" classname="network.columba.app.ui.model.CodecProfileTest" time="0.027"/>
+  <testcase name="each CodecProfile has unique code" classname="network.columba.app.ui.model.CodecProfileTest" time="0.04"/>
+  <testcase name="recommendFromProbe at 4000 bps threshold recommends BANDWIDTH_LOW" classname="network.columba.app.ui.model.CodecProfileTest" time="0.021"/>
+  <testcase name="recommendFromProbe at 10000 bps threshold recommends QUALITY_MEDIUM" classname="network.columba.app.ui.model.CodecProfileTest" time="0.021"/>
+  <testcase name="recommendFromProbe at 64000 bps threshold recommends QUALITY_MAX" classname="network.columba.app.ui.model.CodecProfileTest" time="0.022"/>
+  <testcase name="recommendFromProbe returns QUALITY_MAX for fast links" classname="network.columba.app.ui.model.CodecProfileTest" time="0.021"/>
+  <testcase name="TCP with slow intermediate hop recommends conservative codec" classname="network.columba.app.ui.model.CodecProfileTest" time="0.022"/>
+  <testcase name="LATENCY_LOW and LATENCY_ULTRA_LOW are experimental" classname="network.columba.app.ui.model.CodecProfileTest" time="0.02"/>
+  <testcase name="CodecProfile fromCode returns correct profile" classname="network.columba.app.ui.model.CodecProfileTest" time="0.025"/>
+  <testcase name="recommendFromProbe returns BANDWIDTH_LOW for limited bandwidth" classname="network.columba.app.ui.model.CodecProfileTest" time="0.023"/>
+  <testcase name="fast local TCP link recommends high quality codec" classname="network.columba.app.ui.model.CodecProfileTest" time="0.022"/>
+  <testcase name="getConservativeBandwidthBps uses min of establishment and nextHop when no expectedRate" classname="network.columba.app.ui.model.CodecProfileTest" time="0.021"/>
+  <testcase name="non-latency profiles are not experimental" classname="network.columba.app.ui.model.CodecProfileTest" time="0.02"/>
+  <testcase name="getConservativeBandwidthBps returns establishment when no nextHop" classname="network.columba.app.ui.model.CodecProfileTest" time="0.029"/>
+  <testcase name="recommendFromProbe returns DEFAULT when probe has no data" classname="network.columba.app.ui.model.CodecProfileTest" time="0.025"/>
+  <testcase name="typical BLE link recommends low bandwidth codec" classname="network.columba.app.ui.model.CodecProfileTest" time="0.024"/>
+  <testcase name="recommendFromProbe returns QUALITY_HIGH for good bandwidth" classname="network.columba.app.ui.model.CodecProfileTest" time="0.026"/>
+  <testcase name="getConservativeBandwidthBps prefers expectedRateBps when available" classname="network.columba.app.ui.model.CodecProfileTest" time="0.021"/>
+  <testcase name="getConservativeBandwidthBps uses min when nextHop is lower than establishment" classname="network.columba.app.ui.model.CodecProfileTest" time="0.018"/>
+  <testcase name="recommendFromProbe at 1500 bps threshold recommends BANDWIDTH_VERY_LOW" classname="network.columba.app.ui.model.CodecProfileTest" time="0.021"/>
+  <testcase name="each CodecProfile has displayName and description" classname="network.columba.app.ui.model.CodecProfileTest" time="0.038"/>
+  <testcase name="recommendFromProbe at 32000 bps threshold recommends QUALITY_HIGH" classname="network.columba.app.ui.model.CodecProfileTest" time="0.019"/>
+  <testcase name="getConservativeBandwidthBps returns nextHop when no establishment" classname="network.columba.app.ui.model.CodecProfileTest" time="0.021"/>
+  <testcase name="recommendFromProbe returns QUALITY_MEDIUM for moderate bandwidth" classname="network.columba.app.ui.model.CodecProfileTest" time="0.029"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

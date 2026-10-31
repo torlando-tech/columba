@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.ThemeEditorViewModelTest" tests="35" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:44:34.123Z" hostname="hermes-agent" time="3.117">
+  <properties/>
+  <testcase name="updateSelectedColor in harmonized mode with TERTIARY does not regenerate from primary" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="2.498"/>
+  <testcase name="getSelectedColor returns secondary when SECONDARY is selected" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.013"/>
+  <testcase name="updateSelectedColor in custom mode with TERTIARY updates color and backup" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.012"/>
+  <testcase name="updateSelectedColor in harmonized mode with PRIMARY regenerates secondary and tertiary" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.039"/>
+  <testcase name="loadTheme loads seed colors not palette colors" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.021"/>
+  <testcase name="selectColorRole updates selectedColorRole to PRIMARY" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.011"/>
+  <testcase name="init with themeId loads existing theme" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.02"/>
+  <testcase name="toggleHarmonizedMode OFF to ON saves custom colors and generates harmonized colors" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.011"/>
+  <testcase name="init with no themeId starts with empty state" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.009"/>
+  <testcase name="updateSelectedColor updates state correctly" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.01"/>
+  <testcase name="init with invalid themeId sets error state" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.012"/>
+  <testcase name="saveTheme passes all three seed ARGBs to repository" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.032"/>
+  <testcase name="saveTheme creates new theme when themeId is null" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.015"/>
+  <testcase name="toggleHarmonizedMode ON to OFF with no backup keeps current colors" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.01"/>
+  <testcase name="saveAndApplyTheme handles save errors" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.026"/>
+  <testcase name="updateSelectedColor in custom mode with SECONDARY updates color and backup" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.01"/>
+  <testcase name="selectColorRole updates selectedColorRole to TERTIARY" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.01"/>
+  <testcase name="updateThemeName updates state correctly" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.009"/>
+  <testcase name="saveAndApplyTheme saves new theme and calls saveThemePreference" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.123"/>
+  <testcase name="seed color preservation across edit cycles" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.018"/>
+  <testcase name="updateSelectedColor in custom mode with PRIMARY only updates primary" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.009"/>
+  <testcase name="saveAndApplyTheme validates empty theme name" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.016"/>
+  <testcase name="getSelectedColor returns primary when PRIMARY is selected" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.011"/>
+  <testcase name="saveAndApplyTheme updates existing theme and applies it" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.037"/>
+  <testcase name="saveTheme sets error state on repository failure" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.015"/>
+  <testcase name="saveAndApplyTheme handles theme retrieval errors after save" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.02"/>
+  <testcase name="updateSelectedColor in harmonized mode with SECONDARY does not regenerate from primary" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.01"/>
+  <testcase name="selectColorRole updates selectedColorRole to SECONDARY" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.01"/>
+  <testcase name="updateThemeDescription updates state correctly" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.009"/>
+  <testcase name="getSelectedColor returns tertiary when TERTIARY is selected" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.01"/>
+  <testcase name="toggleHarmonizedMode ON to OFF restores colors from backup" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.009"/>
+  <testcase name="saveTheme does not save when theme name is empty" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.011"/>
+  <testcase name="clearError removes error message" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.008"/>
+  <testcase name="toggleHarmonizedMode multiple times preserves original custom colors" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.008"/>
+  <testcase name="saveTheme updates existing theme when themeId is set" classname="network.columba.app.viewmodel.ThemeEditorViewModelTest" time="0.016"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" tests="51" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:35:44.735Z" hostname="hermes-agent" time="12.163">
+  <properties/>
+  <testcase name="customIntervalDialog_validInput_confirmEnabled" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="6.4"/>
+  <testcase name="intervalChips_1hSelected_showsAsSelected" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.195"/>
+  <testcase name="announceStatus_nextAnnounceInHours_displaysHoursAndMinutes" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.149"/>
+  <testcase name="intervalChips_3hSelected_showsAsSelected" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.131"/>
+  <testcase name="customIntervalDialog_inputAboveMax_confirmDisabled" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.295"/>
+  <testcase name="header_displaysDescription" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.105"/>
+  <testcase name="intervalChips_6hSelected_showsAsSelected" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.101"/>
+  <testcase name="intervalChip_click1h_invokesOnIntervalChange" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.104"/>
+  <testcase name="intervalChip_click3h_invokesOnIntervalChange" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.126"/>
+  <testcase name="intervalChips_customChipDisplayed" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.109"/>
+  <testcase name="intervalChip_click6h_invokesOnIntervalChange" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.111"/>
+  <testcase name="customIntervalDialog_displaysTitle" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.174"/>
+  <testcase name="header_displaysCardTitle" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.09"/>
+  <testcase name="intervalChip_click12h_invokesOnIntervalChange" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.095"/>
+  <testcase name="customIntervalDialog_inputBelowMin_confirmDisabled" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.202"/>
+  <testcase name="customIntervalDialog_confirmClick_invokesOnIntervalChange" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.177"/>
+  <testcase name="edgeCase_allNullTimestamps_rendersWithoutCrash" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.091"/>
+  <testcase name="toggle_enabled_switchIsOn" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.088"/>
+  <testcase name="announceStatus_noNextAnnounce_hidesNextAnnounceText" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.098"/>
+  <testcase name="intervalSelector_hidden_whenDisabled" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.068"/>
+  <testcase name="header_displaysTitle" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.083"/>
+  <testcase name="intervalSelector_displayed_whenEnabled" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.088"/>
+  <testcase name="announceStatus_noLastAnnounce_displaysNoAnnouncesMessage" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.077"/>
+  <testcase name="intervalSelector_displaysCurrentInterval" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.096"/>
+  <testcase name="intervalChips_12hSelected_showsAsSelected" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.143"/>
+  <testcase name="customIntervalDialog_displaysInstructions" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.139"/>
+  <testcase name="customIntervalDialog_displaysTextField" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.121"/>
+  <testcase name="manualAnnounce_click_invokesCallback" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.08"/>
+  <testcase name="intervalChips_customInterval_customChipSelected" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.076"/>
+  <testcase name="toggle_disabled_switchIsOff" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.068"/>
+  <testcase name="edgeCase_disabledState_hidesIntervalAndStatus" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.069"/>
+  <testcase name="intervalChips_allPresetsDisplayed" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.094"/>
+  <testcase name="customIntervalDialog_prefilledWithCurrentInterval" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.151"/>
+  <testcase name="customChip_click_opensDialog" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.123"/>
+  <testcase name="manualAnnounce_announcing_buttonDisabled" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.087"/>
+  <testcase name="announceStatus_nextAnnounceInMinutes_displaysMinutes" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.065"/>
+  <testcase name="customIntervalDialog_cancelClick_dismissesWithoutCallback" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.148"/>
+  <testcase name="customIntervalDialog_emptyInput_confirmDisabled" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.142"/>
+  <testcase name="announceStatus_hoursAgo_displaysHoursAndMinutes" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.072"/>
+  <testcase name="manualAnnounce_notAnnouncing_buttonEnabled" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.079"/>
+  <testcase name="announceStatus_nextAnnounceSoon_displaysSoon" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.064"/>
+  <testcase name="customIntervalDialog_displaysCancelButton" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.106"/>
+  <testcase name="manualAnnounce_error_displaysErrorMessage" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.066"/>
+  <testcase name="customIntervalDialog_invalidInput_showsError" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.165"/>
+  <testcase name="intervalSelector_displaysSingularHour" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.074"/>
+  <testcase name="announceStatus_justAnnounced_displaysJustNow" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.069"/>
+  <testcase name="manualAnnounce_success_displaysSuccessMessage" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.08"/>
+  <testcase name="announceStatus_minutesAgo_displaysMinutes" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.067"/>
+  <testcase name="manualAnnounce_displaysButton" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.069"/>
+  <testcase name="customIntervalDialog_displaysConfirmButton" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.114"/>
+  <testcase name="manualAnnounce_announcing_displaysAnnouncingText" classname="network.columba.app.ui.screens.settings.cards.AutoAnnounceCardTest" time="0.079"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" tests="46" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:33:11.105Z" hostname="hermes-agent" time="12.322">
+  <properties/>
+  <testcase name="radiusStep_displaysZoomRangeSection" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="6.043"/>
+  <testcase name="locationStep_showsErrorForLongitudeAbove180" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.829"/>
+  <testcase name="downloadingStep_cancelButtonCallsOnCancel" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.197"/>
+  <testcase name="locationStep_displaysLatitudeField" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.192"/>
+  <testcase name="downloadingStep_showsPreparingStatus" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.137"/>
+  <testcase name="downloadingStep_cancelButtonNotVisibleOnError" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.136"/>
+  <testcase name="locationStep_errorClearsWhenLocationSetExternally" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.309"/>
+  <testcase name="locationStep_hidesAddressSearchWhenGeocoderUnavailable" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.146"/>
+  <testcase name="locationStep_displaysLongitudeField" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.138"/>
+  <testcase name="locationStep_noErrorForValidLatitude" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.21"/>
+  <testcase name="locationStep_showsErrorForLatitudeAbove90" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.197"/>
+  <testcase name="downloadingStep_showsErrorMessage" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.074"/>
+  <testcase name="radiusStep_hasBackAndNextButtons" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.099"/>
+  <testcase name="downloadingStep_showsErrorStatus" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.088"/>
+  <testcase name="confirmStep_downloadButtonDisabledWithEmptyName" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.14"/>
+  <testcase name="confirmStep_downloadButtonCallsOnStartDownload" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.133"/>
+  <testcase name="locationStep_displaysUseCurrentLocationButton" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.103"/>
+  <testcase name="locationStep_callsOnLocationSetWithValidCoordinates" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.243"/>
+  <testcase name="locationStep_nextButtonDisabledWithoutLocation" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.095"/>
+  <testcase name="locationStep_displaysGeohashField" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.104"/>
+  <testcase name="locationStep_displaysAddressSearchResults" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.107"/>
+  <testcase name="radiusStep_displaysEstimatedDownloadCard" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.129"/>
+  <testcase name="locationStep_displaysAddressSearchError" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.097"/>
+  <testcase name="locationStep_displaysAddressSearchField" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.091"/>
+  <testcase name="downloadingStep_cancelButtonVisibleDuringDownload" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.062"/>
+  <testcase name="locationStep_showsInvalidNumberForNonNumericInput" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.149"/>
+  <testcase name="locationStep_noErrorWhileTypingNegativeSign" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.143"/>
+  <testcase name="summaryRow_displaysNumericValue" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.061"/>
+  <testcase name="locationStep_nextButtonEnabledWithLocation" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.11"/>
+  <testcase name="confirmStep_displaysNameField" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.095"/>
+  <testcase name="confirmStep_displaysSummary" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.076"/>
+  <testcase name="radiusStep_nextButtonCallsOnNext" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.093"/>
+  <testcase name="radiusStep_backButtonCallsOnBack" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.083"/>
+  <testcase name="radiusStep_displaysAllRadiusOptions" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.077"/>
+  <testcase name="locationStep_showsErrorForLatitudeBelowNegative90" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.155"/>
+  <testcase name="downloadingStep_showsPreparingWhenProgressNull" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.078"/>
+  <testcase name="downloadingStep_showsDownloadingStatus" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.062"/>
+  <testcase name="locationStep_displaysInstructions" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.087"/>
+  <testcase name="confirmStep_displaysWifiWarning" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.079"/>
+  <testcase name="downloadingStep_cancelButtonNotVisibleWhenComplete" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.062"/>
+  <testcase name="locationStep_showsLocationSetCard" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.097"/>
+  <testcase name="confirmStep_downloadButtonEnabledWithName" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.08"/>
+  <testcase name="downloadingStep_showsCompleteStatus" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.061"/>
+  <testcase name="locationStep_showsLoadingIndicatorDuringSearch" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.079"/>
+  <testcase name="summaryRow_displaysLabelAndValue" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.054"/>
+  <testcase name="radiusStep_displaysTitle" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreenTest" time="0.12"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

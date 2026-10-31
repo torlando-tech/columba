@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.map.TileDownloadManagerRobolectricTest" tests="27" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:18:49.779Z" hostname="hermes-agent" time="11.37">
+  <properties/>
+  <testcase name="downloadRegion with RMSP updates progress status through lifecycle" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="8.977"/>
+  <testcase name="downloadRegion with RMSP sets ERROR status on exception" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.171"/>
+  <testcase name="downloadRegion with RMSP source deduplicates tiles" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.172"/>
+  <testcase name="unpackRmspTiles rejects negative tile size" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.051"/>
+  <testcase name="downloadRegion with RMSP source returns file on success" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.175"/>
+  <testcase name="unpackRmspTiles accepts valid tile data" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.034"/>
+  <testcase name="unpackRmspTiles rejects excessive tile size" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.046"/>
+  <testcase name="unpackRmspTiles rejects coordinates out of bounds for zoom" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.043"/>
+  <testcase name="getOfflineMapsDir returns same directory on multiple calls" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.027"/>
+  <testcase name="RMSP tile data with truncated tile entry is handled" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.199"/>
+  <testcase name="estimateDownload returns reasonable tile count for small radius" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.046"/>
+  <testcase name="downloadRegion with RMSP source handles empty tile data gracefully" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.115"/>
+  <testcase name="downloadRegion with RMSP source returns null when no tiles received" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.138"/>
+  <testcase name="RMSP uses appropriate geohash precision for small radius" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.136"/>
+  <testcase name="estimateDownload scales with zoom range" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.036"/>
+  <testcase name="unpackRmspTiles rejects excessive tile count" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.032"/>
+  <testcase name="unpackRmspTiles rejects negative coordinates" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.029"/>
+  <testcase name="RMSP tile data with insufficient header bytes is handled" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.133"/>
+  <testcase name="unpackRmspTiles rejects invalid zoom level" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.032"/>
+  <testcase name="cancel method sets isCancelled flag" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.03"/>
+  <testcase name="cancel followed by reset restores idle state" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.03"/>
+  <testcase name="error message is captured in progress state" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.128"/>
+  <testcase name="getOfflineMapsDir creates directory" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.024"/>
+  <testcase name="reset clears progress state" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.029"/>
+  <testcase name="unpackRmspTiles rejects negative tile count" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.027"/>
+  <testcase name="estimateDownload scales with radius" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.037"/>
+  <testcase name="RMSP uses appropriate geohash precision for large radius" classname="network.columba.app.map.TileDownloadManagerRobolectricTest" time="0.121"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

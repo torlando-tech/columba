@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.repository.SettingsRepositoryCrossProcessTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:20:15.265Z" hostname="hermes-agent" time="6.618">
+  <properties/>
+  <testcase name="lastAutoAnnounceTimeFlow emits null when no value set" classname="network.columba.app.repository.SettingsRepositoryCrossProcessTest" time="5.794"/>
+  <testcase name="saveLastAutoAnnounceTime does not write to DataStore" classname="network.columba.app.repository.SettingsRepositoryCrossProcessTest" time="0.095"/>
+  <testcase name="saveLastAutoAnnounceTime writes to SharedPreferences" classname="network.columba.app.repository.SettingsRepositoryCrossProcessTest" time="0.068"/>
+  <testcase name="lastAutoAnnounceTimeFlow emits only on distinct values" classname="network.columba.app.repository.SettingsRepositoryCrossProcessTest" time="0.067"/>
+  <testcase name="saveNetworkChangeAnnounceTime writes to SharedPreferences" classname="network.columba.app.repository.SettingsRepositoryCrossProcessTest" time="0.057"/>
+  <testcase name="repository write is visible to service accessor" classname="network.columba.app.repository.SettingsRepositoryCrossProcessTest" time="0.056"/>
+  <testcase name="networkChangeAnnounceTimeFlow emits null when no value set" classname="network.columba.app.repository.SettingsRepositoryCrossProcessTest" time="0.046"/>
+  <testcase name="lastAutoAnnounceTimeFlow emits value from SharedPreferences" classname="network.columba.app.repository.SettingsRepositoryCrossProcessTest" time="0.049"/>
+  <testcase name="service write is visible to repository flow" classname="network.columba.app.repository.SettingsRepositoryCrossProcessTest" time="0.047"/>
+  <testcase name="networkChangeAnnounceTimeFlow emits value from SharedPreferences" classname="network.columba.app.repository.SettingsRepositoryCrossProcessTest" time="0.045"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

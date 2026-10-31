@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.map.OfflineMapStyleBuilderTest" tests="29" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:18:47.048Z" hostname="hermes-agent" time="0.217">
+  <properties/>
+  <testcase name="buildOfflineStyle sets name correctly" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.029"/>
+  <testcase name="isValidMBTiles returns false for non-existent file" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="style layers have paint or layout properties" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.002"/>
+  <testcase name="style JSON has required top-level keys" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.002"/>
+  <testcase name="buildOfflineStyle includes road layers" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.038"/>
+  <testcase name="layers array is not empty" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.002"/>
+  <testcase name="buildOfflineStyle includes base layers" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="buildOfflineStyle creates mbtiles URL source" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="style layers have valid types" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.088"/>
+  <testcase name="buildOfflineStyle sets version to 8" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="style layers reference openmaptiles source" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="buildCombinedOfflineStyle creates raster layers for non-existent files" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.019"/>
+  <testcase name="buildCombinedOfflineStyle handles empty list" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="buildOfflineStyle uses default name when not specified" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.0"/>
+  <testcase name="buildCombinedOfflineStyle returns valid JSON" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="buildOfflineStyle includes water layer" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="buildOfflineStyle returns valid JSON" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.0"/>
+  <testcase name="buildOfflineStyle handles paths with special characters" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="isValidMBTiles returns true for existing non-empty file" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.006"/>
+  <testcase name="buildCombinedOfflineStyle creates multiple sources" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.0"/>
+  <testcase name="sources object has openmaptiles key" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="isValidMBTiles returns false for empty file" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.0"/>
+  <testcase name="isValidMBTiles returns false for empty path" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="buildOfflineStyle includes background layer" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.0"/>
+  <testcase name="buildOfflineStyle handles paths with spaces" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="isValidMBTiles returns false for directory path" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.003"/>
+  <testcase name="buildOfflineStyle includes place labels" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="buildHybridStyle returns valid JSON" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.001"/>
+  <testcase name="buildHybridStyle currently delegates to buildOfflineStyle" classname="network.columba.app.map.OfflineMapStyleBuilderTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

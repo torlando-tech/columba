@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" tests="32" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:20:56.771Z" hostname="hermes-agent" time="11.647">
+  <properties/>
+  <testcase name="direct telemetry applies provenance replay and privacy admission" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="7.005"/>
+  <testcase name="announceExists returns false when announce does not exist" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.166"/>
+  <testcase name="lookupDisplayName returns null when identity hash not found" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.157"/>
+  <testcase name="incoming activity admission requires active identity" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.12"/>
+  <testcase name="messageExists returns true when message exists" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.122"/>
+  <testcase name="verified delivery proof updates outgoing recipient activity" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.115"/>
+  <testcase name="persistMessage allows known contact when blocking enabled" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.126"/>
+  <testcase name="lookupDisplayName returns announce name when no contact" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.115"/>
+  <testcase name="persistAnnounce inserts new announce into database" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.241"/>
+  <testcase name="persistMessage does NOT insert duplicate message - key deduplication test" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.13"/>
+  <testcase name="persistMessage allows message from non-blocked peer" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.115"/>
+  <testcase name="messageExists returns false when no active identity" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.115"/>
+  <testcase name="persistMessage returns false when no active identity" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.131"/>
+  <testcase name="persistMessage does not increment unread for duplicate" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.13"/>
+  <testcase name="incoming activity admission rejects replay blocked unknown and propagated messages" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.147"/>
+  <testcase name="persistMessage blocks message from blocked peer" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.118"/>
+  <testcase name="persistAnnounce computedIdentityHash matches HashUtils output" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.228"/>
+  <testcase name="incoming message records local reception time instead of sender clock" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.124"/>
+  <testcase name="persistPeerIdentity saves peer identity to database" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.224"/>
+  <testcase name="persistMessage creates new conversation when none exists" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.136"/>
+  <testcase name="persistMessage updates existing conversation" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.131"/>
+  <testcase name="persistMessage saves new message to database" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.119"/>
+  <testcase name="persistAnnounce stores computedIdentityHash in database" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.219"/>
+  <testcase name="persistMessage blocks unknown sender when setting enabled" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.115"/>
+  <testcase name="lookupDisplayName returns contact nickname first" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.12"/>
+  <testcase name="outgoing undelivered message does not update peer activity" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.11"/>
+  <testcase name="lookupDisplayName finds announce by identity hash fallback" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.104"/>
+  <testcase name="announceExists returns true when announce exists" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.104"/>
+  <testcase name="messageExists returns false when message does not exist" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.142"/>
+  <testcase name="delivery proof resolves message after active identity changes" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.135"/>
+  <testcase name="incoming message cannot be mistaken for outgoing proof" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.134"/>
+  <testcase name="lookupDisplayName returns null when no contact or announce" classname="network.columba.app.rns.host.persistence.ServicePersistenceManagerDatabaseTest" time="0.109"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

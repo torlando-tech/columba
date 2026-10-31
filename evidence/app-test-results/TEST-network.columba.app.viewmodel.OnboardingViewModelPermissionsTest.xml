@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.OnboardingViewModelPermissionsTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:43:10.371Z" hostname="hermes-agent" time="9.016">
+  <properties/>
+  <testcase name="checkBlePermissionsStatus_preservesPriorDeniedFlagOnResumeWithDenials" classname="network.columba.app.viewmodel.OnboardingViewModelPermissionsTest" time="6.588"/>
+  <testcase name="checkBlePermissionsStatus_clearsDeniedFlagWhenPermissionsNowGranted" classname="network.columba.app.viewmodel.OnboardingViewModelPermissionsTest" time="0.355"/>
+  <testcase name="checkBatteryOptimizationStatus_setsExemptToTrueWhenIgnoring" classname="network.columba.app.viewmodel.OnboardingViewModelPermissionsTest" time="0.284"/>
+  <testcase name="checkNotificationPermissionStatus_setsGrantedTrueWhenPermissionGranted" classname="network.columba.app.viewmodel.OnboardingViewModelPermissionsTest" time="0.232"/>
+  <testcase name="checkNotificationPermissionStatus_setsGrantedFalseWhenPermissionDenied" classname="network.columba.app.viewmodel.OnboardingViewModelPermissionsTest" time="0.232"/>
+  <testcase name="checkBlePermissionsStatus_doesNotSetDeniedTrueOnFreshInstall" classname="network.columba.app.viewmodel.OnboardingViewModelPermissionsTest" time="0.336"/>
+  <testcase name="checkBatteryOptimizationStatus_setsExemptToFalseWhenNotIgnoring" classname="network.columba.app.viewmodel.OnboardingViewModelPermissionsTest" time="0.216"/>
+  <testcase name="checkBlePermissionsStatus_doesNotMutateSelectedInterfaces" classname="network.columba.app.viewmodel.OnboardingViewModelPermissionsTest" time="0.221"/>
+  <testcase name="checkBlePermissionsStatus_setsGrantedTrueWhenAllGranted" classname="network.columba.app.viewmodel.OnboardingViewModelPermissionsTest" time="0.23"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

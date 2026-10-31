@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.crypto.IdentityKeyEncryptorTest" tests="26" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:14:52.739Z" hostname="hermes-agent" time="12.361">
+  <properties/>
+  <testcase name="encryptForExport produces portable encrypted data" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="2.949"/>
+  <testcase name="encryptForExport produces different ciphertext each time due to random IV" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="1.318"/>
+  <testcase name="secureWipe handles empty array" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.026"/>
+  <testcase name="verifyPassword returns true for correct password" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.63"/>
+  <testcase name="password verification hash is deterministic with same salt" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.705"/>
+  <testcase name="extractSalt returns null for data too short for salt" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.025"/>
+  <testcase name="verifyPassword returns false for wrong password" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.64"/>
+  <testcase name="decryptFromExport throws on truncated data" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.023"/>
+  <testcase name="extractSalt returns salt from password protected data format" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.02"/>
+  <testcase name="requiresPassword returns false for device-only prefix" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.021"/>
+  <testcase name="getEncryptionVersion returns version for device-only prefix" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.019"/>
+  <testcase name="requiresPassword returns true for password prefix" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.018"/>
+  <testcase name="requiresPassword returns false for empty data" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.018"/>
+  <testcase name="encryptForExport and decryptFromExport round trip" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="1.282"/>
+  <testcase name="secureWipe zeroes out byte array" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.022"/>
+  <testcase name="extractSalt returns null for empty data" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.017"/>
+  <testcase name="password verification hash differs with different salt" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.627"/>
+  <testcase name="export encryption is not device-bound" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.674"/>
+  <testcase name="decryptFromExport throws on wrong password" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="1.267"/>
+  <testcase name="decryptFromExport throws on empty data" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.02"/>
+  <testcase name="encryptForExport rejects wrong key size" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.022"/>
+  <testcase name="getEncryptionVersion returns -1 for empty data" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.019"/>
+  <testcase name="getEncryptionVersion returns version for password prefix" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.019"/>
+  <testcase name="password verification hash has expected size" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.348"/>
+  <testcase name="decryptFromExport throws on tampered data" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="1.285"/>
+  <testcase name="extractSalt returns null for device-only prefix" classname="network.columba.app.data.crypto.IdentityKeyEncryptorTest" time="0.023"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.components.VoiceMessageComponentsTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:27:08.522Z" hostname="hermes-agent" time="7.777">
+  <properties/>
+  <testcase name="selected recording preview exposes playback duration and remove action" classname="network.columba.app.ui.components.VoiceMessageComponentsTest" time="6.069"/>
+  <testcase name="recording state exposes stop and cancel actions" classname="network.columba.app.ui.components.VoiceMessageComponentsTest" time="0.154"/>
+  <testcase name="voice bubble exposes play semantics" classname="network.columba.app.ui.components.VoiceMessageComponentsTest" time="0.133"/>
+  <testcase name="unsupported recorder explains that voice messages are unavailable" classname="network.columba.app.ui.components.VoiceMessageComponentsTest" time="0.116"/>
+  <testcase name="voice bubble identifies unsupported audio" classname="network.columba.app.ui.components.VoiceMessageComponentsTest" time="0.108"/>
+  <testcase name="active call explains that voice recording is unavailable" classname="network.columba.app.ui.components.VoiceMessageComponentsTest" time="0.105"/>
+  <testcase name="voice bubble identifies unavailable audio" classname="network.columba.app.ui.components.VoiceMessageComponentsTest" time="0.11"/>
+  <testcase name="voice bubble remains readable and compact at two hundred percent font scale" classname="network.columba.app.ui.components.VoiceMessageComponentsTest" time="0.103"/>
+  <testcase name="voice bubble does not add card edge padding" classname="network.columba.app.ui.components.VoiceMessageComponentsTest" time="0.093"/>
+  <testcase name="voice bubble shows probed duration before playback" classname="network.columba.app.ui.components.VoiceMessageComponentsTest" time="0.146"/>
+  <testcase name="playing voice bubble exposes pause and progress semantics" classname="network.columba.app.ui.components.VoiceMessageComponentsTest" time="0.106"/>
+  <testcase name="permanently denied microphone permission opens app settings" classname="network.columba.app.ui.components.VoiceMessageComponentsTest" time="0.147"/>
+  <testcase name="missing microphone permission exposes grant action" classname="network.columba.app.ui.components.VoiceMessageComponentsTest" time="0.093"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

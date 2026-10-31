@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.CallViewModelTest" tests="45" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:40:28.096Z" hostname="hermes-agent" time="4.462">
+  <properties/>
+  <testcase name="isSpeakerOn exposes telephony isSpeakerOn" classname="network.columba.app.viewmodel.CallViewModelTest" time="2.744"/>
+  <testcase name="formatDuration formats seconds correctly" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.078"/>
+  <testcase name="getStatusText returns empty for Idle state" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.065"/>
+  <testcase name="hasActiveCall returns true when call is active" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.059"/>
+  <testcase name="peerName falls back to formatted hash when contact not found" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.092"/>
+  <testcase name="isConnecting is true when state is Connecting" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.045"/>
+  <testcase name="peerName handles repository exception gracefully" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.051"/>
+  <testcase name="getStatusText returns Rejected for Rejected state" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.048"/>
+  <testcase name="getStatusText returns Call Ended for Ended state" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.046"/>
+  <testcase name="isPttMode exposes telephony isPttMode" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.045"/>
+  <testcase name="getStatusText returns Incoming for Incoming state" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.037"/>
+  <testcase name="hasActiveCall returns true when ringing" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.037"/>
+  <testcase name="hasActiveCall returns true when incoming" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.037"/>
+  <testcase name="toggleMute captures correct mute value" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.037"/>
+  <testcase name="formatDuration formats longer durations correctly" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.031"/>
+  <testcase name="hasActiveCall returns false when idle" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.031"/>
+  <testcase name="getStatusText returns Ringing for Ringing state" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.03"/>
+  <testcase name="callState exposes telephony callState" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.029"/>
+  <testcase name="isConnecting is false when state is Idle" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.029"/>
+  <testcase name="outgoing call admission is blocked while voice recording owns microphone" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.05"/>
+  <testcase name="isMuted exposes telephony isMuted" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.029"/>
+  <testcase name="declineCall sets call state to ended" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.033"/>
+  <testcase name="formatDuration formats minutes correctly" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.025"/>
+  <testcase name="isConnecting is false when state is Ringing" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.027"/>
+  <testcase name="duration timer cancels previous timer on re-emit of Active" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.028"/>
+  <testcase name="hasActiveCall returns true when connecting" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.024"/>
+  <testcase name="duplicate outgoing call cannot clear active admission" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.051"/>
+  <testcase name="duration timer stops and resets when call ends" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.029"/>
+  <testcase name="isPttActive exposes telephony isPttActive" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.027"/>
+  <testcase name="setPttActive is ignored when PTT mode off" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.043"/>
+  <testcase name="endCall sets call state to ended" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.027"/>
+  <testcase name="remoteIdentity exposes telephony remoteIdentity" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.022"/>
+  <testcase name="duration timer starts when call becomes Active" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.028"/>
+  <testcase name="getStatusText returns Connecting for Connecting state" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.069"/>
+  <testcase name="hasActiveCall returns false when ended" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.037"/>
+  <testcase name="peerName resolves from contact repository" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.048"/>
+  <testcase name="togglePttMode enables PTT and mutes transmit" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.046"/>
+  <testcase name="getStatusText returns Line Busy for Busy state" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.024"/>
+  <testcase name="answerCall returns success when telephony succeeds" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.029"/>
+  <testcase name="toggleSpeaker captures correct speaker value" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.025"/>
+  <testcase name="setPttActive released mutes and deactivates" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.036"/>
+  <testcase name="initiateCall updates telephony with correct hash" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.025"/>
+  <testcase name="togglePttMode disables PTT and unmutes transmit" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.04"/>
+  <testcase name="setPttActive pressed unmutes and activates" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.032"/>
+  <testcase name="getStatusText returns Connected for Active state" classname="network.columba.app.viewmodel.CallViewModelTest" time="0.019"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

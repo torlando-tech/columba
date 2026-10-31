@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" tests="30" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:41:19.426Z" hostname="hermes-agent" time="3.652">
+  <properties/>
+  <testcase name="clearInfo clears info message" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="2.994"/>
+  <testcase name="multiple interfaceStatusFlow emissions update state correctly" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.023"/>
+  <testcase name="validateConfig allows same name when editing existing interface" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.154"/>
+  <testcase name="interfaceStatusFlow updates interfaceOnlineStatus in state" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.021"/>
+  <testcase name="validateConfig rejects duplicate when editing to another existing name" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.024"/>
+  <testcase name="showEditDialog with unsupported interface type returns default config state" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.022"/>
+  <testcase name="showEditDialog with AutoInterface null ports converts to empty strings" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.02"/>
+  <testcase name="viewModel_transportFlowEmits_updatesState" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.017"/>
+  <testcase name="viewModel_transportFlow_doesNotChangeOtherStateFields" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.017"/>
+  <testcase name="interface online status is updated in state after event" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.019"/>
+  <testcase name="non-NativeReticulumProtocol does not crash" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.025"/>
+  <testcase name="ViewModel initializes without error with NativeReticulumProtocol" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.017"/>
+  <testcase name="clearSuccess clears success message" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.019"/>
+  <testcase name="multiple interface status events all update state" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.017"/>
+  <testcase name="showEditDialog with TCPClient handles optional fields correctly" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.018"/>
+  <testcase name="observeBluetoothState handles BleConnectionsState Error variant" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.017"/>
+  <testcase name="validateConfig rejects TCPServer with invalid listen port" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.013"/>
+  <testcase name="showEditDialog with AutoInterface valid ports converts correctly" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.015"/>
+  <testcase name="viewModel_initialState_seedsCurrentTransportFromSnapshot" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.015"/>
+  <testcase name="validateConfig accepts valid TCPServer configuration" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.02"/>
+  <testcase name="handleBluetoothStateChange returns early when no BLE interfaces enabled" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.013"/>
+  <testcase name="validateConfig sets nameError for case-insensitive duplicate" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.015"/>
+  <testcase name="clearError clears error message" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.014"/>
+  <testcase name="ViewModel observes NativeReticulumProtocol interfaceStatusFlow" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.039"/>
+  <testcase name="interfaceStatusFlow handles malformed JSON gracefully" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.014"/>
+  <testcase name="validateConfig sets nameError for duplicate interface name" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.014"/>
+  <testcase name="showEditDialog with TCPServer converts correctly" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.015"/>
+  <testcase name="interface status event triggers state update" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.01"/>
+  <testcase name="interfaceStatusFlow handles empty JSON object" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.011"/>
+  <testcase name="validateConfig rejects TCPServer with invalid listen IP" classname="network.columba.app.viewmodel.InterfaceManagementViewModelStatusEventTest" time="0.011"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

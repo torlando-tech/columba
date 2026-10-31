@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.repository.AnnounceRepositoryTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:18.923Z" hostname="hermes-agent" time="0.199">
+  <properties/>
+  <testcase name="saveAnnounce_preservesRecentInterfaceTypesWhenCurrentPathChanges" classname="network.columba.app.data.repository.AnnounceRepositoryTest" time="0.065"/>
+  <testcase name="olderOrEqualObservation_cannotRegressCurrentPathOrSightingMetadata" classname="network.columba.app.data.repository.AnnounceRepositoryTest" time="0.027"/>
+  <testcase name="importedFavorite_canonicalizesParentBeforeSightingExpires" classname="network.columba.app.data.repository.AnnounceRepositoryTest" time="0.025"/>
+  <testcase name="expiredHistoricalInterface_doesNotMatchCurrentPagingWindow" classname="network.columba.app.data.repository.AnnounceRepositoryTest" time="0.041"/>
+  <testcase name="staleSighting_isExcludedFromHistoryButFavoriteMatchesItsCurrentInterface" classname="network.columba.app.data.repository.AnnounceRepositoryTest" time="0.037"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

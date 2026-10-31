@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.service.PropagationNodeManagerTest" tests="82" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:21:45.760Z" hostname="hermes-agent" time="14.264">
+  <properties/>
+  <testcase name="stop - cancels announce observer" classname="network.columba.app.service.PropagationNodeManagerTest" time="3.766"/>
+  <testcase name="setManualRelayByHash - does not add contact if exists" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.195"/>
+  <testcase name="selectBestRelay - excludes specified hash" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.201"/>
+  <testcase name="currentRelay - uses announce peerName when available" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.198"/>
+  <testcase name="enableAutoSelect - no propagation nodes does not set relay" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.157"/>
+  <testcase name="start - does not auto-select when auto mode disabled" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.17"/>
+  <testcase name="setManualRelay - saves manual node" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.152"/>
+  <testcase name="triggerSync - emits Error on protocol failure" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.151"/>
+  <testcase name="syncProgress Complete transitions to Idle after delay" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.188"/>
+  <testcase name="setManualRelay - updates current relay state" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.149"/>
+  <testcase name="availableRelaysState - maps announces to RelayInfo correctly" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.147"/>
+  <testcase name="getAlternativeRelay - excludes multiple relays" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.134"/>
+  <testcase name="start - startup auto-select respects autoSelect setting" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.144"/>
+  <testcase name="syncProgress is Idle when messagesReceived is zero" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.137"/>
+  <testcase name="clearRelay - clears manual node setting" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.125"/>
+  <testcase name="syncWithPropagationNode - does not auto-select when auto disabled" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.135"/>
+  <testcase name="setManualRelayByHash - saves manual node to settings" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.129"/>
+  <testcase name="availableRelaysState - empty when no propagation nodes" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.138"/>
+  <testcase name="start - logs warning when no propagation nodes in database" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.138"/>
+  <testcase name="getAlternativeRelay - selects by hop count among available" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.118"/>
+  <testcase name="clearRelay - clears my relay in contacts" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.121"/>
+  <testcase name="selectBestRelay - aborts if addContactFromAnnounce fails" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.125"/>
+  <testcase name="setManualRelayByHash - adds contact if not exists" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.138"/>
+  <testcase name="onRelayDeleted - autoSelectNew false disables auto-select and does not select relay" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.141"/>
+  <testcase name="availableRelaysState - deduplicates relays by destinationHash" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.128"/>
+  <testcase name="start - can be called without error" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.119"/>
+  <testcase name="start - logs nodeType counts with propagation nodes present" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.13"/>
+  <testcase name="start - auto-selects relay on startup when auto mode and no relay" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.128"/>
+  <testcase name="setManualRelay - configures protocol via database update" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.13"/>
+  <testcase name="setManualRelay - disables auto-select" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.132"/>
+  <testcase name="syncWithPropagationNode - skips when already syncing" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.128"/>
+  <testcase name="syncWithPropagationNode - handles protocol failure gracefully" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.124"/>
+  <testcase name="currentRelay - falls back to contact lastInteractionTimestamp when no announce" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.122"/>
+  <testcase name="clearRelay - clears current state" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.122"/>
+  <testcase name="currentRelay - falls back to truncated hash when no names available" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.119"/>
+  <testcase name="setManualRelayByHash - sets as my relay" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.121"/>
+  <testcase name="start - does not auto-select when relay already configured" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.121"/>
+  <testcase name="enableAutoSelect - selects nearest node" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.121"/>
+  <testcase name="setManualRelay - skips contact add when no announce available" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.129"/>
+  <testcase name="onRelayDeleted - autoSelectNew true no available nodes does not set relay" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.126"/>
+  <testcase name="triggerSync - succeeds when relay loads within timeout" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.135"/>
+  <testcase name="triggerSync - emits NoRelay when no relay configured" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.118"/>
+  <testcase name="setManualRelayByHash - with nickname passes nickname to addPendingContact" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.119"/>
+  <testcase name="triggerSync - skips when already syncing" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.131"/>
+  <testcase name="getAlternativeRelay - returns nearest excluding current" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.117"/>
+  <testcase name="getAlternativeRelay - with empty exclude list returns nearest" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.115"/>
+  <testcase name="start - handles getNodeTypeCounts exception gracefully" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.135"/>
+  <testcase name="syncWithPropagationNode - proceeds when network is ready" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.126"/>
+  <testcase name="setManualRelayByHash - handles addPendingContact failure gracefully" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.119"/>
+  <testcase name="triggerSync - times out and emits Error when relay state never loads" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.123"/>
+  <testcase name="currentRelay - falls back to customNickname when no announce" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.117"/>
+  <testcase name="triggerSync - emits Success on successful sync" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.126"/>
+  <testcase name="triggerSync - updates lastSyncTimestamp on success" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.125"/>
+  <testcase name="triggerSync waits for relay state to load before checking relay" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.124"/>
+  <testcase name="syncWithPropagationNode - updates lastSyncTimestamp on success" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.122"/>
+  <testcase name="setManualRelayByHash - with null nickname passes null to addPendingContact" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.117"/>
+  <testcase name="onRelayDeleted - autoSelectNew true enables auto-select and picks relay" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.12"/>
+  <testcase name="triggerSync - timeout with silent flag does not emit result" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.126"/>
+  <testcase name="selectBestRelay - adds contact if not exists" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.12"/>
+  <testcase name="getAlternativeRelay - returns null when all excluded" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.115"/>
+  <testcase name="selectBestRelay - no-op when no propagation nodes available" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.119"/>
+  <testcase name="selectBestRelay - picks nearest by hop count" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.123"/>
+  <testcase name="onRelayDeleted - autoSelectNew true excludes deleted hash" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.123"/>
+  <testcase name="setManualRelayByHash - disables auto-select" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.121"/>
+  <testcase name="enableAutoSelect - enables auto-select setting" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.121"/>
+  <testcase name="currentRelay - uses announce lastSeenTimestamp when available" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.116"/>
+  <testcase name="start - observeRelayChanges syncs to Python on relay update" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.119"/>
+  <testcase name="start - observeRelayChanges clears Python on relay removal" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.122"/>
+  <testcase name="triggerSync - does not time out when relay loads immediately" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.116"/>
+  <testcase name="selectBestRelay - does not add contact if already exists" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.119"/>
+  <testcase name="setManualRelay - adds contact if not exists and announce available" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.116"/>
+  <testcase name="syncWithPropagationNode - skips when network is initializing" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.113"/>
+  <testcase name="setManualRelay - sets as my relay in contacts" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.115"/>
+  <testcase name="getAlternativeRelay - returns null when no propagation nodes available" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.115"/>
+  <testcase name="syncWithPropagationNode - skips when network not ready" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.125"/>
+  <testcase name="start - loads lastSyncTimestamp from settings" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.116"/>
+  <testcase name="syncWithPropagationNode - tries auto-select when no relay and auto enabled" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.118"/>
+  <testcase name="setManualRelay - does not add contact if already exists" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.117"/>
+  <testcase name="syncWithPropagationNode - skips when no relay configured" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.113"/>
+  <testcase name="onRelayDeleted - clears manual node setting" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.114"/>
+  <testcase name="enableAutoSelect - clears manual node" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.12"/>
+  <testcase name="syncProgress is Complete when messagesReceived greater than zero" classname="network.columba.app.service.PropagationNodeManagerTest" time="0.118"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

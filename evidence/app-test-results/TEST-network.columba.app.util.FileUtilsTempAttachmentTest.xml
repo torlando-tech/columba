@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.util.FileUtilsTempAttachmentTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:39:14.375Z" hostname="hermes-agent" time="3.611">
+  <properties/>
+  <testcase name="cleanupTempAttachments removes old files" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="2.937"/>
+  <testcase name="cleanupTempAttachments preserves recent files" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="0.043"/>
+  <testcase name="writeTempAttachment creates unique files for same filename" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="0.038"/>
+  <testcase name="writeTempAttachment includes timestamp in filename" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="0.034"/>
+  <testcase name="writeTempAttachment handles empty data" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="0.031"/>
+  <testcase name="MAX_SINGLE_FILE_SIZE is Int MAX_VALUE" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="0.032"/>
+  <testcase name="MAX_TOTAL_ATTACHMENT_SIZE is Int MAX_VALUE" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="0.029"/>
+  <testcase name="writeTempAttachment creates file in attachments subdirectory" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="0.042"/>
+  <testcase name="FILE_TRANSFER_THRESHOLD is 500KB" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="0.023"/>
+  <testcase name="writeTempAttachment sanitizes unsafe characters in filename" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="0.024"/>
+  <testcase name="writeTempAttachment preserves safe characters in filename" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="0.029"/>
+  <testcase name="writeTempAttachment creates file with correct content" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="0.029"/>
+  <testcase name="wouldExceedSizeLimit returns false for typical file sizes" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="0.024"/>
+  <testcase name="writeTempAttachment handles large data" classname="network.columba.app.util.FileUtilsTempAttachmentTest" time="0.031"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

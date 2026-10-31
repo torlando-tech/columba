@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.util.TextSanitizerTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:27.331Z" hostname="hermes-agent" time="0.006">
+  <properties/>
+  <testcase name="sanitize preserves emoji" classname="network.columba.app.data.util.TextSanitizerTest" time="0.002"/>
+  <testcase name="sanitizePreview uses MAX_PREVIEW_LENGTH" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <testcase name="sanitize truncates to max length" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <testcase name="sanitize preserves newlines and carriage returns" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <testcase name="sanitize handles complex mixed input" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <testcase name="sanitizePeerName uses MAX_PEER_NAME_LENGTH" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <testcase name="sanitizeMessage uses MAX_MESSAGE_LENGTH" classname="network.columba.app.data.util.TextSanitizerTest" time="0.002"/>
+  <testcase name="sanitize removes control characters except newlines" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <testcase name="sanitize handles whitespace-only string" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <testcase name="sanitize normalizes tabs to single space" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <testcase name="sanitize normalizes multiple spaces to single space" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <testcase name="sanitize handles empty string" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <testcase name="sanitize trims leading and trailing whitespace" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <testcase name="constants have expected values" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <testcase name="sanitize preserves unicode characters" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <testcase name="sanitize normalizes mixed spaces and tabs" classname="network.columba.app.data.util.TextSanitizerTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

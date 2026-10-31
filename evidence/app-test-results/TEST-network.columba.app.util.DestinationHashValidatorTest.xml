@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.util.DestinationHashValidatorTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:39:04.116Z" hostname="hermes-agent" time="0.05">
+  <properties/>
+  <testcase name="validate validUppercase returnsValidNormalized" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.036"/>
+  <testcase name="getCharacterCount empty returnsZeroOf32" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.002"/>
+  <testcase name="getCharacterCount partial returns12Of32" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.0"/>
+  <testcase name="isValid invalidHash returnsFalse" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.001"/>
+  <testcase name="getCharacterCount withWhitespace trimsForCount" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.0"/>
+  <testcase name="validate invalidChars specialCharacter returnsError" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.0"/>
+  <testcase name="validate invalidChars letterG returnsError" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.001"/>
+  <testcase name="isValid validHash returnsTrue" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.0"/>
+  <testcase name="validate tooLong returnsErrorWithLength" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.0"/>
+  <testcase name="validate invalidChars internalSpace returnsError" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.0"/>
+  <testcase name="validate validLowercase returnsValid" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.001"/>
+  <testcase name="validate trailingWhitespace trimsAndValidates" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.0"/>
+  <testcase name="validate leadingWhitespace trimsAndValidates" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.0"/>
+  <testcase name="getCharacterCount full returns32Of32" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.0"/>
+  <testcase name="validate empty returnsError" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.001"/>
+  <testcase name="validate tooShort returnsErrorWithLength" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.0"/>
+  <testcase name="validate whitespaceOnly returnsError" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.0"/>
+  <testcase name="validate validMixedCase returnsValidNormalized" classname="network.columba.app.util.DestinationHashValidatorTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

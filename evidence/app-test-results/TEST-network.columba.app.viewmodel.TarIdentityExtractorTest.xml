@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.TarIdentityExtractorTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:44:29.086Z" hostname="hermes-agent" time="0.108">
+  <properties/>
+  <testcase name="extract handles entry with size not aligned to 512 bytes" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.095"/>
+  <testcase name="extract throws on truncated archive mid-header" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.001"/>
+  <testcase name="readFully reads complete data" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.0"/>
+  <testcase name="extract handles entry with size exactly 512 bytes" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.0"/>
+  <testcase name="skipFully handles skip past EOF gracefully" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.0"/>
+  <testcase name="extract matches filename ending with slash identity" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.001"/>
+  <testcase name="skipFully with zero bytes is a no-op" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.0"/>
+  <testcase name="readFully returns partial count at EOF" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.0"/>
+  <testcase name="readFully returns 0 on empty stream" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.0"/>
+  <testcase name="extract throws when archive ends before identity found" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.0"/>
+  <testcase name="skipFully skips exact number of bytes" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.0"/>
+  <testcase name="extract skips entries with varied sizes before identity" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.001"/>
+  <testcase name="extract throws on truncated data block" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.0"/>
+  <testcase name="extract finds primary_identity after skipping other entries" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.0"/>
+  <testcase name="extract throws on malformed octal size" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.003"/>
+  <testcase name="extract parses name correctly when zero byte appears in later header field" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.001"/>
+  <testcase name="extract finds primary_identity as first entry" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.0"/>
+  <testcase name="readFully respects offset" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.0"/>
+  <testcase name="extract throws on empty archive" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.0"/>
+  <testcase name="extract handles zero-length entries before identity" classname="network.columba.app.viewmodel.TarIdentityExtractorTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.settings.cards.PrivacyCardTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:37:01.482Z" hostname="hermes-agent" time="7.325">
+  <properties/>
+  <testcase name="privacyCard_displaysCorrectSubtitle_whenEnabled" classname="network.columba.app.ui.screens.settings.cards.PrivacyCardTest" time="5.913"/>
+  <testcase name="privacyCard_displaysDescription_whenExpanded" classname="network.columba.app.ui.screens.settings.cards.PrivacyCardTest" time="0.149"/>
+  <testcase name="privacyCard_displaysMessagesFromContactsOnly_rowLabel" classname="network.columba.app.ui.screens.settings.cards.PrivacyCardTest" time="0.184"/>
+  <testcase name="header_displaysCardTitle" classname="network.columba.app.ui.screens.settings.cards.PrivacyCardTest" time="0.145"/>
+  <testcase name="privacyCard_toggleTriggersCallback" classname="network.columba.app.ui.screens.settings.cards.PrivacyCardTest" time="0.202"/>
+  <testcase name="privacyCard_displaysCallsFromContactsOnly_rowLabelAndOffDescription" classname="network.columba.app.ui.screens.settings.cards.PrivacyCardTest" time="0.118"/>
+  <testcase name="privacyCard_displaysTitle_whenCollapsed" classname="network.columba.app.ui.screens.settings.cards.PrivacyCardTest" time="0.097"/>
+  <testcase name="privacyCard_displaysCorrectSubtitle_whenDisabled" classname="network.columba.app.ui.screens.settings.cards.PrivacyCardTest" time="0.109"/>
+  <testcase name="privacyCard_displaysCallsFromContactsOnly_onDescription" classname="network.columba.app.ui.screens.settings.cards.PrivacyCardTest" time="0.105"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

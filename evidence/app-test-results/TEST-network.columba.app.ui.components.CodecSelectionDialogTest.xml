@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.components.CodecSelectionDialogTest" tests="28" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:23:08.942Z" hostname="hermes-agent" time="9.61">
+  <properties/>
+  <testcase name="clicking Low Bandwidth profile selects it" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="6.151"/>
+  <testcase name="clicking Very Low Bandwidth profile selects it" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.254"/>
+  <testcase name="default profile is QUALITY_MEDIUM" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.084"/>
+  <testcase name="dialog displays title" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.177"/>
+  <testcase name="CodecProfile fromCode returns null for invalid code" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.074"/>
+  <testcase name="clicking Ultra Low Bandwidth profile selects it" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.189"/>
+  <testcase name="CodecProfile DEFAULT is QUALITY_MEDIUM" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.063"/>
+  <testcase name="each CodecProfile has unique code" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.061"/>
+  <testcase name="dialog displays all codec profiles" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.147"/>
+  <testcase name="all codec profiles have correct count" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.093"/>
+  <testcase name="cancel button does not call onProfileSelected" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.134"/>
+  <testcase name="recommended profile does not show experimental badge" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.123"/>
+  <testcase name="CodecProfile fromCode returns correct profile" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.057"/>
+  <testcase name="clicking on profile description text also selects profile" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.143"/>
+  <testcase name="confirm button calls onProfileSelected with current selection" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.148"/>
+  <testcase name="dialog displays Call button" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.113"/>
+  <testcase name="cancel button calls onDismiss" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.132"/>
+  <testcase name="dialog displays description text" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.104"/>
+  <testcase name="experimental profiles show warning indicator" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.119"/>
+  <testcase name="dialog shows selected profile as checked" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.05"/>
+  <testcase name="dialog displays Cancel button" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.101"/>
+  <testcase name="dialog defaults to QUALITY_MEDIUM profile" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.103"/>
+  <testcase name="selecting same profile twice keeps selection" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.176"/>
+  <testcase name="changing selection multiple times updates correctly" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.149"/>
+  <testcase name="dialog displays profile descriptions" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.1"/>
+  <testcase name="each CodecProfile has displayName and description" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.049"/>
+  <testcase name="confirm button calls onProfileSelected with changed selection" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.108"/>
+  <testcase name="clicking profile updates selection" classname="network.columba.app.ui.components.CodecSelectionDialogTest" time="0.113"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

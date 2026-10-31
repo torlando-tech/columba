@@ -24,6 +24,7 @@ import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.dao.RmspServerDao
 import network.columba.app.data.db.dao.CallHistoryDao
 import network.columba.app.data.db.dao.CallHistoryDeletionDao
+import network.columba.app.data.db.dao.ThreadDao
 import network.columba.app.data.db.entity.CallHistoryDeletionEntity
 import network.columba.app.data.db.entity.CallHistoryEntity
 import network.columba.app.data.db.entity.AnnounceEntity
@@ -45,6 +46,7 @@ import network.columba.app.data.db.entity.PendingDeliveryStatusEntity
 import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import network.columba.app.data.db.entity.ReceivedLocationEntity
 import network.columba.app.data.db.entity.RmspServerEntity
+import network.columba.app.data.db.entity.ThreadEntity
 
 @Database(
     entities = [
@@ -69,8 +71,9 @@ import network.columba.app.data.db.entity.RmspServerEntity
         PeerActivityEventEntity::class,
         PendingDeliveryStatusEntity::class,
         PreferredPropagationNodeEntity::class,
+        ThreadEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
@@ -255,6 +258,54 @@ abstract class ColumbaDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * v4 → v5: threads P1 (threads-spec §5) — new `threads` table plus
+         * two nullable columns on `messages` / `drafts`. Strictly additive:
+         * no data rewrite, every pre-existing message keeps
+         * `threadId = NULL` (Main). Ships ahead of the `threads_enabled`
+         * feature flag on purpose (additive migrations land early).
+         *
+         * Index names follow Room's `index_<table>_<columns>` convention so
+         * `runMigrationsAndValidate` against the exported v5 schema passes.
+         */
+        val MIGRATION_4_5: Migration =
+            object : Migration(4, 5) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `threads` (
+                            `threadId` BLOB NOT NULL,
+                            `conversationHash` TEXT NOT NULL,
+                            `identityHash` TEXT NOT NULL,
+                            `rootMessageId` TEXT,
+                            `title` TEXT,
+                            `createdAt` INTEGER NOT NULL,
+                            `lastActivityAt` INTEGER NOT NULL,
+                            `archivedAt` INTEGER,
+                            PRIMARY KEY(`conversationHash`, `identityHash`, `threadId`),
+                            FOREIGN KEY(`conversationHash`, `identityHash`)
+                                REFERENCES `conversations`(`peerHash`, `identityHash`)
+                                ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_threads_identityHash_conversationHash_lastActivityAt` " +
+                            "ON `threads` (`identityHash`, `conversationHash`, `lastActivityAt`)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_threads_rootMessageId` " +
+                            "ON `threads` (`rootMessageId`)",
+                    )
+                    db.execSQL("ALTER TABLE `messages` ADD COLUMN `threadId` BLOB")
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_messages_conversationHash_identityHash_threadId_timestamp` " +
+                            "ON `messages` (`conversationHash`, `identityHash`, `threadId`, `timestamp`)",
+                    )
+                    db.execSQL("ALTER TABLE `drafts` ADD COLUMN `threadId` BLOB")
+                }
+            }
+
         private fun backfillPeerActivity(
             db: SupportSQLiteDatabase,
             sourceQuery: String,
@@ -423,6 +474,57 @@ abstract class ColumbaDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * v10 → v11: threads P1 (threads-spec §5) — new `threads` table plus
+         * two nullable columns on `messages` / `drafts`. Strictly additive:
+         * no data rewrite, every pre-existing message keeps
+         * `threadId = NULL` (Main). Ships ahead of the `threads_enabled`
+         * feature flag on purpose (additive migrations land early).
+         *
+         * Renumbered from the P1 branch's v4 → v5 when rebasing onto main
+         * (main's v5-v10 landed independently).
+         *
+         * Index names follow Room's `index_<table>_<columns>` convention so
+         * `runMigrationsAndValidate` against the exported v11 schema passes.
+         */
+        val MIGRATION_10_11: Migration =
+            object : Migration(10, 11) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `threads` (
+                            `threadId` BLOB NOT NULL,
+                            `conversationHash` TEXT NOT NULL,
+                            `identityHash` TEXT NOT NULL,
+                            `rootMessageId` TEXT,
+                            `title` TEXT,
+                            `createdAt` INTEGER NOT NULL,
+                            `lastActivityAt` INTEGER NOT NULL,
+                            `archivedAt` INTEGER,
+                            PRIMARY KEY(`conversationHash`, `identityHash`, `threadId`),
+                            FOREIGN KEY(`conversationHash`, `identityHash`)
+                                REFERENCES `conversations`(`peerHash`, `identityHash`)
+                                ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_threads_identityHash_conversationHash_lastActivityAt` " +
+                            "ON `threads` (`identityHash`, `conversationHash`, `lastActivityAt`)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_threads_rootMessageId` " +
+                            "ON `threads` (`rootMessageId`)",
+                    )
+                    db.execSQL("ALTER TABLE `messages` ADD COLUMN `threadId` BLOB")
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_messages_conversationHash_identityHash_threadId_timestamp` " +
+                            "ON `messages` (`conversationHash`, `identityHash`, `threadId`, `timestamp`)",
+                    )
+                    db.execSQL("ALTER TABLE `drafts` ADD COLUMN `threadId` BLOB")
+                }
+            }
+
         @Suppress("ReturnCount")
         fun splitReactionsOutOfFieldsJson(fieldsJson: String): Pair<String, String>? =
             try {
@@ -478,4 +580,5 @@ abstract class ColumbaDatabase : RoomDatabase() {
     abstract fun pendingDeliveryStatusDao(): PendingDeliveryStatusDao
 
     abstract fun preferredPropagationNodeDao(): PreferredPropagationNodeDao
+    abstract fun threadDao(): ThreadDao
 }

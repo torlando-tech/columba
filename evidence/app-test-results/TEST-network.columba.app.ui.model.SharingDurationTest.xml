@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.model.SharingDurationTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:28:04.193Z" hostname="hermes-agent" time="0.013">
+  <properties/>
+  <testcase name="calculateEndTime for UNTIL_MIDNIGHT is always after start time" classname="network.columba.app.ui.model.SharingDurationTest" time="0.004"/>
+  <testcase name="ONE_HOUR has correct duration millis" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="INDEFINITE has null duration millis" classname="network.columba.app.ui.model.SharingDurationTest" time="0.001"/>
+  <testcase name="durations are in increasing order" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="FIFTEEN_MINUTES has correct duration millis" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="calculateEndTime returns midnight for UNTIL_MIDNIGHT" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="calculateEndTime returns correct time for FIFTEEN_MINUTES" classname="network.columba.app.ui.model.SharingDurationTest" time="0.001"/>
+  <testcase name="entries are in correct order" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="calculateEndTime returns correct time for FOUR_HOURS" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="FOUR_HOURS has correct duration millis" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="FIFTEEN_MINUTES has correct display text" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="SharingDuration has five entries" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="valueOf returns correct enum for valid names" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="INDEFINITE has correct display text" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="UNTIL_MIDNIGHT has null duration millis" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="calculateEndTime returns null for INDEFINITE" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="calculateEndTime returns correct time for ONE_HOUR" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="ONE_HOUR has correct display text" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="UNTIL_MIDNIGHT has correct display text" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <testcase name="FOUR_HOURS has correct display text" classname="network.columba.app.ui.model.SharingDurationTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

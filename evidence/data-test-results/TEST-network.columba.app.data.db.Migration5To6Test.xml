@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.db.Migration5To6Test" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:12.725Z" hostname="hermes-agent" time="0.091">
+  <properties/>
+  <testcase name="migration rebuilds drafts pk without losing rows" classname="network.columba.app.data.db.Migration5To6Test" time="0.089"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

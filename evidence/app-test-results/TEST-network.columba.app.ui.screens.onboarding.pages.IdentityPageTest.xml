@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" tests="26" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:34:14.362Z" hostname="hermes-agent" time="10.18">
+  <properties/>
+  <testcase name="identityPage_displaysContinueButton" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="6.323"/>
+  <testcase name="identityPage_withDisplayName_valueDisplayed" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.18"/>
+  <testcase name="identityPage_displayNameWithSpecialCharacters_displaysCorrectly" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.168"/>
+  <testcase name="identityPage_backButtonMultipleClicks_triggersCallbackEachTime" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.302"/>
+  <testcase name="identityPage_displaysTitle" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.156"/>
+  <testcase name="identityPage_longDisplayName_displaysCorrectly" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.118"/>
+  <testcase name="identityPage_displaysHelperText" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.118"/>
+  <testcase name="identityPage_nonEmptyDisplayName_displaysValue" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.134"/>
+  <testcase name="identityPage_displaysBackButton" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.125"/>
+  <testcase name="identityPage_continueButtonClick_triggersCallback" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.131"/>
+  <testcase name="identityPage_displayNameUpdate_displaysNewValue" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.312"/>
+  <testcase name="identityPage_continueWithEmptyDisplayName_stillTriggersCallback" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.123"/>
+  <testcase name="identityPage_continueButtonMultipleClicks_triggersCallbackEachTime" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.138"/>
+  <testcase name="identityPage_emptyDisplayName_textFieldAccessible" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.106"/>
+  <testcase name="identityPage_backButtonClick_triggersCallback" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.111"/>
+  <testcase name="identityPage_continueWithDisplayName_triggersCallback" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.105"/>
+  <testcase name="identityPage_displaysDisplayNameLabel" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.099"/>
+  <testcase name="identityPage_displayNameWithEmoji_displaysCorrectly" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.097"/>
+  <testcase name="identityPage_displayNameInput_triggersCallback" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.161"/>
+  <testcase name="identityPage_displayNameClear_callbackReceivesEmptyValue" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.115"/>
+  <testcase name="identityPage_enterNameThenContinue_bothCallbacksWork" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.184"/>
+  <testcase name="identityPage_displayNameWithSpaces_displaysCorrectly" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.09"/>
+  <testcase name="identityPage_enterNameThenGoBack_bothCallbacksWork" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.162"/>
+  <testcase name="identityPage_displayNameChange_callbackReceivesNewValue" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.152"/>
+  <testcase name="identityPage_allElementsDisplayed_initialState" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.086"/>
+  <testcase name="identityPage_displaysDescription" classname="network.columba.app.ui.screens.onboarding.pages.IdentityPageTest" time="0.086"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

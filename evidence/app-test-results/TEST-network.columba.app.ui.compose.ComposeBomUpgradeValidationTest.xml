@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.compose.ComposeBomUpgradeValidationTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:27:25.840Z" hostname="hermes-agent" time="7.78">
+  <properties/>
+  <testcase name="stateChange_triggersRecomposition" classname="network.columba.app.ui.compose.ComposeBomUpgradeValidationTest" time="5.556"/>
+  <testcase name="animatedVisibility_toggleToVisible_displaysContent" classname="network.columba.app.ui.compose.ComposeBomUpgradeValidationTest" time="0.255"/>
+  <testcase name="animatedVisibility_toggleToHidden_removesContent" classname="network.columba.app.ui.compose.ComposeBomUpgradeValidationTest" time="0.165"/>
+  <testcase name="listStateChange_triggersRecomposition" classname="network.columba.app.ui.compose.ComposeBomUpgradeValidationTest" time="0.131"/>
+  <testcase name="animatedVisibility_multipleToggles_handlesCorrectly" classname="network.columba.app.ui.compose.ComposeBomUpgradeValidationTest" time="0.165"/>
+  <testcase name="lazyColumn_withMediumDataset_rendersVisibleItems" classname="network.columba.app.ui.compose.ComposeBomUpgradeValidationTest" time="0.38"/>
+  <testcase name="lazyColumn_withDynamicDataset_updatesCorrectly" classname="network.columba.app.ui.compose.ComposeBomUpgradeValidationTest" time="0.172"/>
+  <testcase name="lazyColumn_rapidScrolling_handlesWithoutCrash" classname="network.columba.app.ui.compose.ComposeBomUpgradeValidationTest" time="0.259"/>
+  <testcase name="animatedVisibility_initiallyHidden_doesNotDisplayContent" classname="network.columba.app.ui.compose.ComposeBomUpgradeValidationTest" time="0.071"/>
+  <testcase name="lazyColumn_withLargeDataset_scrollsToEnd" classname="network.columba.app.ui.compose.ComposeBomUpgradeValidationTest" time="0.128"/>
+  <testcase name="animatedVisibility_initiallyVisible_displaysContent" classname="network.columba.app.ui.compose.ComposeBomUpgradeValidationTest" time="0.089"/>
+  <testcase name="lazyColumn_withSmallDataset_rendersAllItems" classname="network.columba.app.ui.compose.ComposeBomUpgradeValidationTest" time="0.091"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.IdentityManagerViewModelTest" tests="40" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:41:04.209Z" hostname="hermes-agent" time="5.288">
+  <properties/>
+  <testcase name="exportIdentity_emptyFileData_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="2.913"/>
+  <testcase name="deleteIdentity_callsPythonWithCorrectHash" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.031"/>
+  <testcase name="createNewIdentity_success_transitionsToSuccessState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.167"/>
+  <testcase name="exportIdentityAsText_success_transitionsToExportTextReadyState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.018"/>
+  <testcase name="resetUiState_transitionsToIdle" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.017"/>
+  <testcase name="saveExportedIdentityToFile_failure_setsErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="1.142"/>
+  <testcase name="saveExportedIdentityToFile_noExportedUri_doesNothing" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.018"/>
+  <testcase name="importIdentityFromBackup_nullInputStream_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.023"/>
+  <testcase name="importIdentityFromBase32_success_transitionsToSuccessState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.02"/>
+  <testcase name="exportIdentity_repositoryError_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.017"/>
+  <testcase name="importIdentity_fileReadError_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.017"/>
+  <testcase name="importIdentityFromBase32_wrongSize_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.013"/>
+  <testcase name="importIdentity_success_transitionsToSuccessState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.02"/>
+  <testcase name="exportIdentityAsText_emptyFileData_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.011"/>
+  <testcase name="exportIdentity_storesExportedUriForSAFSave" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.014"/>
+  <testcase name="importIdentityFromBase32_pythonError_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.015"/>
+  <testcase name="exportIdentity_success_transitionsToExportReadyState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.013"/>
+  <testcase name="renameIdentity_success_transitionsToSuccessState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.011"/>
+  <testcase name="importIdentityFromBackup_success_transitionsToSuccessState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.017"/>
+  <testcase name="importIdentityFromBase32_duplicateIdentity_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.016"/>
+  <testcase name="importIdentityFromBackup_wrongIdentitySize_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.013"/>
+  <testcase name="switchToIdentity_success_transitionsToSuccess" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.071"/>
+  <testcase name="deleteIdentity_success_transitionsToSuccessState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.011"/>
+  <testcase name="importIdentityFromBase32_databaseError_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.014"/>
+  <testcase name="importIdentityFromBase32_invalidBase32_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.01"/>
+  <testcase name="deleteIdentity_databaseError_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.015"/>
+  <testcase name="switchToIdentity_failure_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.015"/>
+  <testcase name="createNewIdentity_callsPythonWithCorrectDisplayName" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.015"/>
+  <testcase name="initialState_isIdle" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.008"/>
+  <testcase name="createNewIdentity_databaseError_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.015"/>
+  <testcase name="saveExportedIdentityToFile_clearsUriAfterSuccess" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.266"/>
+  <testcase name="createNewIdentity_pythonError_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.012"/>
+  <testcase name="importIdentity_pythonError_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.013"/>
+  <testcase name="activeIdentity_exposesRepositoryFlow" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.01"/>
+  <testcase name="saveExportedIdentityToFile_success_copiesFileAndSetsSuccess" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.216"/>
+  <testcase name="renameIdentity_failure_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.013"/>
+  <testcase name="deleteIdentity_activeIdentity_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.013"/>
+  <testcase name="exportIdentityAsText_protocolException_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.012"/>
+  <testcase name="identities_exposesRepositoryFlow" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.011"/>
+  <testcase name="createNewIdentity_missingIdentityHash_transitionsToErrorState" classname="network.columba.app.viewmodel.IdentityManagerViewModelTest" time="0.011"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

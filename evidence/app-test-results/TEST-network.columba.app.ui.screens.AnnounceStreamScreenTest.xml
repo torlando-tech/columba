@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.AnnounceStreamScreenTest" tests="25" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:28:17.374Z" hostname="hermes-agent" time="13.885">
+  <properties/>
+  <testcase name="announceStreamScreen_displaysReachableCount" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="9.085"/>
+  <testcase name="announceButton_whenAnnouncing_showsProgressIndicator" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.287"/>
+  <testcase name="filterChips_tappingInterface_replacesPriorSelection" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.374"/>
+  <testcase name="filterChips_tappingAll_restoresFullSetFromSingle" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.225"/>
+  <testcase name="announceStreamScreen_searchButtonClick_togglesSearchBar" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.524"/>
+  <testcase name="filterChips_tappingAspect_normalisesMessyMultiState" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.205"/>
+  <testcase name="filterChips_displayInterfaceOptions" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.247"/>
+  <testcase name="announceStreamScreen_displaysAnnounceButton" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.161"/>
+  <testcase name="filterChips_tappingInterface_normalisesMessyMultiState" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.158"/>
+  <testcase name="announceStreamScreen_displaysTitle" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.141"/>
+  <testcase name="announceStreamScreen_displaysSearchButton" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.139"/>
+  <testcase name="filterChips_tappingActiveAspect_snapsBackToAll" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.156"/>
+  <testcase name="announceButton_click_triggersTriggerAnnounce" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.158"/>
+  <testcase name="filterChips_tappingAudioAspect_dropsNodeTypes" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.169"/>
+  <testcase name="filterChips_tappingInterface_selectsExclusively" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.156"/>
+  <testcase name="filterToggle_whenCollapsedWithFilterActive_pillRowSurfacesIt" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.196"/>
+  <testcase name="announceStreamScreen_emptyList_displaysEmptyStateDescription" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.135"/>
+  <testcase name="filterToggle_defaultExpanded_showsHideFiltersIcon" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.119"/>
+  <testcase name="filterChips_tappingAspect_fromAllNarrowsToSingle" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.128"/>
+  <testcase name="announceStreamScreen_emptyList_displaysEmptyState" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.199"/>
+  <testcase name="filterChips_tappingActiveInterface_snapsBackToAll" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.136"/>
+  <testcase name="filterChips_alwaysVisibleAboveList" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.113"/>
+  <testcase name="emptyAnnounceState_displaysCorrectText" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.065"/>
+  <testcase name="announceButton_whenNotAnnouncing_isEnabled" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.125"/>
+  <testcase name="filterToggle_tapping_collapsesChipRows" classname="network.columba.app.ui.screens.AnnounceStreamScreenTest" time="0.154"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

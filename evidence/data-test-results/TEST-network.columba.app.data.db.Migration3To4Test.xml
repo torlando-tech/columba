@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.db.Migration3To4Test" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:12.222Z" hostname="hermes-agent" time="0.029">
+  <properties/>
+  <testcase name="migration_backfillsCurrentInterfaceAsFirstSighting" classname="network.columba.app.data.db.Migration3To4Test" time="0.027"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

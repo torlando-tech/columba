@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.reticulum.protocol.FailedInterfaceTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:20:44.666Z" hostname="hermes-agent" time="0.036">
+  <properties/>
+  <testcase name="FailedInterface defaults recoverable to true" classname="network.columba.app.reticulum.protocol.FailedInterfaceTest" time="0.004"/>
+  <testcase name="typical AutoInterface port conflict scenario" classname="network.columba.app.reticulum.protocol.FailedInterfaceTest" time="0.027"/>
+  <testcase name="FailedInterface can be non-recoverable" classname="network.columba.app.reticulum.protocol.FailedInterfaceTest" time="0.0"/>
+  <testcase name="FailedInterface equality works correctly" classname="network.columba.app.reticulum.protocol.FailedInterfaceTest" time="0.0"/>
+  <testcase name="FailedInterface stores name and error correctly" classname="network.columba.app.reticulum.protocol.FailedInterfaceTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

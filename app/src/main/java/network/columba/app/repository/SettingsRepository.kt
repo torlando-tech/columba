@@ -173,6 +173,12 @@ class SettingsRepository
             val ALLOW_CALLS_FROM_CONTACTS_ONLY = booleanPreferencesKey("allow_calls_from_contacts_only")
             val ALLOW_VOICE_CALLS = booleanPreferencesKey("allow_voice_calls")
 
+            // Threads feature flag (threads-spec rollout): default OFF through
+            // one beta cycle. The v4→v5 DB migration is additive and ships
+            // ahead of this flag on purpose; the flag gates the P2 UI, not
+            // persistence.
+            val THREADS_ENABLED = booleanPreferencesKey("threads_enabled")
+
             // Telemetry collector preferences
             val TELEMETRY_COLLECTOR_ADDRESS = stringPreferencesKey("telemetry_collector_address")
             val TELEMETRY_COLLECTOR_ENABLED = booleanPreferencesKey("telemetry_collector_enabled")
@@ -2400,6 +2406,34 @@ class SettingsRepository
                 .edit()
                 .putBoolean(KEY_BLOCK_UNKNOWN_SENDERS, enabled)
                 .apply()
+        }
+
+        // Threads feature flag
+
+        /**
+         * Flow of the `threads_enabled` feature flag. Default false: threads
+         * ship behind this flag through one beta cycle (threads-spec
+         * rollout). Wire parsing + persistence are flag-independent by design
+         * (additive migration lands ahead of the UI); this gates the P2 UI.
+         */
+        val threadsEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.THREADS_ENABLED] ?: false
+                }.distinctUntilChanged()
+
+        /** Get the `threads_enabled` feature flag (non-flow). */
+        suspend fun getThreadsEnabled(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.THREADS_ENABLED] ?: false
+                }.first()
+
+        /** Save the `threads_enabled` feature flag. */
+        suspend fun saveThreadsEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.THREADS_ENABLED] = enabled
+            }
         }
 
         /**

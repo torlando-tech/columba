@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.ChatsViewModelTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:40:33.330Z" hostname="hermes-agent" time="3.859">
+  <properties/>
+  <testcase name="conversations with unread counts are displayed correctly" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="3.195"/>
+  <testcase name="deleteConversation handles multiple deletions" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.037"/>
+  <testcase name="search results with duplicate peerHash are deduplicated" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.039"/>
+  <testcase name="deleteConversation handles errors gracefully" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.024"/>
+  <testcase name="conversations with null public keys are handled" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.029"/>
+  <testcase name="duplicate peerHash conversations are deduplicated in chatsState" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.036"/>
+  <testcase name="blockUser with blackhole calls blackholeIdentity" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.127"/>
+  <testcase name="chatsState flow emits repository data" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.026"/>
+  <testcase name="getContactLocation returns null when repository returns null" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.063"/>
+  <testcase name="initial state has empty conversations and is loading" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.02"/>
+  <testcase name="blockUser with deleteConversation deletes conversation" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.037"/>
+  <testcase name="blockUser persists block and notifies protocol" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.038"/>
+  <testcase name="getContactLocation delegates to repository" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.018"/>
+  <testcase name="blockUser handles errors gracefully" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.028"/>
+  <testcase name="chatsState flow updates when repository data changes" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.031"/>
+  <testcase name="deleteConversation calls repository" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.021"/>
+  <testcase name="blockUser with null identityHash skips blackhole even when enabled" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.042"/>
+  <testcase name="conversations are sorted by timestamp from repository" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.024"/>
+  <testcase name="chatsState flow starts when subscribed" classname="network.columba.app.viewmodel.ChatsViewModelTest" time="0.017"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

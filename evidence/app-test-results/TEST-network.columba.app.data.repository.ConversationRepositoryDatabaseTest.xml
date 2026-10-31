@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:17:59.468Z" hostname="hermes-agent" time="7.855">
+  <properties/>
+  <testcase name="saveMessage preserves audio mode when large payload is extracted" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="6.495"/>
+  <testcase name="saveMessage preserves audio mode when another field triggers extraction" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="0.171"/>
+  <testcase name="saveMessage does NOT overwrite existing message - key deduplication test" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="0.083"/>
+  <testcase name="markConversationAsRead clears unread count" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="0.071"/>
+  <testcase name="getConversations returns empty when no active identity" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="0.142"/>
+  <testcase name="deleteConversation removes conversation and messages" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="0.091"/>
+  <testcase name="saveMessage inserts new message when it does not exist" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="0.069"/>
+  <testcase name="saveMessage sanitizes message content" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="0.049"/>
+  <testcase name="updateMessageStatus changes message status correctly" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="0.057"/>
+  <testcase name="saveMessage does NOT increment unread count for sent messages" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="0.053"/>
+  <testcase name="saveMessage increments unread count for NEW received messages" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="0.05"/>
+  <testcase name="saveMessage does not increment unread count for duplicate messages" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="0.09"/>
+  <testcase name="getConversations returns conversations for active identity" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="0.059"/>
+  <testcase name="saveMessage creates conversation when it does not exist" classname="network.columba.app.data.repository.ConversationRepositoryDatabaseTest" time="0.053"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

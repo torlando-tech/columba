@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.settings.cards.NetworkCardTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:36:52.163Z" hostname="hermes-agent" time="8.329">
+  <properties/>
+  <testcase name="networkCard_withAllDefaultValues_displaysCorrectly" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="6.041"/>
+  <testcase name="viewNetworkStatusButton_callsCallback" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.304"/>
+  <testcase name="manageInterfacesButton_callsCallback" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.151"/>
+  <testcase name="manageInterfacesButton_disabled_whenSharedInstanceOnline" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.123"/>
+  <testcase name="manageInterfacesButton_callbackCalledOnce" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.133"/>
+  <testcase name="viewNetworkStatusButton_isEnabled" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.122"/>
+  <testcase name="manageInterfacesButton_isEnabled_whenNotSharedInstance" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.109"/>
+  <testcase name="viewNetworkStatusButton_callbackCalledOnce" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.108"/>
+  <testcase name="viewNetworkStatusButton_alwaysEnabled_whenSharedInstance" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.096"/>
+  <testcase name="viewNetworkStatusButton_isDisplayed" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.105"/>
+  <testcase name="manageInterfacesButton_noCallbackWhenDisabled" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.105"/>
+  <testcase name="manageInterfacesButton_enabled_whenSharedInstanceOffline" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.085"/>
+  <testcase name="sharedInstance_displaysDisabledDescription" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.088"/>
+  <testcase name="networkCard_displaysInterfaceDescription_whenNotSharedInstance" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.094"/>
+  <testcase name="networkCard_displaysHeader" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.09"/>
+  <testcase name="networkCard_displaysNetworkStatusDescription" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.091"/>
+  <testcase name="sharedInstanceOffline_displaysNormalDescription" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.097"/>
+  <testcase name="manageInterfacesButton_isDisplayed" classname="network.columba.app.ui.screens.settings.cards.NetworkCardTest" time="0.117"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

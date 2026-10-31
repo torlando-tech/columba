@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.BleConnectionStatusScreenTest" tests="25" skipped="6" failures="0" errors="0" timestamp="2026-10-31T21:28:44.258Z" hostname="hermes-agent" time="12.486">
+  <properties/>
+  <testcase name="performanceMetrics_notDisplayedWhenNoData" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.0">
+    <skipped/>
+  </testcase>
+  <testcase name="successState_withConnections_displaysSummaryCard" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.001">
+    <skipped/>
+  </testcase>
+  <testcase name="successState_withConnections_displaysConnectionDetails" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.0">
+    <skipped/>
+  </testcase>
+  <testcase name="performanceMetrics_displayedWhenDataAvailable" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.0">
+    <skipped/>
+  </testcase>
+  <testcase name="successState_multipleConnections_displaysAllCards" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.0">
+    <skipped/>
+  </testcase>
+  <testcase name="successState_emptyList_displaysNoConnectionsMessage" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.0">
+    <skipped/>
+  </testcase>
+  <testcase name="successState_emptyList_displaysBluetoothDisabledIcon" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="8.895"/>
+  <testcase name="refreshButton_callsViewModelRefresh" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.35"/>
+  <testcase name="successState_withConnections_displaysSignalStrength" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.438"/>
+  <testcase name="backButton_triggersOnBackClick" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.18"/>
+  <testcase name="retryButton_callsViewModelRefresh" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.157"/>
+  <testcase name="disconnectButton_callsViewModelDisconnect" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.248"/>
+  <testcase name="loadingState_displaysTopAppBar" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.184"/>
+  <testcase name="successState_withConnections_displaysConnectionCards" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.196"/>
+  <testcase name="loadingState_displaysLoadingIndicator" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.113"/>
+  <testcase name="signalQuality_displaysExcellent" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.191"/>
+  <testcase name="errorState_displaysErrorMessage" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.124"/>
+  <testcase name="connectionTypeBadge_displaysPeripheral" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.157"/>
+  <testcase name="errorState_displaysRetryButton" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.105"/>
+  <testcase name="connectionTypeBadge_displaysBoth" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.128"/>
+  <testcase name="signalQuality_displaysFair" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.138"/>
+  <testcase name="signalQuality_displaysPoor" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.146"/>
+  <testcase name="successState_peripheralConnection_displaysUnavailableRssi" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.163"/>
+  <testcase name="successState_largeList_isScrollable" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.158"/>
+  <testcase name="connectionTypeBadge_displaysCentral" classname="network.columba.app.ui.screens.BleConnectionStatusScreenTest" time="0.117"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

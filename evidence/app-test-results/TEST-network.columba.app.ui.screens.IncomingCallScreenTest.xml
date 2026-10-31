@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.IncomingCallScreenTest" tests="24" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:30:11.983Z" hostname="hermes-agent" time="8.588">
+  <properties/>
+  <testcase name="screen displays 13-character hash formatted" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="5.93"/>
+  <testcase name="screen displays Incoming Voice Call status text" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.15"/>
+  <testcase name="clicking decline button calls onDecline callback" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.265"/>
+  <testcase name="screen displays caller name with special characters" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.136"/>
+  <testcase name="multiple decline clicks are tracked" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.117"/>
+  <testcase name="multiple answer clicks are tracked" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.134"/>
+  <testcase name="screen renders avatar placeholder without crashing" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.107"/>
+  <testcase name="decline button label exists in UI" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.117"/>
+  <testcase name="answer and decline callbacks are independent" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.118"/>
+  <testcase name="screen displays 12-character hash unchanged" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.091"/>
+  <testcase name="all essential UI elements are displayed together" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.094"/>
+  <testcase name="screen displays short identity hash unchanged" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.082"/>
+  <testcase name="answer button icon is displayed" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.082"/>
+  <testcase name="screen displays formatted identity hash for long hashes" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.1"/>
+  <testcase name="screen displays different caller names correctly" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.082"/>
+  <testcase name="decline button is clickable" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.089"/>
+  <testcase name="decline button icon is displayed" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.074"/>
+  <testcase name="answer button label exists in UI" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.081"/>
+  <testcase name="answer button is clickable" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.079"/>
+  <testcase name="screen displays caller name when provided" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.074"/>
+  <testcase name="screen handles caller name with unicode characters" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.073"/>
+  <testcase name="clicking answer button calls onAnswer callback" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.079"/>
+  <testcase name="screen handles empty caller name" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.072"/>
+  <testcase name="screen handles very long caller name" classname="network.columba.app.ui.screens.IncomingCallScreenTest" time="0.071"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

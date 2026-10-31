@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.navigation.NavigationDestinationRegistryTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:19:36.152Z" hostname="hermes-agent" time="0.504">
+  <properties/>
+  <testcase name="production graph registers every destination through the contract registry" classname="network.columba.app.navigation.NavigationDestinationRegistryTest" time="0.359"/>
+  <testcase name="destination and completion contracts are internally consistent" classname="network.columba.app.navigation.NavigationDestinationRegistryTest" time="0.139"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

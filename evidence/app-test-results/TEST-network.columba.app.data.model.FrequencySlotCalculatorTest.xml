@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.model.FrequencySlotCalculatorTest" tests="25" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:17:38.344Z" hostname="hermes-agent" time="0.236">
+  <properties/>
+  <testcase name="calculateFrequency with US region slot 0 returns correct frequency" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.173"/>
+  <testcase name="calculateFrequency slot spacing matches bandwidth" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <testcase name="formatFrequency 2point4 GHz formats correctly" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.004"/>
+  <testcase name="getNumSlots EU 868-P with 250kHz returns 1 slot" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <testcase name="calculateFrequency with US region slot 50 returns correct frequency" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <testcase name="all region IDs are unique" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.008"/>
+  <testcase name="getNumSlots US region with 250kHz returns 104 slots" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <testcase name="calculateSlotFromFrequency handles all valid slots" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.008"/>
+  <testcase name="formatFrequency EU 868 frequency formats correctly" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.002"/>
+  <testcase name="getNumSlots US region with 125kHz returns 208 slots" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.001"/>
+  <testcase name="all regions have valid frequency ranges" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.003"/>
+  <testcase name="getDefaultSlot EU 868-P returns 0 for single slot band" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <testcase name="calculateSlotFromFrequency returns null for frequency above band" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <testcase name="calculateSlotFromFrequency returns null for non-aligned frequency" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <testcase name="calculateSlotFromFrequency roundtrip works correctly" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <testcase name="formatFrequency 433 MHz band formats correctly" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.001"/>
+  <testcase name="formatFrequency decimal MHz shows 3 decimal places" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <testcase name="calculateSlotFromFrequency returns null for frequency below band" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.001"/>
+  <testcase name="getDefaultSlot US region avoids Meshtastic slots 9 and 20" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <testcase name="getNumSlots EU 433 with 125kHz returns expected slots" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <testcase name="getDefaultSlot returns valid slot for all regions" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.015"/>
+  <testcase name="calculateFrequency with EU 868-P slot 0 returns correct frequency" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.001"/>
+  <testcase name="calculateFrequency with different bandwidths produces different spacing" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <testcase name="formatFrequency whole MHz shows no decimals" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <testcase name="calculateFrequency handles maximum slot number" classname="network.columba.app.data.model.FrequencySlotCalculatorTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

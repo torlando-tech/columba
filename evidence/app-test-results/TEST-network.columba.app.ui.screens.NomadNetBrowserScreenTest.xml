@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.NomadNetBrowserScreenTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:32:30.092Z" hostname="hermes-agent" time="6.765">
+  <properties/>
+  <testcase name="browserCloseSiteMenuItem_whenClicked_invokesOnCloseSiteExactlyOnce" classname="network.columba.app.ui.screens.NomadNetBrowserScreenTest" time="6.151"/>
+  <testcase name="browserCloseSiteMenuItem_displaysCloseSiteText" classname="network.columba.app.ui.screens.NomadNetBrowserScreenTest" time="0.176"/>
+  <testcase name="browserCloseSiteMenuItem_doesNotRenderIdentifyToNodeText" classname="network.columba.app.ui.screens.NomadNetBrowserScreenTest" time="0.151"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

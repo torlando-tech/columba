@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.crypto.IdentityKeyProviderTest" tests="21" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:09.406Z" hostname="hermes-agent" time="0.93">
+  <properties/>
+  <testcase name="disablePasswordProtection fails with wrong password" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.167"/>
+  <testcase name="getDecryptedKeyData returns legacy unencrypted key" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.036"/>
+  <testcase name="disablePasswordProtection updates database correctly" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.039"/>
+  <testcase name="verifyPassword returns true for correct password" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.036"/>
+  <testcase name="getDecryptedKeyData returns decrypted key for device-only encryption" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.035"/>
+  <testcase name="requiresPassword returns false for unknown identity" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.043"/>
+  <testcase name="getDecryptedKeyData rejects device-encrypted key that decrypts to wrong length" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.053"/>
+  <testcase name="verifyPassword returns false for wrong password" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.055"/>
+  <testcase name="enablePasswordProtection fails for already protected identity" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.043"/>
+  <testcase name="enablePasswordProtection updates database correctly" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.039"/>
+  <testcase name="verifyPassword returns true for non-password-protected identity" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.033"/>
+  <testcase name="changePassword updates database correctly" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.039"/>
+  <testcase name="disablePasswordProtection fails for non-password-protected identity" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.031"/>
+  <testcase name="getDecryptedKeyData rejects legacy unencrypted key that is not 64 bytes" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.046"/>
+  <testcase name="getDecryptedKeyData returns decrypted key for password encryption" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.032"/>
+  <testcase name="getDecryptedKeyData returns failure for unknown identity" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.031"/>
+  <testcase name="changePassword fails with wrong old password" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.033"/>
+  <testcase name="getDecryptedKeyData returns failure when password required but not provided" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.033"/>
+  <testcase name="requiresPassword returns false for device-only identity" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.032"/>
+  <testcase name="requiresPassword returns true for password-protected identity" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.03"/>
+  <testcase name="enablePasswordProtection fails for unknown identity" classname="network.columba.app.data.crypto.IdentityKeyProviderTest" time="0.031"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

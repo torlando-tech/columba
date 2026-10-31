@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.rnode.ReviewConfigStepTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:35:13.112Z" hostname="hermes-agent" time="11.579">
+  <properties/>
+  <testcase name="hidesRegionCard_inCustomMode" classname="network.columba.app.ui.screens.rnode.ReviewConfigStepTest" time="9.152"/>
+  <testcase name="showsFrequencyRegionCard_whenNotCustomMode" classname="network.columba.app.ui.screens.rnode.ReviewConfigStepTest" time="0.35"/>
+  <testcase name="interfaceModeSelector_showsDropdownOnClick" classname="network.columba.app.ui.screens.rnode.ReviewConfigStepTest" time="0.955"/>
+  <testcase name="showsCorrectDeviceName_fromViewModel" classname="network.columba.app.ui.screens.rnode.ReviewConfigStepTest" time="0.153"/>
+  <testcase name="advancedSettingsButton_togglesVisibility" classname="network.columba.app.ui.screens.rnode.ReviewConfigStepTest" time="0.25"/>
+  <testcase name="bluetoothMode_showsBluetoothIcon" classname="network.columba.app.ui.screens.rnode.ReviewConfigStepTest" time="0.135"/>
+  <testcase name="showsDutyCycleWarning_forRestrictedRegions" classname="network.columba.app.ui.screens.rnode.ReviewConfigStepTest" time="0.144"/>
+  <testcase name="tcpMode_showsWifiIcon" classname="network.columba.app.ui.screens.rnode.ReviewConfigStepTest" time="0.123"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.OnboardingViewModelTest" tests="37" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:43:20.226Z" hostname="hermes-agent" time="4.571">
+  <properties/>
+  <testcase name="completeOnboarding sets error state on exception" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="3.203"/>
+  <testcase name="onNotificationPermissionResult updates state when denied" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.061"/>
+  <testcase name="completeOnboarding disables existing interface when not selected" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.122"/>
+  <testcase name="toggleInterface adds interface when not selected" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.049"/>
+  <testcase name="completeOnboarding enables existing interface when selected" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.077"/>
+  <testcase name="skipOnboarding does not create duplicate AutoInterface" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.045"/>
+  <testcase name="skipOnboarding creates only AutoInterface" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.051"/>
+  <testcase name="onNotificationPermissionResult updates state when granted" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.036"/>
+  <testcase name="checks onboarding status on init" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.038"/>
+  <testcase name="setCurrentPage updates state" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.037"/>
+  <testcase name="initial state has AUTO interface selected by default" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.038"/>
+  <testcase name="completeOnboarding creates interface when missing and selected" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.048"/>
+  <testcase name="completeOnboarding saves display name" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.041"/>
+  <testcase name="shows onboarding on fresh install even if an identity already exists" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.043"/>
+  <testcase name="completeOnboarding updates hasCompletedOnboarding state" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.038"/>
+  <testcase name="updateDisplayName clears error" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.029"/>
+  <testcase name="completeOnboarding marks onboarding completed" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.035"/>
+  <testcase name="completeOnboarding creates TCP interface with default server" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.041"/>
+  <testcase name="skips identity check when onboarding already completed" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.036"/>
+  <testcase name="completeOnboarding applies interface changes" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.039"/>
+  <testcase name="onBlePermissionsResult removes BLE from selection when denied" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.031"/>
+  <testcase name="skipOnboarding sets default display name" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.037"/>
+  <testcase name="initial state has empty display name" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.027"/>
+  <testcase name="skipOnboarding sets error state on exception" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.029"/>
+  <testcase name="onBlePermissionsResult updates state when granted" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.024"/>
+  <testcase name="completeOnboarding handles all selected interfaces correctly" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.042"/>
+  <testcase name="completeOnboarding uses default name when empty" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.027"/>
+  <testcase name="toggleInterface removes interface when already selected" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.021"/>
+  <testcase name="onboarding status read failure still dismisses loading and does not mark onboarding complete" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.024"/>
+  <testcase name="skipOnboarding marks onboarding completed" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.024"/>
+  <testcase name="initial state has loading true" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.02"/>
+  <testcase name="does not mark upgrade when no identity exists" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.024"/>
+  <testcase name="completeOnboarding sets isSaving to true during operation" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.023"/>
+  <testcase name="updateDisplayName updates state" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.02"/>
+  <testcase name="toggleInterface can select multiple interfaces" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.026"/>
+  <testcase name="skipOnboarding updates hasCompletedOnboarding state" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.024"/>
+  <testcase name="completeOnboarding does not auto-create RNode interface" classname="network.columba.app.viewmodel.OnboardingViewModelTest" time="0.031"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.database.dao.InterfaceDaoTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:17:21.369Z" hostname="hermes-agent" time="8.338">
+  <properties/>
+  <testcase name="hasEnabledBluetoothInterface_returns_true_for_RNode_without_connection_mode" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="6.474"/>
+  <testcase name="hasEnabledBluetoothInterface_handles_whitespace_in_connection_mode" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.134"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_false_for_disabled_AndroidBLE" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.121"/>
+  <testcase name="hasEnabledBluetoothInterface_is_case_sensitive_for_tcp" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.121"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_false_when_all_Bluetooth_interfaces_disabled" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.104"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_false_for_empty_database" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.083"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_false_for_RNode_TCP_mode" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.091"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_false_when_only_USB_and_TCP_RNodes_enabled" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.059"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_true_for_RNode_classic_mode" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.084"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_true_for_RNode_with_malformed_JSON" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.091"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_false_for_TCPClient" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.081"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_true_for_RNode_ble_mode" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.064"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_false_for_AutoInterface" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.068"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_false_when_only_non_Bluetooth_interfaces_enabled" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.079"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_false_for_RNode_USB_mode" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.071"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_true_when_any_Bluetooth_interface_enabled" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.067"/>
+  <testcase name="hasEnabledBluetoothInterface_returns_true_for_AndroidBLE" classname="network.columba.app.data.database.dao.InterfaceDaoTest" time="0.1"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

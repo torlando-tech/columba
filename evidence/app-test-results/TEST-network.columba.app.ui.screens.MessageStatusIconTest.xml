@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.MessageStatusIconTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:31:26.207Z" hostname="hermes-agent" time="0.28">
+  <properties/>
+  <testcase name="sent and retrying_propagated and propagated have same icon" classname="network.columba.app.ui.screens.MessageStatusIconTest" time="0.187"/>
+  <testcase name="pending status shows hollow circle" classname="network.columba.app.ui.screens.MessageStatusIconTest" time="0.001"/>
+  <testcase name="delivered status shows double checkmark" classname="network.columba.app.ui.screens.MessageStatusIconTest" time="0.0"/>
+  <testcase name="unknown status shows empty string" classname="network.columba.app.ui.screens.MessageStatusIconTest" time="0.0"/>
+  <testcase name="propagated status shows single checkmark" classname="network.columba.app.ui.screens.MessageStatusIconTest" time="0.0"/>
+  <testcase name="normal delivery flow has correct icon progression" classname="network.columba.app.ui.screens.MessageStatusIconTest" time="0.0"/>
+  <testcase name="propagation fallback flow has correct icon progression" classname="network.columba.app.ui.screens.MessageStatusIconTest" time="0.0"/>
+  <testcase name="retrying_propagated status shows single checkmark" classname="network.columba.app.ui.screens.MessageStatusIconTest" time="0.0"/>
+  <testcase name="status icons are distinct for main states" classname="network.columba.app.ui.screens.MessageStatusIconTest" time="0.085"/>
+  <testcase name="sent status shows single checkmark" classname="network.columba.app.ui.screens.MessageStatusIconTest" time="0.0"/>
+  <testcase name="empty status shows empty string" classname="network.columba.app.ui.screens.MessageStatusIconTest" time="0.0"/>
+  <testcase name="null-like status shows empty string" classname="network.columba.app.ui.screens.MessageStatusIconTest" time="0.0"/>
+  <testcase name="failed status shows exclamation" classname="network.columba.app.ui.screens.MessageStatusIconTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

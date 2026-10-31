@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.service.ReticulumServiceBleTest" tests="21" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:22:07.373Z" hostname="hermes-agent" time="3.819">
+  <properties/>
+  <testcase name="connectionTypeMapping_neither_defaultsToCentral" classname="network.columba.app.service.ReticulumServiceBleTest" time="2.86"/>
+  <testcase name="connectionTypeMapping_centralOnly" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.041"/>
+  <testcase name="edgeCase_deviceWithNoName" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.04"/>
+  <testcase name="jsonFields_correctTypes" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.047"/>
+  <testcase name="repository_canParseServiceResponse" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.105"/>
+  <testcase name="repository_handlesMultipleConnections" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.031"/>
+  <testcase name="parseConnectionDetails_handlesNullValues" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.027"/>
+  <testcase name="timestamps_areValidEpochMilliseconds" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.053"/>
+  <testcase name="getBleConnectionDetails_multipleConnections_parsesCorrectly" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.024"/>
+  <testcase name="edgeCase_realRssiFromScanner" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.024"/>
+  <testcase name="repository_handlesEmptyServiceResponse" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.025"/>
+  <testcase name="mtuValues_withinBleRange" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.058"/>
+  <testcase name="rssiValues_withinValidRange" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.024"/>
+  <testcase name="getBleConnectionDetails_returnsValidJsonArray" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.024"/>
+  <testcase name="edgeCase_extremelyLongIdentityHash" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.029"/>
+  <testcase name="parseConnectionDetails_handlesInvalidJson" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.021"/>
+  <testcase name="connectionTypeMapping_both" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.02"/>
+  <testcase name="edgeCase_unknownIdentityHash" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.02"/>
+  <testcase name="connectionTypeMapping_peripheralOnly" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.019"/>
+  <testcase name="getBleConnectionDetails_emptyArray_isValidJson" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.019"/>
+  <testcase name="parseConnectionDetails_handlesMissingFields" classname="network.columba.app.service.ReticulumServiceBleTest" time="0.019"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

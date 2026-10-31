@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" tests="28" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:34:25.605Z" hostname="hermes-agent" time="9.93">
+  <properties/>
+  <testcase name="permissionsPage_displaysTitle" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="5.813"/>
+  <testcase name="continueButton_isDisplayed" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.247"/>
+  <testcase name="batteryOptimizationCard_isDisplayed" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.171"/>
+  <testcase name="batteryEnableButton_triggersCallback" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.23"/>
+  <testcase name="backButton_callbackCalledOnce" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.178"/>
+  <testcase name="notificationCard_transitionsFromEnableButtonToSuccessIndicator" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.148"/>
+  <testcase name="permissionsPage_displaysSubtitle" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.122"/>
+  <testcase name="batteryOptimizationCard_displaysSecondaryDescription" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.134"/>
+  <testcase name="noPermissionsGranted_showsTwoEnableButtons" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.13"/>
+  <testcase name="notificationCard_showsSuccessIndicator_whenGranted" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.096"/>
+  <testcase name="backButton_isDisplayed" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.11"/>
+  <testcase name="permissionsPage_displaysDeliveryConfirmationsFeature" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.105"/>
+  <testcase name="bothPermissionsGranted_showsTwoSuccessIndicators" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.095"/>
+  <testcase name="batteryEnableButton_callbackCalledOnce" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.12"/>
+  <testcase name="backButton_triggersCallback" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.123"/>
+  <testcase name="notificationEnableButton_triggersCallback" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.098"/>
+  <testcase name="permissionsPage_displaysNewMessagesFeature" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.09"/>
+  <testcase name="permissionsPage_displaysSomeoneAddsContactFeature" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.09"/>
+  <testcase name="batteryOptimizationCard_displaysDescription" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.11"/>
+  <testcase name="notificationEnableButton_callbackCalledOnce" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.219"/>
+  <testcase name="batteryOptimizationCard_showsEnableButton_whenNotExempt" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.149"/>
+  <testcase name="continueButton_callbackCalledOnce" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.158"/>
+  <testcase name="notificationCard_displaysDescription" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.139"/>
+  <testcase name="notificationCard_isDisplayed" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.124"/>
+  <testcase name="continueButton_triggersCallback" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.127"/>
+  <testcase name="permissionsPage_displaysAllElements" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.257"/>
+  <testcase name="batteryOptimizationCard_showsSuccessIndicator_whenExempt" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.118"/>
+  <testcase name="notificationCard_showsEnableButton_whenNotGranted" classname="network.columba.app.ui.screens.onboarding.pages.PermissionsPageTest" time="0.114"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

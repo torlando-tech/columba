@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.RNodeWizardViewModelReconnectTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:43:27.089Z" hostname="hermes-agent" time="3.107">
+  <properties/>
+  <testcase name="cancelReconnectScan sets isPairingInProgress to false" classname="network.columba.app.viewmodel.RNodeWizardViewModelReconnectTest" time="2.837"/>
+  <testcase name="classic device error message mentions pairing mode" classname="network.columba.app.viewmodel.RNodeWizardViewModelReconnectTest" time="0.006"/>
+  <testcase name="initiateBluetoothPairing with no bluetooth adapter does not crash" classname="network.columba.app.viewmodel.RNodeWizardViewModelReconnectTest" time="0.194"/>
+  <testcase name="reconnect timeout constant exists and is reasonable" classname="network.columba.app.viewmodel.RNodeWizardViewModelReconnectTest" time="0.006"/>
+  <testcase name="state fields are grouped correctly in RNodeWizardState" classname="network.columba.app.viewmodel.RNodeWizardViewModelReconnectTest" time="0.005"/>
+  <testcase name="reconnect timeout error message mentions power and range" classname="network.columba.app.viewmodel.RNodeWizardViewModelReconnectTest" time="0.008"/>
+  <testcase name="initial state has reconnectDeviceName as null" classname="network.columba.app.viewmodel.RNodeWizardViewModelReconnectTest" time="0.009"/>
+  <testcase name="multiple cancelReconnectScan calls are idempotent" classname="network.columba.app.viewmodel.RNodeWizardViewModelReconnectTest" time="0.007"/>
+  <testcase name="cancelReconnectScan sets isWaitingForReconnect to false" classname="network.columba.app.viewmodel.RNodeWizardViewModelReconnectTest" time="0.006"/>
+  <testcase name="classic device pairing failure shows not in pairing mode error" classname="network.columba.app.viewmodel.RNodeWizardViewModelReconnectTest" time="0.009"/>
+  <testcase name="cancelReconnectScan sets reconnectDeviceName to null" classname="network.columba.app.viewmodel.RNodeWizardViewModelReconnectTest" time="0.007"/>
+  <testcase name="initial state has isWaitingForReconnect as false" classname="network.columba.app.viewmodel.RNodeWizardViewModelReconnectTest" time="0.008"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

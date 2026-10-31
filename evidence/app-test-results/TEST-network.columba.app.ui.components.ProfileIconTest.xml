@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.components.ProfileIconTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:25:42.493Z" hostname="hermes-agent" time="8.467">
+  <properties/>
+  <testcase name="profileIcon_fallsBackToIdenticon_whenBackgroundColorIsNull" classname="network.columba.app.ui.components.ProfileIconTest" time="5.765"/>
+  <testcase name="profileIcon_fallsBackToIdenticon_whenIconNameIsNull" classname="network.columba.app.ui.components.ProfileIconTest" time="0.126"/>
+  <testcase name="profileIcon_handlesEmptyHash" classname="network.columba.app.ui.components.ProfileIconTest" time="0.115"/>
+  <testcase name="profileIcon_showsIcon_whenAllParametersProvided" classname="network.columba.app.ui.components.ProfileIconTest" time="0.354"/>
+  <testcase name="profileIcon_acceptsLargeSize" classname="network.columba.app.ui.components.ProfileIconTest" time="0.111"/>
+  <testcase name="profileIcon_fallsBackToIdenticon_whenForegroundColorIsNull" classname="network.columba.app.ui.components.ProfileIconTest" time="0.098"/>
+  <testcase name="profileIcon_handlesPartialHexColor" classname="network.columba.app.ui.components.ProfileIconTest" time="0.098"/>
+  <testcase name="profileIcon_handlesEmptyColorString" classname="network.columba.app.ui.components.ProfileIconTest" time="0.096"/>
+  <testcase name="profileIcon_validBlackColor" classname="network.columba.app.ui.components.ProfileIconTest" time="0.089"/>
+  <testcase name="profileIcon_handlesBothInvalidColors_fallsBackToDefaultColors" classname="network.columba.app.ui.components.ProfileIconTest" time="0.092"/>
+  <testcase name="profileIcon_validLowercaseHexColor" classname="network.columba.app.ui.components.ProfileIconTest" time="0.09"/>
+  <testcase name="profileIcon_fallsBackToIdenticon_whenAllIconParametersNull" classname="network.columba.app.ui.components.ProfileIconTest" time="0.092"/>
+  <testcase name="profileIcon_handlesInvalidForegroundColor_fallsBackToDefaultColor" classname="network.columba.app.ui.components.ProfileIconTest" time="0.085"/>
+  <testcase name="profileIcon_acceptsMediumSize" classname="network.columba.app.ui.components.ProfileIconTest" time="0.141"/>
+  <testcase name="profileIcon_acceptsSmallSize" classname="network.columba.app.ui.components.ProfileIconTest" time="0.158"/>
+  <testcase name="profileIcon_handlesMinimalHash" classname="network.columba.app.ui.components.ProfileIconTest" time="0.097"/>
+  <testcase name="profileIcon_handlesInvalidBackgroundColor_fallsBackToDefaultColor" classname="network.columba.app.ui.components.ProfileIconTest" time="0.079"/>
+  <testcase name="profileIcon_handlesUnknownIconName_fallsBackToIdenticon" classname="network.columba.app.ui.components.ProfileIconTest" time="0.078"/>
+  <testcase name="profileIcon_showsIcon_withVariousColors" classname="network.columba.app.ui.components.ProfileIconTest" time="0.077"/>
+  <testcase name="profileIcon_validWhiteColor" classname="network.columba.app.ui.components.ProfileIconTest" time="0.073"/>
+  <testcase name="profileIcon_validBlueColor" classname="network.columba.app.ui.components.ProfileIconTest" time="0.074"/>
+  <testcase name="profileIcon_validMixedCaseHexColor" classname="network.columba.app.ui.components.ProfileIconTest" time="0.085"/>
+  <testcase name="profileIcon_showsIcon_withDifferentIconName" classname="network.columba.app.ui.components.ProfileIconTest" time="0.064"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

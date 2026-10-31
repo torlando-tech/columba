@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.model.BleConnectionInfoTest" tests="27" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:17:31.077Z" hostname="hermes-agent" time="0.151">
+  <properties/>
+  <testcase name="signalQuality EXCELLENT for rssi greater than -50" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.007"/>
+  <testcase name="totalBytesTransferred handles zero bytes" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="signalQuality FAIR at -70 boundary" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="connectionDurationMs handles zero duration" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="signalQuality POOR for rssi less than -85" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="signalQuality FAIR for rssi between -85 and -70" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="handles connection with all minimum values" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.041"/>
+  <testcase name="signalQuality handles extremely negative rssi" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="signalQuality GOOD at -50 boundary" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="signalQuality POOR at -85 boundary" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.001"/>
+  <testcase name="connectionDurationMs handles long duration" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="totalBytesTransferred handles large values" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="two BleConnectionInfo with different values are not equal" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="shortIdentityHash returns first 8 characters" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="signalQuality GOOD at -69 boundary" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.001"/>
+  <testcase name="shortIdentityHash handles empty hash" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="signalQuality FAIR at -84 boundary" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="SignalQuality enum has all expected values" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.085"/>
+  <testcase name="two BleConnectionInfo with same values are equal" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.001"/>
+  <testcase name="signalQuality handles zero rssi" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.001"/>
+  <testcase name="totalBytesTransferred sums sent and received bytes" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="handles connection with all maximum practical values" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="signalQuality EXCELLENT at -49 boundary" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="signalQuality GOOD for rssi between -70 and -50" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="ConnectionType enum has all expected values" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="connectionDurationMs calculates correct duration" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <testcase name="shortIdentityHash handles short hash correctly" classname="network.columba.app.data.model.BleConnectionInfoTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

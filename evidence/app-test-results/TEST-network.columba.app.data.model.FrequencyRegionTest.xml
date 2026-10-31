@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.model.FrequencyRegionTest" tests="21" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:17:36.662Z" hostname="hermes-agent" time="0.307">
+  <properties/>
+  <testcase name="frequency computes midpoint for narrow band" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.232"/>
+  <testcase name="2point4 GHz region spans worldwide ISM band" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.0"/>
+  <testcase name="findById returns null for invalid ID" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.001"/>
+  <testcase name="hasDutyCycleLimit false for US with 100 percent" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.0"/>
+  <testcase name="findById returns correct region for all EU sub-bands" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.0"/>
+  <testcase name="all regions have valid TX power limits" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.006"/>
+  <testcase name="all regions have valid duty cycles" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.006"/>
+  <testcase name="findById all 21 regions are findable" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.001"/>
+  <testcase name="hasDutyCycleLimit true for EU 868-L with 1 percent" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.0"/>
+  <testcase name="dutyCycleDisplay shows percentage for limited regions" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.002"/>
+  <testcase name="findById returns null for empty string" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.0"/>
+  <testcase name="hasDutyCycleLimit true for EU 868-P with 10 percent" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.0"/>
+  <testcase name="all regions have valid frequency ranges" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.001"/>
+  <testcase name="all regions have non-empty names and descriptions" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.042"/>
+  <testcase name="dutyCycleDisplay shows Unlimited for 100 percent" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.0"/>
+  <testcase name="findById returns correct region for us_915" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.0"/>
+  <testcase name="regions count is 21" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.0"/>
+  <testcase name="frequency computes midpoint correctly" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.0"/>
+  <testcase name="Japan region has correct ARIB limits" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.0"/>
+  <testcase name="China 470 MHz region is correct" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.001"/>
+  <testcase name="hasDutyCycleLimit false for Australia with 100 percent" classname="network.columba.app.data.model.FrequencyRegionTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

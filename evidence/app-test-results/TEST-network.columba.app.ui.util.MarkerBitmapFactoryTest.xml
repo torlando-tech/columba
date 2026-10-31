@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.util.MarkerBitmapFactoryTest" tests="35" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:38:32.909Z" hostname="hermes-agent" time="4.374">
+  <properties/>
+  <testcase name="createFilledCircleWithDashedOutline creates square bitmap" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="3.014"/>
+  <testcase name="createProfileIconMarker scales with density" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.232"/>
+  <testcase name="createDashedCircle creates valid bitmap" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.052"/>
+  <testcase name="createDashedCircle has ARGB_8888 config" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.038"/>
+  <testcase name="createFilledCircleWithDashedOutline returns non-null bitmap" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.029"/>
+  <testcase name="createProfileIconMarker expands width for long display names" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.029"/>
+  <testcase name="createInitialMarker has circle center at bitmap vertical midpoint" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.026"/>
+  <testcase name="hashToColor returns different colors for different hashes" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.028"/>
+  <testcase name="createFilledCircleWithDashedOutline creates valid bitmap" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.023"/>
+  <testcase name="createFilledCircleWithDashedOutline has ARGB_8888 config" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.025"/>
+  <testcase name="hashToColor handles empty string" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.023"/>
+  <testcase name="hashToColor returns same color for same hash" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.021"/>
+  <testcase name="createDashedCircle returns non-null bitmap" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.021"/>
+  <testcase name="createInitialMarker handles uppercase initial" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.022"/>
+  <testcase name="hashToColor handles special characters" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.022"/>
+  <testcase name="createFilledCircleWithDashedOutline accepts various opacity values" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.069"/>
+  <testcase name="createFilledCircleWithDashedOutline handles zero opacity without crash" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.02"/>
+  <testcase name="createProfileIconMarker handles various MDI icons" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.022"/>
+  <testcase name="createInitialMarker uses correct size based on density" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.019"/>
+  <testcase name="createProfileIconMarker returns null for invalid icon name" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.019"/>
+  <testcase name="createDashedCircle scales with density" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.02"/>
+  <testcase name="createInitialMarker handles empty display name" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.019"/>
+  <testcase name="createFilledCircleWithDashedOutline scales with density" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.02"/>
+  <testcase name="createInitialMarker expands width for long display names" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.021"/>
+  <testcase name="hashToColor produces colors with correct saturation and brightness" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.02"/>
+  <testcase name="createProfileIconMarker handles invalid color gracefully" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.019"/>
+  <testcase name="createProfileIconMarker has ARGB_8888 config" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.019"/>
+  <testcase name="hashToColor is deterministic across multiple calls" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.02"/>
+  <testcase name="createInitialMarker handles non-letter initial" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.018"/>
+  <testcase name="createInitialMarker returns non-null bitmap" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.019"/>
+  <testcase name="createProfileIconMarker returns bitmap for valid icon name" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.019"/>
+  <testcase name="createDashedCircle creates square bitmap" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.018"/>
+  <testcase name="createInitialMarker creates bitmap with correct minimum dimensions" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.017"/>
+  <testcase name="createInitialMarker creates valid bitmap" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.017"/>
+  <testcase name="createInitialMarker has ARGB_8888 config" classname="network.columba.app.ui.util.MarkerBitmapFactoryTest" time="0.016"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

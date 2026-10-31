@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.settings.cards.AboutCardTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:35:25.723Z" hostname="hermes-agent" time="9.455">
+  <properties/>
+  <testcase name="card omits identity section when hash is null" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="6.177"/>
+  <testcase name="displays app name" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.251"/>
+  <testcase name="callback is not invoked when card is first rendered" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.197"/>
+  <testcase name="renders without crashing with full system info" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.159"/>
+  <testcase name="renders without crashing with null protocol versions" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.139"/>
+  <testcase name="view license handles missing external activity without crashing" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.354"/>
+  <testcase name="renders without crashing with minimal system info" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.152"/>
+  <testcase name="displays Columba logo" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.133"/>
+  <testcase name="displays tagline" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.135"/>
+  <testcase name="card contains section headers" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.166"/>
+  <testcase name="view release handles missing external activity without crashing" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.161"/>
+  <testcase name="card contains identity section when hash is present" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.137"/>
+  <testcase name="card renders with all edge cases" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.111"/>
+  <testcase name="displays app information section header" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.153"/>
+  <testcase name="external links handle security exception without crashing" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.171"/>
+  <testcase name="displays report bug button" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.107"/>
+  <testcase name="resource link handles missing external activity without crashing" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.131"/>
+  <testcase name="displays version number from system info" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.102"/>
+  <testcase name="renders without crashing with null identity hash" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.1"/>
+  <testcase name="displays copy system info button" classname="network.columba.app.ui.screens.settings.cards.AboutCardTest" time="0.121"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

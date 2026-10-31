@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.util.BatteryOptimizationManagerTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:38:53.563Z" hostname="hermes-agent" time="4.47">
+  <properties/>
+  <testcase name="shouldPromptForExemption returns valid result on M+ devices" classname="network.columba.app.util.BatteryOptimizationManagerTest" time="3.704"/>
+  <testcase name="createRequestExemptionIntent has correct package data" classname="network.columba.app.util.BatteryOptimizationManagerTest" time="0.073"/>
+  <testcase name="createRequestExemptionIntent has correct action" classname="network.columba.app.util.BatteryOptimizationManagerTest" time="0.077"/>
+  <testcase name="requestBatteryOptimizationExemption returns true even when both intents available" classname="network.columba.app.util.BatteryOptimizationManagerTest" time="0.082"/>
+  <testcase name="isIgnoringBatteryOptimizations checks power manager on M+ devices" classname="network.columba.app.util.BatteryOptimizationManagerTest" time="0.053"/>
+  <testcase name="requestBatteryOptimizationExemption launches direct intent when supported" classname="network.columba.app.util.BatteryOptimizationManagerTest" time="0.066"/>
+  <testcase name="createBatterySettingsIntent has correct action" classname="network.columba.app.util.BatteryOptimizationManagerTest" time="0.058"/>
+  <testcase name="requestBatteryOptimizationExemption falls back to settings when direct intent unavailable" classname="network.columba.app.util.BatteryOptimizationManagerTest" time="0.05"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

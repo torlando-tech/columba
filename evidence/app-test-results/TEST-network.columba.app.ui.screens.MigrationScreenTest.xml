@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.MigrationScreenTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:32:09.888Z" hostname="hermes-agent" time="10.108">
+  <properties/>
+  <testcase name="clicking label text triggers setIncludeAttachments on viewmodel" classname="network.columba.app.ui.screens.MigrationScreenTest" time="8.679"/>
+  <testcase name="checkbox displays Include file attachments label" classname="network.columba.app.ui.screens.MigrationScreenTest" time="0.192"/>
+  <testcase name="helper text not shown when checkbox is checked" classname="network.columba.app.ui.screens.MigrationScreenTest" time="0.149"/>
+  <testcase name="export section header is displayed" classname="network.columba.app.ui.screens.MigrationScreenTest" time="0.176"/>
+  <testcase name="notification permission dialog not shown initially" classname="network.columba.app.ui.screens.MigrationScreenTest" time="0.176"/>
+  <testcase name="helper text appears when checkbox is unchecked" classname="network.columba.app.ui.screens.MigrationScreenTest" time="0.136"/>
+  <testcase name="clicking label when unchecked triggers setIncludeAttachments with true" classname="network.columba.app.ui.screens.MigrationScreenTest" time="0.155"/>
+  <testcase name="export button is displayed" classname="network.columba.app.ui.screens.MigrationScreenTest" time="0.114"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

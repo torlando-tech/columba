@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.MigrationViewModelTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:42:17.503Z" hostname="hermes-agent" time="6.049">
+  <properties/>
+  <testcase name="initial state is Idle" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="2.937"/>
+  <testcase name="importData sets state to Importing then RestartingService then ImportComplete on success" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.772"/>
+  <testcase name="exportData passes includeAttachments false to exporter" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.144"/>
+  <testcase name="exportData sets state to Error on failure" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.055"/>
+  <testcase name="setIncludeAttachments updates includeAttachments state" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.011"/>
+  <testcase name="importData updates progress during import" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.234"/>
+  <testcase name="saveExportToFile copies file and sets ExportSaved on success" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="1.173"/>
+  <testcase name="saveExportToFile does nothing when no exported file URI" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.016"/>
+  <testcase name="includeAttachments defaults to true" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.009"/>
+  <testcase name="onExportSaveDialogLaunched sets state to Idle" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.076"/>
+  <testcase name="exportData passes includeAttachments true to exporter by default" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.096"/>
+  <testcase name="previewImport sets state to Loading then ImportPreview on success" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.066"/>
+  <testcase name="importData sets state to Error on failure" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.029"/>
+  <testcase name="loadExportPreview is called on init and updates exportPreview" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.022"/>
+  <testcase name="exportData sets state to Exporting then ExportComplete on success" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.055"/>
+  <testcase name="exportData updates progress during export" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.035"/>
+  <testcase name="cleanupExportFiles calls exporter cleanup" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.005"/>
+  <testcase name="saveExportToFile sets Error on failure" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.237"/>
+  <testcase name="resetState returns to Idle and clears progress" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.05"/>
+  <testcase name="previewImport sets state to Error on failure" classname="network.columba.app.viewmodel.MigrationViewModelTest" time="0.015"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

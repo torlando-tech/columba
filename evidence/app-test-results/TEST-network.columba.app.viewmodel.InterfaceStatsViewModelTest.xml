@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.InterfaceStatsViewModelTest" tests="26" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:41:23.891Z" hostname="hermes-agent" time="4.873">
+  <properties/>
+  <testcase name="loadInterface handles exception" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="3.792"/>
+  <testcase name="refreshStats does not set RSSI if value is too low" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.276"/>
+  <testcase name="TCPServer config is parsed correctly" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.022"/>
+  <testcase name="invalid JSON returns empty parsed config" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.018"/>
+  <testcase name="loadInterface sets error when interface not found" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.025"/>
+  <testcase name="needsUsbPermission is false when device not found" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.029"/>
+  <testcase name="refreshStats updates online status" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.027"/>
+  <testcase name="refreshStats handles null interface stats" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.015"/>
+  <testcase name="USB RNode config parses usb_device_id" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.02"/>
+  <testcase name="refreshStats records cumulative counters for traffic chart" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.062"/>
+  <testcase name="requestUsbPermission does nothing without usbDeviceId" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.107"/>
+  <testcase name="isConnecting is false for disabled interface" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.034"/>
+  <testcase name="isConnecting is false for online interface" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.023"/>
+  <testcase name="isConnecting is true for enabled offline interface that was never online" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.021"/>
+  <testcase name="TCPClient config is parsed correctly" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.02"/>
+  <testcase name="loadInterface sets interface entity on success" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.021"/>
+  <testcase name="needsUsbPermission is false when not in USB mode" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.015"/>
+  <testcase name="toggleEnabled does nothing if no interface entity" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.039"/>
+  <testcase name="signalReconnecting resets connecting state" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.013"/>
+  <testcase name="invalid interface ID sets error message" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.012"/>
+  <testcase name="refreshStats updates RSSI for online RNode" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.017"/>
+  <testcase name="needsUsbPermission is true when USB device lacks permission" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.135"/>
+  <testcase name="RNode config is parsed correctly" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.02"/>
+  <testcase name="initial state has isLoading true" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.02"/>
+  <testcase name="toggleEnabled updates interface enabled state" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.056"/>
+  <testcase name="unknown interface type returns default mode" classname="network.columba.app.viewmodel.InterfaceStatsViewModelTest" time="0.016"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

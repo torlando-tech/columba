@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.MapViewModelTest" tests="57" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:41:42.090Z" hostname="hermes-agent" time="8.237">
+  <properties/>
+  <testcase name="periodic polling follows overlapping resumed map owners" classname="network.columba.app.viewmodel.MapViewModelTest" time="5.342"/>
+  <testcase name="contact markers come from received locations" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.123"/>
+  <testcase name="stopSharing without parameter stops all sharing" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.081"/>
+  <testcase name="focusOnContact overwrites previous pending focus" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.06"/>
+  <testcase name="startSharing with empty list calls locationSharingManager with empty list" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.07"/>
+  <testcase name="enableHttp triggers map style refresh" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.11"/>
+  <testcase name="isSharing state updates from locationSharingManager" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.052"/>
+  <testcase name="updateUserLocation updates state with new location" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.413"/>
+  <testcase name="permission sheet dismissed state survives ViewModel recreation via SavedStateHandle" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.079"/>
+  <testcase name="stopSharing called multiple times calls manager each time" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.047"/>
+  <testcase name="initial state has no location permission" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.036"/>
+  <testcase name="multiple location updates replace previous location" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.05"/>
+  <testcase name="permission card dismissed state is false with fresh SavedStateHandle" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.034"/>
+  <testcase name="httpEnabledFlow changes trigger map style refresh" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.034"/>
+  <testcase name="deleteMarker removes marker from state" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.057"/>
+  <testcase name="initial state has permission card not dismissed" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.046"/>
+  <testcase name="markers are static from received locations - user location does not affect them" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.056"/>
+  <testcase name="pendingFocusContact is initially null" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.041"/>
+  <testcase name="onPermissionResult updates hasLocationPermission to true" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.042"/>
+  <testcase name="markers have positions from received locations" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.052"/>
+  <testcase name="markers use announce peerName when not in contacts" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.058"/>
+  <testcase name="startSharing calls locationSharingManager with correct parameters" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.049"/>
+  <testcase name="dismissed state persists after permission granted" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.049"/>
+  <testcase name="enableHttp clears download flag and enables HTTP" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.08"/>
+  <testcase name="dismissPermissionCard updates state to dismissed" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.046"/>
+  <testcase name="calculateMarkerState - expired within grace period returns EXPIRED_GRACE_PERIOD" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.033"/>
+  <testcase name="consumePendingFocus clears pendingFocusContact" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.033"/>
+  <testcase name="dismissLocationPermissionSheet calls settingsRepository and updates SavedStateHandle" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.044"/>
+  <testcase name="markers have null icon fields when no announce found" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.056"/>
+  <testcase name="permission card dismissed state does not leak between different SavedStateHandles" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.041"/>
+  <testcase name="focusOnContact sets pendingFocusContact" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.034"/>
+  <testcase name="markers include icon appearance from announces" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.051"/>
+  <testcase name="markers prefer contacts over announces for display name" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.052"/>
+  <testcase name="calculateMarkerState - location older than 5 minutes returns STALE" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.034"/>
+  <testcase name="markers fall back to truncated hash when no name found" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.046"/>
+  <testcase name="calculateMarkerState - expired past grace period returns null" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.028"/>
+  <testcase name="permission and location can be set independently" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.033"/>
+  <testcase name="large number of received locations generates correct number of markers" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.038"/>
+  <testcase name="initial state has no user location" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.033"/>
+  <testcase name="initial state has no error message" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.03"/>
+  <testcase name="calculateMarkerState - exactly at stale threshold returns FRESH" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.022"/>
+  <testcase name="onPermissionResult updates hasLocationPermission to false" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.026"/>
+  <testcase name="empty contacts results in empty markers" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.05"/>
+  <testcase name="calculateMarkerState - indefinite sharing never expires" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.026"/>
+  <testcase name="activeSessions state updates from locationSharingManager" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.025"/>
+  <testcase name="state reflects dismissed permission sheet from SavedStateHandle" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.024"/>
+  <testcase name="startSharing with single contact" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.028"/>
+  <testcase name="markers have null icon fields when announce has no icon" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.036"/>
+  <testcase name="calculateMarkerState - just past stale threshold returns STALE" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.023"/>
+  <testcase name="contact markers use display name from contacts" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.035"/>
+  <testcase name="state is immutable - modifications dont affect original" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.024"/>
+  <testcase name="stopSharing with destinationHash stops specific session" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.056"/>
+  <testcase name="isLoading is false after contacts loaded" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.022"/>
+  <testcase name="initial state has permission sheet not dismissed" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.028"/>
+  <testcase name="permission card dismissed state survives ViewModel recreation via SavedStateHandle" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.046"/>
+  <testcase name="clearError removes error message" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.029"/>
+  <testcase name="calculateMarkerState - fresh location returns FRESH" classname="network.columba.app.viewmodel.MapViewModelTest" time="0.022"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

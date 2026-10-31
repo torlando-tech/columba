@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" tests="39" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:34:02.607Z" hostname="hermes-agent" time="10.647">
+  <properties/>
+  <testcase name="interfaceOptions_displaysBleOption" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="5.762"/>
+  <testcase name="navigationButtons_continueClick_triggersOnContinueCallback" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.394"/>
+  <testcase name="interfaceOptions_displaysTcpOption" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.19"/>
+  <testcase name="interfaceToggle_bleClick_triggersCallbackWithBleType" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.169"/>
+  <testcase name="edgeCase_bothBleStatesTrue_showsDenied" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.13"/>
+  <testcase name="interfaceToggle_wifiClick_triggersCallbackWithAutoType" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.132"/>
+  <testcase name="blePermissions_granted_showsSuccessIndicator" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.133"/>
+  <testcase name="interfaceDescriptions_displaysTcpDescription" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.142"/>
+  <testcase name="blePermissions_grantedWithBleSelected_showsSuccess" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.113"/>
+  <testcase name="selectedInterfaces_multipleSelected_allShowAsChecked" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.179"/>
+  <testcase name="selectedInterfaces_bleSelected_showsAsChecked" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.127"/>
+  <testcase name="selectedInterfaces_wifiSelected_showsAsChecked" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.128"/>
+  <testcase name="header_displaysTitle" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.118"/>
+  <testcase name="interfaceToggle_rnodeClick_triggersCallbackWithRnodeType" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.138"/>
+  <testcase name="selectedInterfaces_rnodeSelected_showsAsChecked" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.106"/>
+  <testcase name="interfaceDescriptions_displaysBleDescription" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.102"/>
+  <testcase name="navigationButtons_continueButtonDisplayed" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.124"/>
+  <testcase name="multipleToggleCallbacks_eachTriggersCorrectType" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.21"/>
+  <testcase name="selectedInterfaces_noneSelected_allUnchecked" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.126"/>
+  <testcase name="header_displaysSubtitle" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.087"/>
+  <testcase name="selectedInterfaces_tcpSelected_showsAsChecked" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.084"/>
+  <testcase name="blePermissions_denied_showsWarningText" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.086"/>
+  <testcase name="blePermissions_neitherGrantedNorDenied_showsNoStatusText" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.086"/>
+  <testcase name="interfaceOptions_allFourOptionsDisplayed" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.212"/>
+  <testcase name="interfaceDescriptions_displaysWiFiSecondaryDescription" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.081"/>
+  <testcase name="helperText_displaysConfigureLaterMessage" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.09"/>
+  <testcase name="edgeCase_allInterfacesSelected_displaysCorrectly" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.084"/>
+  <testcase name="interfaceOptions_displaysRnodeOption" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.084"/>
+  <testcase name="checkboxClick_triggersOnInterfaceToggle" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.083"/>
+  <testcase name="navigationButtons_backButtonDisplayed" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.095"/>
+  <testcase name="interfaceDescriptions_displaysBleSecondaryDescription" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.082"/>
+  <testcase name="navigationButtons_backClick_triggersOnBackCallback" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.101"/>
+  <testcase name="interfaceDescriptions_displaysRnodeSecondaryDescription" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.12"/>
+  <testcase name="interfaceDescriptions_displaysTcpSecondaryDescription" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.08"/>
+  <testcase name="interfaceDescriptions_displaysWiFiDescription" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.071"/>
+  <testcase name="interfaceToggle_tcpClick_triggersCallbackWithTcpType" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.082"/>
+  <testcase name="blePermissions_deniedWithBleSelected_showsWarning" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.074"/>
+  <testcase name="interfaceDescriptions_displaysRnodeDescription" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.076"/>
+  <testcase name="interfaceOptions_displaysWiFiOption" classname="network.columba.app.ui.screens.onboarding.pages.ConnectivityPageTest" time="0.084"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

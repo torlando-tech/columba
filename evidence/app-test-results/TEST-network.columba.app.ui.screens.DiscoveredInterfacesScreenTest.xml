@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" tests="62" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:29:33.275Z" hostname="hermes-agent" time="10.55">
+  <properties/>
+  <testcase name="DiscoverySettingsCard shows enable help text when disabled" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="5.647"/>
+  <testcase name="Connected badge shown when isConnected true" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.197"/>
+  <testcase name="formatLastHeard with 3 days ago returns days ago" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.088"/>
+  <testcase name="DiscoveryStatusSummary displays unknown count" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.137"/>
+  <testcase name="EmptyDiscoveredCard displays help text" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.111"/>
+  <testcase name="DiscoverySettingsCard shows Active when runtime enabled" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.182"/>
+  <testcase name="isYggdrasilAddress with null returns false" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.077"/>
+  <testcase name="formatLoraParamsForClipboard formats coding rate" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.066"/>
+  <testcase name="formatInterfaceType TCPClientInterface returns TCP Client" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.065"/>
+  <testcase name="DiscoverySettingsCard shows Disabled when not enabled" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.129"/>
+  <testcase name="isYggdrasilAddress with regular IPv6 returns false" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.062"/>
+  <testcase name="Connected badge hidden when isConnected false" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.097"/>
+  <testcase name="isYggdrasilAddress with 0200 exact boundary returns true" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.061"/>
+  <testcase name="isYggdrasilAddress with IPv4 returns false" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.054"/>
+  <testcase name="formatInterfaceType WeaveInterface returns Weave LoRa" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.053"/>
+  <testcase name="DiscoverySettingsCard displays title" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.077"/>
+  <testcase name="formatLastHeard with recent timestamp returns just now" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.053"/>
+  <testcase name="DiscoveryStatusSummary displays total count" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.077"/>
+  <testcase name="formatInterfaceType KISSInterface returns KISS" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.061"/>
+  <testcase name="isYggdrasilAddress with empty string returns false" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.052"/>
+  <testcase name="formatLastHeard with 2 hours ago returns hours ago" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.053"/>
+  <testcase name="DiscoverySettingsCard slider shows Off when autoconnect is zero" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.083"/>
+  <testcase name="InterfaceTypeIcon displays Settings for unknown interface type" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.066"/>
+  <testcase name="formatLoraParamsForClipboard formats frequency in MHz" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.066"/>
+  <testcase name="Info icon hidden for regular TCP interface" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.134"/>
+  <testcase name="formatInterfaceType TCPServerInterface returns TCP Server" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.057"/>
+  <testcase name="formatInterfaceType RNodeInterface returns RNode LoRa" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.049"/>
+  <testcase name="DiscoveryStatusSummary displays stale count" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.078"/>
+  <testcase name="formatLoraParamsForClipboard includes modulation" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.058"/>
+  <testcase name="formatInterfaceType I2PInterface returns I2P" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.051"/>
+  <testcase name="DiscoverySettingsCard shows autoconnect count when enabled" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.072"/>
+  <testcase name="formatLoraParamsForClipboard formats bandwidth in kHz" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.066"/>
+  <testcase name="formatLoraParamsForClipboard formats spreading factor" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.067"/>
+  <testcase name="isYggdrasilAddress with bracketed address returns true" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.043"/>
+  <testcase name="formatLastHeard with zero timestamp returns Never" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.045"/>
+  <testcase name="DiscoverySettingsCard displays bootstrap interface names" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.081"/>
+  <testcase name="DiscoverySettingsCard shows slider when enabled" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.081"/>
+  <testcase name="isYggdrasilAddress with 01FF below range returns false" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.056"/>
+  <testcase name="InterfaceTypeIcon displays Antenna for RNode interface" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.065"/>
+  <testcase name="isYggdrasilAddress with 0400 above range returns false" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.053"/>
+  <testcase name="InterfaceTypeIcon displays Globe for TCP interface with public IP" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.068"/>
+  <testcase name="formatLastHeard with 5 minutes ago returns min ago" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.05"/>
+  <testcase name="DiscoverySettingsCard toggle calls callback" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.142"/>
+  <testcase name="DiscoveryStatusSummary displays available count" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.072"/>
+  <testcase name="isYggdrasilAddress with 0200 prefix returns true" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.045"/>
+  <testcase name="DiscoverySettingsCard shows bootstrap auto-detach note" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.065"/>
+  <testcase name="DiscoverySettingsCard shows debug message when autoconnect is zero" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.065"/>
+  <testcase name="DiscoverySettingsCard shows Restarting message when restarting" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.102"/>
+  <testcase name="formatLoraParamsForClipboard omits null values" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.052"/>
+  <testcase name="formatLoraParamsForClipboard includes interface name" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.05"/>
+  <testcase name="Info icon shown for I2P interface" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.181"/>
+  <testcase name="formatInterfaceType BackboneInterface returns Backbone TCP" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.044"/>
+  <testcase name="formatLastHeard with old timestamp returns formatted date" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.046"/>
+  <testcase name="DiscoveryStatusSummary shows all columns including zeros" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.072"/>
+  <testcase name="InterfaceTypeIcon displays TreePine for Yggdrasil address" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.061"/>
+  <testcase name="EmptyDiscoveredCard displays title" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.073"/>
+  <testcase name="isYggdrasilAddress with 03FF exact boundary returns true" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.052"/>
+  <testcase name="InterfaceTypeIcon displays incognito for I2P interface" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.069"/>
+  <testcase name="isYggdrasilAddress with 0300 prefix returns true" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.049"/>
+  <testcase name="Info icon shown for Yggdrasil interface" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.081"/>
+  <testcase name="formatInterfaceType unknown type returns type unchanged" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.048"/>
+  <testcase name="DiscoverySettingsCard hides slider when disabled" classname="network.columba.app.ui.screens.DiscoveredInterfacesScreenTest" time="0.088"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

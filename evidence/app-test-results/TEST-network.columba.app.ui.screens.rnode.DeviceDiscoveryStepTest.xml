@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" tests="32" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:34:47.723Z" hostname="hermes-agent" time="13.242">
+  <properties/>
+  <testcase name="reconnectWaitingState_showsDeviceName" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="8.335"/>
+  <testcase name="pairingInProgress_showsSpinnerOnPairButton" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.274"/>
+  <testcase name="bluetoothTab_showsUsbPairingCard_whenPairingModeActive" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.179"/>
+  <testcase name="reconnectWaitingState_notShownWhenFalse" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.15"/>
+  <testcase name="unknownTypeDevice_cardClick_showsTypeSelector" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.525"/>
+  <testcase name="editMode_showsCurrentDeviceSection" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.15"/>
+  <testcase name="cancelManualEntry_hidesForm" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.374"/>
+  <testcase name="unknownTypeDeviceCard_showsTypeSelectorOnClick" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.182"/>
+  <testcase name="manualEntryForm_showsWarningForNonRNodeName" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.144"/>
+  <testcase name="unpairedDevice_pairTextButton_initiatesPairing" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.133"/>
+  <testcase name="usbPairingMode_showsPairingCard_withPinDisplay" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.113"/>
+  <testcase name="editMode_allowsSelectingDifferentDevice" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.1"/>
+  <testcase name="unpairedDevice_cardClick_initiatesPairing" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.115"/>
+  <testcase name="tcpValidation_failure_showsErrorIcon" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.113"/>
+  <testcase name="manualEntryForm_showsValidationError" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.14"/>
+  <testcase name="tcpValidation_inProgress_showsSpinner" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.11"/>
+  <testcase name="manualEntryForm_showsOnButtonClick" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.134"/>
+  <testcase name="tcpMode_hidesBluetoothDeviceList" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.104"/>
+  <testcase name="associatingState_showsProgressIndicator" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.097"/>
+  <testcase name="reconnectWaitingState_cancelButton_callsCancelReconnectScan" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.104"/>
+  <testcase name="usbPairingMode_showsManualPinEntry_whenNoPin" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.111"/>
+  <testcase name="usbPairingMode_showsStatusMessage" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.15"/>
+  <testcase name="bluetoothTypeChips_updateOnSelection" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.112"/>
+  <testcase name="usbPairingMode_exitButton_callsExitPairingMode" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.092"/>
+  <testcase name="tcpErrorMessage_displaysCorrectly" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.088"/>
+  <testcase name="tcpValidation_success_showsCheckmark" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.107"/>
+  <testcase name="typeSelector_bleChip_setsDeviceType" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.143"/>
+  <testcase name="pairedDevice_cardClick_selectsDevice" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.103"/>
+  <testcase name="reconnectWaitingState_showsWaitingCard" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.087"/>
+  <testcase name="tcpMode_showsConnectionForm" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.088"/>
+  <testcase name="bluetoothTab_pairViaUsb_button_startsUsbAssistedPairing" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.094"/>
+  <testcase name="typeSelector_classicChip_setsDeviceType" classname="network.columba.app.ui.screens.rnode.DeviceDiscoveryStepTest" time="0.124"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

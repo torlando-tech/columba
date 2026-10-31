@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" tests="38" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:36:07.917Z" hostname="hermes-agent" time="10.192">
+  <properties/>
+  <testcase name="getDurationDisplayText returns fallback for invalid duration" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="4.868"/>
+  <testcase name="locationSharingCard with active session displays stop button" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="1.355"/>
+  <testcase name="getDurationDisplayText returns correct text for INDEFINITE" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.087"/>
+  <testcase name="formatTimeRemaining returns hours and minutes for longer durations" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.091"/>
+  <testcase name="locationSharingCard displays location precision setting" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.171"/>
+  <testcase name="locationSharingCard displays default duration setting" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.172"/>
+  <testcase name="locationSharingCard with active sessions displays currently sharing section" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.157"/>
+  <testcase name="getPrecisionRadiusDisplayText returns km for custom large radius" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.075"/>
+  <testcase name="locationSharingCard stop all button invokes callback" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.434"/>
+  <testcase name="formatTimeRemaining correctly formats 2 hours" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.072"/>
+  <testcase name="locationSharingCard toggle invokes callback" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.119"/>
+  <testcase name="getPrecisionRadiusDisplayText handles edge case at 1000m boundary" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.085"/>
+  <testcase name="getPrecisionRadiusDisplayText returns Precise for 0 meters" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.091"/>
+  <testcase name="getPrecisionRadiusDisplayText returns Neighborhood for 1000 meters" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.09"/>
+  <testcase name="getPrecisionRadiusDisplayText returns meters for small custom radius" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.069"/>
+  <testcase name="locationSharingCard with multiple sessions displays stop all button" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.17"/>
+  <testcase name="getPrecisionRadiusDisplayText returns Region for 100000 meters" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.071"/>
+  <testcase name="formatTimeRemaining returns expiring for current time" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.055"/>
+  <testcase name="getDurationDisplayText returns fallback for empty string" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.055"/>
+  <testcase name="getDurationDisplayText returns correct text for FOUR_HOURS" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.054"/>
+  <testcase name="getPrecisionRadiusDisplayText returns km for very large custom radius" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.052"/>
+  <testcase name="formatTimeRemaining correctly formats 4 hours 15 minutes" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.055"/>
+  <testcase name="formatTimeRemaining returns until stopped for null endTime" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.048"/>
+  <testcase name="locationSharingCard disabled hides active sessions section" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.104"/>
+  <testcase name="getDurationDisplayText returns correct text for FIFTEEN_MINUTES" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.063"/>
+  <testcase name="formatTimeRemaining returns minutes only for under 1 hour" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.056"/>
+  <testcase name="locationSharingCard displays description" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.107"/>
+  <testcase name="locationSharingCard duration click opens picker" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.247"/>
+  <testcase name="getPrecisionRadiusDisplayText handles minimum positive value" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.061"/>
+  <testcase name="getDurationDisplayText returns fallback for lowercase name" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.064"/>
+  <testcase name="locationSharingCard precision click opens picker" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.153"/>
+  <testcase name="getDurationDisplayText returns correct text for ONE_HOUR" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.053"/>
+  <testcase name="getPrecisionRadiusDisplayText returns meters for very small radius" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.047"/>
+  <testcase name="getPrecisionRadiusDisplayText returns City for 10000 meters" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.05"/>
+  <testcase name="locationSharingCard displays title" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.108"/>
+  <testcase name="getDurationDisplayText returns correct text for UNTIL_MIDNIGHT" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.074"/>
+  <testcase name="formatTimeRemaining returns minutes for short durations" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.074"/>
+  <testcase name="formatTimeRemaining returns expiring for past times" classname="network.columba.app.ui.screens.settings.cards.LocationSharingCardTest" time="0.052"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

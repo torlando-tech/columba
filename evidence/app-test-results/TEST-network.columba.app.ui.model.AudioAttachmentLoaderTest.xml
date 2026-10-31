@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.model.AudioAttachmentLoaderTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:27:34.571Z" hostname="hermes-agent" time="3.816">
+  <properties/>
+  <testcase name="rejects audio payload wrappers beyond structural depth limit" classname="network.columba.app.ui.model.AudioAttachmentLoaderTest" time="3.131"/>
+  <testcase name="rejects malformed and missing payloads" classname="network.columba.app.ui.model.AudioAttachmentLoaderTest" time="0.066"/>
+  <testcase name="rejects file references outside managed attachment storage" classname="network.columba.app.ui.model.AudioAttachmentLoaderTest" time="0.057"/>
+  <testcase name="loads raw Ogg bytes from file reference" classname="network.columba.app.ui.model.AudioAttachmentLoaderTest" time="0.039"/>
+  <testcase name="loads inline canonical audio payload" classname="network.columba.app.ui.model.AudioAttachmentLoaderTest" time="0.039"/>
+  <testcase name="loads payload level file reference containing hex" classname="network.columba.app.ui.model.AudioAttachmentLoaderTest" time="0.035"/>
+  <testcase name="loads legacy whole field reference containing canonical array" classname="network.columba.app.ui.model.AudioAttachmentLoaderTest" time="0.036"/>
+  <testcase name="loads nested data object consistently with mapper" classname="network.columba.app.ui.model.AudioAttachmentLoaderTest" time="0.038"/>
+  <testcase name="rejects oversized managed audio before reading" classname="network.columba.app.ui.model.AudioAttachmentLoaderTest" time="0.029"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

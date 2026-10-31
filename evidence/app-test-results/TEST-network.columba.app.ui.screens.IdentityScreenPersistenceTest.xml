@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.IdentityScreenPersistenceTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:29:52.792Z" hostname="hermes-agent" time="8.242">
+  <properties/>
+  <testcase name="reticulumInfoCard_lastLockRefreshPositive_displaysSecondsAgo" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="5.988"/>
+  <testcase name="reticulumInfoCard_networkMonitorRunning_displaysLabel" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.169"/>
+  <testcase name="reticulumInfoCard_hasFailedInterfaces_displaysCount" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.154"/>
+  <testcase name="reticulumInfoCard_displaysRnsAvailable" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.136"/>
+  <testcase name="reticulumInfoCard_displaysCardTitle" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.13"/>
+  <testcase name="reticulumInfoCard_noFailedInterfaces_doesNotDisplayRow" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.117"/>
+  <testcase name="reticulumInfoCard_displaysLockStates" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.126"/>
+  <testcase name="reticulumInfoCard_allPersistenceFieldsStopped_displaysStoppedStates" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.121"/>
+  <testcase name="reticulumInfoCard_maintenanceRunning_displaysLabel" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.151"/>
+  <testcase name="reticulumInfoCard_displaysPersistenceSectionHeader" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.137"/>
+  <testcase name="reticulumInfoCard_healthCheckStopped_displaysStopped" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.101"/>
+  <testcase name="reticulumInfoCard_lastLockRefreshNotYet_displaysNotYet" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.098"/>
+  <testcase name="reticulumInfoCard_heartbeatPositive_displaysSecondsAgo" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.123"/>
+  <testcase name="reticulumInfoCard_allPersistenceFieldsRunning_displaysAllLabels" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.107"/>
+  <testcase name="reticulumInfoCard_heartbeatNotStarted_displaysNotStarted" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.113"/>
+  <testcase name="reticulumInfoCard_heartbeatZeroSeconds_displaysZeroSecondsAgo" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.09"/>
+  <testcase name="reticulumInfoCard_healthCheckRunning_displaysRunning" classname="network.columba.app.ui.screens.IdentityScreenPersistenceTest" time="0.091"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

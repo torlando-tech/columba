@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.OfflineMapsViewModelTest" tests="59" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:43:00.044Z" hostname="hermes-agent" time="9.308">
+  <properties/>
+  <testcase name="getTotalStorageString handles boundary values" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="5.48"/>
+  <testcase name="state updates when region list changes" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.838"/>
+  <testcase name="region getSizeString returns GB for gigabyte values" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.048"/>
+  <testcase name="state updates when totalStorage flow emits" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.053"/>
+  <testcase name="state updates independently for regions and storage" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.05"/>
+  <testcase name="deleteRegion sets error message on exception" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.1"/>
+  <testcase name="deleteRegion deletes mbtiles file when path exists" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.056"/>
+  <testcase name="deleteRegion with file delete failure still deletes from repository" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.043"/>
+  <testcase name="region getSizeString returns B for small values" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.03"/>
+  <testcase name="getOfflineMapsDir returns directory with correct path" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.038"/>
+  <testcase name="checkForUpdates shows error on exception" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.156"/>
+  <testcase name="UpdateCheckResult hasUpdate is false when versions are equal" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.029"/>
+  <testcase name="UpdateCheckResult hasUpdate is true when versions differ" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.026"/>
+  <testcase name="deleteRegion does not call mapLibreOfflineManager when maplibreRegionId is null" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.067"/>
+  <testcase name="getTotalStorageString handles zero" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.026"/>
+  <testcase name="UpdateCheckResult defaults" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.024"/>
+  <testcase name="clearError does nothing when no error exists" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.027"/>
+  <testcase name="state handles region with all null optional fields" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.034"/>
+  <testcase name="getTotalStorageString returns KB for kilobyte values" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.025"/>
+  <testcase name="checkForUpdates fetches version and detects update available" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.125"/>
+  <testcase name="state handles null totalStorage as zero" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.032"/>
+  <testcase name="getTotalStorageString returns B for small values" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.025"/>
+  <testcase name="deleteRegion handles null mbtiles path gracefully" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.033"/>
+  <testcase name="getOfflineMapsDir uses context filesDir" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.034"/>
+  <testcase name="initial state has correct defaults" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.032"/>
+  <testcase name="retryDownload can be called multiple times" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.026"/>
+  <testcase name="UpdateCheckResult copy preserves all fields" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.022"/>
+  <testcase name="getTotalStorageString returns MB for megabyte values" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.021"/>
+  <testcase name="deleteRegion handles concurrent calls safely" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.032"/>
+  <testcase name="checkForUpdates can be called for multiple regions" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.13"/>
+  <testcase name="clearUpdateCheckResult only removes specified region" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.129"/>
+  <testcase name="UpdateCheckResult hasUpdate is false when latestVersion is null" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.026"/>
+  <testcase name="deleteRegion handles non-existent mbtiles file gracefully" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.032"/>
+  <testcase name="state copy preserves all fields correctly" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.021"/>
+  <testcase name="retryDownload does not throw for any region" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.024"/>
+  <testcase name="region getSizeString returns KB for kilobyte values" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.021"/>
+  <testcase name="state updates when regions flow emits" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.032"/>
+  <testcase name="UpdateCheckResult equality works correctly" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.02"/>
+  <testcase name="deleteRegion resets isDeleting on error" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.029"/>
+  <testcase name="state correctly reflects regions with different statuses" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.027"/>
+  <testcase name="checkForUpdates shows error when server unreachable" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.126"/>
+  <testcase name="deleteRegion sets isDeleting to true then false" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.063"/>
+  <testcase name="deleteRegion calls mapLibreOfflineManager for regions with maplibreRegionId" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.033"/>
+  <testcase name="clearError sets errorMessage to null" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.031"/>
+  <testcase name="state contains multiple regions when repository returns list" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.03"/>
+  <testcase name="checkForUpdates fetches version and detects up to date" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.117"/>
+  <testcase name="region getSizeString returns MB for megabyte values" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.022"/>
+  <testcase name="deleteRegion calls repository deleteRegion" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.032"/>
+  <testcase name="checkForUpdates for region without tileVersion shows up to date" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.116"/>
+  <testcase name="state handles very large storage values" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.027"/>
+  <testcase name="clearUpdateCheckResult does nothing for non-existent region" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.026"/>
+  <testcase name="getTotalStorageString returns GB for gigabyte values" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.021"/>
+  <testcase name="UpdateCheckResult hasUpdate is false when currentVersion is null" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.019"/>
+  <testcase name="OfflineMapsState is immutable" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.02"/>
+  <testcase name="error message is preserved when other state changes" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.029"/>
+  <testcase name="state handles empty region name" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.029"/>
+  <testcase name="clearUpdateCheckResult removes the result for a region" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.117"/>
+  <testcase name="state combines regions and storage correctly" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.037"/>
+  <testcase name="state correctly reflects regions with different sources" classname="network.columba.app.viewmodel.OfflineMapsViewModelTest" time="0.035"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

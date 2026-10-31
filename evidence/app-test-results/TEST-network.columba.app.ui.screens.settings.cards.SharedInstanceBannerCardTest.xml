@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.settings.cards.SharedInstanceBannerCardTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:37:17.989Z" hostname="hermes-agent" time="7.217">
+  <properties/>
+  <testcase name="copy action is absent for hosting conflict" classname="network.columba.app.ui.screens.settings.cards.SharedInstanceBannerCardTest" time="5.956"/>
+  <testcase name="hosting card shows copy action and invokes callback" classname="network.columba.app.ui.screens.settings.cards.SharedInstanceBannerCardTest" time="0.292"/>
+  <testcase name="copy action is absent for shared instance client" classname="network.columba.app.ui.screens.settings.cards.SharedInstanceBannerCardTest" time="0.424"/>
+  <testcase name="copy action is absent for standalone instance" classname="network.columba.app.ui.screens.settings.cards.SharedInstanceBannerCardTest" time="0.105"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

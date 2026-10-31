@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.ApkSharingViewModelTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:40:11.782Z" hostname="hermes-agent" time="4.275">
+  <properties/>
+  <testcase name="state flow is exposed as immutable StateFlow" classname="network.columba.app.viewmodel.ApkSharingViewModelTest" time="3.488"/>
+  <testcase name="initial state has default values" classname="network.columba.app.viewmodel.ApkSharingViewModelTest" time="0.038"/>
+  <testcase name="startServer is idempotent when already running" classname="network.columba.app.viewmodel.ApkSharingViewModelTest" time="0.096"/>
+  <testcase name="ApkSharingState with error" classname="network.columba.app.viewmodel.ApkSharingViewModelTest" time="0.031"/>
+  <testcase name="viewModel emits error when APK preparation fails" classname="network.columba.app.viewmodel.ApkSharingViewModelTest" time="0.054"/>
+  <testcase name="getRequiredHotspotPermissions returns non-empty on API 33" classname="network.columba.app.viewmodel.ApkSharingViewModelTest" time="0.053"/>
+  <testcase name="ApkSharingState hotspot mode has all fields" classname="network.columba.app.viewmodel.ApkSharingViewModelTest" time="0.031"/>
+  <testcase name="viewModel init triggers startServer which reaches a terminal sharing-state" classname="network.columba.app.viewmodel.ApkSharingViewModelTest" time="0.053"/>
+  <testcase name="createShareIntent returns a valid share intent" classname="network.columba.app.viewmodel.ApkSharingViewModelTest" time="0.056"/>
+  <testcase name="SharingMode enum has expected values" classname="network.columba.app.viewmodel.ApkSharingViewModelTest" time="0.031"/>
+  <testcase name="ApkSharingState copy works correctly" classname="network.columba.app.viewmodel.ApkSharingViewModelTest" time="0.025"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

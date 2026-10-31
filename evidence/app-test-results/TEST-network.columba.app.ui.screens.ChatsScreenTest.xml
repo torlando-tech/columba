@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.ChatsScreenTest" tests="43" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:28:57.769Z" hostname="hermes-agent" time="14.128">
+  <properties/>
+  <testcase name="conversationCard_displaysLastMessage" classname="network.columba.app.ui.screens.ChatsScreenTest" time="5.676"/>
+  <testcase name="contextMenu_deleteClick_callsOnDeleteConversation" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.535"/>
+  <testcase name="chatsScreen_withConversations_displaysCards" classname="network.columba.app.ui.screens.ChatsScreenTest" time="3.097"/>
+  <testcase name="conversationCard_starButton_clickWhenSaved_invokesOnStarClick" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.191"/>
+  <testcase name="contextMenu_saveClick_callsOnSaveToContacts" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.212"/>
+  <testcase name="conversationCard_notSaved_doesNotShowSavedIcon" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.125"/>
+  <testcase name="chatsScreen_syncButton_triggersSync" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.199"/>
+  <testcase name="conversationCard_withHighUnreadCount_displaysCappedBadge" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.102"/>
+  <testcase name="chatsScreen_loadingWithExistingConversations_showsConversationsNotSpinner" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.133"/>
+  <testcase name="contextMenu_viewDetailsClick_callsOnViewDetails" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.153"/>
+  <testcase name="conversationCard_zeroUnread_doesNotShowBadge" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.081"/>
+  <testcase name="conversationCard_starButton_doesNotTriggerCardClick" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.099"/>
+  <testcase name="emptyState_displaysPrimaryText" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.084"/>
+  <testcase name="contextMenu_notSaved_showsSaveToContacts" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.129"/>
+  <testcase name="conversationCard_starButton_displaysCorrectContentDescription_whenSaved" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.087"/>
+  <testcase name="conversationCard_withUnreadCount_displaysBadge" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.075"/>
+  <testcase name="conversationCard_starButton_clickInvokesOnStarClick" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.078"/>
+  <testcase name="deleteDialog_cancelClick_callsOnDismiss" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.255"/>
+  <testcase name="conversationCard_isSaved_displaysSavedIcon" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.078"/>
+  <testcase name="chatsScreen_notLoadingWithEmptyList_showsEmptyStateNotSpinner" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.101"/>
+  <testcase name="deleteDialog_deleteClick_callsOnConfirm" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.101"/>
+  <testcase name="emptyState_displaysSecondaryText" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.065"/>
+  <testcase name="deleteDialog_displaysCancelButton" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.094"/>
+  <testcase name="contextMenu_isSaved_showsRemoveFromContacts" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.102"/>
+  <testcase name="contextMenu_expanded_displaysAllItems" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.11"/>
+  <testcase name="conversationCard_displaysPeerName" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.069"/>
+  <testcase name="conversationCard_click_invokesOnClick" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.076"/>
+  <testcase name="chatsScreen_displaysTopAppBarTitle" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.111"/>
+  <testcase name="chatsScreen_loadingWithEmptyList_showsLoadingSpinner" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.117"/>
+  <testcase name="deleteDialog_displaysPeerNameInMessage" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.088"/>
+  <testcase name="conversationCard_starButton_displaysCorrectContentDescription_whenNotSaved" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.09"/>
+  <testcase name="contextMenu_markUnreadClick_callsOnMarkAsUnread" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.128"/>
+  <testcase name="chatsScreen_emptyList_displaysEmptyState" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.091"/>
+  <testcase name="chatsScreen_displaysConversationCount_plural" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.122"/>
+  <testcase name="chatsScreen_starButton_whenSaved_callsRemoveFromContacts" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.114"/>
+  <testcase name="chatsScreen_conversationClick_callsOnChatClick" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.099"/>
+  <testcase name="deleteDialog_displaysTitle" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.094"/>
+  <testcase name="deleteDialog_displaysDeleteButton" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.107"/>
+  <testcase name="chatsScreen_displaysConversationCount_singular" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.118"/>
+  <testcase name="contextMenu_removeClick_callsOnRemoveFromContacts" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.093"/>
+  <testcase name="chatsScreen_starButton_displaysCorrectState_forMultipleConversations" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.108"/>
+  <testcase name="chatsScreen_starButton_whenNotSaved_callsSaveToContacts" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.117"/>
+  <testcase name="conversationCard_longPress_invokesOnLongPress" classname="network.columba.app.ui.screens.ChatsScreenTest" time="0.088"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

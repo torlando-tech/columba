@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.settings.cards.AdvancedCardTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:35:36.263Z" hostname="hermes-agent" time="7.304">
+  <properties/>
+  <testcase name="transportNodeToggle_displaysDescription" classname="network.columba.app.ui.screens.settings.cards.AdvancedCardTest" time="5.98"/>
+  <testcase name="transportNodeToggle_callbackCalledOnce" classname="network.columba.app.ui.screens.settings.cards.AdvancedCardTest" time="0.204"/>
+  <testcase name="transportNodeToggle_displaysLabel" classname="network.columba.app.ui.screens.settings.cards.AdvancedCardTest" time="0.129"/>
+  <testcase name="transportNodeToggle_isOn_whenEnabled" classname="network.columba.app.ui.screens.settings.cards.AdvancedCardTest" time="0.132"/>
+  <testcase name="transportNodeToggle_callsCallback_withTrue_whenTurningOn" classname="network.columba.app.ui.screens.settings.cards.AdvancedCardTest" time="0.133"/>
+  <testcase name="transportNodeToggle_isOff_whenDisabled" classname="network.columba.app.ui.screens.settings.cards.AdvancedCardTest" time="0.191"/>
+  <testcase name="transportNodeToggle_callsCallback_withFalse_whenTurningOff" classname="network.columba.app.ui.screens.settings.cards.AdvancedCardTest" time="0.116"/>
+  <testcase name="advancedCard_displaysHeader" classname="network.columba.app.ui.screens.settings.cards.AdvancedCardTest" time="0.106"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

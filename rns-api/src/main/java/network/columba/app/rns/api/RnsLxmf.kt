@@ -49,6 +49,11 @@ interface RnsLxmf {
      * @param imageData Optional image data bytes
      * @param imageFormat Optional image format (e.g., "jpg", "png", "webp")
      * @param fileAttachments Optional list of file attachments as (filename, bytes) pairs
+     * @param threadId Optional LXMF `FIELD_THREAD` (0x08) grouping key — 16
+     *   random bytes chosen by the thread creator (threads-spec §4.1).
+     *   Combined with `replyToMessageId`/`replyQuotedContent` it covers wire
+     *   cases 1-4: {T}, {T, 0x30, 0x31}, {T}, {T, 0x30, 0x31}. Null = Main.
+     *   The root message is NOT re-sent for thread-from-here (case 2).
      * @return Result containing MessageReceipt or failure
      */
     @Suppress("LongParameterList")
@@ -65,6 +70,7 @@ interface RnsLxmf {
         replyQuotedContent: String? = null,
         iconAppearance: IconAppearance? = null,
         extraFields: Map<Int, Any>? = null,
+        threadId: ByteArray? = null,
     ): Result<MessageReceipt>
 
     /**

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.db.Migration5To6SchemaTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:12.604Z" hostname="hermes-agent" time="0.119">
+  <properties/>
+  <testcase name="real v2 fixture upgrades through the full chain to a valid v6 schema" classname="network.columba.app.data.db.Migration5To6SchemaTest" time="0.06"/>
+  <testcase name="v5 fixture upgrades to a valid v6 schema" classname="network.columba.app.data.db.Migration5To6SchemaTest" time="0.057"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

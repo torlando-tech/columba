@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.model.MessageMapperTest" tests="235" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:27:49.259Z" hostname="hermes-agent" time="7.944">
+  <properties/>
+  <testcase name="getImageMetadata returns binary when first three PNG bytes match but fourth does not" classname="network.columba.app.ui.model.MessageMapperTest" time="2.94"/>
+  <testcase name="decodeImageWithAnimation returns null for nonexistent file reference" classname="network.columba.app.ui.model.MessageMapperTest" time="0.049"/>
+  <testcase name="toMessageUi maps basic fields correctly" classname="network.columba.app.ui.model.MessageMapperTest" time="0.063"/>
+  <testcase name="loadFileAttachmentData handles large hex data efficiently" classname="network.columba.app.ui.model.MessageMapperTest" time="0.075"/>
+  <testcase name="getImageMetadata returns gif for static GIF without animation" classname="network.columba.app.ui.model.MessageMapperTest" time="0.035"/>
+  <testcase name="loadFileAttachmentData returns null for nonexistent data reference" classname="network.columba.app.ui.model.MessageMapperTest" time="0.028"/>
+  <testcase name="isPendingFileNotification returns true when notification present" classname="network.columba.app.ui.model.MessageMapperTest" time="0.044"/>
+  <testcase name="toMessageUi handles per-file data reference with missing file gracefully" classname="network.columba.app.ui.model.MessageMapperTest" time="0.037"/>
+  <testcase name="loadFileAttachmentMetadata returns null for invalid JSON" classname="network.columba.app.ui.model.MessageMapperTest" time="0.025"/>
+  <testcase name="loadFileAttachmentMetadata returns correct filename and mimeType for PDF" classname="network.columba.app.ui.model.MessageMapperTest" time="0.024"/>
+  <testcase name="loadImageData returns null for nonexistent file reference" classname="network.columba.app.ui.model.MessageMapperTest" time="0.022"/>
+  <testcase name="getImageMetadata reads from file reference" classname="network.columba.app.ui.model.MessageMapperTest" time="0.029"/>
+  <testcase name="decodeAndCacheImage returns null when file reference path is directory" classname="network.columba.app.ui.model.MessageMapperTest" time="0.025"/>
+  <testcase name="loadFileAttachmentData returns null for null fieldsJson" classname="network.columba.app.ui.model.MessageMapperTest" time="0.027"/>
+  <testcase name="toMessageUi sets hasFileAttachments false when no fieldsJson" classname="network.columba.app.ui.model.MessageMapperTest" time="0.026"/>
+  <testcase name="decodeAndCacheImage handles file reference with empty _file_ref value" classname="network.columba.app.ui.model.MessageMapperTest" time="0.022"/>
+  <testcase name="getImageMetadata returns null for too short data" classname="network.columba.app.ui.model.MessageMapperTest" time="0.022"/>
+  <testcase name="toMessageUi preserves known non-markdown renderer values" classname="network.columba.app.ui.model.MessageMapperTest" time="0.029"/>
+  <testcase name="loadFileAttachmentMetadata returns null when field 5 is missing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.027"/>
+  <testcase name="getImageMetadata returns binary when first two bytes are FF D8 but third is not FF" classname="network.columba.app.ui.model.MessageMapperTest" time="0.022"/>
+  <testcase name="toMessageUi sets hasImageAttachment true for file reference with valid path" classname="network.columba.app.ui.model.MessageMapperTest" time="0.029"/>
+  <testcase name="pendingFileInfo returns null for malformed notification" classname="network.columba.app.ui.model.MessageMapperTest" time="0.028"/>
+  <testcase name="decodeAndCacheImage handles uppercase hex string" classname="network.columba.app.ui.model.MessageMapperTest" time="0.051"/>
+  <testcase name="decodeAndCacheImage reads from file reference when file exists" classname="network.columba.app.ui.model.MessageMapperTest" time="0.046"/>
+  <testcase name="pendingFileInfo returns null when field 16 is missing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.022"/>
+  <testcase name="decodeAndCacheImage returns null for invalid JSON" classname="network.columba.app.ui.model.MessageMapperTest" time="0.028"/>
+  <testcase name="toMessageUi handles field 5 as null" classname="network.columba.app.ui.model.MessageMapperTest" time="0.021"/>
+  <testcase name="isMediaOnlyMessage returns false when imageData is null" classname="network.columba.app.ui.model.MessageMapperTest" time="0.025"/>
+  <testcase name="pendingFileInfo uses default values for missing fields" classname="network.columba.app.ui.model.MessageMapperTest" time="0.03"/>
+  <testcase name="getImageMetadata returns jpeg for JPEG image" classname="network.columba.app.ui.model.MessageMapperTest" time="0.028"/>
+  <testcase name="getImageMetadata returns binary when RIFF matches but WEBP W does not" classname="network.columba.app.ui.model.MessageMapperTest" time="0.022"/>
+  <testcase name="loadFileAttachmentData handles attachment at non-zero index with valid data" classname="network.columba.app.ui.model.MessageMapperTest" time="0.022"/>
+  <testcase name="decodeAndCacheImage returns null for empty field 6" classname="network.columba.app.ui.model.MessageMapperTest" time="0.021"/>
+  <testcase name="loadFileAttachmentData handles field 5 with number type gracefully" classname="network.columba.app.ui.model.MessageMapperTest" time="0.019"/>
+  <testcase name="toMessageUi parses file attachment with unicode filename" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="toMessageUi preserves unsupported audio mode without crashing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.022"/>
+  <testcase name="toMessageUi handles repository file ref audio payload" classname="network.columba.app.ui.model.MessageMapperTest" time="0.021"/>
+  <testcase name="decodeAndCacheImage handles very long hex string without crashing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.029"/>
+  <testcase name="loadFileAttachmentData reads from per-file data references with multiple attachments" classname="network.columba.app.ui.model.MessageMapperTest" time="0.021"/>
+  <testcase name="loadFileAttachmentMetadata returns correct mimeType for image file" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="toMessageUi handles malformed JSON in field 16 gracefully" classname="network.columba.app.ui.model.MessageMapperTest" time="0.025"/>
+  <testcase name="toMessageUi extracts replyToMessageId from canonical 0x30 field" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="getImageMetadata returns null for null fieldsJson" classname="network.columba.app.ui.model.MessageMapperTest" time="0.02"/>
+  <testcase name="DecodedImageResult equals returns false for different isAnimated" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="isPendingFileNotification returns false when no notification in json" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="getImageMetadata returns binary when RIFF and WEB match but P does not" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="loadFileAttachmentData returns null when data field is empty" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="loadFileAttachmentData decodes positional wire format" classname="network.columba.app.ui.model.MessageMapperTest" time="0.019"/>
+  <testcase name="toMessageUi handles field 16 as number gracefully" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="getImageMetadata returns binary when first byte is 47 but not GIF" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="decodeAndCacheImage handles field 6 as non-string non-object type" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="ReactionUi count equals senderHashes size" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="toMessageUi maps replyToMessageId from Message data class" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="decodeAndCacheImage handles arbitrary byte data without crashing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.022"/>
+  <testcase name="toMessageUi decodes hex-encoded filename from Columba sender" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi rejects audio payload wrappers beyond structural depth limit" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="decodeAndCacheImage returns cached image if already cached" classname="network.columba.app.ui.model.MessageMapperTest" time="0.054"/>
+  <testcase name="decodeAndCacheImage returns null for empty fieldsJson" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi prefers canonical 0x30 over legacy 0x10 reply_to" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="loadFileAttachmentMetadata extracts filename from positional wire format" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="loadFileAttachmentMetadata reads metadata from inline array with multiple attachments" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="loadFileAttachmentMetadata returns null for negative index" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="toMessageUi sets hasImageAttachment false when field 6 is number" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="toMessageUi sets replyPreview to null initially" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="toMessageUi excludes fieldsJson when image is cached" classname="network.columba.app.ui.model.MessageMapperTest" time="0.023"/>
+  <testcase name="decodeImageWithAnimation returns null for empty fieldsJson" classname="network.columba.app.ui.model.MessageMapperTest" time="0.02"/>
+  <testcase name="isMediaOnlyMessage returns false when has file attachments" classname="network.columba.app.ui.model.MessageMapperTest" time="0.02"/>
+  <testcase name="parseReplyQuoteFromFields returns null when 0x31 is absent" classname="network.columba.app.ui.model.MessageMapperTest" time="0.024"/>
+  <testcase name="toMessageUi handles file attachments with missing filename" classname="network.columba.app.ui.model.MessageMapperTest" time="0.025"/>
+  <testcase name="toMessageUi sets hasImageAttachment true for inline image" classname="network.columba.app.ui.model.MessageMapperTest" time="0.024"/>
+  <testcase name="toMessageUi handles empty file attachments array" classname="network.columba.app.ui.model.MessageMapperTest" time="0.023"/>
+  <testcase name="toMessageUi sets hasImageAttachment false for empty file reference path" classname="network.columba.app.ui.model.MessageMapperTest" time="0.032"/>
+  <testcase name="toMessageUi with failed message includes error message" classname="network.columba.app.ui.model.MessageMapperTest" time="0.022"/>
+  <testcase name="decodeImageWithAnimation returns null for invalid JSON" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="getImageMetadata returns webp for WebP image" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="decodeAndCacheImage caches result after successful decode" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="loadFileAttachmentData returns null for out of bounds index" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi includes deliveryMethod and errorMessage" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="DecodedImageResult equals returns false for different bytes" classname="network.columba.app.ui.model.MessageMapperTest" time="0.02"/>
+  <testcase name="loadFileAttachmentData handles field 5 with string type gracefully" classname="network.columba.app.ui.model.MessageMapperTest" time="0.021"/>
+  <testcase name="getImageMetadata returns binary for RIFF without WEBP" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="loadFileAttachmentMetadata returns correct mimeType for text file" classname="network.columba.app.ui.model.MessageMapperTest" time="0.02"/>
+  <testcase name="loadFileAttachmentData handles mixed case hex" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="loadFileAttachmentMetadata returns null for empty fieldsJson" classname="network.columba.app.ui.model.MessageMapperTest" time="0.019"/>
+  <testcase name="getImageMetadata returns null for nonexistent file reference" classname="network.columba.app.ui.model.MessageMapperTest" time="0.019"/>
+  <testcase name="loadFileAttachmentMetadata handles unicode filename" classname="network.columba.app.ui.model.MessageMapperTest" time="0.021"/>
+  <testcase name="toMessageUi skips malformed positional entry with too few elements" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="toMessageUi sets hasImageAttachment false for empty JSON object" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="getImageMetadata returns binary when first RIFF byte matches but second does not" classname="network.columba.app.ui.model.MessageMapperTest" time="0.027"/>
+  <testcase name="DecodedImageResult equals returns true for identical data" classname="network.columba.app.ui.model.MessageMapperTest" time="0.028"/>
+  <testcase name="getImageMetadata returns binary when RI matches but FF does not" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="loadFileAttachmentMetadata returns null when field 5 is not array or file ref" classname="network.columba.app.ui.model.MessageMapperTest" time="0.023"/>
+  <testcase name="toMessageUi sets hasImageAttachment true for file reference" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="getImageMetadata returns null for empty fieldsJson" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="decodeImageWithAnimation uses cached bitmap for static image" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="loadFileAttachmentMetadata returns null when field 5 is number" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="pendingFileInfo returns null when fieldsJson is null" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="parseReactionsJson handles invalid JSON gracefully" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi sets hasImageAttachment false when no fieldsJson" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="decodeAndCacheImage returns null when field 6 is missing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="toMessageUi preserves plain-string filename from Sideband sender" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="toMessageUi parses canonical opus audio attachment" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="parseReplyQuoteFromFields tolerates malformed JSON" classname="network.columba.app.ui.model.MessageMapperTest" time="0.019"/>
+  <testcase name="loadFileAttachmentData handles invalid hex data in file reference gracefully" classname="network.columba.app.ui.model.MessageMapperTest" time="0.019"/>
+  <testcase name="toMessageUi defaults to plain text without renderer field" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="loadFileAttachmentMetadata returns null when field 5 is object with empty path" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="getImageMetadata returns binary when first two GIF bytes match but third does not" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi includes fieldsJson when only file attachments present no image" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="decodeAndCacheImage returns null for null fieldsJson" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi returns null replyToMessageId when field 16 is missing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="loadImageData returns null when file reference object has wrong key" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="toMessageUi sets hasFileAttachments false when field 5 is missing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="toMessageUi returns null replyToMessageId when field 16 has no reply_to key" classname="network.columba.app.ui.model.MessageMapperTest" time="0.02"/>
+  <testcase name="isMediaOnlyMessage returns false when has reply preview" classname="network.columba.app.ui.model.MessageMapperTest" time="0.019"/>
+  <testcase name="getImageMetadata returns binary for unknown format" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="isSuperseded returns false when fieldsJson is null" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="loadFileAttachmentData reads from per-file data reference when file exists" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="isMediaOnlyMessage returns false when has audio attachment" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="getImageMetadata returns binary when first byte is FF but not JPEG" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi skips malformed attachment in array and continues" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="toMessageUi lowercases canonical 0x30 hash" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi handles file attachments with missing size" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="loadImageData returns null for null fieldsJson" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="isSuperseded returns false when superseded is false" classname="network.columba.app.ui.model.MessageMapperTest" time="0.019"/>
+  <testcase name="toMessageUi maps LXMF markdown renderer field" classname="network.columba.app.ui.model.MessageMapperTest" time="0.019"/>
+  <testcase name="parseReplyQuoteFromFields decodes UTF-8 hex bytes" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="loadImageData reads from file reference when file exists" classname="network.columba.app.ui.model.MessageMapperTest" time="0.019"/>
+  <testcase name="isSuperseded returns true when superseded is true" classname="network.columba.app.ui.model.MessageMapperTest" time="0.041"/>
+  <testcase name="toMessageUi sets hasFileAttachments true for per-file data reference" classname="network.columba.app.ui.model.MessageMapperTest" time="0.02"/>
+  <testcase name="isMediaOnlyMessage returns true for animated GIF without text" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi sets isAnimatedImage to false by default" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi sets hasImageAttachment false when file reference object has wrong key" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="loadImageData handles large image data" classname="network.columba.app.ui.model.MessageMapperTest" time="0.028"/>
+  <testcase name="decodeAndCacheImage handles empty file" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi handles both image and file attachments" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="isSuperseded returns false when superseded is not present" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="loadFileAttachmentMetadata returns null when field 5 is object not array" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="loadFileAttachmentData handles attachment with special characters in data" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="getImageMetadata returns binary when RIFF and WE match but B does not" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="decodeAndCacheImage handles concurrent cache check" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="toMessageUi parses positional wire format from Sideband" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="pendingFileInfo returns null for invalid JSON" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi correctly maps all MessageUi fields" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="loadImageData returns null for empty field 6" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="loadImageData returns null for empty fieldsJson" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="loadImageData handles mixed case hex" classname="network.columba.app.ui.model.MessageMapperTest" time="0.019"/>
+  <testcase name="loadFileAttachmentMetadata returns null for out of bounds index" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="getImageMetadata returns binary when first two PNG bytes match but third does not" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="getImageMetadata returns gif for animated GIF" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="loadFileAttachmentData returns null for positional entry with too few elements" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi handles message with reply and image attachment" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi rejects hex decode that produces control-char garbage" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="DecodedImageResult hashCode is consistent for equal objects" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="toMessageUi handles field 16 with null reply_to value" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi reads file attachments with per-file data references" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="toMessageUi returns cached image when available" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="getImageMetadata returns binary when first byte is 89 but not PNG" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="decodeImageWithAnimation reads from file reference" classname="network.columba.app.ui.model.MessageMapperTest" time="0.02"/>
+  <testcase name="decodeImageWithAnimation returns null for empty field 6" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="loadFileAttachmentData returns null for negative index" classname="network.columba.app.ui.model.MessageMapperTest" time="0.035"/>
+  <testcase name="loadFileAttachmentData returns null for empty data reference path" classname="network.columba.app.ui.model.MessageMapperTest" time="0.028"/>
+  <testcase name="decodeAndCacheImage handles file reference with special characters in path" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="decodeImageWithAnimation returns null for null fieldsJson" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="toMessageUi parses reply with multiple field 16 properties" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="decodeImageWithAnimation returns null for non-GIF header without decoding" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="toMessageUi sets hasImageAttachment false for malformed JSON" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="getImageMetadata returns binary when RIFF and W match but E does not" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="loadFileAttachmentMetadata handles filename with no extension" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi sets hasImageAttachment false when field 6 is null" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="toMessageUi handles field 16 as non-object type gracefully" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="decodeAndCacheImage returns null for invalid hex in field 6" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi prefers replyToMessageId from data class over field 16" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="isMediaOnlyMessage returns false when content is present" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi handles message with image but no animation data" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi handles malformed JSON in field 5" classname="network.columba.app.ui.model.MessageMapperTest" time="0.013"/>
+  <testcase name="decodeImageWithAnimation detects animated GIF" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="loadImageData returns bytes for valid inline hex" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="loadFileAttachmentData returns data for valid index" classname="network.columba.app.ui.model.MessageMapperTest" time="0.013"/>
+  <testcase name="loadFileAttachmentMetadata handles multiple attachments at different indices" classname="network.columba.app.ui.model.MessageMapperTest" time="0.013"/>
+  <testcase name="loadFileAttachmentMetadata handles unknown file extension" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="parseReactionsJson returns empty list for null input" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="decodeAndCacheImage handles file with whitespace only" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="pendingFileInfo returns null when not a pending notification" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="decodeAndCacheImage handles field 6 as JSONObject without _file_ref key" classname="network.columba.app.ui.model.MessageMapperTest" time="0.021"/>
+  <testcase name="decodeAndCacheImage returns null for file reference with nonexistent file" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="toMessageUi handles deeply nested JSON without crashing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi handles field 5 as boolean gracefully" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="toMessageUi falls back to plain text for malformed or unknown renderer" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi returns null replyToMessageId when reply_to is empty" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi extracts replyToMessageId from field 16 when not in data class" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="getImageMetadata returns png for PNG image" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="getImageMetadata returns binary when RIF matches but fourth byte does not" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="getImageMetadata returns binary for partial RIFF header" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="loadImageData returns null for invalid JSON" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="decodeAndCacheImage handles file with valid hex content" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="loadFileAttachmentMetadata returns null when field 5 is empty array" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="toMessageUi parses multiple file attachments" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="loadFileAttachmentData returns null when field 5 is missing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="getImageMetadata returns null when field 6 is missing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="parseReactionsJson parses single reaction correctly" classname="network.columba.app.ui.model.MessageMapperTest" time="0.013"/>
+  <testcase name="getImageMetadata returns binary for exactly 11 byte RIFF with WEBP prefix" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="loadFileAttachmentMetadata returns null for null fieldsJson" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="loadFileAttachmentData returns null when data field is missing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi handles field 5 as number gracefully" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="loadImageData returns null when field 6 is missing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="isMediaOnlyMessage returns true with blank content" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="ReactionUi count is zero for empty senderHashes" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="decodeImageWithAnimation detects non-animated GIF as static" classname="network.columba.app.ui.model.MessageMapperTest" time="0.055"/>
+  <testcase name="loadFileAttachmentData returns correct attachment from multiple" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi sets hasImageAttachment false when field 6 is boolean" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="toMessageUi sets hasImageAttachment false when no image field in json" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="decodeImageWithAnimation returns null when field 6 is missing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi sets hasImageAttachment false when field 6 is array" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="decodeAndCacheImage handles mixed case hex string" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="loadFileAttachmentMetadata returns null when attachment is not JSONObject" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="loadFileAttachmentData handles binary data with all byte values" classname="network.columba.app.ui.model.MessageMapperTest" time="0.019"/>
+  <testcase name="loadFileAttachmentData handles uppercase hex" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="decodeAndCacheImage handles malformed file reference gracefully" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="toMessageUi parses mixed object and positional entries" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi sets hasFileAttachments true for inline array" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="toMessageUi accepts explicit size in positional wire format" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="loadFileAttachmentMetadata reads metadata from inline array with data reference" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="pendingFileInfo parses notification correctly" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="toMessageUi handles JSON with multiple fields including image" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="loadImageData returns null for empty file reference path" classname="network.columba.app.ui.model.MessageMapperTest" time="0.018"/>
+  <testcase name="decodeImageWithAnimation returns null for field 6 as number" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="loadImageData handles uppercase hex" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="isMediaOnlyMessage returns false when not animated" classname="network.columba.app.ui.model.MessageMapperTest" time="0.015"/>
+  <testcase name="isPendingFileNotification returns false when fieldsJson is null" classname="network.columba.app.ui.model.MessageMapperTest" time="0.017"/>
+  <testcase name="loadFileAttachmentMetadata returns null when field 5 object has invalid JSON path" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="decodeAndCacheImage handles odd-length hex string gracefully" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <testcase name="loadFileAttachmentMetadata returns unknown filename when missing" classname="network.columba.app.ui.model.MessageMapperTest" time="0.014"/>
+  <testcase name="loadImageData returns null for field 6 as number" classname="network.columba.app.ui.model.MessageMapperTest" time="0.026"/>
+  <testcase name="toMessageUi handles message with reply and file attachments" classname="network.columba.app.ui.model.MessageMapperTest" time="0.027"/>
+  <testcase name="parseReactionsJson parses multiple reactions correctly" classname="network.columba.app.ui.model.MessageMapperTest" time="0.016"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.MessagingScreenTest" tests="82" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:31:32.977Z" hostname="hermes-agent" time="21.423">
+  <properties/>
+  <testcase name="inputBar_emptyText_sendButtonDisabled" classname="network.columba.app.ui.screens.MessagingScreenTest" time="9.623"/>
+  <testcase name="inputBar_sending_keepsAccessibleNameAndState" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.243"/>
+  <testcase name="inputBar_shiftEnter_doesNotSend" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.479"/>
+  <testcase name="topAppBar_syncMenuItem_callsSyncFromPropagationNode" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.528"/>
+  <testcase name="contactToggleResult_added_triggersToastCollection" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.224"/>
+  <testcase name="inputBar_displaysPlaceholder" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.161"/>
+  <testcase name="inputBar_bareEnter_sendsMessage" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.196"/>
+  <testcase name="messageList_mixedMessages_displaysCorrectly" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.371"/>
+  <testcase name="inputBar_clearImageButton_callsClearSelectedImage" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.15"/>
+  <testcase name="replyInputBar_withFileReply_displaysFilename" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.148"/>
+  <testcase name="inputBar_bareEnter_whileSending_doesNotSend" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.164"/>
+  <testcase name="sentGifMessage_showsDeliveredStatus" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.146"/>
+  <testcase name="animatedGifMessage_withText_displaysInBubble" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.162"/>
+  <testcase name="sentGifMessage_showsDeliveryStatus" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.166"/>
+  <testcase name="fromNotification_true_screenComposesWithCoordinator" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.138"/>
+  <testcase name="onlineStatus_ignoresActivityFromPreviousConversation" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.137"/>
+  <testcase name="onlineStatus_displaysLastSeen_whenRecentlySeen" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.145"/>
+  <testcase name="messageWithReply_loadsReplyPreviewAsync_whenNotCached" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.137"/>
+  <testcase name="contactToggleResult_removed_triggersToastCollection" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.117"/>
+  <testcase name="inputBar_gifAttached_showsCorrectSize" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.21"/>
+  <testcase name="messageWithCachedImage_doesNotTriggerAsyncLoad" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.151"/>
+  <testcase name="contactToggleResult_error_triggersToastCollection" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.177"/>
+  <testcase name="inputBar_bareEnter_blankText_doesNotSend" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.143"/>
+  <testcase name="receivedMessage_doesNotShowDeliveryStatus" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.147"/>
+  <testcase name="multipleMessagesWithImages_triggerIndependentLoads" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.135"/>
+  <testcase name="onlineStatus_displaysOffline_whenNotRecentlySeen" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.112"/>
+  <testcase name="staticImagePreview_displayed_whenSelectedNonAnimatedImage" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.11"/>
+  <testcase name="sentGifMessage_showsFailedStatus" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.125"/>
+  <testcase name="replyInputBar_cancelButton_callsClearReplyTo" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.116"/>
+  <testcase name="replyPreviewCache_update_triggersRecomposition" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.13"/>
+  <testcase name="inputBar_withText_sendButtonEnabled" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.125"/>
+  <testcase name="animatedGifPreview_displayed_whenSelectedAnimatedImage" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.109"/>
+  <testcase name="inputBar_ctrlEnter_doesNotSend" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.138"/>
+  <testcase name="inputBar_withImageAndText_sendButtonEnabled" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.205"/>
+  <testcase name="inputBar_withImageOnly_sendButtonEnabled" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.121"/>
+  <testcase name="topAppBar_starButton_whenSaved_callsToggleContact" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.108"/>
+  <testcase name="sentGifMessage_showsPendingStatus" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.13"/>
+  <testcase name="inputBar_imagePreview_shown_whenImageSelected" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.093"/>
+  <testcase name="fromNotification_false_screenComposesWithCoordinator" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.09"/>
+  <testcase name="inputBar_withPendingReply_sendButtonEnabled" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.113"/>
+  <testcase name="inputBar_metaEnter_doesNotSend" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.129"/>
+  <testcase name="animatedGifMessage_displaysWithoutBubble_whenMediaOnly" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.107"/>
+  <testcase name="replyInputBar_withImageReply_displaysPhotoIndicator" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.095"/>
+  <testcase name="topAppBar_backButton_cancelsActiveVoiceRecordingBeforeNavigation" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.297"/>
+  <testcase name="messageWithReply_doesNotReload_whenCached" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.197"/>
+  <testcase name="inputBar_sendWithGif_callsSendMessageWithImageData" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.134"/>
+  <testcase name="sentMessage_displaysContent" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.117"/>
+  <testcase name="inputBar_attachmentButton_showsLoadingIndicator_whenProcessing" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.121"/>
+  <testcase name="sentMessage_showsDeliveryStatus_delivered" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.109"/>
+  <testcase name="sentMessage_showsDeliveryStatus_sent" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.123"/>
+  <testcase name="screen_loadsMessages_onComposition" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.088"/>
+  <testcase name="topAppBar_backButton_callsOnBackClick" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.085"/>
+  <testcase name="receivedMessage_displaysContent" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.098"/>
+  <testcase name="topAppBar_starButton_callsToggleContact" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.098"/>
+  <testcase name="inputBar_sendClick_callsSendMessage" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.11"/>
+  <testcase name="inputBar_clearsSubmittedTextOnlyAfterDurableSendResult" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.126"/>
+  <testcase name="sentMessage_showsDeliveryStatus_pending" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.117"/>
+  <testcase name="inputBar_altEnter_doesNotSend" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.15"/>
+  <testcase name="receivedGifMessage_displaysWithoutBubble_whenMediaOnly" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.156"/>
+  <testcase name="sentMessage_showsDeliveryStatus_failed" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.123"/>
+  <testcase name="retryingGifMessage_showsCorrectStatus" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.122"/>
+  <testcase name="topAppBar_displaysPeerName" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.105"/>
+  <testcase name="animatedGifMessage_asReply_displaysInBubble" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.123"/>
+  <testcase name="messageWithNoImage_doesNotTriggerAsyncLoad" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.119"/>
+  <testcase name="loadedImageIds_update_triggersRecomposition" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.097"/>
+  <testcase name="emptyState_displaysNoMessagesYet" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.085"/>
+  <testcase name="multipleGifMessages_displayCorrectly" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.094"/>
+  <testcase name="replyInputBar_notDisplayed_whenNoPendingReply" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.079"/>
+  <testcase name="messageList_displaysMessages" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.109"/>
+  <testcase name="topAppBar_starButton_displaysCorrectContentDescription_whenSaved" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.082"/>
+  <testcase name="topAppBar_longPeerName_displaysCorrectly" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.088"/>
+  <testcase name="messageWithImageAndNullFieldsJson_doesNotTriggerLoad" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.097"/>
+  <testcase name="propagatedGifMessage_showsCorrectStatus" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.09"/>
+  <testcase name="replyInputBar_displayed_whenPendingReplyIsSet" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.134"/>
+  <testcase name="messageWithUncachedImage_triggersAsyncLoad" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.155"/>
+  <testcase name="topAppBar_starButton_displaysCorrectContentDescription_whenNotSaved" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.089"/>
+  <testcase name="topAppBar_peerHeader_callsOnPeerClick" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.088"/>
+  <testcase name="messageWithReply_displaysReplyPreviewBubble" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.114"/>
+  <testcase name="topAppBar_syncMenuItem_showsSyncingState" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.129"/>
+  <testcase name="inputBar_preservesOriginalWhitespaceThroughDurableSendResult" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.108"/>
+  <testcase name="onlineStatus_ignoresActiveLinkFromPreviousConversation" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.081"/>
+  <testcase name="inputBar_processingFile_showsLoadingState" classname="network.columba.app.ui.screens.MessagingScreenTest" time="0.079"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

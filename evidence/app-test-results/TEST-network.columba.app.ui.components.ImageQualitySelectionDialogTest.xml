@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.components.ImageQualitySelectionDialogTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:24:41.387Z" hostname="hermes-agent" time="10.418">
+  <properties/>
+  <testcase name="dialog_selectsRecommendedPresetByDefault" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="7.094"/>
+  <testcase name="dialog_displaysFailedMessage_whenLinkFailed" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.209"/>
+  <testcase name="dialog_displaysAllQualityOptions" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.268"/>
+  <testcase name="dialog_callsOnDismiss_whenCancelClicked" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.205"/>
+  <testcase name="dialog_handlesNullLinkState" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.188"/>
+  <testcase name="dialog_displaysPresetDescriptions" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.275"/>
+  <testcase name="dialog_displaysConnectingMessage_whenEstablishing" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.179"/>
+  <testcase name="dialog_handlesEmptyTransferTimeEstimates" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.168"/>
+  <testcase name="dialog_displaysSendAndCancelButtons" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.143"/>
+  <testcase name="dialog_allowsSelectingDifferentPreset" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.234"/>
+  <testcase name="dialog_displaysTitle" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.132"/>
+  <testcase name="dialog_recommendsOriginal_forFastNetworks" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.139"/>
+  <testcase name="dialog_callsOnSelect_whenSendClicked" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.131"/>
+  <testcase name="dialog_displaysNoActiveLink_whenInactive" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.168"/>
+  <testcase name="dialog_displaysTransferTimeEstimates" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.122"/>
+  <testcase name="dialog_displaysHopsAndBitrate_whenLinkActive" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.131"/>
+  <testcase name="dialog_displaysRecommendedBadge" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.111"/>
+  <testcase name="dialog_canSelectEachPreset" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.127"/>
+  <testcase name="dialog_recommendsLow_forSlowNetworks" classname="network.columba.app.ui.components.ImageQualitySelectionDialogTest" time="0.111"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

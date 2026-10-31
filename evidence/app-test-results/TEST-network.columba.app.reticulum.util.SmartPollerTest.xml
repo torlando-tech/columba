@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.reticulum.util.SmartPollerTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:20:49.217Z" hostname="hermes-agent" time="0.009">
+  <properties/>
+  <testcase name="markActive resets to minimum interval" classname="network.columba.app.reticulum.util.SmartPollerTest" time="0.002"/>
+  <testcase name="idle state applies exponential backoff" classname="network.columba.app.reticulum.util.SmartPollerTest" time="0.0"/>
+  <testcase name="active state returns minimum interval consistently" classname="network.columba.app.reticulum.util.SmartPollerTest" time="0.001"/>
+  <testcase name="custom intervals work correctly" classname="network.columba.app.reticulum.util.SmartPollerTest" time="0.0"/>
+  <testcase name="initial interval is minimum interval" classname="network.columba.app.reticulum.util.SmartPollerTest" time="0.0"/>
+  <testcase name="reset returns to initial state" classname="network.columba.app.reticulum.util.SmartPollerTest" time="0.0"/>
+  <testcase name="idle state caps at maximum interval" classname="network.columba.app.reticulum.util.SmartPollerTest" time="0.0"/>
+  <testcase name="getCurrentInterval does not modify state" classname="network.columba.app.reticulum.util.SmartPollerTest" time="0.0"/>
+  <testcase name="polling frequency meets Phase 2_2 success criteria" classname="network.columba.app.reticulum.util.SmartPollerTest" time="0.001"/>
+  <testcase name="transition from active to idle applies backoff" classname="network.columba.app.reticulum.util.SmartPollerTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

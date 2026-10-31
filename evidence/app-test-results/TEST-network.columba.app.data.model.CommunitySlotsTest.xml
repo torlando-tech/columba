@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.model.CommunitySlotsTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:17:32.155Z" hostname="hermes-agent" time="0.246">
+  <properties/>
+  <testcase name="isMeshtasticSlot returns false for US slot 100" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.201"/>
+  <testcase name="forRegion returns empty for invalid region" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.0"/>
+  <testcase name="forRegion returns empty for EU region" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.0"/>
+  <testcase name="isMeshtasticSlot returns true for US slot 9" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.0"/>
+  <testcase name="isMeshtasticSlot returns false for EU region" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.0"/>
+  <testcase name="forRegion US slots have correct data" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.025"/>
+  <testcase name="all community slots have required fields" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.001"/>
+  <testcase name="isMeshtasticSlot returns false for invalid region" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.001"/>
+  <testcase name="isMeshtasticSlot returns false for Australia region" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.0"/>
+  <testcase name="all community slots have valid region IDs" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.004"/>
+  <testcase name="meshtasticSlots contains expected slots" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.0"/>
+  <testcase name="forRegion returns slots for US region" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.0"/>
+  <testcase name="meshtasticSlots has exactly 2 entries" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.0"/>
+  <testcase name="isMeshtasticSlot returns true for US slot 20" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.0"/>
+  <testcase name="isMeshtasticSlot returns false for US slot 0" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.001"/>
+  <testcase name="isMeshtasticSlot returns false for US slot 50" classname="network.columba.app.data.model.CommunitySlotsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

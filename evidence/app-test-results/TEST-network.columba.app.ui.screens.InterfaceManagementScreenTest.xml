@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.InterfaceManagementScreenTest" tests="40" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:30:21.535Z" hostname="hermes-agent" time="9.849">
+  <properties/>
+  <testcase name="getInterfaceTypeLabel returns correct label for AndroidBLE" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="4.733"/>
+  <testcase name="InterfaceTypeOption displays title" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.963"/>
+  <testcase name="getInterfaceTypeLabel returns correct label for TCPClient" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.104"/>
+  <testcase name="getInterfaceTypeLabel returns unknown type as-is" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.108"/>
+  <testcase name="InterfaceTypeSelector Cancel button calls onDismiss" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.471"/>
+  <testcase name="getInterfaceTypeLabel returns correct label for AutoInterface" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.075"/>
+  <testcase name="getInterfaceTypeLabel returns correct label for TCPServer" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.076"/>
+  <testcase name="DiscoveredInterfacesSummaryCard shows disabled message when discovery disabled" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.099"/>
+  <testcase name="InterfaceTypeSelector displays Cancel button" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.143"/>
+  <testcase name="InterfaceTypeSelector displays TCP Client option" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.182"/>
+  <testcase name="formatAddressWithPort with localhost IPv4" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.072"/>
+  <testcase name="InterfaceTypeSelector displays Advanced section" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.135"/>
+  <testcase name="DiscoveredInterfacesSummaryCard shows unknown status badge" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.098"/>
+  <testcase name="DiscoveredInterfacesSummaryCard shows stale status badge" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.111"/>
+  <testcase name="InterfaceTypeSelector displays Bluetooth LE option" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.145"/>
+  <testcase name="InterfaceTypeSelector displays RNode LoRa option" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.144"/>
+  <testcase name="getInterfaceTypeLabel returns correct label for RNode" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.064"/>
+  <testcase name="InterfaceTypeSelector displays title" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.137"/>
+  <testcase name="DiscoveredInterfacesSummaryCard hides zero count badges" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.084"/>
+  <testcase name="InterfaceTypeOption displays description" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.071"/>
+  <testcase name="InterfaceTypeSelector displays Auto Discovery option" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.155"/>
+  <testcase name="DiscoveredInterfacesSummaryCard displays title" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.078"/>
+  <testcase name="InterfaceTypeSelector TCP Server hidden by default" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.106"/>
+  <testcase name="getInterfaceTypeLabel returns correct label for UDP" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.053"/>
+  <testcase name="formatAddressWithPort with custom port" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.051"/>
+  <testcase name="formatAddressWithPort with IPv4 address does not use brackets" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.051"/>
+  <testcase name="DiscoveredInterfacesSummaryCard shows no interfaces message when enabled but empty" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.078"/>
+  <testcase name="InterfaceTypeOption calls onClick when clicked" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.072"/>
+  <testcase name="DiscoveredInterfacesSummaryCard shows all status badges" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.087"/>
+  <testcase name="InterfaceTypeSelector calls onTypeSelected with AutoInterface" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.111"/>
+  <testcase name="formatAddressWithPort with null IP returns no network" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.051"/>
+  <testcase name="DiscoveredInterfacesSummaryCard calls onClick when clicked" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.094"/>
+  <testcase name="formatAddressWithPort with IPv6 address uses brackets" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.056"/>
+  <testcase name="InterfaceTypeSelector calls onTypeSelected with AndroidBLE" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.114"/>
+  <testcase name="DiscoveredInterfacesSummaryCard shows available status badge" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.07"/>
+  <testcase name="DiscoveredInterfacesSummaryCard shows total count when interfaces found" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.069"/>
+  <testcase name="formatAddressWithPort with Yggdrasil address uses brackets" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.057"/>
+  <testcase name="formatAddressWithPort with all zeros bind address" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.048"/>
+  <testcase name="InterfaceTypeSelector calls onTypeSelected with TCPClient" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.103"/>
+  <testcase name="formatAddressWithPort detects IPv6 by colon even if isIpv6 is false" classname="network.columba.app.ui.screens.InterfaceManagementScreenTest" time="0.047"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

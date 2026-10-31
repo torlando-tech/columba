@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.RNodeConfigValidatorTest" tests="53" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:43:26.285Z" hostname="hermes-agent" time="0.061">
+  <properties/>
+  <testcase name="validateAirtimeLimit valid limit" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.034"/>
+  <testcase name="validateTxPower NZ region allows up to 36 dBm" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.001"/>
+  <testcase name="validateAirtimeLimit exceeds regional duty cycle" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.003"/>
+  <testcase name="validateFrequency below region minimum" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="getMaxAirtimeLimit returns null without region" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateTxPower US region allows 30 dBm" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.001"/>
+  <testcase name="validateName whitespace only is invalid" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateAirtimeLimit blank is valid (no limit)" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateFrequency invalid number" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateTxPower NZ region rejects above 36 dBm" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.002"/>
+  <testcase name="getFrequencyRange returns region range" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.002"/>
+  <testcase name="validateBandwidth blank is valid (while typing)" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateConfigSilent all valid" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.002"/>
+  <testcase name="getFrequencyRange returns default without region" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateSpreadingFactor blank is valid (while typing)" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateConfigSilent invalid txPower fails" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateFrequency above region maximum" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateAirtimeLimit no limit for 100 percent duty cycle region" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.001"/>
+  <testcase name="validateFrequency valid frequency with region" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateFrequency without region rejects out of range" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateSpreadingFactor above maximum" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateSpreadingFactor at boundaries" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateConfig blank frequency returns error with range" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.002"/>
+  <testcase name="validateName valid name" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateSpreadingFactor below minimum" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateFrequency without region uses default range" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateConfig all valid returns valid result" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateBandwidth valid bandwidth" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="getMaxTxPower returns region max" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateName blank name is invalid" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.001"/>
+  <testcase name="validateFrequency blank is valid (while typing)" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateTxPower valid for region" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateConfig multiple errors" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.003"/>
+  <testcase name="validateAirtimeLimit negative" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="getMaxTxPower returns default without region" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateAirtimeLimit over 100 percent" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateFrequency at region boundary is valid" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateTxPower EU region limits to 14 dBm" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="getMaxAirtimeLimit returns null for unlimited region" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateCodingRate valid CR" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateTxPower without region uses default max" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateConfig blank name returns error" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.001"/>
+  <testcase name="validateSpreadingFactor valid SF" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateTxPower exceeds region max" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="getMaxAirtimeLimit returns duty cycle for limited region" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateBandwidth above maximum" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateBandwidth at boundaries" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateConfigSilent blank name fails" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateCodingRate above maximum" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateBandwidth below minimum" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateConfigSilent blank frequency fails" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateCodingRate below minimum" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <testcase name="validateTxPower negative" classname="network.columba.app.viewmodel.RNodeConfigValidatorTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

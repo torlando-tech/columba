@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.db.RoomUpgradeValidationTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:12.833Z" hostname="hermes-agent" time="0.625">
+  <properties/>
+  <testcase name="foreignKey_cascadeDelete_conversationDeletesMessages" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.085"/>
+  <testcase name="messageDao_replyPreviewData" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.047"/>
+  <testcase name="conversationDao_searchByPeerName" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.073"/>
+  <testcase name="messageDao_flowEmitsOnStatusUpdate" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.034"/>
+  <testcase name="database_createsSuccessfully" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.024"/>
+  <testcase name="messageDao_bulkInsert_replaceStrategy" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.029"/>
+  <testcase name="conversationDao_unreadCountOperations" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.029"/>
+  <testcase name="conversationDao_flowEmitsOnInsert" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.049"/>
+  <testcase name="localIdentityDao_insertAndRetrieve" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.038"/>
+  <testcase name="foreignKey_cascadeDelete_identityDeletesAll" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.039"/>
+  <testcase name="localIdentityDao_flowEmitsUpdates" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.035"/>
+  <testcase name="messageDao_bulkInsert_ignoreStrategy" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.035"/>
+  <testcase name="messageDao_unreadCountQuery" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.046"/>
+  <testcase name="conversationDao_compositePrimaryKey_works" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.028"/>
+  <testcase name="messageDao_compositePrimaryKey_withForeignKeys" classname="network.columba.app.data.db.RoomUpgradeValidationTest" time="0.025"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

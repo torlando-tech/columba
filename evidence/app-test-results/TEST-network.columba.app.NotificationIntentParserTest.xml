@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.NotificationIntentParserTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:16:42.976Z" hostname="hermes-agent" time="4.743">
+  <properties/>
+  <testcase name="parseOpenConversation with missing peer name returns null" classname="network.columba.app.NotificationIntentParserTest" time="3.913"/>
+  <testcase name="parseOpenConversation with missing destination hash returns null" classname="network.columba.app.NotificationIntentParserTest" time="0.066"/>
+  <testcase name="parseOpenConversation with both extras missing returns null" classname="network.columba.app.NotificationIntentParserTest" time="0.044"/>
+  <testcase name="successive notification taps receive distinct event ids" classname="network.columba.app.NotificationIntentParserTest" time="0.05"/>
+  <testcase name="parseOpenConversation preserves exact peer name including spaces and unicode" classname="network.columba.app.NotificationIntentParserTest" time="0.039"/>
+  <testcase name="parseOpenConversation with valid notification intent returns Conversation with fromNotification true" classname="network.columba.app.NotificationIntentParserTest" time="0.054"/>
+  <testcase name="parseOpenConversation result fromNotification differs from default Conversation" classname="network.columba.app.NotificationIntentParserTest" time="0.054"/>
+  <testcase name="parseOpenConversation with wrong action returns null" classname="network.columba.app.NotificationIntentParserTest" time="0.074"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

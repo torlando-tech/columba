@@ -18,9 +18,11 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.notifications.NotificationHelper
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.util.ThreadFieldCodec
 import network.columba.app.rns.host.util.PeerNameResolver
 import network.columba.app.telemetry.MemoryDiagnosticCounter
 import network.columba.app.telemetry.MemoryDiagnostics
+import network.columba.app.ui.model.parseReplyToFromFields
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -232,6 +234,15 @@ class MessageCollector
                                 // for full semantics); the UI renders an "unverified
                                 // sender" warning on these.
                                 signatureVerified = receivedMessage.signatureVerified,
+                                // Threads-spec §4.3: convKey = (identityHash,
+                                // peerHash, T). T = fieldsJson key "8" (raw
+                                // FIELD_THREAD bytes, hex over the bridge);
+                                // null => Main. The resolved 0x30 target is
+                                // persisted too so the thread root hook and
+                                // reply previews resolve from the DB column.
+                                threadId = ThreadFieldCodec
+                                    .threadIdFromFieldsJson(receivedMessage.fieldsJson),
+                                replyToMessageId = parseReplyToFromFields(receivedMessage.fieldsJson),
                             )
 
                         // Get peer name from cache, existing conversation, or use formatted hash

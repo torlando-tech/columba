@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.components.ContactLocationBottomSheetTest" tests="35" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:23:39.151Z" hostname="hermes-agent" time="12.927">
+  <properties/>
+  <testcase name="contactLocationBottomSheet displays directions button" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="7.537"/>
+  <testcase name="contactLocationBottomSheet message button invokes callback" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.649"/>
+  <testcase name="contactLocationBottomSheet remove button invokes callback" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.484"/>
+  <testcase name="bearingToDirection handles angles greater than 360" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.107"/>
+  <testcase name="bearingToDirection returns southeast for angles 112_5 to 157_5" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.105"/>
+  <testcase name="formatUpdatedTime returns hours for timestamps under 1 day" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.119"/>
+  <testcase name="formatDistanceAndDirection formats meters for short distances" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.098"/>
+  <testcase name="formatUpdatedTime returns minutes for timestamps under 1 hour" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.074"/>
+  <testcase name="formatDistanceAndDirection includes direction" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.063"/>
+  <testcase name="contactLocationBottomSheet expired marker shows remove button" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.241"/>
+  <testcase name="formatDistanceAndDirection returns unknown when userLocation is null" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.086"/>
+  <testcase name="formatUpdatedTime returns seconds for timestamps under 1 minute" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.091"/>
+  <testcase name="bearingToDirection returns west for angles 247_5 to 292_5" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.109"/>
+  <testcase name="bearingToDirection returns east for angles 67_5 to 112_5" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.074"/>
+  <testcase name="formatUpdatedTime handles very old timestamps" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.14"/>
+  <testcase name="bearingToDirection returns northeast for angles 22_5 to 67_5" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.101"/>
+  <testcase name="bearingToDirection returns south for angles 157_5 to 202_5" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.084"/>
+  <testcase name="contactLocationBottomSheet expired marker shows last known badge" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.232"/>
+  <testcase name="contactLocationBottomSheet fresh marker does not show remove button" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.263"/>
+  <testcase name="contactLocationBottomSheet displays updated time" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.194"/>
+  <testcase name="bearingToDirection returns north for angles near 360" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.065"/>
+  <testcase name="bearingToDirection returns north for small positive angles" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.095"/>
+  <testcase name="contactLocationBottomSheet stale marker shows remove button" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.259"/>
+  <testcase name="contactLocationBottomSheet displays message button" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.226"/>
+  <testcase name="bearingToDirection returns north for 0 degrees" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.07"/>
+  <testcase name="bearingToDirection returns northwest for angles 292_5 to 337_5" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.063"/>
+  <testcase name="formatUpdatedTime returns just now for recent timestamps" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.076"/>
+  <testcase name="bearingToDirection returns southwest for angles 202_5 to 247_5" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.069"/>
+  <testcase name="formatDistanceAndDirection formats kilometers for long distances" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.073"/>
+  <testcase name="bearingToDirection returns north for 360 degrees" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.074"/>
+  <testcase name="formatUpdatedTime returns days for old timestamps" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.059"/>
+  <testcase name="contactLocationBottomSheet displays location unknown when no user location" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.265"/>
+  <testcase name="contactLocationBottomSheet stale marker shows stale badge" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.179"/>
+  <testcase name="contactLocationBottomSheet displays contact name" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.14"/>
+  <testcase name="bearingToDirection handles negative angles" classname="network.columba.app.ui.components.ContactLocationBottomSheetTest" time="0.049"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

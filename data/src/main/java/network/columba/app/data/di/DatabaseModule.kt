@@ -29,6 +29,7 @@ import network.columba.app.data.db.dao.PeerIdentityDao
 import network.columba.app.data.db.dao.PreferredPropagationNodeDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.dao.RmspServerDao
+import network.columba.app.data.db.dao.ThreadDao
 import javax.inject.Singleton
 
 @Module
@@ -121,6 +122,7 @@ object DatabaseModule {
                 ColumbaDatabase.MIGRATION_7_8,
                 ColumbaDatabase.MIGRATION_8_9,
                 ColumbaDatabase.MIGRATION_9_10,
+                ColumbaDatabase.MIGRATION_10_11,
             )
             .enableMultiInstanceInvalidation()
             .addCallback(DURABILITY_CALLBACK)
@@ -174,6 +176,9 @@ object DatabaseModule {
 
     @Provides
     fun provideInterfaceFirstSeenDao(database: ColumbaDatabase): InterfaceFirstSeenDao = database.interfaceFirstSeenDao()
+
+    @Provides
+    fun provideThreadDao(database: ColumbaDatabase): ThreadDao = database.threadDao()
 
     @Provides
     @Singleton

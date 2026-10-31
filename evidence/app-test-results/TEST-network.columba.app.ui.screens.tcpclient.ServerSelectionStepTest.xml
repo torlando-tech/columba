@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.tcpclient.ServerSelectionStepTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:37:48.287Z" hostname="hermes-agent" time="9.931">
+  <properties/>
+  <testcase name="serverSelectionStep_displaysCustomOption" classname="network.columba.app.ui.screens.tcpclient.ServerSelectionStepTest" time="8.376"/>
+  <testcase name="customMode_selected_showsCheckIcon" classname="network.columba.app.ui.screens.tcpclient.ServerSelectionStepTest" time="0.217"/>
+  <testcase name="serverSelectionStep_displaysHeader" classname="network.columba.app.ui.screens.tcpclient.ServerSelectionStepTest" time="0.153"/>
+  <testcase name="customSettingsCard_onClick_callsEnableCustomMode" classname="network.columba.app.ui.screens.tcpclient.ServerSelectionStepTest" time="0.332"/>
+  <testcase name="serverSelectionStep_displaysCommunityServers" classname="network.columba.app.ui.screens.tcpclient.ServerSelectionStepTest" time="0.143"/>
+  <testcase name="serverCard_selected_showsCheckIcon" classname="network.columba.app.ui.screens.tcpclient.ServerSelectionStepTest" time="0.122"/>
+  <testcase name="serverSelectionStep_displaysDescription" classname="network.columba.app.ui.screens.tcpclient.ServerSelectionStepTest" time="0.127"/>
+  <testcase name="serverCard_onClick_callsSelectServer" classname="network.columba.app.ui.screens.tcpclient.ServerSelectionStepTest" time="0.158"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

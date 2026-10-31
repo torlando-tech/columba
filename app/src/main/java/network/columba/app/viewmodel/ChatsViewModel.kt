@@ -17,6 +17,10 @@ import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.VoiceCallState
 import network.columba.app.service.IdentityResolutionManager
+import network.columba.app.repository.SettingsRepository
+import network.columba.app.rns.api.util.hexToBytes
+import network.columba.app.ui.model.ChatCardThreadsUi
+import network.columba.app.ui.model.ThreadUiDerivation
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
@@ -29,6 +33,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
@@ -90,6 +95,9 @@ sealed interface CallHistoryNavigation {
 }
 
 @HiltViewModel
+// Single VM for the merged Chats+Voice screen (segments, cards, sync, call state);
+// splitting would scatter shared state (search, identity switch) across seams.
+@Suppress("TooManyFunctions")
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatsViewModel
     @Inject
@@ -105,6 +113,7 @@ class ChatsViewModel
         private val propagationNodeManager: PropagationNodeManager,
         private val receivedLocationRepository: ReceivedLocationRepository,
         private val identityResolutionManager: IdentityResolutionManager,
+        private val settingsRepository: SettingsRepository,
         private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
     ) : ViewModel() {
         companion object {
@@ -179,6 +188,137 @@ class ChatsViewModel
                     started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = emptyMap(),
                 )
+
+        // Threads P2 (threads-spec §6.1): expanding contact cards.
+
+        /** `threads_enabled` feature flag (default off). */
+        val threadsEnabled: StateFlow<Boolean> =
+            settingsRepository
+                .threadsEnabledFlow
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = false,
+                )
+
+        /** Peer hashes whose card is expanded (per-card local preference). */
+        val expandedCards: StateFlow<Set<String>> =
+            settingsRepository
+                .expandedChatCardsFlow
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = emptySet(),
+                )
+
+        fun setCardExpanded(
+            peerHash: String,
+            expanded: Boolean,
+        ) {
+            viewModelScope.launch {
+                try {
+                    settingsRepository.setChatCardExpanded(peerHash, expanded)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error updating card expansion state", e)
+                }
+            }
+        }
+
+        // Cache of per-conversation thread bundles, keyed by peerHash — only
+        // expanded cards / open sheets subscribe (same pattern as
+        // contactSavedCache).
+        private val cardThreadsCache = ConcurrentHashMap<String, kotlinx.coroutines.flow.StateFlow<ChatCardThreadsUi>>()
+
+        /** Threads + Main preview for one conversation (card + sheet share it). */
+        fun cardThreads(peerHash: String): kotlinx.coroutines.flow.StateFlow<ChatCardThreadsUi> =
+            cardThreadsCache.getOrPut(peerHash) {
+                kotlinx.coroutines.flow
+                    .flow {
+                        // The repository accessors are suspend (they resolve the
+                        // active identity once) — build the combine inside flow{}.
+                        val threads = conversationRepository.threadsForConversation(peerHash, includeArchived = true)
+                        val unread = conversationRepository.observeUnreadCountsPerThread(peerHash)
+                        val last = conversationRepository.observeLastMessagesPerThread(peerHash)
+                        val mainLast = conversationRepository.observeMainLastMessage(peerHash)
+                        emitAll(
+                            kotlinx.coroutines.flow
+                                .combine(threads, unread, last, mainLast) { threadRows, unreadRows, lastRows, mainRow ->
+                                    val unreadByHex = ThreadUiDerivation.unreadByThread(unreadRows)
+                                    val lastByHex = ThreadUiDerivation.lastMessageByThread(lastRows)
+                                    ChatCardThreadsUi(
+                                        sheet =
+                                            ThreadUiDerivation.buildSheetState(
+                                                threadRows,
+                                                unreadByHex,
+                                                lastByHex,
+                                                System.currentTimeMillis(),
+                                            ),
+                                        mainPreview = mainRow?.content.orEmpty(),
+                                        mainTimestamp = mainRow?.timestamp ?: 0L,
+                                    )
+                                },
+                        )
+                    }.stateIn(
+                        scope = viewModelScope,
+                        started = SharingStarted.WhileSubscribed(5000L),
+                        initialValue = ChatCardThreadsUi(),
+                    )
+            }
+
+        // Thread sheet management (spec §6.3) — local-only, never wire traffic.
+
+        fun renameThread(
+            peerHash: String,
+            threadIdHex: String,
+            title: String,
+        ) {
+            viewModelScope.launch {
+                try {
+                    conversationRepository.renameThread(peerHash, threadIdHex.hexToBytes(), title)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error renaming thread", e)
+                }
+            }
+        }
+
+        fun archiveThread(
+            peerHash: String,
+            threadIdHex: String,
+        ) {
+            viewModelScope.launch {
+                try {
+                    conversationRepository.setThreadArchived(peerHash, threadIdHex.hexToBytes(), archived = true)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error archiving thread", e)
+                }
+            }
+        }
+
+        fun unarchiveThread(
+            peerHash: String,
+            threadIdHex: String,
+        ) {
+            viewModelScope.launch {
+                try {
+                    conversationRepository.setThreadArchived(peerHash, threadIdHex.hexToBytes(), archived = false)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error un-archiving thread", e)
+                }
+            }
+        }
+
+        fun deleteThread(
+            peerHash: String,
+            threadIdHex: String,
+        ) {
+            viewModelScope.launch {
+                try {
+                    conversationRepository.deleteThread(peerHash, threadIdHex.hexToBytes())
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error deleting thread", e)
+                }
+            }
+        }
 
         // Search query state
         val searchQuery = MutableStateFlow("")

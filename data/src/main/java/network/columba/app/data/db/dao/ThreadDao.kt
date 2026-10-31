@@ -10,8 +10,12 @@ import network.columba.app.data.db.entity.ThreadEntity
 /**
  * Thread rows are created implicitly on receive (first message seen with an
  * unknown `FIELD_THREAD` value — threads-spec §4.3) and by the send path when
- * the user starts a thread (P2). No delete surface: local delete ships with
- * the P2 thread sheet; wire events never remove threads.
+ * the user starts a thread (P2). Wire events never remove threads.
+ *
+ * P2 adds the thread-sheet management surface: rename, archive/un-archive,
+ * and local delete. All three are local-only — they never emit wire traffic
+ * and never touch received message history beyond the explicit delete of the
+ * thread's own messages (the conversation's Main rows are untouched).
  */
 @Dao
 interface ThreadDao {
@@ -83,4 +87,40 @@ interface ThreadDao {
         identityHash: String,
         cutoffAt: Long,
     ): List<ThreadEntity>
+
+    /** Rename a thread (local label only — titles never touch the wire, spec §2 non-goals). */
+    @Query(
+        "UPDATE threads SET title = :title WHERE identityHash = :identityHash AND conversationHash = :conversationHash AND threadId = :threadId",
+    )
+    suspend fun renameThread(
+        threadId: ByteArray,
+        identityHash: String,
+        conversationHash: String,
+        title: String,
+    )
+
+    /** Archive ([archivedAt] = now) or un-archive ([archivedAt] = null). Local presentation only (spec §5). */
+    @Query(
+        "UPDATE threads SET archivedAt = :archivedAt WHERE identityHash = :identityHash AND conversationHash = :conversationHash AND threadId = :threadId",
+    )
+    suspend fun setArchived(
+        threadId: ByteArray,
+        identityHash: String,
+        conversationHash: String,
+        archivedAt: Long?,
+    )
+
+    /**
+     * Delete one thread row. The caller deletes the thread's messages and
+     * draft in the same transaction (repository `deleteThread`); Main rows
+     * and the wire history are never touched.
+     */
+    @Query(
+        "DELETE FROM threads WHERE identityHash = :identityHash AND conversationHash = :conversationHash AND threadId = :threadId",
+    )
+    suspend fun deleteThread(
+        threadId: ByteArray,
+        identityHash: String,
+        conversationHash: String,
+    )
 }

@@ -17,6 +17,7 @@ import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.VoiceCallState
+import network.columba.app.repository.SettingsRepository
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.PropagationNodeManager
 import io.mockk.*
@@ -61,6 +62,7 @@ class ChatsViewModelTest {
     private lateinit var reticulumProtocol: RnsCore
     private lateinit var rnsTelephony: RnsTelephony
     private lateinit var liveCallState: MutableStateFlow<CallState>
+    private lateinit var settingsRepository: SettingsRepository
     private lateinit var viewModel: ChatsViewModel
 
     private val testConversation1 =
@@ -114,6 +116,7 @@ class ChatsViewModelTest {
         propagationNodeManager = mockk(relaxed = true)
         receivedLocationRepository = mockk()
         identityResolutionManager = mockk()
+        settingsRepository = mockSettingsRepository()
         coEvery { identityResolutionManager.requestPathForContact(any()) } just Runs
 
         // Default: no conversations, no drafts
@@ -144,6 +147,7 @@ class ChatsViewModelTest {
                 propagationNodeManager,
                 receivedLocationRepository,
                 identityResolutionManager,
+                settingsRepository,
             )
     }
 
@@ -152,6 +156,12 @@ class ChatsViewModelTest {
         Dispatchers.resetMain()
         clearAllMocks()
     }
+
+    private fun mockSettingsRepository(): SettingsRepository =
+        mockk {
+            every { threadsEnabledFlow } returns flowOf(false)
+            every { expandedChatCardsFlow } returns flowOf(emptySet())
+        }
 
     @Test
     fun `initial state has empty conversations and is loading`() =
@@ -186,6 +196,7 @@ class ChatsViewModelTest {
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
+                    mockSettingsRepository(),
                 )
 
             // WhileSubscribed requires active collector - test() provides one
@@ -228,6 +239,7 @@ class ChatsViewModelTest {
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
+                    mockSettingsRepository(),
                 )
 
             newViewModel.chatsState.test {
@@ -309,6 +321,7 @@ class ChatsViewModelTest {
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
+                    mockSettingsRepository(),
                 )
             advanceUntilIdle()
 
@@ -360,6 +373,7 @@ class ChatsViewModelTest {
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
+                    mockSettingsRepository(),
                 )
 
             newViewModel.chatsState.test {
@@ -401,6 +415,7 @@ class ChatsViewModelTest {
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
+                    mockSettingsRepository(),
                 )
 
             newViewModel.chatsState.test {
@@ -442,6 +457,7 @@ class ChatsViewModelTest {
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
+                    mockSettingsRepository(),
                 )
 
             // When: chatsState is collected
@@ -484,6 +500,7 @@ class ChatsViewModelTest {
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
+                    mockSettingsRepository(),
                 )
 
             // When: Search query is set

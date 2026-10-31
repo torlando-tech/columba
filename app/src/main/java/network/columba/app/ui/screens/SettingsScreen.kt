@@ -116,6 +116,7 @@ fun SettingsScreen(
     val state by viewModel.state.collectAsState()
     val blockedPeerCount by blockedUsersViewModel.blockedPeerCount.collectAsState()
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
+    val threadsEnabled by viewModel.threadsEnabled.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -578,6 +579,8 @@ fun SettingsScreen(
                     isRestarting = state.isRestarting,
                     crashReportingEnabled = state.crashReportingEnabled,
                     onCrashReportingToggle = { viewModel.setCrashReportingEnabled(it) },
+                    threadsEnabled = threadsEnabled,
+                    onThreadsToggle = { viewModel.setThreadsEnabled(it) },
                 )
 
                 // About section

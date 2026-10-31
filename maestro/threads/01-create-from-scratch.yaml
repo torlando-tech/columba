@@ -1,0 +1,46 @@
+# 01-create-from-scratch.yaml
+#
+# Spec §6.2 case 1: the thread sheet's "+ New" opens an unnamed thread in place; the first
+# sent message becomes the thread's first reply. A case-1 thread has NO root,
+# so the thread view shows no pinned header (the off-screen placeholder is
+# only for case-2 threads whose root was never received) and the chip takes
+# its title from the first message.
+#
+# Params: APP_ID, PEER_HASH, PEER_NAME, MSG_TOKEN.
+appId: ${APP_ID}
+---
+- runFlow:
+    file: lib/open-self-chat.yaml
+    env:
+      APP_ID: ${APP_ID}
+      PEER_HASH: ${PEER_HASH}
+      PEER_NAME: ${PEER_NAME}
+
+# Chip bar present with Main pinned first.
+- extendedWaitUntil:
+    visible: "Main"
+# Case 1: sheet "+ New" (the only thread-creation entry point, per manager
+# decision) — composer retargets (placeholder proves it).
+- tapOn: "More threads"
+- extendedWaitUntil:
+    visible: "Threads"
+    timeout: 10000
+- tapOn: "+ New"
+- assertVisible: "Reply in thread…"
+
+- tapOn: "Reply in thread…"
+- inputText: ${MSG_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+
+# The reply renders in the thread view. Case-1 threads have no root: no
+# pinned header card and no off-screen placeholder — just messages in order.
+- extendedWaitUntil:
+    visible: ${MSG_TOKEN}
+    timeout: 30000
+- assertNotVisible: "Thread started off-screen"
+
+# The chip now carries the thread (title derived from the first message).
+- assertVisible:
+    text: ".*${MSG_TOKEN}.*"
+- takeScreenshot: threads-create-from-scratch

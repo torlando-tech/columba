@@ -111,6 +111,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         settingsRepository = mockk()
         every { settingsRepository.bottomNavTabsFlow } returns flowOf(null)
         every { settingsRepository.nomadNetLastPageFlow } returns flowOf(NomadNetLastPage(null, null))
+        every { settingsRepository.threadsEnabledFlow } returns flowOf(false)
         identityRepository = mockk()
         rnsBackend = mockk()
         rnsCore = mockk()

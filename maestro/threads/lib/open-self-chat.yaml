@@ -1,0 +1,30 @@
+# lib/open-self-chat.yaml
+#
+# Shared prologue for the threads suite: open (or reuse) a conversation with
+# PEER_HASH via the lxma:// deep link and land on the MessagingScreen.
+#
+# The runner points PEER_HASH at the device's OWN LXMF destination, so every
+# send resolves locally on a single device (same trick as
+# e2e/single-device/send-large-attachment.yaml).
+#
+# Params: APP_ID, PEER_HASH, PEER_NAME.
+appId: ${APP_ID}
+---
+- openLink:
+    url: lxma://${PEER_HASH}
+    appId: ${APP_ID}
+
+# First run: the deep-link confirmation dialog. Later runs: the contact
+# already exists and the app lands on Contacts directly.
+- tapOn:
+    text: "Add"
+    optional: true
+
+# Contacts tab -> the self contact -> MessagingScreen.
+- tapOn:
+    text: ${PEER_NAME}
+- tapOn:
+    text: "Chats"
+    optional: true
+- tapOn:
+    text: ${PEER_NAME}

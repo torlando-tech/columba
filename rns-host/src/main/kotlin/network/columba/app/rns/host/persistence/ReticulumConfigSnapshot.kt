@@ -164,16 +164,7 @@ object ReticulumConfigSnapshot {
     /** Caller must hold [withSnapshotLock]. */
     private fun readLocked(context: Context): Snapshot? {
         val file = snapshotFile(context)
-        if (!file.exists()) {
-            Log.d(TAG, "No snapshot at ${file.absolutePath} — first run or never initialized")
-            return null
-        }
-        val bytes = try {
-            file.readBytes()
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to read snapshot file: ${e.message}", e)
-            return null
-        }
+        val bytes = readSnapshotBytes(file) ?: return null
         val parcel = Parcel.obtain()
         return try {
             parcel.unmarshall(bytes, 0, bytes.size)
@@ -204,6 +195,20 @@ object ReticulumConfigSnapshot {
             null
         } finally {
             parcel.recycle()
+        }
+    }
+
+    /** Raw snapshot bytes, or null if the file is absent or can't be read. */
+    private fun readSnapshotBytes(file: File): ByteArray? {
+        if (!file.exists()) {
+            Log.d(TAG, "No snapshot at ${file.absolutePath} — first run or never initialized")
+            return null
+        }
+        return try {
+            file.readBytes()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read snapshot file: ${e.message}", e)
+            null
         }
     }
 

@@ -393,7 +393,7 @@ class BoundRnsBackendTest {
         val transferProgressEmitter = MutableSharedFlow<TransferProgressUpdate>(extraBufferCapacity = 1)
 
         override suspend fun sendLxmfMessage(destinationHash: ByteArray, content: String, sourceIdentity: Identity, imageData: ByteArray?, imageFormat: String?, fileAttachments: List<Pair<String, ByteArray>>?): Result<MessageReceipt> = error("not used")
-        override suspend fun sendLxmfMessageWithMethod(destinationHash: ByteArray, content: String, sourceIdentity: Identity, deliveryMethod: DeliveryMethod, tryPropagationOnFail: Boolean, imageData: ByteArray?, imageFormat: String?, fileAttachments: List<Pair<String, ByteArray>>?, replyToMessageId: String?, replyQuotedContent: String?, iconAppearance: IconAppearance?, extraFields: Map<Int, Any>?): Result<MessageReceipt> = error("not used")
+        override suspend fun sendLxmfMessageWithMethod(destinationHash: ByteArray, content: String, sourceIdentity: Identity, deliveryMethod: DeliveryMethod, tryPropagationOnFail: Boolean, imageData: ByteArray?, imageFormat: String?, fileAttachments: List<Pair<String, ByteArray>>?, replyToMessageId: String?, replyQuotedContent: String?, iconAppearance: IconAppearance?, extraFields: Map<Int, Any>?, threadId: ByteArray?): Result<MessageReceipt> = error("not used")
         override suspend fun sendReaction(destinationHash: ByteArray, targetMessageId: String, emoji: String, sourceIdentity: Identity): Result<MessageReceipt> = error("not used")
         override fun observeMessages() = kotlinx.coroutines.flow.emptyFlow<ReceivedMessage>()
         override fun observeDeliveryStatus() = kotlinx.coroutines.flow.emptyFlow<DeliveryStatusUpdate>()

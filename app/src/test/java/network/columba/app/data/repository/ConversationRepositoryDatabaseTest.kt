@@ -65,6 +65,7 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
                 localIdentityDao = localIdentityDao,
                 attachmentStorage = mockAttachmentStorage,
                 draftDao = draftDao,
+                threadDao = threadDao,
             )
     }
 

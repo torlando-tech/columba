@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.util.InterfaceFormattingUtilsTest" tests="37" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:39:36.975Z" hostname="hermes-agent" time="0.155">
+  <properties/>
+  <testcase name="formatBandwidth formats MHz for values 1000000 and above" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.004"/>
+  <testcase name="formatFrequency formats 433 MHz correctly" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatFrequency handles very large values" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBytes formats boundary value 1023 as bytes" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.003"/>
+  <testcase name="formatBytes formats boundary value 1073741823 as MB" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="getConnectionIcon returns TCP WiFi icon for RNode with tcp mode" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.128"/>
+  <testcase name="getConnectionIcon returns Bluetooth icon for AndroidBLE" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.002"/>
+  <testcase name="getConnectionIcon returns WiFi icon for TCPClient" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.001"/>
+  <testcase name="getConnectionIcon returns SignalCellularAlt icon for AutoInterface" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.001"/>
+  <testcase name="formatBytes formats boundary value 1024 as KB" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBytes uses one decimal place for KB and MB" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="getConnectionIcon returns default icon for unknown interface type" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.001"/>
+  <testcase name="getConnectionIcon returns WiFi icon for TCPServer" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBytes formats boundary value 1073741824 as GB" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBytes formats boundary value 1048575 as KB" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBandwidth formats zero" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.002"/>
+  <testcase name="formatFrequency formats with three decimal places" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBandwidth formats boundary value 1000000 as MHz" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="getConnectionIcon returns Bluetooth icon for RNode with ble mode" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBandwidth formats kHz for values 1000 to 999999" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.001"/>
+  <testcase name="formatFrequency formats 915 MHz correctly" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBytes formats boundary value 1048576 as MB" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBytes uses two decimal places for GB" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBytes formats MB for values 1048576 to 1073741823" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBandwidth formats Hz for values below 1000" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="getConnectionIcon returns WiFi icon for UDP" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.001"/>
+  <testcase name="formatBandwidth formats boundary value 1000 as kHz" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBytes formats zero" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBytes formats small values in bytes" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBytes formats GB for values 1073741824 and above" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBytes formats KB for values 1024 to 1048575" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="getConnectionIcon ignores connection mode for non-RNode interfaces" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatBandwidth formats boundary value 999 as Hz" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.001"/>
+  <testcase name="getConnectionIcon returns USB icon for RNode with usb mode" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.002"/>
+  <testcase name="formatFrequency handles zero" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="formatFrequency formats fractional MHz correctly" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.0"/>
+  <testcase name="getConnectionIcon returns Bluetooth icon for RNode without connection mode" classname="network.columba.app.util.InterfaceFormattingUtilsTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

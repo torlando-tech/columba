@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.MessageDetailScreenTest" tests="35" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:31:12.043Z" hostname="hermes-agent" time="13.28">
+  <properties/>
+  <testcase name="status card failed displays correct text" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="8.404"/>
+  <testcase name="delivery method card unknown method displays capitalized text" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.423"/>
+  <testcase name="status card sent displays correct text" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.172"/>
+  <testcase name="error details card not displayed when status failed but error message is null" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.132"/>
+  <testcase name="top app bar displays correct title" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.277"/>
+  <testcase name="screen displays correct number of cards for failed message with error" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.159"/>
+  <testcase name="delivery method card not displayed when delivery method is null" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.114"/>
+  <testcase name="error details card displayed when status failed and error message exists" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.144"/>
+  <testcase name="delivery method card propagated displays correct content" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.155"/>
+  <testcase name="status card unknown status displays default sent text" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.11"/>
+  <testcase name="error details card not displayed when status is not failed" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.105"/>
+  <testcase name="screen calls loadMessage on launch" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.099"/>
+  <testcase name="screen displays correct number of cards for message without delivery method" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.137"/>
+  <testcase name="status card pending displays correct text" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.11"/>
+  <testcase name="receiving interface card displays truncated name for unknown interface" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.244"/>
+  <testcase name="hop count card displays singular hop for one hop" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.124"/>
+  <testcase name="delivery method card opportunistic displays correct content" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.109"/>
+  <testcase name="delivery method card direct displays correct content" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.121"/>
+  <testcase name="error details card not displayed when status failed but error message is blank" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.086"/>
+  <testcase name="timestamp card displays sent label" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.116"/>
+  <testcase name="loading state displays loading text" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.084"/>
+  <testcase name="hop count card not displayed when hop count is null" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.095"/>
+  <testcase name="receiving interface card displays Local Network for AutoInterface" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.135"/>
+  <testcase name="loading state displays top app bar" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.12"/>
+  <testcase name="hop count card displays Direct for zero hops" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.112"/>
+  <testcase name="receiving interface card displays Serial for serial interface" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.123"/>
+  <testcase name="receiving interface card displays Bluetooth for BLE interface" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.112"/>
+  <testcase name="receiving interface card not displayed when interface is null" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.088"/>
+  <testcase name="hop count card displays plural hops for multiple hops" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.103"/>
+  <testcase name="screen displays correct number of cards for delivered message" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.091"/>
+  <testcase name="screen updates UI when message state changes" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.103"/>
+  <testcase name="receiving interface card displays TCP for TCPClient" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.123"/>
+  <testcase name="status card delivered displays correct text" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.08"/>
+  <testcase name="back button invokes callback" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.162"/>
+  <testcase name="receiving interface card displays LoRa Radio for RNode" classname="network.columba.app.ui.screens.MessageDetailScreenTest" time="0.107"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

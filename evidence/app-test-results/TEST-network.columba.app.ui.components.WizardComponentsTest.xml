@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.components.WizardComponentsTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:27:17.345Z" hostname="hermes-agent" time="7.477">
+  <properties/>
+  <testcase name="customSettingsCard_notSelected_doesNotShowCheckIcon" classname="network.columba.app.ui.components.WizardComponentsTest" time="5.77"/>
+  <testcase name="wizardBottomBar_isSaving_showsProgressIndicator" classname="network.columba.app.ui.components.WizardComponentsTest" time="0.208"/>
+  <testcase name="customSettingsCard_displaysDescription" classname="network.columba.app.ui.components.WizardComponentsTest" time="0.138"/>
+  <testcase name="customSettingsCard_displaysTitle" classname="network.columba.app.ui.components.WizardComponentsTest" time="0.119"/>
+  <testcase name="wizardBottomBar_displaysButtonText" classname="network.columba.app.ui.components.WizardComponentsTest" time="0.114"/>
+  <testcase name="wizardBottomBar_displaysSaveButtonText" classname="network.columba.app.ui.components.WizardComponentsTest" time="0.105"/>
+  <testcase name="wizardBottomBar_isSaving_buttonDisabled" classname="network.columba.app.ui.components.WizardComponentsTest" time="0.115"/>
+  <testcase name="wizardBottomBar_canProceed_buttonEnabled" classname="network.columba.app.ui.components.WizardComponentsTest" time="0.11"/>
+  <testcase name="wizardBottomBar_onClick_invokesCallback" classname="network.columba.app.ui.components.WizardComponentsTest" time="0.216"/>
+  <testcase name="wizardBottomBar_cannotProceed_buttonDisabled" classname="network.columba.app.ui.components.WizardComponentsTest" time="0.083"/>
+  <testcase name="customSettingsCard_onClick_invokesCallback" classname="network.columba.app.ui.components.WizardComponentsTest" time="0.101"/>
+  <testcase name="customSettingsCard_selected_showsCheckIcon" classname="network.columba.app.ui.components.WizardComponentsTest" time="0.081"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

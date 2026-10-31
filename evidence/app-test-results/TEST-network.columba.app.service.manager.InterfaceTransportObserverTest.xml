@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.service.manager.InterfaceTransportObserverTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:22:18.539Z" hostname="hermes-agent" time="3.527">
+  <properties/>
+  <testcase name="vpn and unsupported capabilities emit unknown" classname="network.columba.app.service.manager.InterfaceTransportObserverTest" time="3.326"/>
+  <testcase name="start registers default network callback and seeds from snapshot" classname="network.columba.app.service.manager.InterfaceTransportObserverTest" time="0.019"/>
+  <testcase name="wifi to cellular handoff updates state and reloads once per meaningful transition" classname="network.columba.app.service.manager.InterfaceTransportObserverTest" time="0.023"/>
+  <testcase name="duplicate same bucket capability updates are deduplicated" classname="network.columba.app.service.manager.InterfaceTransportObserverTest" time="0.018"/>
+  <testcase name="stale wifi onLost after cellular promotion does not emit none or reload" classname="network.columba.app.service.manager.InterfaceTransportObserverTest" time="0.026"/>
+  <testcase name="stop and restart clears callback identity and duplicate state" classname="network.columba.app.service.manager.InterfaceTransportObserverTest" time="0.025"/>
+  <testcase name="final default loss emits none and reloads" classname="network.columba.app.service.manager.InterfaceTransportObserverTest" time="0.023"/>
+  <testcase name="registration callback cannot be overwritten by an older startup snapshot" classname="network.columba.app.service.manager.InterfaceTransportObserverTest" time="0.03"/>
+  <testcase name="first default capabilities trigger filtering and reload" classname="network.columba.app.service.manager.InterfaceTransportObserverTest" time="0.028"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

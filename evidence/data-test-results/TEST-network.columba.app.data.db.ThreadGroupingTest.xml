@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.db.ThreadGroupingTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:13.472Z" hostname="hermes-agent" time="0.765">
+  <properties/>
+  <testcase name="first sighting with a Main target attaches the root hook" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.074"/>
+  <testcase name="markThreadAsRead clears only that thread" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.038"/>
+  <testcase name="older activity never rewinds the watermark" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.038"/>
+  <testcase name="messagesForThread returns only that thread's messages in time order" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.06"/>
+  <testcase name="first unknown T creates the thread titled with the first-message excerpt" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.032"/>
+  <testcase name="unknown-root thread - unresolved 0x30 target degrades to no root, never throws" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.028"/>
+  <testcase name="duplicate first sighting is ignored not duplicated" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.032"/>
+  <testcase name="threadsForConversation orders by activity desc and hides archived by default" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.032"/>
+  <testcase name="any new message revives a dormant thread" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.031"/>
+  <testcase name="unread counts split per thread and Main" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.038"/>
+  <testcase name="dormancy sweep reports only non-archived threads idle beyond the window" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.048"/>
+  <testcase name="root is attached only on first sighting - later replies cannot retroactively set it" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.028"/>
+  <testcase name="known T only bumps activity - title and root are untouched" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.029"/>
+  <testcase name="target inside another thread is not adopted as root" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.042"/>
+  <testcase name="null threadId is Main - no thread row is created" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.085"/>
+  <testcase name="same thread bytes under different conversations are distinct threads" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.049"/>
+  <testcase name="target in a different conversation is not adopted as root" classname="network.columba.app.data.db.ThreadGroupingTest" time="0.067"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

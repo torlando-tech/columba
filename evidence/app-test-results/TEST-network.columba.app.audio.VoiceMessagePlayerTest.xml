@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.audio.VoiceMessagePlayerTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:17:01.004Z" hostname="hermes-agent" time="5.615">
+  <properties/>
+  <testcase name="playing another message releases previous engine and deletes temp file" classname="network.columba.app.audio.VoiceMessagePlayerTest" time="4.597"/>
+  <testcase name="close releases engine deletes temp file and clears state" classname="network.columba.app.audio.VoiceMessagePlayerTest" time="0.062"/>
+  <testcase name="toggleFile previews selected recording without deleting it" classname="network.columba.app.audio.VoiceMessagePlayerTest" time="0.05"/>
+  <testcase name="cancelMetadata cancels an off-screen metadata load" classname="network.columba.app.audio.VoiceMessagePlayerTest" time="0.062"/>
+  <testcase name="waveform failure does not block playback" classname="network.columba.app.audio.VoiceMessagePlayerTest" time="0.062"/>
+  <testcase name="metadata semaphore permits only one active load" classname="network.columba.app.audio.VoiceMessagePlayerTest" time="0.059"/>
+  <testcase name="missing payload produces unavailable state without creating engine" classname="network.columba.app.audio.VoiceMessagePlayerTest" time="0.04"/>
+  <testcase name="toggle after completion restarts from beginning" classname="network.columba.app.audio.VoiceMessagePlayerTest" time="0.037"/>
+  <testcase name="play prepares and starts loaded audio" classname="network.columba.app.audio.VoiceMessagePlayerTest" time="0.035"/>
+  <testcase name="toggle pauses and resumes same message without seeking to start" classname="network.columba.app.audio.VoiceMessagePlayerTest" time="0.034"/>
+  <testcase name="concurrent same-key metadata requests start only one load" classname="network.columba.app.audio.VoiceMessagePlayerTest" time="0.073"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

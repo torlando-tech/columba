@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.service.AutoAnnounceManagerTest" tests="12" skipped="1" failures="0" errors="0" timestamp="2026-10-31T21:21:11.707Z" hostname="hermes-agent" time="6.472">
+  <properties/>
+  <testcase name="networkChangeObserver_resetsTimerOnTimestampChange" classname="network.columba.app.service.AutoAnnounceManagerTest" time="0.001">
+    <skipped/>
+  </testcase>
+  <testcase name="resetTimer_emitsSignal" classname="network.columba.app.service.AutoAnnounceManagerTest" time="5.623"/>
+  <testcase name="stop_cancelsJobs" classname="network.columba.app.service.AutoAnnounceManagerTest" time="0.084"/>
+  <testcase name="start_createsJobs" classname="network.columba.app.service.AutoAnnounceManagerTest" time="0.054"/>
+  <testcase name="stop_beforeStart_doesNotThrow" classname="network.columba.app.service.AutoAnnounceManagerTest" time="0.047"/>
+  <testcase name="randomizationLogic_baseInterval3h_producesMinuteValuesIn2to4hRange" classname="network.columba.app.service.AutoAnnounceManagerTest" time="0.046"/>
+  <testcase name="randomizationLogic_randomOffsetRange_coversFullMinuteRange" classname="network.columba.app.service.AutoAnnounceManagerTest" time="0.038"/>
+  <testcase name="networkChangeObserver_ignoresNullTimestamp" classname="network.columba.app.service.AutoAnnounceManagerTest" time="0.077"/>
+  <testcase name="resetTimer_multipleCallsEmitMultipleSignals" classname="network.columba.app.service.AutoAnnounceManagerTest" time="0.071"/>
+  <testcase name="randomizationLogic_minimumInterval1h_clampsToMinimum" classname="network.columba.app.service.AutoAnnounceManagerTest" time="0.037"/>
+  <testcase name="start_observesSettingsChanges" classname="network.columba.app.service.AutoAnnounceManagerTest" time="0.044"/>
+  <testcase name="randomizationLogic_maximumInterval12h_clampsToMaximum" classname="network.columba.app.service.AutoAnnounceManagerTest" time="0.034"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

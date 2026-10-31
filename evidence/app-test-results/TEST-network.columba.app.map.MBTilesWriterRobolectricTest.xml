@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.map.MBTilesWriterRobolectricTest" tests="36" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:18:23.020Z" hostname="hermes-agent" time="7.258">
+  <properties/>
+  <testcase name="open creates metadata table with correct schema" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="5.305"/>
+  <testcase name="open with nested directory creates parent dirs" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.049"/>
+  <testcase name="writeTile replaces existing tile at same coordinates" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.059"/>
+  <testcase name="metadata includes version field" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.061"/>
+  <testcase name="metadata includes center when provided" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.053"/>
+  <testcase name="writeTile increments tile count" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.063"/>
+  <testcase name="metadata includes bounds when provided" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.077"/>
+  <testcase name="metadata contains required MBTiles fields" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.06"/>
+  <testcase name="writeTile after close is safe and does nothing" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.031"/>
+  <testcase name="getFileSize returns actual file size" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.042"/>
+  <testcase name="writeTile flips Y coordinate correctly at higher zoom levels" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.064"/>
+  <testcase name="writer handles negative coordinates in bounds" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.031"/>
+  <testcase name="Y coordinate flipping is consistent across all stored tiles" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.107"/>
+  <testcase name="beginTransaction and endTransaction work correctly" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.049"/>
+  <testcase name="writeTile handles large tile data" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.06"/>
+  <testcase name="writer handles special characters in name and description" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.048"/>
+  <testcase name="close with active transaction rolls back uncommitted changes" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.052"/>
+  <testcase name="writeTile stores tile data correctly" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.03"/>
+  <testcase name="open creates tiles index for performance" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.032"/>
+  <testcase name="open creates database file and schema" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.026"/>
+  <testcase name="open overwrites existing file" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.026"/>
+  <testcase name="database is readable after close" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.049"/>
+  <testcase name="optimize compacts the database" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.043"/>
+  <testcase name="open creates tiles table with correct schema" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.04"/>
+  <testcase name="full lifecycle - create write close reopen read" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.033"/>
+  <testcase name="close can be called multiple times safely" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.039"/>
+  <testcase name="writer handles boundary zoom levels" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.03"/>
+  <testcase name="writeTile handles empty tile data" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.035"/>
+  <testcase name="bulk insert with transaction is more efficient" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.051"/>
+  <testcase name="metadata excludes description when empty" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.029"/>
+  <testcase name="endTransaction with success false does not commit" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.03"/>
+  <testcase name="close releases database resources" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.042"/>
+  <testcase name="metadata includes description when provided" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.025"/>
+  <testcase name="writeTile flips Y coordinate from XYZ to TMS at zoom 0" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.025"/>
+  <testcase name="writeTile flips Y coordinate from XYZ to TMS at zoom 1" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.025"/>
+  <testcase name="writeTile accumulates total bytes" classname="network.columba.app.map.MBTilesWriterRobolectricTest" time="0.028"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

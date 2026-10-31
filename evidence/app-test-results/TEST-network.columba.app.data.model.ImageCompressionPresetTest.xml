@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.model.ImageCompressionPresetTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:17:39.736Z" hostname="hermes-agent" time="0.024">
+  <properties/>
+  <testcase name="all presets have valid maxDimension values" classname="network.columba.app.data.model.ImageCompressionPresetTest" time="0.01"/>
+  <testcase name="HIGH preset has expected values" classname="network.columba.app.data.model.ImageCompressionPresetTest" time="0.0"/>
+  <testcase name="MEDIUM preset has expected values" classname="network.columba.app.data.model.ImageCompressionPresetTest" time="0.001"/>
+  <testcase name="fromName returns DEFAULT for unknown name" classname="network.columba.app.data.model.ImageCompressionPresetTest" time="0.0"/>
+  <testcase name="all presets have valid targetSize values" classname="network.columba.app.data.model.ImageCompressionPresetTest" time="0.0"/>
+  <testcase name="all presets have quality values in valid range" classname="network.columba.app.data.model.ImageCompressionPresetTest" time="0.001"/>
+  <testcase name="ORIGINAL preset has 25MB target" classname="network.columba.app.data.model.ImageCompressionPresetTest" time="0.0"/>
+  <testcase name="LOW preset has expected values" classname="network.columba.app.data.model.ImageCompressionPresetTest" time="0.001"/>
+  <testcase name="all presets have non-empty displayName and description" classname="network.columba.app.data.model.ImageCompressionPresetTest" time="0.0"/>
+  <testcase name="AUTO preset is default" classname="network.columba.app.data.model.ImageCompressionPresetTest" time="0.001"/>
+  <testcase name="presets are ordered by target size" classname="network.columba.app.data.model.ImageCompressionPresetTest" time="0.0"/>
+  <testcase name="fromName returns correct preset" classname="network.columba.app.data.model.ImageCompressionPresetTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

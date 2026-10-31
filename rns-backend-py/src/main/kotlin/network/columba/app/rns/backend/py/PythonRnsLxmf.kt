@@ -181,6 +181,7 @@ class PythonRnsLxmf(
         replyQuotedContent: String?,
         iconAppearance: IconAppearance?,
         extraFields: Map<Int, Any>?,
+        threadId: ByteArray?,
     ): Result<MessageReceipt> =
         pyResult {
             runtime.requireRunning()
@@ -192,6 +193,7 @@ class PythonRnsLxmf(
                 replyQuotedContent = replyQuotedContent,
                 iconAppearance = iconAppearance,
                 extraFields = extraFields,
+                threadId = threadId,
             )
             // tryPropagationOnFail mirrors Sideband's `try_propagation_on_fail`
             // pattern: tag the LXMessage so the failure callback (in
@@ -549,8 +551,16 @@ class PythonRnsLxmf(
         replyQuotedContent: String? = null,
         iconAppearance: IconAppearance? = null,
         extraFields: Map<Int, Any>? = null,
+        threadId: ByteArray? = null,
     ): PyObject {
         val fields = LinkedHashMap<Int, Any>()
+
+        if (threadId != null && threadId.isNotEmpty()) {
+            // Thread grouping key (threads-spec §4.2): fields[0x08] = raw
+            // bytes (16B CSPRNG, reused for the thread's lifetime). Kept in
+            // lockstep with NativeMessageSender; absent = Main.
+            fields[LxmfFields.FIELD_THREAD] = threadId.toPyBytes()
+        }
 
         if (imageData != null && imageFormat != null) {
             // FIELD_IMAGE: [format_string, image_bytes]

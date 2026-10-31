@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.util.FileAttachmentTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:39:09.459Z" hostname="hermes-agent" time="0.013">
+  <properties/>
+  <testcase name="equals returns false for different sizeBytes" classname="network.columba.app.util.FileAttachmentTest" time="0.003"/>
+  <testcase name="equals returns false for different data" classname="network.columba.app.util.FileAttachmentTest" time="0.001"/>
+  <testcase name="equals returns true for identical attachments" classname="network.columba.app.util.FileAttachmentTest" time="0.0"/>
+  <testcase name="hashCode differs for different objects" classname="network.columba.app.util.FileAttachmentTest" time="0.0"/>
+  <testcase name="properties are accessible" classname="network.columba.app.util.FileAttachmentTest" time="0.0"/>
+  <testcase name="handles unicode in filename" classname="network.columba.app.util.FileAttachmentTest" time="0.0"/>
+  <testcase name="handles empty data" classname="network.columba.app.util.FileAttachmentTest" time="0.001"/>
+  <testcase name="equals returns false for null" classname="network.columba.app.util.FileAttachmentTest" time="0.0"/>
+  <testcase name="equals returns true for same instance" classname="network.columba.app.util.FileAttachmentTest" time="0.0"/>
+  <testcase name="equals returns false for different filenames" classname="network.columba.app.util.FileAttachmentTest" time="0.0"/>
+  <testcase name="equals returns false for different class" classname="network.columba.app.util.FileAttachmentTest" time="0.0"/>
+  <testcase name="handles special characters in filename" classname="network.columba.app.util.FileAttachmentTest" time="0.001"/>
+  <testcase name="equals returns false for different mimeTypes" classname="network.columba.app.util.FileAttachmentTest" time="0.0"/>
+  <testcase name="handles large data" classname="network.columba.app.util.FileAttachmentTest" time="0.002"/>
+  <testcase name="hashCode is consistent for equal objects" classname="network.columba.app.util.FileAttachmentTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

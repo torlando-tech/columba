@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.settings.cards.ShareColumbaCardTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:37:09.827Z" hostname="hermes-agent" time="7.013">
+  <properties/>
+  <testcase name="displays share button when expanded" classname="network.columba.app.ui.screens.settings.cards.ShareColumbaCardTest" time="5.945"/>
+  <testcase name="displays card title" classname="network.columba.app.ui.screens.settings.cards.ShareColumbaCardTest" time="0.162"/>
+  <testcase name="displays description when expanded" classname="network.columba.app.ui.screens.settings.cards.ShareColumbaCardTest" time="0.168"/>
+  <testcase name="expand change callback is invoked" classname="network.columba.app.ui.screens.settings.cards.ShareColumbaCardTest" time="0.208"/>
+  <testcase name="share button triggers navigation callback" classname="network.columba.app.ui.screens.settings.cards.ShareColumbaCardTest" time="0.123"/>
+  <testcase name="hides content when collapsed" classname="network.columba.app.ui.screens.settings.cards.ShareColumbaCardTest" time="0.101"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

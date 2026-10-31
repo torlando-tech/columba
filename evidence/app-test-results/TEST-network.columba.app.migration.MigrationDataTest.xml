@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.migration.MigrationDataTest" tests="22" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:19:11.516Z" hostname="hermes-agent" time="0.202">
+  <properties/>
+  <testcase name="AnnounceExport backward compatibility with v5 JSON without receivingInterfaceType" classname="network.columba.app.migration.MigrationDataTest" time="0.071"/>
+  <testcase name="ImportResult Success contains correct counts" classname="network.columba.app.migration.MigrationDataTest" time="0.001"/>
+  <testcase name="MigrationBundle backward compatibility with v6 JSON without ratchetFiles" classname="network.columba.app.migration.MigrationDataTest" time="0.028"/>
+  <testcase name="MigrationBundle with ratchetFiles serializes correctly" classname="network.columba.app.migration.MigrationDataTest" time="0.075"/>
+  <testcase name="MigrationBundle with pending contacts serializes correctly" classname="network.columba.app.migration.MigrationDataTest" time="0.003"/>
+  <testcase name="ContactExport backward compatibility with older exports without status field" classname="network.columba.app.migration.MigrationDataTest" time="0.0"/>
+  <testcase name="AnnounceExport round-trip preserves receivingInterfaceType" classname="network.columba.app.migration.MigrationDataTest" time="0.001"/>
+  <testcase name="ContactExport with null publicKey serializes correctly" classname="network.columba.app.migration.MigrationDataTest" time="0.0"/>
+  <testcase name="RatchetRef round-trip preserves all fields" classname="network.columba.app.migration.MigrationDataTest" time="0.001"/>
+  <testcase name="MigrationBundle with populated optional lists serializes correctly" classname="network.columba.app.migration.MigrationDataTest" time="0.005"/>
+  <testcase name="MigrationBundle with empty optional lists serializes correctly" classname="network.columba.app.migration.MigrationDataTest" time="0.001"/>
+  <testcase name="MigrationBundle version is set to CURRENT_VERSION" classname="network.columba.app.migration.MigrationDataTest" time="0.0"/>
+  <testcase name="SettingsExport propagation settings round-trip correctly" classname="network.columba.app.migration.MigrationDataTest" time="0.001"/>
+  <testcase name="MigrationBundle serializes to JSON and deserializes back correctly" classname="network.columba.app.migration.MigrationDataTest" time="0.003"/>
+  <testcase name="ContactExport with valid publicKey serializes correctly" classname="network.columba.app.migration.MigrationDataTest" time="0.0"/>
+  <testcase name="SettingsExport round-trip preserves all fields" classname="network.columba.app.migration.MigrationDataTest" time="0.001"/>
+  <testcase name="IdentityExport round-trip preserves all fields" classname="network.columba.app.migration.MigrationDataTest" time="0.0"/>
+  <testcase name="SettingsExport backward compatibility with v5 JSON without propagation settings" classname="network.columba.app.migration.MigrationDataTest" time="0.001"/>
+  <testcase name="ExportResult Success contains correct counts" classname="network.columba.app.migration.MigrationDataTest" time="0.001"/>
+  <testcase name="CustomThemeExport preserves all 48 color values through serialization" classname="network.columba.app.migration.MigrationDataTest" time="0.002"/>
+  <testcase name="RatchetRef peer type serializes correctly" classname="network.columba.app.migration.MigrationDataTest" time="0.0"/>
+  <testcase name="InterfaceExport round-trip preserves configJson" classname="network.columba.app.migration.MigrationDataTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

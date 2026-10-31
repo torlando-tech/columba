@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.repository.InterfaceRepositoryTest" tests="34" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:20:11.735Z" hostname="hermes-agent" time="2.535">
+  <properties/>
+  <testcase name="allInterfaces returns empty list when all interfaces are corrupted" classname="network.columba.app.repository.InterfaceRepositoryTest" time="2.115"/>
+  <testcase name="enabledInterfaces correctly converts valid TCPServer" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.04"/>
+  <testcase name="entityToConfig roundTrip preserves cellularOnly across all 6 types" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.063"/>
+  <testcase name="enabledInterfaces skips TCPServer with invalid listen port" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.02"/>
+  <testcase name="enabledInterfaces skips RNode with missing target_device_name field" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.024"/>
+  <testcase name="enabledInterfaces skips AutoInterface with invalid discovery_port" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.012"/>
+  <testcase name="enabledInterfaces skips AndroidBLE with invalid device_name" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.024"/>
+  <testcase name="enabledInterfaces skips TCP RNode with invalid tcp_host format" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.011"/>
+  <testcase name="enabledInterfaces skips interface with unknown type" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.011"/>
+  <testcase name="enabledInterfaces handles mix of valid and corrupted interfaces" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.011"/>
+  <testcase name="enabledInterfaces correctly converts valid RNode" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.007"/>
+  <testcase name="enabledInterfaces reads null TCPServer IFAC fields when omitted" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.007"/>
+  <testcase name="entityToConfig autoInterface legacy json without restriction defaults to wifi only" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="enabledInterfaces correctly converts valid AutoInterface" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="enabledInterfaces skips UDP with invalid listen port" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.009"/>
+  <testcase name="entityToConfig parses AutoInterface with only discovery_port" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="enabledInterfaces correctly converts valid TCP RNode" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="entityToConfig tcpClient legacy json without restriction defaults to any" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.007"/>
+  <testcase name="enabledInterfaces skips TCPClient with invalid port" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="enabledInterfaces skips RNode with empty target_device_name field" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="enabledInterfaces skips TCPServer with invalid listen IP" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="enabledInterfaces skips interface with invalid JSON" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.007"/>
+  <testcase name="enabledInterfaces skips TCP RNode with empty tcp_host" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="enabledInterfaces skips TCP RNode with invalid tcp_port" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="enabledInterfaces skips UDP with invalid forward port" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="enabledInterfaces deserializes TCPServer IFAC fields" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="enabledInterfaces converts TCPServer with custom port" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.007"/>
+  <testcase name="enabledInterfaces correctly converts valid AndroidBLE" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="enabledInterfaces correctly converts valid TCPClient" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.007"/>
+  <testcase name="entityToConfig parses AutoInterface with only data_port" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="every InterfaceConfig type round-trips through typeName and entityToConfig" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.018"/>
+  <testcase name="allInterfaces skips corrupted interfaces" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <testcase name="enabledInterfaces skips AutoInterface with invalid data_port" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.007"/>
+  <testcase name="enabledInterfaces allows TCP RNode without target_device_name" classname="network.columba.app.repository.InterfaceRepositoryTest" time="0.008"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

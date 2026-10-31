@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:34:36.868Z" hostname="hermes-agent" time="9.696">
+  <properties/>
+  <testcase name="welcomePage_getStartedButton_multipleClicks_callsCallbackEachTime" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="7.311"/>
+  <testcase name="welcomePage_displaysAppIcon" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.174"/>
+  <testcase name="welcomePage_displaysGetStartedButton" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.17"/>
+  <testcase name="welcomePage_displaysRestoreFromBackupLink" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.145"/>
+  <testcase name="welcomePage_displaysNoPhoneNumberBullet" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.129"/>
+  <testcase name="welcomePage_getStartedClick_doesNotTriggerRestoreCallback" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.147"/>
+  <testcase name="welcomePage_getStartedButton_invokesCallback" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.131"/>
+  <testcase name="welcomePage_restoreClick_doesNotTriggerGetStartedCallback" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.13"/>
+  <testcase name="welcomePage_restoreFromBackupLink_invokesCallback" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.122"/>
+  <testcase name="welcomePage_displaysNoEmailAddressBullet" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.129"/>
+  <testcase name="welcomePage_displaysIdentityExplanation" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.11"/>
+  <testcase name="welcomePage_displaysTitle" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.099"/>
+  <testcase name="welcomePage_allUIElementsDisplayed" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.149"/>
+  <testcase name="welcomePage_displaysNoSignUpBullet" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.104"/>
+  <testcase name="welcomePage_displaysAllPrivacyFeatures" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.094"/>
+  <testcase name="welcomePage_displaysSubtitle" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.129"/>
+  <testcase name="welcomePage_restoreFromBackupLink_multipleClicks_callsCallbackEachTime" classname="network.columba.app.ui.screens.onboarding.pages.WelcomePageTest" time="0.115"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

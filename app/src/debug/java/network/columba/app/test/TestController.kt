@@ -252,6 +252,9 @@ object TestController {
         toHex: String,
         text: String,
         tryPropagationOnFail: Boolean = false,
+        threadHex: String? = null,
+        replyToMessageId: String? = null,
+        replyQuotedContent: String? = null,
     ) {
         ensureInit(context)
         scope.launch {
@@ -263,18 +266,26 @@ object TestController {
                 Log.i(LOGCAT_TAG, "msg_send_err method=$method reason=no_active_identity")
                 return@launch
             }
+            val threadId = threadHex?.fromHex()
+            if (threadHex != null && threadId == null) {
+                Log.i(LOGCAT_TAG, "msg_send_err method=$method reason=bad_thread_hex thread=$threadHex")
+                return@launch
+            }
             val result = rnsLxmf!!.sendLxmfMessageWithMethod(
                 destinationHash = toBytes,
                 content = text,
                 sourceIdentity = identity,
                 deliveryMethod = method,
                 tryPropagationOnFail = tryPropagationOnFail,
+                replyToMessageId = replyToMessageId,
+                replyQuotedContent = replyQuotedContent,
+                threadId = threadId,
             )
             result.onSuccess { receipt ->
                 val idHex = receipt.messageHash.toHex()
                 Log.i(
                     LOGCAT_TAG,
-                    "msg_sent id=$idHex method=$method to=$toHex",
+                    "msg_sent id=$idHex method=$method to=$toHex thread=${threadHex ?: "none"}",
                 )
                 // Stamp initial state so GET_MSG_STATE works before the first
                 // observeDeliveryStatus event arrives.

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.util.ImageUtilsExifTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:39:20.722Z" hostname="hermes-agent" time="3.986">
+  <properties/>
+  <testcase name="ORIENTATION_FLIP_VERTICAL preserves dimensions" classname="network.columba.app.util.ImageUtilsExifTest" time="3.003"/>
+  <testcase name="ORIENTATION_TRANSPOSE swaps width and height" classname="network.columba.app.util.ImageUtilsExifTest" time="0.049"/>
+  <testcase name="sample size calculation for image within limits" classname="network.columba.app.util.ImageUtilsExifTest" time="0.046"/>
+  <testcase name="ORIENTATION_TRANSVERSE swaps width and height" classname="network.columba.app.util.ImageUtilsExifTest" time="0.037"/>
+  <testcase name="ORIENTATION_NORMAL does not change dimensions" classname="network.columba.app.util.ImageUtilsExifTest" time="0.034"/>
+  <testcase name="ORIENTATION_ROTATE_90 swaps width and height" classname="network.columba.app.util.ImageUtilsExifTest" time="0.032"/>
+  <testcase name="ORIENTATION_ROTATE_270 value is 8" classname="network.columba.app.util.ImageUtilsExifTest" time="0.03"/>
+  <testcase name="sample size calculation for huge panorama" classname="network.columba.app.util.ImageUtilsExifTest" time="0.032"/>
+  <testcase name="ORIENTATION_ROTATE_180 value is 3" classname="network.columba.app.util.ImageUtilsExifTest" time="0.031"/>
+  <testcase name="ORIENTATION_ROTATE_90 value is 6" classname="network.columba.app.util.ImageUtilsExifTest" time="0.029"/>
+  <testcase name="Matrix preScale -1, 1 creates horizontal flip" classname="network.columba.app.util.ImageUtilsExifTest" time="0.031"/>
+  <testcase name="unknown orientation value returns original bitmap unchanged" classname="network.columba.app.util.ImageUtilsExifTest" time="0.026"/>
+  <testcase name="sample size calculation for image exceeding limit" classname="network.columba.app.util.ImageUtilsExifTest" time="0.025"/>
+  <testcase name="Matrix postRotate 90 creates correct transformation" classname="network.columba.app.util.ImageUtilsExifTest" time="0.029"/>
+  <testcase name="ORIENTATION_ROTATE_270 swaps width and height" classname="network.columba.app.util.ImageUtilsExifTest" time="0.028"/>
+  <testcase name="ORIENTATION_NORMAL value is 1" classname="network.columba.app.util.ImageUtilsExifTest" time="0.022"/>
+  <testcase name="ORIENTATION_FLIP_HORIZONTAL preserves dimensions" classname="network.columba.app.util.ImageUtilsExifTest" time="0.021"/>
+  <testcase name="sample size calculation for large image" classname="network.columba.app.util.ImageUtilsExifTest" time="0.027"/>
+  <testcase name="ORIENTATION_UNDEFINED returns original bitmap unchanged" classname="network.columba.app.util.ImageUtilsExifTest" time="0.02"/>
+  <testcase name="sample size calculation for very large image" classname="network.columba.app.util.ImageUtilsExifTest" time="0.021"/>
+  <testcase name="sample size calculation for LOW preset" classname="network.columba.app.util.ImageUtilsExifTest" time="0.024"/>
+  <testcase name="sample size calculation for extremely large image" classname="network.columba.app.util.ImageUtilsExifTest" time="0.024"/>
+  <testcase name="ORIENTATION_ROTATE_180 preserves dimensions" classname="network.columba.app.util.ImageUtilsExifTest" time="0.022"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

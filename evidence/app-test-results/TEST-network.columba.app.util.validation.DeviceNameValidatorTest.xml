@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.util.validation.DeviceNameValidatorTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:40:04.209Z" hostname="hermes-agent" time="0.044">
+  <properties/>
+  <testcase name="validate returns Error for name exceeding max length" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.031"/>
+  <testcase name="validate returns Valid for empty name" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.001"/>
+  <testcase name="validate returns Valid for RNode name" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.003"/>
+  <testcase name="MAX_DEVICE_NAME_LENGTH is 32" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.0"/>
+  <testcase name="validate returns Valid for blank name" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.0"/>
+  <testcase name="validate returns Warning for name starting with R but not RNode" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.001"/>
+  <testcase name="validate returns Error for very long device name" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.0"/>
+  <testcase name="validate returns Valid for RNode name at max length" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.001"/>
+  <testcase name="validate accepts name at exact max length 32" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.0"/>
+  <testcase name="validate returns Valid for mixed case RNode name" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.0"/>
+  <testcase name="validate accepts exactly RNode with no suffix" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.0"/>
+  <testcase name="validate returns Warning for device name at max length not starting with RNode" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.0"/>
+  <testcase name="validate returns Valid for RNODE name (uppercase)" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.001"/>
+  <testcase name="validate returns Warning for name that contains RNode but does not start with it" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.0"/>
+  <testcase name="validate rejects name at 33 characters" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.0"/>
+  <testcase name="validate returns Warning for non-RNode device name" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.0"/>
+  <testcase name="validate returns Error for RNode name exceeding max length" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.0"/>
+  <testcase name="validate accepts single character RNode prefix" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.0"/>
+  <testcase name="validate returns Valid for rnode name (lowercase)" classname="network.columba.app.util.validation.DeviceNameValidatorTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.MessagingViewModelTest" tests="181" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:44.149Z" hostname="hermes-agent" time="39.191">
+  <properties/>
+  <testcase name="identity loads successfully on init" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="10.35"/>
+  <testcase name="toggleContact emits Error result on repository exception" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.31"/>
+  <testcase name="getFileAttachmentUri returns null when fieldsJson is null" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.217"/>
+  <testcase name="totalAttachmentSize initial value is zero" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.254"/>
+  <testcase name="toggleContact emits Error result when public key unavailable" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.253"/>
+  <testcase name="getFileAttachmentUri creates attachments directory if not exists" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.671"/>
+  <testcase name="loadImageAsync does not crash on invalid JSON" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.276"/>
+  <testcase name="setReplyTo with image attachment sets hasImage correctly" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.23"/>
+  <testcase name="call microphone ownership includes transitional call states" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.205"/>
+  <testcase name="loadReplyPreviewAsync caches reply preview" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.207"/>
+  <testcase name="saveImage returns false when output stream is null" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.968"/>
+  <testcase name="sendMessage clears image after successful send" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.328"/>
+  <testcase name="initial state has empty messages" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.308"/>
+  <testcase name="sendMessage clears pending reply after successful send" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.27"/>
+  <testcase name="isContactSaved returns false when contact not saved" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.215"/>
+  <testcase name="saveReceivedFileAttachment returns false when output stream is null" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.201"/>
+  <testcase name="setReactionTarget sets pending reaction message id and shows picker" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.173"/>
+  <testcase name="delivered status updates message status only" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.216"/>
+  <testcase name="removeFileAttachment handles negative index" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.146"/>
+  <testcase name="fetchPendingFile reverts size limit after sync" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.229"/>
+  <testcase name="retrying_propagated status is blocked when message is already delivered" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.187"/>
+  <testcase name="failed status updates message status" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.17"/>
+  <testcase name="sendMessage accepts valid message at max length" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.175"/>
+  <testcase name="retryFailedMessage preserves inline voice audio field" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.245"/>
+  <testcase name="saveImage returns false when fieldsJson has no image" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.145"/>
+  <testcase name="sendReaction handles protocol send failure gracefully" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.161"/>
+  <testcase name="sendReaction clears reaction UI state after sending" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.22"/>
+  <testcase name="getFileAttachmentUri returns null when message not found" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.143"/>
+  <testcase name="isSending initial state is false" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.137"/>
+  <testcase name="toggleContact removes contact when already saved" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.159"/>
+  <testcase name="saveReceivedFileAttachment returns false when field 5 is missing" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.146"/>
+  <testcase name="setProcessingFile updates isProcessingFile state" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.133"/>
+  <testcase name="isSyncing delegates to propagationNodeManager" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.133"/>
+  <testcase name="sendMessage sanitizes content before sending" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.154"/>
+  <testcase name="getImageShareUri returns gif mimetype for animated gif" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.28"/>
+  <testcase name="pendingReplyTo initial state is null" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.131"/>
+  <testcase name="getImageShareUri returns null on exception" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.132"/>
+  <testcase name="getFileAttachmentUri returns null when file data field is missing" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.135"/>
+  <testcase name="loadReplyPreviewAsync handles deleted message gracefully" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.132"/>
+  <testcase name="failed status is allowed when message is pending" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.14"/>
+  <testcase name="retryFailedMessage preserves file backed voice audio field" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.152"/>
+  <testcase name="failed status is blocked when message is already delivered" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.138"/>
+  <testcase name="sendReaction returns early when message not found" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.137"/>
+  <testcase name="getImageExtension returns png for PNG image" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.159"/>
+  <testcase name="loadMessages marks conversation as read" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.131"/>
+  <testcase name="saveReceivedFileAttachment writes file data to output stream" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.135"/>
+  <testcase name="setReplyTo does not set pending reply when message not found" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.134"/>
+  <testcase name="getFileAttachmentUri returns null on exception" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.136"/>
+  <testcase name="setReplyTo with file attachment sets hasFileAttachment correctly" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.131"/>
+  <testcase name="sendMessage converts destination hash to bytes correctly" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.151"/>
+  <testcase name="toggleContact emits Removed result when contact successfully removed" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.127"/>
+  <testcase name="getFileAttachmentUri handles unknown file extension" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.232"/>
+  <testcase name="onCleared releases owned voice recording lease" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.135"/>
+  <testcase name="removeFileAttachment does nothing for invalid index" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.127"/>
+  <testcase name="syncFromPropagationNode triggers sync" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.139"/>
+  <testcase name="saveReceivedFileAttachment returns false on exception" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.131"/>
+  <testcase name="isSending is true during message send and false after" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.134"/>
+  <testcase name="getFileAttachmentUri returns null for negative index" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.125"/>
+  <testcase name="dismissReactionPicker hides picker but keeps target" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.133"/>
+  <testcase name="failed status is blocked when message is already sent" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.138"/>
+  <testcase name="sendMessage with empty content but file attached succeeds" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.179"/>
+  <testcase name="retryFailedMessage retries message when status is failed" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.162"/>
+  <testcase name="deleteMessage invalidates reply preview cache for deleted message" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.135"/>
+  <testcase name="isSending is false after failed send" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.149"/>
+  <testcase name="resource progress is exposed while active and removed at terminal state" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.131"/>
+  <testcase name="handleIncomingReaction ignores message when not found" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.133"/>
+  <testcase name="getImageExtension returns bin when message not found" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.133"/>
+  <testcase name="sendMessage with whitespace-only content does not send" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.146"/>
+  <testcase name="sendReaction sends reaction via protocol when message exists" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.134"/>
+  <testcase name="send completion preserves a replacement attachment" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.155"/>
+  <testcase name="sendMessage with valid hex hash succeeds" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.145"/>
+  <testcase name="addFileAttachment adds multiple files" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.126"/>
+  <testcase name="getFileAttachmentUri handles different file types correctly" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.226"/>
+  <testcase name="totalAttachmentSize reflects sum of file sizes when files are added" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.128"/>
+  <testcase name="toggleContact handles missing public key gracefully" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.131"/>
+  <testcase name="saveImage returns false when message not found" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.128"/>
+  <testcase name="propagated status is blocked when message is already delivered" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.15"/>
+  <testcase name="saveReceivedFileAttachment returns false when fieldsJson is null" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.135"/>
+  <testcase name="sendMessage clears file attachments after successful send" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.151"/>
+  <testcase name="showOriginalMessage does nothing when state is null" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.129"/>
+  <testcase name="clearReplyTo clears pending reply" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.136"/>
+  <testcase name="handleIncomingReaction updates message when found" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.15"/>
+  <testcase name="pendingReactionMessageId initial state is null" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.124"/>
+  <testcase name="retryFailedMessage does nothing when message is not failed" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.137"/>
+  <testcase name="sendMessage with propagated default method sends large text via PROPAGATED" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.151"/>
+  <testcase name="handleIncomingReaction handles malformed JSON gracefully" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.126"/>
+  <testcase name="voice recording is blocked while a call is active" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.124"/>
+  <testcase name="getFileAttachmentUri handles multiple attachments at different indices" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.281"/>
+  <testcase name="syncProgress delegates to propagationNodeManager" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.126"/>
+  <testcase name="handleIncomingReaction merges reactions with existing" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.135"/>
+  <testcase name="retryFailedMessage fails closed when persisted image is unavailable" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.137"/>
+  <testcase name="sendMessage with invalid destination hash does not send or save" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.138"/>
+  <testcase name="addFileAttachment adds file to selectedFileAttachments" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.126"/>
+  <testcase name="showReactionPicker initial state is false" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.125"/>
+  <testcase name="sent status is blocked when message is already delivered" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.128"/>
+  <testcase name="non-failed status updates still work for terminal states" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.136"/>
+  <testcase name="deleteMessage without active conversation does not modify state" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.127"/>
+  <testcase name="toggleContact does nothing when no conversation loaded" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.136"/>
+  <testcase name="myIdentityHash is set after identity loads" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.136"/>
+  <testcase name="onCleared releases voice recording lease when recorder close fails" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.184"/>
+  <testcase name="getImageExtension returns bin on exception" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.128"/>
+  <testcase name="enterReactionMode with failed message sets isFailed correctly" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.128"/>
+  <testcase name="setProcessingImage updates isProcessingImage state" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.129"/>
+  <testcase name="startSharingWithPeer calls location sharing manager" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.129"/>
+  <testcase name="toggleContact emits Added result when contact successfully added" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.126"/>
+  <testcase name="retryFailedMessage handles invalid destination hash" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.127"/>
+  <testcase name="reactionModeState initial state is null" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.132"/>
+  <testcase name="getFileAttachmentUri returns null when attachment is not JSONObject" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.138"/>
+  <testcase name="loadReplyPreviewAsync does not reload if already cached" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.141"/>
+  <testcase name="setReplyTo sets pending reply when message found" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.148"/>
+  <testcase name="decodedImages initial state is empty" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.133"/>
+  <testcase name="saveReceivedFileAttachment saves correct attachment from multiple" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.136"/>
+  <testcase name="sendMessage with non-hex destination hash does not send" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.144"/>
+  <testcase name="getImageShareUri returns null when message not found" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.135"/>
+  <testcase name="sendReaction does not touch fieldsJson when the target has reply metadata" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.127"/>
+  <testcase name="selectImage sets image data and format" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.122"/>
+  <testcase name="sendMessage with propagated default method sends short text via PROPAGATED" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.137"/>
+  <testcase name="getFileAttachmentUri returns null when file data is empty" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.125"/>
+  <testcase name="sendReaction adds sender to existing emoji reaction" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.154"/>
+  <testcase name="sendReaction writes flat reactionsJson blob to reactionsJson column" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.133"/>
+  <testcase name="sendMessage with empty content does not send" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.134"/>
+  <testcase name="sendMessage with pending reply includes replyToMessageId" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.145"/>
+  <testcase name="retryFailedMessage preserves file backed image field" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.14"/>
+  <testcase name="toggleContact adds contact when not saved" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.128"/>
+  <testcase name="switching conversations updates message flow" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.148"/>
+  <testcase name="clearFileAttachments removes all files" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.128"/>
+  <testcase name="removeFileAttachment removes file at index" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.125"/>
+  <testcase name="saveImage writes image data to output stream" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.132"/>
+  <testcase name="announceInfo returns null when no conversation loaded" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.125"/>
+  <testcase name="clearReactionTarget clears pending reaction and hides picker" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.126"/>
+  <testcase name="getFileAttachmentUri creates file and returns URI with correct mimeType" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.238"/>
+  <testcase name="saveReceivedFileAttachment returns false when file index is out of bounds" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.127"/>
+  <testcase name="retrying_propagated status updates both status and deliveryMethod" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.137"/>
+  <testcase name="getFileAttachmentUri returns null when field 5 is missing" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.13"/>
+  <testcase name="totalAttachmentSize reflects sum of file sizes when files are removed" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.125"/>
+  <testcase name="sendMessage with too-long content does not send" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.132"/>
+  <testcase name="fetchPendingFile triggers sync with increased size limit" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.137"/>
+  <testcase name="delivery status gracefully handles unknown message hash" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.138"/>
+  <testcase name="failed status is blocked when message is already propagated" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.13"/>
+  <testcase name="loadedImageIds initial state is empty" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.123"/>
+  <testcase name="getImageExtension returns jpg for JPEG image" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.131"/>
+  <testcase name="stopSharingWithPeer calls location sharing manager" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.124"/>
+  <testcase name="sendMessage failure saves message to database with failed status" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.132"/>
+  <testcase name="loadMessages updates current conversation and triggers flow" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.139"/>
+  <testcase name="peerActivity exposes durable timestamp for current conversation" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.139"/>
+  <testcase name="sendMessage with empty content but image attached succeeds" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.199"/>
+  <testcase name="voice recording admission is blocked while outgoing call owns microphone" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.134"/>
+  <testcase name="enterReactionMode generates unique instanceId" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.137"/>
+  <testcase name="getImageShareUri returns null when metadata is null" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.132"/>
+  <testcase name="getFileAttachmentUri returns null when field 5 is not array or file ref" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.128"/>
+  <testcase name="loadReplyPreviewAsync handles exception gracefully" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.136"/>
+  <testcase name="saveReceivedFileAttachment returns false when message not found" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.137"/>
+  <testcase name="getImageShareUri returns null when fieldsJson has no image" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.135"/>
+  <testcase name="setReplyTo handles exception gracefully" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.129"/>
+  <testcase name="sendMessage with direct default method keeps OPPORTUNISTIC for short text" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.138"/>
+  <testcase name="sendMessage without loaded identity logs error and returns early" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.177"/>
+  <testcase name="retryFailedMessage does nothing when message not found" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.147"/>
+  <testcase name="messages flow updates when database changes" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.141"/>
+  <testcase name="selectImage with animated flag sets isAnimated" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.133"/>
+  <testcase name="toggleContact handles repository exception gracefully" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.133"/>
+  <testcase name="enterReactionMode sets state with isMessageHidden true by default" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.126"/>
+  <testcase name="totalAttachmentSize is zero when no files attached" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.134"/>
+  <testcase name="sendMessage with file attachment calls protocol with file data" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.14"/>
+  <testcase name="clearSelectedImage clears image state" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.129"/>
+  <testcase name="sendMessage retains composer attachment when local persistence fails" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.138"/>
+  <testcase name="replyPreviewCache initial state is empty" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.134"/>
+  <testcase name="retryFailedMessage preserves voice and file attachments together" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.143"/>
+  <testcase name="getImageShareUri returns uri and mimetype for valid image" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.282"/>
+  <testcase name="retryFailedMessage restores failed status on retry failure" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.153"/>
+  <testcase name="getFileAttachmentUri returns null when file index is out of bounds" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.139"/>
+  <testcase name="sendMessage without pending reply does not include replyToMessageId" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.146"/>
+  <testcase name="sendMessage admits only one in flight send" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.167"/>
+  <testcase name="loadImageAsync does not crash on null fieldsJson" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.129"/>
+  <testcase name="sendMessage success saves message to database with sent status" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.145"/>
+  <testcase name="retryFailedMessage admits only one retry per message" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.14"/>
+  <testcase name="isContactSaved has initial value of false before loading conversation" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.125"/>
+  <testcase name="exitReactionMode clears state" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.126"/>
+  <testcase name="showOriginalMessage preserves instanceId" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.128"/>
+  <testcase name="showOriginalMessage sets isMessageHidden to false" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.13"/>
+  <testcase name="saveImage returns false on exception" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.132"/>
+  <testcase name="markAsRead calls repository" classname="network.columba.app.viewmodel.MessagingViewModelTest" time="0.133"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

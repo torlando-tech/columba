@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.migration.MigrationCryptoTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:19:07.741Z" hostname="hermes-agent" time="3.008">
+  <properties/>
+  <testcase name="isEncrypted returns true for encrypted data" classname="network.columba.app.migration.MigrationCryptoTest" time="0.371"/>
+  <testcase name="encrypted output starts with version byte" classname="network.columba.app.migration.MigrationCryptoTest" time="0.181"/>
+  <testcase name="decrypt works with unicode password" classname="network.columba.app.migration.MigrationCryptoTest" time="0.335"/>
+  <testcase name="encrypt and decrypt round-trip with large data" classname="network.columba.app.migration.MigrationCryptoTest" time="0.321"/>
+  <testcase name="encryptFile encrypts file in-place" classname="network.columba.app.migration.MigrationCryptoTest" time="0.293"/>
+  <testcase name="isEncrypted throws for empty data" classname="network.columba.app.migration.MigrationCryptoTest" time="0.001"/>
+  <testcase name="isEncrypted returns false for ZIP data" classname="network.columba.app.migration.MigrationCryptoTest" time="0.0"/>
+  <testcase name="decrypt with wrong password throws WrongPasswordException" classname="network.columba.app.migration.MigrationCryptoTest" time="0.286"/>
+  <testcase name="decrypt throws for truncated data" classname="network.columba.app.migration.MigrationCryptoTest" time="0.0"/>
+  <testcase name="encrypted output is larger than plaintext" classname="network.columba.app.migration.MigrationCryptoTest" time="0.138"/>
+  <testcase name="encrypt and decrypt round-trip with empty data" classname="network.columba.app.migration.MigrationCryptoTest" time="0.275"/>
+  <testcase name="two encryptions of same data produce different ciphertext" classname="network.columba.app.migration.MigrationCryptoTest" time="0.271"/>
+  <testcase name="isEncrypted throws for unrecognized format" classname="network.columba.app.migration.MigrationCryptoTest" time="0.004"/>
+  <testcase name="decrypt throws for empty data" classname="network.columba.app.migration.MigrationCryptoTest" time="0.0"/>
+  <testcase name="encrypt and decrypt round-trip preserves data" classname="network.columba.app.migration.MigrationCryptoTest" time="0.26"/>
+  <testcase name="decryptStream returns valid input stream" classname="network.columba.app.migration.MigrationCryptoTest" time="0.266"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

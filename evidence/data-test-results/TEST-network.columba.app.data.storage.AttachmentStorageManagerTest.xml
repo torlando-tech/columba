@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.storage.AttachmentStorageManagerTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:26.774Z" hostname="hermes-agent" time="0.548">
+  <properties/>
+  <testcase name="loadAttachment returns null for invalid path" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.09"/>
+  <testcase name="loadAttachment returns null for non-existent file" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.03"/>
+  <testcase name="cleanupOldAttachments preserves recent directories" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.034"/>
+  <testcase name="cleanupOldAttachments removes directories older than maxAge" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.022"/>
+  <testcase name="cleanupOldAttachments preserves 6 day old directories by default" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.019"/>
+  <testcase name="saveAttachment handles special characters in message hash" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.021"/>
+  <testcase name="deleteAttachments handles non-existent directory gracefully" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.019"/>
+  <testcase name="saveAttachment creates nested directories" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.019"/>
+  <testcase name="deleteAttachments removes all files in directory" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.019"/>
+  <testcase name="saveAttachment handles large data" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.053"/>
+  <testcase name="saveAttachment returns path on success" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.06"/>
+  <testcase name="cleanupOldAttachments handles empty attachments directory" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.021"/>
+  <testcase name="deleteAttachments removes message directory" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.017"/>
+  <testcase name="SIZE_THRESHOLD is 500KB" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.017"/>
+  <testcase name="saveAttachment creates file with correct content" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.017"/>
+  <testcase name="FILE_REF_KEY is _file_ref" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.018"/>
+  <testcase name="saveAttachment overwrites existing file" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.02"/>
+  <testcase name="cleanupOldAttachments uses default 7 day max age" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.02"/>
+  <testcase name="loadAttachment reads existing file" classname="network.columba.app.data.storage.AttachmentStorageManagerTest" time="0.019"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.NotificationSettingsViewModelTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:42:35.817Z" hostname="hermes-agent" time="5.272">
+  <properties/>
+  <testcase name="initial state has isLoading true before collection completes" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="3.503"/>
+  <testcase name="state collects values from repository flows" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.31"/>
+  <testcase name="state updates for each notification type independently" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.128"/>
+  <testcase name="toggleNotificationsEnabled calls repository saveNotificationsEnabled" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.126"/>
+  <testcase name="default state values match repository defaults" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.073"/>
+  <testcase name="NotificationSettingsState equals works correctly for distinctUntilChanged" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.083"/>
+  <testcase name="toggleReceivedMessage calls repository saveNotificationReceivedMessage" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.085"/>
+  <testcase name="toggleReceivedMessageFavorite calls repository saveNotificationReceivedMessageFavorite" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.086"/>
+  <testcase name="state updates when repository flows change" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.082"/>
+  <testcase name="toggleAnnounceDirectOnly calls repository saveNotificationAnnounceDirectOnly" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.128"/>
+  <testcase name="toggleHeardAnnounce calls repository saveNotificationHeardAnnounce" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.076"/>
+  <testcase name="permission granted scenario enables notifications" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.07"/>
+  <testcase name="markNotificationPermissionRequested calls repository markNotificationPermissionRequested" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.057"/>
+  <testcase name="permission denied scenario disables notifications" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.086"/>
+  <testcase name="toggleBleDisconnected calls repository saveNotificationBleDisconnected" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.082"/>
+  <testcase name="toggleAnnounceExcludeTcp calls repository saveNotificationAnnounceExcludeTcp" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.082"/>
+  <testcase name="toggleBleConnected calls repository saveNotificationBleConnected" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.089"/>
+  <testcase name="permission grant properly initializes notification system" classname="network.columba.app.viewmodel.NotificationSettingsViewModelTest" time="0.114"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

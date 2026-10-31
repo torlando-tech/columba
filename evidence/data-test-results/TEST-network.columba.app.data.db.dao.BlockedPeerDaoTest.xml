@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.db.dao.BlockedPeerDaoTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:15.328Z" hostname="hermes-agent" time="0.457">
+  <properties/>
+  <testcase name="getBlackholedPeerIdentityHashes returns only blackholed peers" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.036"/>
+  <testcase name="deleteBlockedPeer removes block" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.025"/>
+  <testcase name="getBlockedPeers returns all blocked for identity" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.027"/>
+  <testcase name="isBlocked is identity-scoped" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.037"/>
+  <testcase name="insertBlockedPeer and isBlocked returns true" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.028"/>
+  <testcase name="insertBlockedPeer replaces on conflict" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.041"/>
+  <testcase name="getBlackholedPeerIdentityHashes excludes null identity hashes" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.026"/>
+  <testcase name="updateBlackholeEnabled toggles blackhole status" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.03"/>
+  <testcase name="FK cascade deletes blocked peers when identity is deleted" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.026"/>
+  <testcase name="isBlocked returns false for non-blocked peer" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.028"/>
+  <testcase name="getBlockedPeerCount emits correct count" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.038"/>
+  <testcase name="getBlockedPeerHashes returns all peer hashes for identity" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.03"/>
+  <testcase name="isBlockedFlow emits updates reactively" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.029"/>
+  <testcase name="getBlockedPeerHashes is identity-scoped" classname="network.columba.app.data.db.dao.BlockedPeerDaoTest" time="0.028"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

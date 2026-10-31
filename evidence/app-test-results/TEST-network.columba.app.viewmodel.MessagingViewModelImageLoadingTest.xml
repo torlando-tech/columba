@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:41:56.790Z" hostname="hermes-agent" time="19.833">
+  <properties/>
+  <testcase name="loadImageAsync skips when image is already in cache" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="10.352"/>
+  <testcase name="loadImageAsync handles invalid JSON gracefully" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.524"/>
+  <testcase name="loadImageAsync marks loading complete on decode failure to stop spinner" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.623"/>
+  <testcase name="loadImageAsync with missing file reference marks loading complete" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.607"/>
+  <testcase name="multiple concurrent loadImageAsync calls for same message only load once" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.617"/>
+  <testcase name="loadImageAsync skips when messageId in loadedImageIds but not in cache" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.405"/>
+  <testcase name="loadImageAsync processes different messages independently" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.586"/>
+  <testcase name="loadImageAsync with nested JSON in field 6 but missing file_ref does not update loadedImageIds" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.399"/>
+  <testcase name="loadImageAsync early return when ImageCache contains messageId" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.374"/>
+  <testcase name="loadImageAsync handles null fieldsJson gracefully" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.387"/>
+  <testcase name="loadedImageIds initial state is empty" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.367"/>
+  <testcase name="loadImageAsync skips when image is already being loaded" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.787"/>
+  <testcase name="loadImageAsync with valid hex triggers decode path" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.597"/>
+  <testcase name="loadImageAsync skips when messageId is already in loadedImageIds set" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.369"/>
+  <testcase name="loadImageAsync with missing field 6 does not update loadedImageIds" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.36"/>
+  <testcase name="loadImageAsync launches coroutine for new message" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.576"/>
+  <testcase name="loadImageAsync updates loadedImageIds on successful decode" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.557"/>
+  <testcase name="loadImageAsync with empty fieldsJson does not crash" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.357"/>
+  <testcase name="loadImageAsync with empty string field 6 does not update loadedImageIds" classname="network.columba.app.viewmodel.MessagingViewModelImageLoadingTest" time="0.357"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+The PNG file(not given PNG file name) cannot be decoded. This may be due to an OpenJDK issue with certain PNG files. See https://github.com/robolectric/robolectric/issues/6812 for more details.
+]]></system-err>
+</testsuite>

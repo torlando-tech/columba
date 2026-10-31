@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" tests="43" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:31:31.849Z" hostname="hermes-agent" time="0.138">
+  <properties/>
+  <testcase name="handles URL with authentication" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.12"/>
+  <testcase name="preserves port number" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="safe Markdown links allow web and Reticulum schemes" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.001"/>
+  <testcase name="preserves complex URL with path query and fragment" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="trims both leading and trailing whitespace" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="handles uppercase HTTP scheme" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="adds https scheme to bare domain" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="handles mixed case scheme" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.001"/>
+  <testcase name="preserves existing https scheme" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="recognizes Pyxis update attachment names" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="trims leading whitespace" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="already-schemed nomadnetwork address is preserved" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="handles uppercase HTTPS scheme" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="preserves query string" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="preserves fragment" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.001"/>
+  <testcase name="strips trailing period" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="preserves path" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="NomadNet address with an interior space is not scheme-normalized" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="strips trailing exclamation mark" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="handles URL with www prefix" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.001"/>
+  <testcase name="bare 32-hex hash without path is not treated as NomadNet address" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="strips trailing question mark" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="strips trailing closing brace" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="does not offer updater for generic archives or binaries" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="handles IPv4 address" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.001"/>
+  <testcase name="strips trailing punctuation but preserves query string" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="trims trailing whitespace" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="strips trailing semicolon" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="preserves port number with path" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="bare NomadNet file address gets nomadnetwork scheme" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.001"/>
+  <testcase name="safe Markdown links reject active and local content schemes" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="handles IPv4 address with port" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="handles subdomain" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="uppercase hex NomadNet address gets nomadnetwork scheme" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="strips trailing colon" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.001"/>
+  <testcase name="strips trailing comma" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="bare NomadNet page address gets nomadnetwork scheme" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="31-char hex prefix is not treated as NomadNet address" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="strips mixed trailing punctuation" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="strips trailing closing parenthesis" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.001"/>
+  <testcase name="preserves existing http scheme" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="strips multiple trailing punctuation marks" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <testcase name="strips trailing closing bracket" classname="network.columba.app.ui.screens.MessagingScreenLinkUtilsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

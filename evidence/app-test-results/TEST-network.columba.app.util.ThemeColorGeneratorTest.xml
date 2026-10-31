@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.util.ThemeColorGeneratorTest" tests="39" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:39:58.420Z" hostname="hermes-agent" time="4.284">
+  <properties/>
+  <testcase name="hasSufficientContrast_detectsPoorContrastBetweenSimilarColors" classname="network.columba.app.util.ThemeColorGeneratorTest" time="2.993"/>
+  <testcase name="argbToHex_convertsColorCorrectlyWithoutAlpha" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.044"/>
+  <testcase name="generateColorScheme_withThreeSeeds_usesDifferentSeedsForEachPalette" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.089"/>
+  <testcase name="generateTonalPalette_createsTenTones" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.057"/>
+  <testcase name="generateColorScheme_threeSeed_createsProperContainers" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.033"/>
+  <testcase name="hexToArgb_parsesSixDigitHexCorrectly" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.049"/>
+  <testcase name="getContrastingColor_forceDarkReturnsDark" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.029"/>
+  <testcase name="hexConversion_roundtripPreservesColor" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.028"/>
+  <testcase name="generateTonalPalette_allColorsAreUnique" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.031"/>
+  <testcase name="generateColorScheme_handlesPureBlackSeedColor" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.027"/>
+  <testcase name="generateColorSchemes_returnsBothLightAndDarkSchemes" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.026"/>
+  <testcase name="hexToArgb_parsesEightDigitHexWithAlpha" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.024"/>
+  <testcase name="hexToArgb_returnsNullForInvalidHex" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.022"/>
+  <testcase name="generateColorScheme_withThreeIdenticalSeeds_stillProducesValidScheme" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.022"/>
+  <testcase name="generateColorScheme_createsValidMaterial3SchemeForLightMode" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.023"/>
+  <testcase name="hasSufficientContrast_detectsGoodContrastBetweenBlackAndWhite" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.022"/>
+  <testcase name="generateColorScheme_withThreeSeeds_createsValidDarkScheme" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.027"/>
+  <testcase name="generateColorScheme_handlesPureWhiteSeedColor" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.023"/>
+  <testcase name="generateColorScheme_handlesGrayscaleColors" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.021"/>
+  <testcase name="calculateContrastRatio_returnsLowRatioForSimilarColors" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.026"/>
+  <testcase name="argbToHex_convertsColorCorrectlyWithAlpha" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.03"/>
+  <testcase name="generateColorScheme_withThreeSeeds_createsValidLightScheme" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.025"/>
+  <testcase name="calculateContrastRatio_returnsHighRatioForBlackAndWhite" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.02"/>
+  <testcase name="generateColorScheme_adjustsColorsBasedOnDarkMode" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.02"/>
+  <testcase name="hexToArgb_parsesSixDigitHexWithoutHash" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.019"/>
+  <testcase name="darkenColor_clampsToMinimumLightness" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.021"/>
+  <testcase name="hexToArgb_parsesThreeDigitHexCorrectly" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.02"/>
+  <testcase name="lightenColor_clampsToMaximumLightness" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.019"/>
+  <testcase name="hexToArgb_returnsNullForWrongLength" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.019"/>
+  <testcase name="generateColorScheme_handlesSaturatedColors" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.02"/>
+  <testcase name="generateColorScheme_threeSeed_adjustsLightnessForDarkMode" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.019"/>
+  <testcase name="generateTonalPalette_orderedFromLightToDark" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.02"/>
+  <testcase name="getContrastingColor_returnsBlackForLightBackgrounds" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.017"/>
+  <testcase name="getContrastingColor_returnsWhiteForDarkBackgrounds" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.018"/>
+  <testcase name="darkenColor_decreasesLightness" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.017"/>
+  <testcase name="suggestComplementaryColors_returnsThreeDifferentColors" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.019"/>
+  <testcase name="generateColorScheme_createsValidMaterial3SchemeForDarkMode" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.018"/>
+  <testcase name="lightenColor_increasesLightness" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.018"/>
+  <testcase name="hasSufficientContrast_usesWCAGAAStandardByDefault" classname="network.columba.app.util.ThemeColorGeneratorTest" time="0.017"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

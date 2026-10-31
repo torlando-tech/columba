@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.components.FileAttachmentCardTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:23:53.159Z" hostname="hermes-agent" time="8.038">
+  <properties/>
+  <testcase name="handles unicode in filename" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="5.677"/>
+  <testcase name="displays file size in KB" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.121"/>
+  <testcase name="displays file size in MB" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.127"/>
+  <testcase name="handles very long filename" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.107"/>
+  <testcase name="displays file size in bytes" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.096"/>
+  <testcase name="displays archive icon for zip files" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.102"/>
+  <testcase name="displays generic icon for unknown MIME types" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.092"/>
+  <testcase name="multiple cards display correctly" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.214"/>
+  <testcase name="handles empty filename" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.102"/>
+  <testcase name="displays PDF icon for PDF files" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.085"/>
+  <testcase name="displays correct icon for HTML files" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.082"/>
+  <testcase name="displays text icon for text files" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.075"/>
+  <testcase name="displays correct icon for tar files" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.074"/>
+  <testcase name="handles special characters in filename" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.08"/>
+  <testcase name="tap invokes onTap callback" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.086"/>
+  <testcase name="displays correct icon for gzip files" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.082"/>
+  <testcase name="handles zero byte file" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.085"/>
+  <testcase name="displays correct icon for CSV files" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.07"/>
+  <testcase name="displays video icon for video files" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.071"/>
+  <testcase name="tap anywhere on card invokes callback" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.076"/>
+  <testcase name="displays content description with MIME type" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.064"/>
+  <testcase name="displays filename correctly" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.065"/>
+  <testcase name="displays audio icon for audio files" classname="network.columba.app.ui.components.FileAttachmentCardTest" time="0.064"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

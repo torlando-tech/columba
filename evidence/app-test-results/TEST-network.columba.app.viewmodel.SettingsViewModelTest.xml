@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.SettingsViewModelTest" tests="139" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:44:09.023Z" hostname="hermes-agent" time="14.51">
+  <properties/>
+  <testcase name="setLocationPrecisionRadius saves to repository and sends update" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="4.849"/>
+  <testcase name="setDefaultSharingDuration saves to repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.269"/>
+  <testcase name="transportNodeEnabled state is preserved when other settings change" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.217"/>
+  <testcase name="updateDisplayName failure doesNotSetShowSaveSuccess" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.165"/>
+  <testcase name="setLocationSharingEnabled false saves to repository and stops all sharing" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.151"/>
+  <testcase name="clearManualAnnounceStatus clearsErrorMessage" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.12"/>
+  <testcase name="state collects isSyncing from propagationNodeManager" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.103"/>
+  <testcase name="switchToOwnInstanceAfterLoss clears wasUsingSharedInstance and saves preference" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.103"/>
+  <testcase name="state collects transportNodeEnabled from repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.079"/>
+  <testcase name="toggleAutoAnnounce enabled savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.087"/>
+  <testcase name="saveRpcKey does not restart when not shared instance" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.08"/>
+  <testcase name="state collectsAutoAnnounceEnabledFromRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.075"/>
+  <testcase name="wasUsingSharedInstance flag remains false when networkStatus stays READY" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.077"/>
+  <testcase name="updateIconAppearance updates icon when active identity exists" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.076"/>
+  <testcase name="toggleAutoAnnounce disabled savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.067"/>
+  <testcase name="setDefaultDeliveryMethod direct saves to repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.077"/>
+  <testcase name="dismissSharedInstanceLostWarning clears flag" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.063"/>
+  <testcase name="dismissSharedInstanceLostWarning sets wasUsingSharedInstance to false" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.055"/>
+  <testcase name="triggerManualAnnounce setsIsManualAnnouncingTrue" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.053"/>
+  <testcase name="toggle shows ON after switching to own instance" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.055"/>
+  <testcase name="setMapSourceRmspEnabled true saves to repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.054"/>
+  <testcase name="setMapSourceHttpEnabled can disable HTTP without blocking" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.056"/>
+  <testcase name="availability monitor survives BackendNotReady from the hosting poll - COLUMBA-AX" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.057"/>
+  <testcase name="setTransportNodeEnabled triggers service restart" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.051"/>
+  <testcase name="copy host access config emits one shot without retaining secret in state" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.095"/>
+  <testcase name="setTryPropagationOnFail enabled saves to repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.056"/>
+  <testcase name="updateIconAppearance clears icon when null values provided" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.052"/>
+  <testcase name="parseRpcKey with key only returns key" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.049"/>
+  <testcase name="setMapSourceRmspEnabled false does not save when only source" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.065"/>
+  <testcase name="updateDisplayName emptyName savesEmptyString" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.051"/>
+  <testcase name="setAutoSelectPropagationNode true enables auto-select and saves" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.058"/>
+  <testcase name="updateDisplayName exception handledGracefully" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.063"/>
+  <testcase name="setTryPropagationOnFail disabled saves to repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.066"/>
+  <testcase name="parseRpcKey with empty string returns null" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.068"/>
+  <testcase name="selectRelay calls propagationNodeManager setManualRelay" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.051"/>
+  <testcase name="sharedInstanceOnline state is preserved across flow emissions" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.052"/>
+  <testcase name="clearSaveSuccess setsShowSaveSuccessToFalse" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.052"/>
+  <testcase name="networkStatus uses service status not port probe for monitoring" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.05"/>
+  <testcase name="defaultDeliveryMethod persists across navigation" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.051"/>
+  <testcase name="restartService calls interfaceConfigManager" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.06"/>
+  <testcase name="setRetrievalIntervalSeconds 120 savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.069"/>
+  <testcase name="saveRpcKey with raw hex saves directly" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.072"/>
+  <testcase name="networkStatus READY clears wasUsingSharedInstance flag" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.053"/>
+  <testcase name="syncNow callsPropagationNodeManagerTriggerSync" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.054"/>
+  <testcase name="triggerManualAnnounce success with NativeReticulumProtocol" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.055"/>
+  <testcase name="setLocationSharingEnabled true saves to repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.057"/>
+  <testcase name="applyCustomTheme validId appliesTheme" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.123"/>
+  <testcase name="parseRpcKey with invalid characters returns null" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.057"/>
+  <testcase name="banner visibility conditions work correctly" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.055"/>
+  <testcase name="setAnnounceInterval boundaryMin1 savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.068"/>
+  <testcase name="initial state reflects repository values" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.081"/>
+  <testcase name="setRetrievalIntervalSeconds 60 savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.074"/>
+  <testcase name="sharedInstanceAvailable is preserved in state" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.053"/>
+  <testcase name="wasUsingSharedInstance is preserved when other state changes" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.053"/>
+  <testcase name="initial state has AUTO image compression preset" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.05"/>
+  <testcase name="map source settings are preserved across state changes" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.054"/>
+  <testcase name="saveRpcKey triggers service restart when shared instance" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.054"/>
+  <testcase name="non-shared instance mode ignores networkStatus changes" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.052"/>
+  <testcase name="isRestarting state controls monitoring behavior" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.07"/>
+  <testcase name="parseRpcKey with spaces around equals extracts key" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.061"/>
+  <testcase name="clearManualAnnounceStatus clearsSuccessFlag" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.056"/>
+  <testcase name="viewmodel passes NativeReticulumProtocol check for monitoring" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.059"/>
+  <testcase name="state collects defaultDeliveryMethod from repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.058"/>
+  <testcase name="image compression preset flow updates state" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.053"/>
+  <testcase name="stopSharingWith calls locationSharingManager stopSharing" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.049"/>
+  <testcase name="setAutoRetrieveEnabled false savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.053"/>
+  <testcase name="saveRpcKey with invalid input saves null" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.051"/>
+  <testcase name="parseRpcKey with multiline config and key in middle extracts key" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.061"/>
+  <testcase name="toggle reflects preferOwnInstance value from repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.055"/>
+  <testcase name="initial state has correct defaults" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.074"/>
+  <testcase name="updateDisplayName success triggersShowSaveSuccess" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.054"/>
+  <testcase name="setRetrievalIntervalSeconds 300 savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.056"/>
+  <testcase name="applyCustomTheme invalidId doesNotCrash" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.056"/>
+  <testcase name="state collects mapSourceRmspEnabled from repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.05"/>
+  <testcase name="setDefaultDeliveryMethod propagated saves to repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.049"/>
+  <testcase name="updateIconAppearance shows success when update succeeds" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.052"/>
+  <testcase name="setImageCompressionPreset to MEDIUM saves preset" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.051"/>
+  <testcase name="setAnnounceInterval validMinutes savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.05"/>
+  <testcase name="toggleQrDialog false setsShowQrDialogFalse" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.05"/>
+  <testcase name="monitors are disabled when enableMonitors flag is false" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.053"/>
+  <testcase name="parseRpcKey with mixed case preserves case" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.075"/>
+  <testcase name="setAnnounceInterval boundaryMax60 savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.051"/>
+  <testcase name="reticulumProtocol networkStatus flow is available for monitoring" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.052"/>
+  <testcase name="triggerManualAnnounce failure with NativeReticulumProtocol" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.06"/>
+  <testcase name="setMapSourceHttpEnabled false saves even when only source" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.061"/>
+  <testcase name="setTransportNodeEnabled does not restart if already restarting" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.063"/>
+  <testcase name="setMapSourceHttpEnabled true saves to repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.064"/>
+  <testcase name="setTransportNodeEnabled true saves to repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.063"/>
+  <testcase name="setRetrievalIntervalSeconds 30 savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.057"/>
+  <testcase name="stopAllSharing calls locationSharingManager stopSharing with null" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.057"/>
+  <testcase name="dismissSharedInstanceAvailable sets preferOwnInstance" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.076"/>
+  <testcase name="state collectsThemePreferenceFromRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.054"/>
+  <testcase name="availability monitor survives a transient BackendNotReady and recovers - COLUMBA-AX" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.058"/>
+  <testcase name="switchToSharedInstance clears preferOwn and triggers restart" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.063"/>
+  <testcase name="shared instance offline triggers auto-restart with correct state transitions" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.071"/>
+  <testcase name="updateIconAppearance does not update when no active identity" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.067"/>
+  <testcase name="card expansion states are preserved after toggling HTTP" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.066"/>
+  <testcase name="addManualPropagationNode calls propagationNodeManager setManualRelayByHash" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.064"/>
+  <testcase name="informational state condition is correct" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.062"/>
+  <testcase name="copy host access config emits unavailable when backend returns null" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.075"/>
+  <testcase name="state collects isSharedInstance from repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.055"/>
+  <testcase name="addManualPropagationNode with null nickname calls propagationNodeManager" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.067"/>
+  <testcase name="state collects rpcKey from repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.057"/>
+  <testcase name="setMapSourceHttpEnabled false saves to repository when RMSP enabled" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.075"/>
+  <testcase name="setImageCompressionPreset saves preset to repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.06"/>
+  <testcase name="updateDisplayName validName savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.062"/>
+  <testcase name="setImageCompressionPreset to ORIGINAL saves preset" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.064"/>
+  <testcase name="state collects hasOfflineMaps from mapTileSourceManager" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.056"/>
+  <testcase name="updateIconAppearance handles repository failure gracefully" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.072"/>
+  <testcase name="setTheme defaultTheme savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.055"/>
+  <testcase name="setImageCompressionPreset to HIGH saves preset" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.054"/>
+  <testcase name="restartServiceAfterSharedInstanceLost saves preferOwnInstance true" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.056"/>
+  <testcase name="state reflects transportNodeEnabled when explicitly set to true" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.055"/>
+  <testcase name="state collects preferOwnInstance from repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.055"/>
+  <testcase name="setMapSourceRmspEnabled false saves to repository when HTTP enabled" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.065"/>
+  <testcase name="getEffectiveDisplayName returnsDisplayNameFromState" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.062"/>
+  <testcase name="toggleQrDialog true setsShowQrDialogTrue" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.104"/>
+  <testcase name="parseRpcKey with whitespace only returns null" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.095"/>
+  <testcase name="updateDisplayName noActiveIdentity doesNotCrash" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.072"/>
+  <testcase name="state collects lastSyncTimestamp from propagationNodeManager" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.066"/>
+  <testcase name="state collectsAutoAnnounceIntervalFromRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.063"/>
+  <testcase name="state collects rmspServerCount from mapTileSourceManager" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.065"/>
+  <testcase name="state collects mapSourceHttpEnabled from repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.065"/>
+  <testcase name="toggle enable logic respects shared instance availability" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.06"/>
+  <testcase name="parseRpcKey with extra whitespace trims correctly" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.084"/>
+  <testcase name="lastSyncTimestamp is preserved when other settings change" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.063"/>
+  <testcase name="setTransportNodeEnabled false saves to repository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.069"/>
+  <testcase name="parseRpcKey with full Sideband config extracts key" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.07"/>
+  <testcase name="saveRpcKey with valid config parses and saves" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.065"/>
+  <testcase name="setAutoSelectPropagationNode false saves without enabling auto-select" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.071"/>
+  <testcase name="switchToOwnInstanceAfterLoss sets preferOwn and triggers restart" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.071"/>
+  <testcase name="setAutoRetrieveEnabled true savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.09"/>
+  <testcase name="toggleSharedInstanceBannerExpanded toggles state" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.068"/>
+  <testcase name="setTheme presetTheme savesToRepository" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.073"/>
+  <testcase name="complete transition flow - preferOwnInstance updates correctly" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.08"/>
+  <testcase name="togglePreferOwnInstance saves to repository and triggers restart" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.088"/>
+  <testcase name="setMapSourceHttpEnabled false saves to repository when offline maps exist" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.076"/>
+  <testcase name="shutdownService setsShutdownFlagAndSendsStopIntent" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.244"/>
+  <testcase name="parseRpcKey with null returns null" classname="network.columba.app.viewmodel.SettingsViewModelTest" time="0.128"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

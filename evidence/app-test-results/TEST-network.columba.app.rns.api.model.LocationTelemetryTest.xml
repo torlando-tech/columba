@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.rns.api.model.LocationTelemetryTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:20:55.658Z" hostname="hermes-agent" time="0.016">
+  <properties/>
+  <testcase name="equals true for identical data" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.006"/>
+  <testcase name="handles negative coordinates" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.0"/>
+  <testcase name="handles extreme coordinates" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.0"/>
+  <testcase name="LEGACY_FIELD_ID constant is 7 for backwards compat" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.0"/>
+  <testcase name="COLUMBA_META_FIELD_ID is upstream FIELD_CUSTOM_META 0xFD" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.001"/>
+  <testcase name="type defaults to location_share" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.0"/>
+  <testcase name="optional fields default correctly" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.0"/>
+  <testcase name="constructor sets required fields correctly" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.0"/>
+  <testcase name="approxRadius coarsens precision" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.0"/>
+  <testcase name="copy creates new instance with modified values" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.0"/>
+  <testcase name="cease frame discards lat lng when intent is delete" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.0"/>
+  <testcase name="Telemeter fields round-trip" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.001"/>
+  <testcase name="expires can be set to timestamp" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.001"/>
+  <testcase name="LXMF_FIELD_ID constant is FIELD_TELEMETRY (0x02)" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.0"/>
+  <testcase name="TYPE_LOCATION_SHARE constant is correct" classname="network.columba.app.rns.api.model.LocationTelemetryTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

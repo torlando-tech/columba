@@ -1,0 +1,9 @@
+349b7d094fb16c5703ec96f5eef1ec84e8bb66b7ba963b783f7a5c5abc42896c  apk/app-noSentry-pythonBackend-arm64-v8a-debug.apk
+f0b3d8a787d53e10c11d60def14a69e4fd9cf712631f9263ea26432e6f870bb5  app-test-results.zip
+e503f0db2dacea4700af71b49f83fb89e6551e7d7e03e1ace49c3d289a3d6337  data-test-results.zip
+6cc30fc833ee343dcdabc9688f357133f5a0fab6fd67f11651082ddedf4c42ea  logs/app-full-lint-apk.log
+f6e454a46f29ac2824015d1c8ca299b1d1a9296f50fe90b87312393d14116258  logs/app-test-1-compile-failure.log
+f22a0016d707d2580bfbf14ca75373235c7a1fb22b1d7c08be3f51abfa2fd97b  logs/app-test-2.log
+ff270d222f5a2e4abc36f31ea6dd292748e38e74c7ae111594a9e5b9289fd1d4  logs/app-test-3.log
+0d012298874a5fd2f2d8c33d8b0e320f3651a383677509fb00cb013eade7d603  logs/app-test-4.log
+35cbd6a0a0183ecae1921cbbb1e6d7485622d1ef770bcd17ea58007d8af5178b  logs/app-test-5-targeted.log

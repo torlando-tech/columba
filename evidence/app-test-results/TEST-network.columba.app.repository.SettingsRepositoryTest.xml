@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.repository.SettingsRepositoryTest" tests="88" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:20:23.054Z" hostname="hermes-agent" time="9.102">
+  <properties/>
+  <testcase name="getBlockUnknownSenders_matchesFlow" classname="network.columba.app.repository.SettingsRepositoryTest" time="5.535"/>
+  <testcase name="importAllPreferences_handlesInvalidValuesGracefully" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.129"/>
+  <testcase name="allowCallsFromContactsOnlyFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.09"/>
+  <testcase name="notificationReceivedMessageFavoriteFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.056"/>
+  <testcase name="telemetrySendIntervalSecondsFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.053"/>
+  <testcase name="blockUnknownSendersFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.049"/>
+  <testcase name="notificationBleConnectedFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.05"/>
+  <testcase name="getAllowVoiceCalls_matchesFlow" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.059"/>
+  <testcase name="setHttpEnabledForDownload_true_updatesFlow" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.053"/>
+  <testcase name="getAllowCallsFromContactsOnly_matchesFlow" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.043"/>
+  <testcase name="telemetryCollectorEnabledFlow_defaultsToFalse" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.036"/>
+  <testcase name="incomingMessageSizeLimitKbFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.048"/>
+  <testcase name="notificationBleDisconnectedFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.044"/>
+  <testcase name="hasDismissedLocationPermissionSheetFlow_defaultsToFalse" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.04"/>
+  <testcase name="preferOwnInstanceFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.046"/>
+  <testcase name="transportNodeEnabledFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.04"/>
+  <testcase name="autoAnnounceEnabledFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.051"/>
+  <testcase name="isSharedInstanceFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.044"/>
+  <testcase name="lastTelemetryRequestTimeFlow_emitsTimestampValues" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.038"/>
+  <testcase name="httpEnabledForDownloadFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.041"/>
+  <testcase name="notificationsEnabledFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.044"/>
+  <testcase name="hasDismissedLocationPermissionSheetFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.037"/>
+  <testcase name="autoAnnounceIntervalHoursFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.042"/>
+  <testcase name="telemetryHostModeEnabledFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.039"/>
+  <testcase name="lastTelemetrySendTimeFlow_emitsTimestampValues" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.029"/>
+  <testcase name="lastServiceStatusFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.039"/>
+  <testcase name="transportNodeEnabled_persistsValue" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.036"/>
+  <testcase name="telemetryHostModeEnabled_persistsAcrossSessions" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.032"/>
+  <testcase name="importAllPreferences_restoresBooleanSettings" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.027"/>
+  <testcase name="flowAndGetMethod_returnSameValue" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.031"/>
+  <testcase name="getIncomingMessageSizeLimitKb_returnsDefaultWhenNotSet" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.025"/>
+  <testcase name="telemetryHostModeEnabledFlow_defaultsToFalse" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.027"/>
+  <testcase name="importAllPreferences_restoresIntSettings" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.034"/>
+  <testcase name="telemetryCollectorAddressFlow_defaultsToNull" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.027"/>
+  <testcase name="autoconnectIfacOnly_persistsValue" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.036"/>
+  <testcase name="telemetryRequestIntervalSecondsFlow_defaultsTo900" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.028"/>
+  <testcase name="importAllPreferences_restoresLongSettings" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.027"/>
+  <testcase name="autoRetrieveEnabledFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.04"/>
+  <testcase name="blockUnknownSendersFlow_defaultsToFalse" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.024"/>
+  <testcase name="setHttpEnabledForDownload_false_updatesFlow" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.031"/>
+  <testcase name="telemetryRequestIntervalSecondsFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.041"/>
+  <testcase name="telemetryHostMode_flowAndGetMethodReturnSameValue" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.032"/>
+  <testcase name="autoconnectIfacOnly_defaultsToFalse" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.027"/>
+  <testcase name="defaultDeliveryMethodFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.036"/>
+  <testcase name="saveTelemetryRequestIntervalSeconds_clampsToValidRange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.035"/>
+  <testcase name="exportImport_roundTrip_preservesSettings" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.057"/>
+  <testcase name="lastTelemetrySendTimeFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.038"/>
+  <testcase name="nextAutoAnnounceTimeFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.036"/>
+  <testcase name="exportAllPreferences_includesAllSavedSettings" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.035"/>
+  <testcase name="lastAutoAnnounceTimeFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.044"/>
+  <testcase name="hasRequestedNotificationPermissionFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.035"/>
+  <testcase name="importAllPreferences_restoresStringSettings" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.027"/>
+  <testcase name="saveTelemetrySendIntervalSeconds_clampsToMaximum" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.029"/>
+  <testcase name="telemetryCollector_flowAndGetMethodReturnSameValue" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.042"/>
+  <testcase name="markLocationPermissionSheetDismissed_setsToTrue" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.032"/>
+  <testcase name="saveTelemetrySendIntervalSeconds_clampsToMinimum" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.028"/>
+  <testcase name="allowVoiceCallsFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.033"/>
+  <testcase name="nextAutoAnnounceTimeFlow_defaultsToNull" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.021"/>
+  <testcase name="telemetryCollectorEnabledFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.045"/>
+  <testcase name="retrievalIntervalSecondsFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.05"/>
+  <testcase name="saveLocationPrecisionRadius_reSavingPrecise_keepsDismissal" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.035"/>
+  <testcase name="networkChangeAnnounceTimeFlow_defaultsToNull" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.023"/>
+  <testcase name="importAllPreferences_ignoresUnknownKeys" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.026"/>
+  <testcase name="autoSelectPropagationNodeFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.032"/>
+  <testcase name="hasCompletedOnboardingFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.031"/>
+  <testcase name="saveTelemetrySendIntervalSeconds_acceptsValidValues" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.038"/>
+  <testcase name="lastTelemetryRequestTimeFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.029"/>
+  <testcase name="resetLocationPermissionSheetDismissal_setsToFalse" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.025"/>
+  <testcase name="rpcKeyFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.028"/>
+  <testcase name="lastPropagationNodeFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.027"/>
+  <testcase name="autoAnnounceIntervalHoursFlow_defaultsTo3Hours" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.019"/>
+  <testcase name="saveAutoAnnounceIntervalHours_clampsToValidRange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.029"/>
+  <testcase name="locationSharingEnabledFlow_defaultsToFalse" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.023"/>
+  <testcase name="networkChangeAnnounceTimeFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.027"/>
+  <testcase name="notificationHeardAnnounceFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.029"/>
+  <testcase name="notificationReceivedMessageFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.031"/>
+  <testcase name="lastSyncTimestampFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.027"/>
+  <testcase name="telemetryCollectorAddressFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.029"/>
+  <testcase name="locationSharingEnabledFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.032"/>
+  <testcase name="saveIncomingMessageSizeLimitKb_acceptsValidValues" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.037"/>
+  <testcase name="telemetrySendIntervalSecondsFlow_emitsIntervalValues" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.022"/>
+  <testcase name="saveIncomingMessageSizeLimitKb_clampsToMaximum" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.029"/>
+  <testcase name="manualPropagationNodeFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.029"/>
+  <testcase name="incomingMessageSizeLimitKbFlow_defaultsTo1024" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.023"/>
+  <testcase name="autoconnectIfacOnlyFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.028"/>
+  <testcase name="saveIncomingMessageSizeLimitKb_clampsToMinimum" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.03"/>
+  <testcase name="tryPropagationOnFailFlow_emitsOnlyOnChange" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.045"/>
+  <testcase name="saveLocationPrecisionRadius_transitionIntoPrecise_reArmsDismissedPrompt" classname="network.columba.app.repository.SettingsRepositoryTest" time="0.03"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

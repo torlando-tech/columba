@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.nomadnet.NomadNetPageCacheTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:19:39.573Z" hostname="hermes-agent" time="3.657">
+  <properties/>
+  <testcase name="cache preserves Micron markup with special characters" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="2.957"/>
+  <testcase name="different paths are cached separately" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="0.041"/>
+  <testcase name="put overwrites previous entry for same key" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="0.037"/>
+  <testcase name="cache with negative TTL does not store" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="0.034"/>
+  <testcase name="cache with zero TTL does not store" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="0.039"/>
+  <testcase name="expired entry returns null" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="0.04"/>
+  <testcase name="get returns null for uncached page" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="0.031"/>
+  <testcase name="remove deletes cached entry" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="0.031"/>
+  <testcase name="cache with null TTL uses default (stores successfully)" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="0.028"/>
+  <testcase name="different nodes are cached separately" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="0.026"/>
+  <testcase name="cleanExpired removes only expired files" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="0.027"/>
+  <testcase name="cache preserves Unicode block characters" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="0.024"/>
+  <testcase name="remove on non-existent entry is no-op" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="0.026"/>
+  <testcase name="put and get returns cached content" classname="network.columba.app.nomadnet.NomadNetPageCacheTest" time="0.03"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

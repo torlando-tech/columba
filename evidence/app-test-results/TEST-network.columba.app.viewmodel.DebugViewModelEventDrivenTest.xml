@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:40:45.278Z" hostname="hermes-agent" time="4.374">
+  <properties/>
+  <testcase name="restartService handles exception and resets isRestarting" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="4.091"/>
+  <testcase name="initial state has default values before Flow emits" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="0.014"/>
+  <testcase name="parseAndUpdateDebugInfo parses interfaces array correctly" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="0.025"/>
+  <testcase name="generateShareText returns null when destinationHash is null" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="0.025"/>
+  <testcase name="debugInfo is reset to defaults when network status becomes SHUTDOWN" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="0.017"/>
+  <testcase name="observeDebugInfo falls back to fetchDebugInfo for non-ServiceProtocol" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="0.054"/>
+  <testcase name="viewModel collects from debugInfoFlow without crashing" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="0.014"/>
+  <testcase name="parseAndUpdateDebugInfo merges failed interfaces" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="0.018"/>
+  <testcase name="generateShareText returns null when publicKey is null" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="0.02"/>
+  <testcase name="parseAndUpdateDebugInfo extracts NetworkStatus ERROR to error field" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="0.019"/>
+  <testcase name="debugInfo remains populated while network is READY" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="0.018"/>
+  <testcase name="restartService sets isRestarting state correctly" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="0.021"/>
+  <testcase name="multiple emissions to debugInfoFlow do not crash" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="0.017"/>
+  <testcase name="parseAndUpdateDebugInfo handles malformed JSON gracefully" classname="network.columba.app.viewmodel.DebugViewModelEventDrivenTest" time="0.011"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

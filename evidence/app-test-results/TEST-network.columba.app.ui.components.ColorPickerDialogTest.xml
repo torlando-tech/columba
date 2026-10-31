@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.components.ColorPickerDialogTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:23:28.766Z" hostname="hermes-agent" time="9.294">
+  <properties/>
+  <testcase name="colorPickerDialog_displaysCustomTitle" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="6.265"/>
+  <testcase name="colorPickerDialog_confirmButtonCallsBothCallbacks" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.308"/>
+  <testcase name="colorPickerDialog_displaysHexInputField" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.215"/>
+  <testcase name="colorPickerDialog_displaysTitle" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.164"/>
+  <testcase name="colorPickerDialog_confirmReturnsColor" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.168"/>
+  <testcase name="colorPickerDialog_rendersWithMaterialRed" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.19"/>
+  <testcase name="colorPickerDialog_rendersWithMaterialBlue" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.183"/>
+  <testcase name="colorPickerDialog_handlesBlackColor" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.158"/>
+  <testcase name="colorPickerDialog_rendersWithMaterialGreen" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.146"/>
+  <testcase name="colorPickerDialog_displaysConfirmButton" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.146"/>
+  <testcase name="colorPickerDialog_handlesTransparentColor" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.157"/>
+  <testcase name="colorPickerDialog_displaysHueSliderLabel" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.121"/>
+  <testcase name="colorPickerDialog_initializesWithProvidedColor" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.117"/>
+  <testcase name="colorPickerDialog_displaysLightnessSliderLabel" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.114"/>
+  <testcase name="colorPickerDialog_cancelButtonCallsOnDismiss" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.12"/>
+  <testcase name="colorPickerDialog_handlesWhiteColor" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.111"/>
+  <testcase name="colorPickerDialog_displaysSaturationSliderLabel" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.108"/>
+  <testcase name="colorPickerDialog_displaysCancelButton" classname="network.columba.app.ui.components.ColorPickerDialogTest" time="0.16"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

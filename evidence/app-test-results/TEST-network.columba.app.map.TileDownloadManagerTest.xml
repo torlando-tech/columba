@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.map.TileDownloadManagerTest" tests="47" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:19:01.990Z" hostname="hermes-agent" time="0.221">
+  <properties/>
+  <testcase name="latLonToTile clamps coordinates within valid range" classname="network.columba.app.map.TileDownloadManagerTest" time="0.015"/>
+  <testcase name="encodeGeohash returns correct geohash for London" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="TileSource Rmsp holds server hash" classname="network.columba.app.map.TileDownloadManagerTest" time="0.004"/>
+  <testcase name="DownloadProgress status enum has expected values" classname="network.columba.app.map.TileDownloadManagerTest" time="0.088"/>
+  <testcase name="encodeGeohash returns correct geohash for Sydney" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="encodeGeohash handles different precision levels" classname="network.columba.app.map.TileDownloadManagerTest" time="0.022"/>
+  <testcase name="tileToLatLon returns northwest corner of tile" classname="network.columba.app.map.TileDownloadManagerTest" time="0.002"/>
+  <testcase name="decodeGeohashCenter is consistent with decodeGeohashBounds" classname="network.columba.app.map.TileDownloadManagerTest" time="0.001"/>
+  <testcase name="RegionParams data class holds correct values" classname="network.columba.app.map.TileDownloadManagerTest" time="0.002"/>
+  <testcase name="decodeGeohashCenter returns null for empty string" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="generateFilename includes timestamp for uniqueness" classname="network.columba.app.map.TileDownloadManagerTest" time="0.017"/>
+  <testcase name="geohashesForBounds covers entire bounds" classname="network.columba.app.map.TileDownloadManagerTest" time="0.041"/>
+  <testcase name="TileSource Http has default URL" classname="network.columba.app.map.TileDownloadManagerTest" time="0.001"/>
+  <testcase name="latLonToTile handles equator correctly" classname="network.columba.app.map.TileDownloadManagerTest" time="0.001"/>
+  <testcase name="geohashesForBounds returns correct number of geohashes for small area" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="DownloadProgress progress is zero when totalTiles is zero" classname="network.columba.app.map.TileDownloadManagerTest" time="0.001"/>
+  <testcase name="encodeGeohash returns correct geohash for Tokyo" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="DownloadProgress progress calculation is correct" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="TileSource Http accepts custom URL" classname="network.columba.app.map.TileDownloadManagerTest" time="0.001"/>
+  <testcase name="encodeGeohash handles equator correctly" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="latLonToTile handles maximum zoom level" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="encodeGeohash returns correct geohash for known coordinates" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="geohashesForBounds returns more geohashes for higher precision" classname="network.columba.app.map.TileDownloadManagerTest" time="0.001"/>
+  <testcase name="generateFilename sanitizes special characters" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="RegionParams equals works correctly" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="decodeGeohashBounds is inverse of encodeGeohash" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="tileToLatLon and latLonToTile are consistent" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="encodeGeohash handles extreme latitudes" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="encodeGeohash produces unique hashes for different locations" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="TileCoord equals works correctly" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="latLonToTile returns correct tile for known coordinates at zoom 10" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="encodeGeohash handles negative coordinates correctly" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="latLonToTile handles date line correctly" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="latLonToTile returns (0,0) tile for northwest corner at low zoom" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="generateFilename truncates long names" classname="network.columba.app.map.TileDownloadManagerTest" time="0.001"/>
+  <testcase name="encodeGeohash produces similar hashes for nearby locations" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="decodeGeohashBounds handles s0000 (origin)" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="tileToLatLon returns valid coordinates for tile (0,0) at zoom 0" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="encodeGeohash handles extreme longitudes" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="generateFilename produces valid filename" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="geohashesForBounds returns more geohashes for larger area" classname="network.columba.app.map.TileDownloadManagerTest" time="0.001"/>
+  <testcase name="latLonToTile handles zoom level correctly" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="encodeGeohash handles prime meridian correctly" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="decodeGeohashCenter returns center of geohash cell" classname="network.columba.app.map.TileDownloadManagerTest" time="0.003"/>
+  <testcase name="TileCoord data class holds correct values" classname="network.columba.app.map.TileDownloadManagerTest" time="0.001"/>
+  <testcase name="decodeGeohashBounds returns correct bounds for known geohash" classname="network.columba.app.map.TileDownloadManagerTest" time="0.0"/>
+  <testcase name="decodeGeohashBounds has smaller area for higher precision" classname="network.columba.app.map.TileDownloadManagerTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

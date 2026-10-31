@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Parcel
 import android.util.Log
 import java.io.File
+import java.io.RandomAccessFile
 import network.columba.app.rns.api.model.ReticulumConfig
 
 /**
@@ -36,6 +37,7 @@ import network.columba.app.rns.api.model.ReticulumConfig
 object ReticulumConfigSnapshot {
     private const val TAG = "ReticulumConfigSnapshot"
     private const val FILE_NAME = "rns_config_snapshot.bin"
+    private const val LOCK_FILE_NAME = "$FILE_NAME.lock"
     // Bumped to 4 when ReticulumConfig.autoconnectInterfaceMode was added.
     // The field sits mid-layout (before interfaceDiscoverySources /
     // requiredDiscoveryValue / incomingMessageSizeLimitKb), so V3 snapshots
@@ -59,6 +61,38 @@ object ReticulumConfigSnapshot {
         File(context.filesDir, FILE_NAME)
 
     /**
+     * Decodes the [ReticulumConfig] payload. Swappable only so tests can force a
+     * [LinkageError] (the COLUMBA-AT failure mode) on the decode path.
+     */
+    @Suppress("DEPRECATION")
+    internal var configDecoder: (Parcel) -> ReticulumConfig? = { parcel ->
+        // readParcelable(ClassLoader) works across the whole minSdk-24 fleet. The typed
+        // (ClassLoader, Class) overload is API 33+ and throws NoSuchMethodError below it.
+        // (Mirrors ReticulumConfig.kt / LinkEvent.kt.)
+        parcel.readParcelable<ReticulumConfig>(ReticulumConfig::class.java.classLoader)
+    }
+
+    /**
+     * Runs [block] while holding an exclusive lock on the snapshot, shared by the UI
+     * process (writer) and `:reticulum` (reader). This makes "read bytes -> decode fails ->
+     * delete file" atomic with respect to writes, so cleanup can never delete a fresh
+     * snapshot that a concurrent [write] just put in place. `synchronized` covers
+     * threads in the same process, because a JVM can't hold two overlapping
+     * [java.nio.channels.FileLock]s.
+     */
+    private fun <T> withSnapshotLock(context: Context, block: () -> T): T =
+        synchronized(this) {
+            RandomAccessFile(File(context.filesDir, LOCK_FILE_NAME), "rw").use { raf ->
+                val lock = raf.channel.lock()
+                try {
+                    block()
+                } finally {
+                    lock.release()
+                }
+            }
+        }
+
+    /**
      * Write [config] (with [ReticulumConfig.deliveryIdentityKey] stripped) and
      * [identityHashHex] to the snapshot file. Best-effort: a write failure is
      * logged and swallowed — the next successful write overwrites cleanly,
@@ -66,6 +100,18 @@ object ReticulumConfigSnapshot {
      * initialize.
      */
     fun write(
+        context: Context,
+        config: ReticulumConfig,
+        identityHashHex: String?,
+    ) {
+        try {
+            withSnapshotLock(context) { writeLocked(context, config, identityHashHex) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to write config snapshot: ${e.message}", e)
+        }
+    }
+
+    private fun writeLocked(
         context: Context,
         config: ReticulumConfig,
         identityHashHex: String?,
@@ -96,8 +142,6 @@ object ReticulumConfigSnapshot {
                 "Wrote snapshot: ${bytes.size} bytes, ${config.enabledInterfaces.size} interfaces, " +
                     "identity=${identityHashHex?.take(8)}…",
             )
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to write config snapshot: ${e.message}", e)
         } finally {
             parcel.recycle()
         }
@@ -109,7 +153,16 @@ object ReticulumConfigSnapshot {
      * which are non-fatal (the caller falls back to "wait for UI to drive
      * initialize").
      */
-    fun read(context: Context): Snapshot? {
+    fun read(context: Context): Snapshot? =
+        try {
+            withSnapshotLock(context) { readLocked(context) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to lock/read snapshot: ${e.message}", e)
+            null
+        }
+
+    /** Caller must hold [withSnapshotLock]. */
+    private fun readLocked(context: Context): Snapshot? {
         val file = snapshotFile(context)
         if (!file.exists()) {
             Log.d(TAG, "No snapshot at ${file.absolutePath} — first run or never initialized")
@@ -131,13 +184,7 @@ object ReticulumConfigSnapshot {
                 return null
             }
             val identityHashHex = parcel.readString().orEmpty().takeIf { it.isNotEmpty() }
-            // readParcelable(ClassLoader) works across the whole minSdk-24 fleet. The typed
-            // (ClassLoader, Class) overload is API 33+ and throws NoSuchMethodError below it —
-            // and that's an Error, NOT an Exception, so the catch below would NOT save us; it
-            // crashes :reticulum on FGS start. (Mirrors ReticulumConfig.kt / LinkEvent.kt.)
-            @Suppress("DEPRECATION")
-            val config = parcel.readParcelable<ReticulumConfig>(ReticulumConfig::class.java.classLoader)
-            config?.let {
+            configDecoder(parcel)?.let {
                 Snapshot(
                     configWithoutKey = it,
                     identityHashHex = identityHashHex,
@@ -163,7 +210,8 @@ object ReticulumConfigSnapshot {
     /**
      * Delete a snapshot that failed to decode so a restarted `:reticulum` doesn't
      * re-read the same bad bytes on every start. The next successful UI-driven
-     * initialize writes a fresh snapshot.
+     * initialize writes a fresh snapshot. Only called under [withSnapshotLock], so the
+     * file deleted is guaranteed to be the one whose bytes just failed to decode.
      */
     private fun discardUnreadable(file: File) {
         if (!file.delete()) {
@@ -187,21 +235,31 @@ object ReticulumConfigSnapshot {
      * initialization writes a fresh one with the current value.
      */
     fun updateIncomingMessageSizeLimitKb(context: Context, limitKb: Long?) {
-        val snapshot = read(context)
-        if (snapshot == null) {
-            Log.d(TAG, "No snapshot to update for incoming limit ($limitKb KB)")
-            return
+        try {
+            withSnapshotLock(context) {
+                val snapshot = readLocked(context)
+                if (snapshot == null) {
+                    Log.d(TAG, "No snapshot to update for incoming limit ($limitKb KB)")
+                    return@withSnapshotLock
+                }
+                writeLocked(
+                    context = context,
+                    config = snapshot.configWithoutKey.copy(incomingMessageSizeLimitKb = limitKb),
+                    identityHashHex = snapshot.identityHashHex,
+                )
+                Log.d(TAG, "Snapshot incoming limit updated: $limitKb KB")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to update snapshot incoming limit: ${e.message}", e)
         }
-        write(
-            context = context,
-            config = snapshot.configWithoutKey.copy(incomingMessageSizeLimitKb = limitKb),
-            identityHashHex = snapshot.identityHashHex,
-        )
-        Log.d(TAG, "Snapshot incoming limit updated: $limitKb KB")
     }
 
     /** Delete the snapshot — used after `shutdown()` to force fresh wiring on next start. */
     fun clear(context: Context) {
-        snapshotFile(context).delete()
+        try {
+            withSnapshotLock(context) { snapshotFile(context).delete() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to clear snapshot: ${e.message}", e)
+        }
     }
 }

@@ -9,6 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -109,6 +110,26 @@ class ReticulumConfigSnapshotTest {
 
         assertNull(ReticulumConfigSnapshot.read(context))
         assertFalse("unreadable snapshot must be deleted to avoid a restart loop", file.exists())
+    }
+
+    @Test
+    fun `read returns null and discards the snapshot when decoding throws a LinkageError`() {
+        ReticulumConfigSnapshot.clear(context)
+        ReticulumConfigSnapshot.write(context, sampleConfig(), identityHashHex = "deadbeefcafe")
+        val file = File(context.filesDir, "rns_config_snapshot.bin")
+        assertTrue("precondition: snapshot was written", file.exists())
+
+        val originalDecoder = ReticulumConfigSnapshot.configDecoder
+        ReticulumConfigSnapshot.configDecoder = {
+            // Same failure the API-33-only readParcelable(ClassLoader, Class) produced on API < 33.
+            throw NoSuchMethodError("readParcelable(Ljava/lang/ClassLoader;Ljava/lang/Class;)")
+        }
+        try {
+            assertNull(ReticulumConfigSnapshot.read(context))
+            assertFalse("unreadable snapshot must be deleted to avoid a restart loop", file.exists())
+        } finally {
+            ReticulumConfigSnapshot.configDecoder = originalDecoder
+        }
     }
 
     @Test

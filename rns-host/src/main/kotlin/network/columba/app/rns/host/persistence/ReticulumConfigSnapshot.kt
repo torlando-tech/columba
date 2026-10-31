@@ -145,9 +145,29 @@ object ReticulumConfigSnapshot {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to unmarshal snapshot: ${e.message}", e)
+            discardUnreadable(file)
+            null
+        } catch (e: LinkageError) {
+            // NoSuchMethodError / NoClassDefFoundError etc. are Errors, not Exceptions, so
+            // the catch above misses them. Left unhandled they crash :reticulum on FGS start,
+            // and START_STICKY restarts straight back into the same crash (COLUMBA-AT).
+            // Degrade to "no snapshot" — the UI re-initializes and writes a fresh one.
+            Log.e(TAG, "Snapshot read hit an API/linkage error: ${e.message}", e)
+            discardUnreadable(file)
             null
         } finally {
             parcel.recycle()
+        }
+    }
+
+    /**
+     * Delete a snapshot that failed to decode so a restarted `:reticulum` doesn't
+     * re-read the same bad bytes on every start. The next successful UI-driven
+     * initialize writes a fresh snapshot.
+     */
+    private fun discardUnreadable(file: File) {
+        if (!file.delete()) {
+            Log.w(TAG, "Failed to delete unreadable snapshot at ${file.absolutePath}")
         }
     }
 

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.theme.ThemeModeTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:08:12.814Z" hostname="hermes-agent" time="0.002">
+  <properties/>
+  <testcase name="system mode follows device theme" classname="network.columba.app.ui.theme.ThemeModeTest" time="0.001"/>
+  <testcase name="fromIdentifier falls back to system for null" classname="network.columba.app.ui.theme.ThemeModeTest" time="0.0"/>
+  <testcase name="fromIdentifier round trips through name" classname="network.columba.app.ui.theme.ThemeModeTest" time="0.0"/>
+  <testcase name="light mode always renders light" classname="network.columba.app.ui.theme.ThemeModeTest" time="0.001"/>
+  <testcase name="fromIdentifier falls back to system for unknown values" classname="network.columba.app.ui.theme.ThemeModeTest" time="0.0"/>
+  <testcase name="fromIdentifier parses valid names" classname="network.columba.app.ui.theme.ThemeModeTest" time="0.0"/>
+  <testcase name="dark mode always renders dark" classname="network.columba.app.ui.theme.ThemeModeTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

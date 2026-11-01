@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.reticulum.protocol.ContinuationRaceTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:20:33.010Z" hostname="hermes-agent" time="10.968">
+<testsuite name="network.columba.app.reticulum.protocol.ContinuationRaceTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:02:02.921Z" hostname="hermes-agent" time="10.678">
   <properties/>
-  <testcase name="safe pattern handles double callback safely" classname="network.columba.app.reticulum.protocol.ContinuationRaceTest" time="0.118"/>
-  <testcase name="unsafe pattern can lose wakeup when callback fires first" classname="network.columba.app.reticulum.protocol.ContinuationRaceTest" time="10.199"/>
-  <testcase name="safe pattern is thread safe under concurrent access" classname="network.columba.app.reticulum.protocol.ContinuationRaceTest" time="0.223"/>
-  <testcase name="safe pattern handles rapid cycles" classname="network.columba.app.reticulum.protocol.ContinuationRaceTest" time="0.297"/>
-  <testcase name="safe pattern never loses wakeup" classname="network.columba.app.reticulum.protocol.ContinuationRaceTest" time="0.125"/>
+  <testcase name="safe pattern handles double callback safely" classname="network.columba.app.reticulum.protocol.ContinuationRaceTest" time="0.014"/>
+  <testcase name="unsafe pattern can lose wakeup when callback fires first" classname="network.columba.app.reticulum.protocol.ContinuationRaceTest" time="10.061"/>
+  <testcase name="safe pattern is thread safe under concurrent access" classname="network.columba.app.reticulum.protocol.ContinuationRaceTest" time="0.212"/>
+  <testcase name="safe pattern handles rapid cycles" classname="network.columba.app.reticulum.protocol.ContinuationRaceTest" time="0.271"/>
+  <testcase name="safe pattern never loses wakeup" classname="network.columba.app.reticulum.protocol.ContinuationRaceTest" time="0.12"/>
   <system-out><![CDATA[Lost wakeups (unsafe): 100/100
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>

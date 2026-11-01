@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.db.Migration1To2Test" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:10.342Z" hostname="hermes-agent" time="0.039">
+<testsuite name="network.columba.app.data.db.Migration1To2Test" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:15.285Z" hostname="hermes-agent" time="0.017">
   <properties/>
-  <testcase name="returns null on unparseable input" classname="network.columba.app.data.db.Migration1To2Test" time="0.031"/>
-  <testcase name="splits reactions blob and leaves remaining field16 keys in place" classname="network.columba.app.data.db.Migration1To2Test" time="0.004"/>
-  <testcase name="removes field16 entirely when reactions was its only key" classname="network.columba.app.data.db.Migration1To2Test" time="0.0"/>
+  <testcase name="returns null on unparseable input" classname="network.columba.app.data.db.Migration1To2Test" time="0.013"/>
+  <testcase name="splits reactions blob and leaves remaining field16 keys in place" classname="network.columba.app.data.db.Migration1To2Test" time="0.002"/>
+  <testcase name="removes field16 entirely when reactions was its only key" classname="network.columba.app.data.db.Migration1To2Test" time="0.001"/>
   <testcase name="multiple emojis survive the round-trip" classname="network.columba.app.data.db.Migration1To2Test" time="0.0"/>
-  <testcase name="returns null when field16 is missing" classname="network.columba.app.data.db.Migration1To2Test" time="0.001"/>
-  <testcase name="returns null when there are no reactions to lift" classname="network.columba.app.data.db.Migration1To2Test" time="0.0"/>
+  <testcase name="returns null when field16 is missing" classname="network.columba.app.data.db.Migration1To2Test" time="0.0"/>
+  <testcase name="returns null when there are no reactions to lift" classname="network.columba.app.data.db.Migration1To2Test" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

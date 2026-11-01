@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.screens.InterfaceManagementUtilsTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:30:32.174Z" hostname="hermes-agent" time="1.947">
+<testsuite name="network.columba.app.ui.screens.InterfaceManagementUtilsTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:05:38.511Z" hostname="hermes-agent" time="0.451">
   <properties/>
-  <testcase name="restrictionView_autoInterface_onNoNetwork_returnsNoNetworkWifiOnly" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.03"/>
-  <testcase name="restrictionView_autoInterface_wifiOnly_onCellular_returnsBlockedWifiOnly" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.002"/>
-  <testcase name="restrictionView_tcpClient_any_onAnyTransport_returnsNotApplicable" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.002"/>
+  <testcase name="restrictionView_autoInterface_onNoNetwork_returnsNoNetworkWifiOnly" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.017"/>
+  <testcase name="restrictionView_autoInterface_wifiOnly_onCellular_returnsBlockedWifiOnly" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.001"/>
+  <testcase name="restrictionView_tcpClient_any_onAnyTransport_returnsNotApplicable" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.003"/>
   <testcase name="restrictionView_restrictedIpInterface_onUnknown_returnsBlockedNotNoNetwork" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.001"/>
   <testcase name="restrictionView_autoInterface_wifiOnly_onWifiLike_returnsAllowedWifiOnly" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.002"/>
   <testcase name="restrictionView_androidBle_wifiOnly_onCellular_returnsNotApplicable" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.0"/>
   <testcase name="restrictionView_legacyJsonWithoutRestriction_autoInterface_defaultsToWifiOnly" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.0"/>
-  <testcase name="parseRestrictionForEntity_legacyDefaults_matchInterfaceRepositoryRuntimeDefault" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="1.891"/>
+  <testcase name="parseRestrictionForEntity_legacyDefaults_matchInterfaceRepositoryRuntimeDefault" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.425"/>
   <testcase name="restrictionView_tcpClient_cellularOnly_onWifiLike_returnsBlockedCellularOnly" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.001"/>
   <testcase name="restrictionView_androidBle_onNoNetwork_returnsNotApplicable" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.0"/>
   <testcase name="restrictionView_legacyJsonWithoutRestriction_tcpClient_defaultsToAny" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.0"/>
   <testcase name="restrictionView_rnodeTcpMode_cellularOnly_onWifiLike_returnsBlockedCellularOnly" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.0"/>
-  <testcase name="entityRidesOnIpCarrier_truthTable_matchesInterfaceTransportFilter" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.01"/>
+  <testcase name="entityRidesOnIpCarrier_truthTable_matchesInterfaceTransportFilter" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.001"/>
   <testcase name="restrictionView_disabledInterface_returnsNotApplicable" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.0"/>
   <testcase name="restrictionView_tcpClient_cellularOnly_onNoNetwork_returnsNoNetwork" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.0"/>
   <testcase name="restrictionView_rnodeBleMode_wifiOnly_onCellular_returnsNotApplicable" classname="network.columba.app.ui.screens.InterfaceManagementUtilsTest" time="0.0"/>
@@ -21,9 +21,5 @@
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation
 SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
 ]]></system-err>
 </testsuite>

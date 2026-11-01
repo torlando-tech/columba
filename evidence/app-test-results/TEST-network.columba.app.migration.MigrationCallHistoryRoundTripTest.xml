@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.migration.MigrationCallHistoryRoundTripTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:00:44.703Z" hostname="hermes-agent" time="4.39">
+  <properties/>
+  <testcase name="encrypted production export round trips every reduced outcome with legacy key protection" classname="network.columba.app.migration.MigrationCallHistoryRoundTripTest" time="1.695"/>
+  <testcase name="deleting a local identity cascade-deletes its call history" classname="network.columba.app.migration.MigrationCallHistoryRoundTripTest" time="0.037"/>
+  <testcase name="encrypted production export round trips every reduced outcome with password key protection" classname="network.columba.app.migration.MigrationCallHistoryRoundTripTest" time="1.329"/>
+  <testcase name="deletion authority round trips and suppresses later re-import" classname="network.columba.app.migration.MigrationCallHistoryRoundTripTest" time="1.323"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

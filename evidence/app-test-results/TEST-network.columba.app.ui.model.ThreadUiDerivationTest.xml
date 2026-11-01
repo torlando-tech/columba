@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.model.ThreadUiDerivationTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:28:04.960Z" hostname="hermes-agent" time="0.116">
+<testsuite name="network.columba.app.ui.model.ThreadUiDerivationTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:04:53.663Z" hostname="hermes-agent" time="0.009">
   <properties/>
-  <testcase name="chips exclude archived and dormant but always include the selection" classname="network.columba.app.ui.model.ThreadUiDerivationTest" time="0.104"/>
-  <testcase name="header resolves root degrades to offscreen and case-1 has none" classname="network.columba.app.ui.model.ThreadUiDerivationTest" time="0.002"/>
-  <testcase name="row preview prefers last message over activity timestamp" classname="network.columba.app.ui.model.ThreadUiDerivationTest" time="0.002"/>
+  <testcase name="chips exclude archived and dormant but always include the selection" classname="network.columba.app.ui.model.ThreadUiDerivationTest" time="0.005"/>
+  <testcase name="header resolves root degrades to offscreen and case-1 has none" classname="network.columba.app.ui.model.ThreadUiDerivationTest" time="0.001"/>
+  <testcase name="row preview prefers last message over activity timestamp" classname="network.columba.app.ui.model.ThreadUiDerivationTest" time="0.001"/>
   <testcase name="aggregate maps key by hex and skip null-thread rows" classname="network.columba.app.ui.model.ThreadUiDerivationTest" time="0.001"/>
-  <testcase name="sheet partitions by archived then dormancy keeping dao order" classname="network.columba.app.ui.model.ThreadUiDerivationTest" time="0.001"/>
+  <testcase name="sheet partitions by archived then dormancy keeping dao order" classname="network.columba.app.ui.model.ThreadUiDerivationTest" time="0.0"/>
   <testcase name="hook map keys by root id and survives archiving" classname="network.columba.app.ui.model.ThreadUiDerivationTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.AnnounceFilterChipsTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:22:51.942Z" hostname="hermes-agent" time="7.482">
+<testsuite name="network.columba.app.ui.components.AnnounceFilterChipsTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:03:31.264Z" hostname="hermes-agent" time="0.981">
   <properties/>
-  <testcase name="collapsed_withAspectFilter_rendersPillRow" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="5.933"/>
-  <testcase name="collapsed_withMessyMultiAspectState_rendersNothing" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="0.14"/>
-  <testcase name="expanded_rendersBothChipRows" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="0.445"/>
-  <testcase name="collapsed_tappingPillRow_firesOnExpandRequest" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="0.184"/>
-  <testcase name="expanded_chipClicks_stillExclusive" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="0.234"/>
-  <testcase name="collapsed_withNoActiveFilter_rendersNothing" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="0.133"/>
-  <testcase name="collapsed_withBothFiltersActive_pillRowJoinsLabels" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="0.109"/>
+  <testcase name="collapsed_withAspectFilter_rendersPillRow" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="0.142"/>
+  <testcase name="collapsed_withMessyMultiAspectState_rendersNothing" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="0.089"/>
+  <testcase name="expanded_rendersBothChipRows" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="0.195"/>
+  <testcase name="collapsed_tappingPillRow_firesOnExpandRequest" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="0.174"/>
+  <testcase name="expanded_chipClicks_stillExclusive" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="0.219"/>
+  <testcase name="collapsed_withNoActiveFilter_rendersNothing" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="0.079"/>
+  <testcase name="collapsed_withBothFiltersActive_pillRowJoinsLabels" classname="network.columba.app.ui.components.AnnounceFilterChipsTest" time="0.072"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

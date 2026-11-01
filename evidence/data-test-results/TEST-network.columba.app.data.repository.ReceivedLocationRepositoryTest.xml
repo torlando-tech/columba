@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.repository.ReceivedLocationRepositoryTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:26.512Z" hostname="hermes-agent" time="0.243">
+<testsuite name="network.columba.app.data.repository.ReceivedLocationRepositoryTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:31.112Z" hostname="hermes-agent" time="0.257">
   <properties/>
-  <testcase name="observeHasLocation emits true for valid non-expired location" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.133"/>
-  <testcase name="observeHasLocation emits true when expired but within grace period" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.005"/>
-  <testcase name="getContactLocation normalizes hash to lowercase" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.078"/>
-  <testcase name="observeHasLocation emits false when no location exists" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.005"/>
-  <testcase name="getContactLocation returns null when no location exists" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.004"/>
-  <testcase name="getContactLocation returns coordinates for valid non-expired location" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.004"/>
-  <testcase name="observeHasLocation emits false when expired beyond grace period" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.004"/>
+  <testcase name="observeHasLocation emits true for valid non-expired location" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.124"/>
+  <testcase name="observeHasLocation emits true when expired but within grace period" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.004"/>
+  <testcase name="getContactLocation normalizes hash to lowercase" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.092"/>
+  <testcase name="observeHasLocation emits false when no location exists" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.006"/>
+  <testcase name="getContactLocation returns null when no location exists" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.006"/>
+  <testcase name="getContactLocation returns coordinates for valid non-expired location" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.005"/>
+  <testcase name="observeHasLocation emits false when expired beyond grace period" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.007"/>
   <testcase name="getContactLocation returns coordinates when expired but within grace period" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.005"/>
-  <testcase name="getContactLocation returns null when expired beyond grace period" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.004"/>
+  <testcase name="getContactLocation returns null when expired beyond grace period" classname="network.columba.app.data.repository.ReceivedLocationRepositoryTest" time="0.005"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

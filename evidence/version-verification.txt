@@ -1,0 +1,8 @@
+APK: app-noSentry-pythonBackend-arm64-v8a-debug.apk
+package: name='network.columba.app.debug' versionCode='20302094' versionName='2.3.2.0092-dev-debug' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+
+Emulator install verification (emulator-5554, x86_64 split of same commit 8662de3a5):
+  $ adb install -r app-noSentry-pythonBackend-x86_64-debug.apk -> Success
+  $ dumpsys package network.columba.app.debug | grep version
+    versionCode=20302095 versionName=2.3.2.0092-dev-debug
+    (previous installed build was 2.1.0.0146-dev-debug / 20100149 - upgrade install succeeded)

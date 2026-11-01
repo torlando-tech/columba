@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.StarToggleButtonTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:26:41.484Z" hostname="hermes-agent" time="6.671">
+<testsuite name="network.columba.app.ui.components.StarToggleButtonTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:04:34.830Z" hostname="hermes-agent" time="0.417">
   <properties/>
-  <testcase name="starToggleButton_stateChange_updatesContentDescription" classname="network.columba.app.ui.components.StarToggleButtonTest" time="5.662"/>
-  <testcase name="starToggleButton_whenStarred_showsRemoveFromContactsDescription" classname="network.columba.app.ui.components.StarToggleButtonTest" time="0.142"/>
-  <testcase name="starToggleButton_whenNotStarred_showsSaveToContactsDescription" classname="network.columba.app.ui.components.StarToggleButtonTest" time="0.113"/>
-  <testcase name="starToggleButton_whenClicked_callsOnClick" classname="network.columba.app.ui.components.StarToggleButtonTest" time="0.207"/>
-  <testcase name="starToggleButton_whenStarred_clickCallsOnClick" classname="network.columba.app.ui.components.StarToggleButtonTest" time="0.117"/>
-  <testcase name="starToggleButton_multipleClicks_callsOnClickEachTime" classname="network.columba.app.ui.components.StarToggleButtonTest" time="0.115"/>
+  <testcase name="starToggleButton_stateChange_updatesContentDescription" classname="network.columba.app.ui.components.StarToggleButtonTest" time="0.061"/>
+  <testcase name="starToggleButton_whenStarred_showsRemoveFromContactsDescription" classname="network.columba.app.ui.components.StarToggleButtonTest" time="0.061"/>
+  <testcase name="starToggleButton_whenNotStarred_showsSaveToContactsDescription" classname="network.columba.app.ui.components.StarToggleButtonTest" time="0.058"/>
+  <testcase name="starToggleButton_whenClicked_callsOnClick" classname="network.columba.app.ui.components.StarToggleButtonTest" time="0.061"/>
+  <testcase name="starToggleButton_whenStarred_clickCallsOnClick" classname="network.columba.app.ui.components.StarToggleButtonTest" time="0.098"/>
+  <testcase name="starToggleButton_multipleClicks_callsOnClickEachTime" classname="network.columba.app.ui.components.StarToggleButtonTest" time="0.074"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

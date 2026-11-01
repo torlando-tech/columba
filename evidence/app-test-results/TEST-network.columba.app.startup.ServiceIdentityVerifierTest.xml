@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.startup.ServiceIdentityVerifierTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:22:26.592Z" hostname="hermes-agent" time="2.093">
+<testsuite name="network.columba.app.startup.ServiceIdentityVerifierTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:03:18.506Z" hostname="hermes-agent" time="2.114">
   <properties/>
-  <testcase name="verify returns isMatch true when service identity is null" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="2.034"/>
+  <testcase name="verify returns isMatch true when service identity is null" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="2.067"/>
   <testcase name="VerificationResult contains correct hashes on mismatch" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="0.01"/>
-  <testcase name="verify returns isMatch true when db identity is null" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="0.007"/>
-  <testcase name="verify returns isMatch false when identities do not match" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="0.006"/>
-  <testcase name="verify returns isMatch true when identities match" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="0.007"/>
-  <testcase name="verify converts service identity hash to lowercase hex" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="0.006"/>
-  <testcase name="VerificationResult contains correct hashes on match" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="0.009"/>
-  <testcase name="verify returns isMatch true when both identities are null" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="0.008"/>
+  <testcase name="verify returns isMatch true when db identity is null" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="0.006"/>
+  <testcase name="verify returns isMatch false when identities do not match" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="0.005"/>
+  <testcase name="verify returns isMatch true when identities match" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="0.006"/>
+  <testcase name="verify converts service identity hash to lowercase hex" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="0.005"/>
+  <testcase name="VerificationResult contains correct hashes on match" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="0.005"/>
+  <testcase name="verify returns isMatch true when both identities are null" classname="network.columba.app.startup.ServiceIdentityVerifierTest" time="0.005"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation

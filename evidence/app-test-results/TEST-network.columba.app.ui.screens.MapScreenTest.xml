@@ -1,47 +1,47 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.screens.MapScreenTest" tests="41" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:30:52.217Z" hostname="hermes-agent" time="9.42">
+<testsuite name="network.columba.app.ui.screens.MapScreenTest" tests="41" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:05:47.450Z" hostname="hermes-agent" time="6.428">
   <properties/>
-  <testcase name="scaleBar_displays10kmForCountryZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="5.792"/>
-  <testcase name="emptyMapStateCard_displaysLocationIcon" classname="network.columba.app.ui.screens.MapScreenTest" time="0.235"/>
-  <testcase name="scaleBar_displaysCorrectFormatForKilometers" classname="network.columba.app.ui.screens.MapScreenTest" time="0.119"/>
-  <testcase name="FocusInterfaceContent hides LoRa buttons when no frequency" classname="network.columba.app.ui.screens.MapScreenTest" time="0.111"/>
-  <testcase name="scaleBar_displays10mForCloseZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.089"/>
-  <testcase name="formatLoraParamsForClipboard formats coding rate" classname="network.columba.app.ui.screens.MapScreenTest" time="0.066"/>
-  <testcase name="scaleBar_displays1kmForCityZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.091"/>
-  <testcase name="formatTimeAgo with 2 hours ago returns hours ago" classname="network.columba.app.ui.screens.MapScreenTest" time="0.069"/>
-  <testcase name="scaleBar_displays50mForMediumZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.095"/>
-  <testcase name="FocusInterfaceContent displays interface name" classname="network.columba.app.ui.screens.MapScreenTest" time="0.084"/>
-  <testcase name="FocusInterfaceContent displays interface type" classname="network.columba.app.ui.screens.MapScreenTest" time="0.104"/>
-  <testcase name="FocusInterfaceContent Copy Params button triggers callback" classname="network.columba.app.ui.screens.MapScreenTest" time="0.218"/>
-  <testcase name="scaleBar_displaysCorrectFormatForMeters" classname="network.columba.app.ui.screens.MapScreenTest" time="0.072"/>
-  <testcase name="scaleBar_displays500mForNeighborhoodZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.075"/>
-  <testcase name="InterfaceDetailRow displays label" classname="network.columba.app.ui.screens.MapScreenTest" time="0.079"/>
-  <testcase name="InterfaceDetailRow displays value" classname="network.columba.app.ui.screens.MapScreenTest" time="0.087"/>
-  <testcase name="FocusInterfaceContent Use for RNode button triggers callback" classname="network.columba.app.ui.screens.MapScreenTest" time="0.101"/>
-  <testcase name="formatTimeAgo with recent timestamp returns Just now" classname="network.columba.app.ui.screens.MapScreenTest" time="0.057"/>
-  <testcase name="formatLoraParamsForClipboard formats frequency in MHz" classname="network.columba.app.ui.screens.MapScreenTest" time="0.061"/>
-  <testcase name="scaleBar_displays1000kmForGlobalZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.083"/>
-  <testcase name="formatTimeAgo with 5 minutes ago returns min ago" classname="network.columba.app.ui.screens.MapScreenTest" time="0.069"/>
-  <testcase name="formatLoraParamsForClipboard includes modulation" classname="network.columba.app.ui.screens.MapScreenTest" time="0.069"/>
-  <testcase name="formatLoraParamsForClipboard formats bandwidth in kHz" classname="network.columba.app.ui.screens.MapScreenTest" time="0.062"/>
-  <testcase name="formatLoraParamsForClipboard formats spreading factor" classname="network.columba.app.ui.screens.MapScreenTest" time="0.05"/>
-  <testcase name="scaleBar_displays5mForVeryCloseZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.072"/>
-  <testcase name="scaleBar_displays100mForStreetLevelZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.065"/>
-  <testcase name="FocusInterfaceContent displays Radio Parameters section for LoRa" classname="network.columba.app.ui.screens.MapScreenTest" time="0.091"/>
-  <testcase name="formatLoraParamsForClipboard omits null values" classname="network.columba.app.ui.screens.MapScreenTest" time="0.054"/>
-  <testcase name="FocusInterfaceContent displays Network section for TCP" classname="network.columba.app.ui.screens.MapScreenTest" time="0.107"/>
-  <testcase name="formatLoraParamsForClipboard includes interface name" classname="network.columba.app.ui.screens.MapScreenTest" time="0.056"/>
-  <testcase name="emptyMapStateCard_displaysSecondaryText" classname="network.columba.app.ui.screens.MapScreenTest" time="0.066"/>
-  <testcase name="FocusInterfaceContent displays altitude when present" classname="network.columba.app.ui.screens.MapScreenTest" time="0.065"/>
-  <testcase name="FocusInterfaceContent displays location" classname="network.columba.app.ui.screens.MapScreenTest" time="0.059"/>
-  <testcase name="FocusInterfaceContent displays hops when present" classname="network.columba.app.ui.screens.MapScreenTest" time="0.067"/>
-  <testcase name="FocusInterfaceContent displays Use for RNode button for LoRa" classname="network.columba.app.ui.screens.MapScreenTest" time="0.068"/>
-  <testcase name="scaleBar_displays100kmForContinentZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.059"/>
-  <testcase name="FocusInterfaceContent displays Copy Params button for LoRa" classname="network.columba.app.ui.screens.MapScreenTest" time="0.068"/>
-  <testcase name="formatTimeAgo with 3 days ago returns days ago" classname="network.columba.app.ui.screens.MapScreenTest" time="0.044"/>
-  <testcase name="FocusInterfaceContent displays status badge" classname="network.columba.app.ui.screens.MapScreenTest" time="0.068"/>
-  <testcase name="emptyMapStateCard_displaysPrimaryText" classname="network.columba.app.ui.screens.MapScreenTest" time="0.075"/>
-  <testcase name="scaleBar_displays5kmForRegionalZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.06"/>
+  <testcase name="scaleBar_displays10kmForCountryZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.112"/>
+  <testcase name="emptyMapStateCard_displaysLocationIcon" classname="network.columba.app.ui.screens.MapScreenTest" time="0.177"/>
+  <testcase name="scaleBar_displaysCorrectFormatForKilometers" classname="network.columba.app.ui.screens.MapScreenTest" time="0.112"/>
+  <testcase name="FocusInterfaceContent hides LoRa buttons when no frequency" classname="network.columba.app.ui.screens.MapScreenTest" time="0.145"/>
+  <testcase name="scaleBar_displays10mForCloseZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.09"/>
+  <testcase name="formatLoraParamsForClipboard formats coding rate" classname="network.columba.app.ui.screens.MapScreenTest" time="0.083"/>
+  <testcase name="scaleBar_displays1kmForCityZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.085"/>
+  <testcase name="formatTimeAgo with 2 hours ago returns hours ago" classname="network.columba.app.ui.screens.MapScreenTest" time="0.086"/>
+  <testcase name="scaleBar_displays50mForMediumZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.149"/>
+  <testcase name="FocusInterfaceContent displays interface name" classname="network.columba.app.ui.screens.MapScreenTest" time="0.185"/>
+  <testcase name="FocusInterfaceContent displays interface type" classname="network.columba.app.ui.screens.MapScreenTest" time="0.102"/>
+  <testcase name="FocusInterfaceContent Copy Params button triggers callback" classname="network.columba.app.ui.screens.MapScreenTest" time="0.146"/>
+  <testcase name="scaleBar_displaysCorrectFormatForMeters" classname="network.columba.app.ui.screens.MapScreenTest" time="0.137"/>
+  <testcase name="scaleBar_displays500mForNeighborhoodZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.171"/>
+  <testcase name="InterfaceDetailRow displays label" classname="network.columba.app.ui.screens.MapScreenTest" time="0.168"/>
+  <testcase name="InterfaceDetailRow displays value" classname="network.columba.app.ui.screens.MapScreenTest" time="0.099"/>
+  <testcase name="FocusInterfaceContent Use for RNode button triggers callback" classname="network.columba.app.ui.screens.MapScreenTest" time="0.243"/>
+  <testcase name="formatTimeAgo with recent timestamp returns Just now" classname="network.columba.app.ui.screens.MapScreenTest" time="0.147"/>
+  <testcase name="formatLoraParamsForClipboard formats frequency in MHz" classname="network.columba.app.ui.screens.MapScreenTest" time="0.101"/>
+  <testcase name="scaleBar_displays1000kmForGlobalZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.138"/>
+  <testcase name="formatTimeAgo with 5 minutes ago returns min ago" classname="network.columba.app.ui.screens.MapScreenTest" time="0.188"/>
+  <testcase name="formatLoraParamsForClipboard includes modulation" classname="network.columba.app.ui.screens.MapScreenTest" time="0.318"/>
+  <testcase name="formatLoraParamsForClipboard formats bandwidth in kHz" classname="network.columba.app.ui.screens.MapScreenTest" time="0.187"/>
+  <testcase name="formatLoraParamsForClipboard formats spreading factor" classname="network.columba.app.ui.screens.MapScreenTest" time="0.125"/>
+  <testcase name="scaleBar_displays5mForVeryCloseZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.176"/>
+  <testcase name="scaleBar_displays100mForStreetLevelZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.22"/>
+  <testcase name="FocusInterfaceContent displays Radio Parameters section for LoRa" classname="network.columba.app.ui.screens.MapScreenTest" time="0.339"/>
+  <testcase name="formatLoraParamsForClipboard omits null values" classname="network.columba.app.ui.screens.MapScreenTest" time="0.173"/>
+  <testcase name="FocusInterfaceContent displays Network section for TCP" classname="network.columba.app.ui.screens.MapScreenTest" time="0.187"/>
+  <testcase name="formatLoraParamsForClipboard includes interface name" classname="network.columba.app.ui.screens.MapScreenTest" time="0.11"/>
+  <testcase name="emptyMapStateCard_displaysSecondaryText" classname="network.columba.app.ui.screens.MapScreenTest" time="0.158"/>
+  <testcase name="FocusInterfaceContent displays altitude when present" classname="network.columba.app.ui.screens.MapScreenTest" time="0.103"/>
+  <testcase name="FocusInterfaceContent displays location" classname="network.columba.app.ui.screens.MapScreenTest" time="0.112"/>
+  <testcase name="FocusInterfaceContent displays hops when present" classname="network.columba.app.ui.screens.MapScreenTest" time="0.165"/>
+  <testcase name="FocusInterfaceContent displays Use for RNode button for LoRa" classname="network.columba.app.ui.screens.MapScreenTest" time="0.154"/>
+  <testcase name="scaleBar_displays100kmForContinentZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.152"/>
+  <testcase name="FocusInterfaceContent displays Copy Params button for LoRa" classname="network.columba.app.ui.screens.MapScreenTest" time="0.216"/>
+  <testcase name="formatTimeAgo with 3 days ago returns days ago" classname="network.columba.app.ui.screens.MapScreenTest" time="0.116"/>
+  <testcase name="FocusInterfaceContent displays status badge" classname="network.columba.app.ui.screens.MapScreenTest" time="0.157"/>
+  <testcase name="emptyMapStateCard_displaysPrimaryText" classname="network.columba.app.ui.screens.MapScreenTest" time="0.137"/>
+  <testcase name="scaleBar_displays5kmForRegionalZoom" classname="network.columba.app.ui.screens.MapScreenTest" time="0.237"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

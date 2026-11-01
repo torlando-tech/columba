@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.theme.ThemeSwitchingComposeTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:38:17.328Z" hostname="hermes-agent" time="7.914">
+<testsuite name="network.columba.app.ui.theme.ThemeSwitchingComposeTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:08:14.098Z" hostname="hermes-agent" time="12.373">
   <properties/>
-  <testcase name="darkModeToggle_updatesTheme" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="6.129"/>
-  <testcase name="vibrantTheme_darkMode_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.189"/>
-  <testcase name="expressiveTheme_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.163"/>
-  <testcase name="allPresetThemes_renderInDarkMode" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.214"/>
-  <testcase name="differentThemes_haveDifferentPrimaryColors" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.077"/>
-  <testcase name="oceanTheme_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.091"/>
-  <testcase name="themeSwitching_updatesContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.124"/>
-  <testcase name="materialTheme_colorScheme_isAccessible" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.091"/>
-  <testcase name="monochromeTheme_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.083"/>
-  <testcase name="vibrantTheme_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.086"/>
-  <testcase name="sunsetTheme_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.09"/>
-  <testcase name="forestTheme_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.124"/>
-  <testcase name="materialTheme_typography_isAccessible" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.098"/>
+  <testcase name="darkModeToggle_updatesTheme" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="9.406"/>
+  <testcase name="vibrantTheme_darkMode_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.225"/>
+  <testcase name="expressiveTheme_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.273"/>
+  <testcase name="allPresetThemes_renderInDarkMode" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.282"/>
+  <testcase name="differentThemes_haveDifferentPrimaryColors" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.212"/>
+  <testcase name="oceanTheme_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.172"/>
+  <testcase name="themeSwitching_updatesContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.291"/>
+  <testcase name="materialTheme_colorScheme_isAccessible" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.142"/>
+  <testcase name="monochromeTheme_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.19"/>
+  <testcase name="vibrantTheme_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.171"/>
+  <testcase name="sunsetTheme_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.118"/>
+  <testcase name="forestTheme_rendersContent" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.282"/>
+  <testcase name="materialTheme_typography_isAccessible" classname="network.columba.app.ui.theme.ThemeSwitchingComposeTest" time="0.096"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

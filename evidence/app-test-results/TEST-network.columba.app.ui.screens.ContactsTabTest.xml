@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.screens.ContactsTabTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:29:32.277Z" hostname="hermes-agent" time="0.008">
+<testsuite name="network.columba.app.ui.screens.ContactsTabTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:05:31.239Z" hostname="hermes-agent" time="0.001">
   <properties/>
-  <testcase name="tabs have distinct display names" classname="network.columba.app.ui.screens.ContactsTabTest" time="0.002"/>
+  <testcase name="tabs have distinct display names" classname="network.columba.app.ui.screens.ContactsTabTest" time="0.001"/>
   <testcase name="ContactsTab has two entries" classname="network.columba.app.ui.screens.ContactsTabTest" time="0.0"/>
   <testcase name="entries are in correct order" classname="network.columba.app.ui.screens.ContactsTabTest" time="0.0"/>
   <testcase name="NETWORK has correct display name" classname="network.columba.app.ui.screens.ContactsTabTest" time="0.0"/>

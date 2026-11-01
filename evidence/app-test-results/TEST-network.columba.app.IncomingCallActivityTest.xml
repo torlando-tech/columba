@@ -1,24 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.IncomingCallActivityTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:16:29.615Z" hostname="hermes-agent" time="11.802">
+<testsuite name="network.columba.app.IncomingCallActivityTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:59:48.617Z" hostname="hermes-agent" time="7.034">
   <properties/>
-  <testcase name="onDestroy does not crash" classname="network.columba.app.IncomingCallActivityTest" time="9.63"/>
-  <testcase name="finishes immediately when no identity hash provided" classname="network.columba.app.IncomingCallActivityTest" time="0.199"/>
-  <testcase name="onNewIntent with null hash does not crash" classname="network.columba.app.IncomingCallActivityTest" time="0.159"/>
-  <testcase name="configures FLAG_KEEP_SCREEN_ON" classname="network.columba.app.IncomingCallActivityTest" time="0.157"/>
-  <testcase name="does not finish when identity hash is provided" classname="network.columba.app.IncomingCallActivityTest" time="0.191"/>
-  <testcase name="activity finishes when call state becomes Rejected" classname="network.columba.app.IncomingCallActivityTest" time="0.16"/>
-  <testcase name="onNewIntent updates identity hash" classname="network.columba.app.IncomingCallActivityTest" time="0.165"/>
-  <testcase name="activity finishes when call state becomes Ended" classname="network.columba.app.IncomingCallActivityTest" time="0.146"/>
-  <testcase name="full lifecycle does not crash" classname="network.columba.app.IncomingCallActivityTest" time="0.178"/>
-  <testcase name="activity finishes when call state becomes Busy" classname="network.columba.app.IncomingCallActivityTest" time="0.135"/>
-  <testcase name="activity finishes when call state becomes Idle" classname="network.columba.app.IncomingCallActivityTest" time="0.142"/>
+  <testcase name="onDestroy does not crash" classname="network.columba.app.IncomingCallActivityTest" time="5.02"/>
+  <testcase name="finishes immediately when no identity hash provided" classname="network.columba.app.IncomingCallActivityTest" time="0.152"/>
+  <testcase name="onNewIntent with null hash does not crash" classname="network.columba.app.IncomingCallActivityTest" time="0.13"/>
+  <testcase name="configures FLAG_KEEP_SCREEN_ON" classname="network.columba.app.IncomingCallActivityTest" time="0.122"/>
+  <testcase name="does not finish when identity hash is provided" classname="network.columba.app.IncomingCallActivityTest" time="0.183"/>
+  <testcase name="activity finishes when call state becomes Rejected" classname="network.columba.app.IncomingCallActivityTest" time="0.116"/>
+  <testcase name="onNewIntent updates identity hash" classname="network.columba.app.IncomingCallActivityTest" time="0.118"/>
+  <testcase name="activity finishes when call state becomes Ended" classname="network.columba.app.IncomingCallActivityTest" time="0.122"/>
+  <testcase name="renders call controls before persisted theme mode is available" classname="network.columba.app.IncomingCallActivityTest" time="0.146"/>
+  <testcase name="full lifecycle does not crash" classname="network.columba.app.IncomingCallActivityTest" time="0.134"/>
+  <testcase name="activity finishes when call state becomes Busy" classname="network.columba.app.IncomingCallActivityTest" time="0.111"/>
+  <testcase name="activity finishes when call state becomes Idle" classname="network.columba.app.IncomingCallActivityTest" time="0.111"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation
 SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
 ]]></system-err>
 </testsuite>

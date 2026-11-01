@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.OfflineModeBannerTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:25:22.262Z" hostname="hermes-agent" time="0.013">
+<testsuite name="network.columba.app.ui.components.OfflineModeBannerTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:04:11.396Z" hostname="hermes-agent" time="0.005">
   <properties/>
-  <testcase name="shouldShowOfflineBanner returns false for READY" classname="network.columba.app.ui.components.OfflineModeBannerTest" time="0.007"/>
+  <testcase name="shouldShowOfflineBanner returns false for READY" classname="network.columba.app.ui.components.OfflineModeBannerTest" time="0.004"/>
   <testcase name="shouldShowOfflineBanner returns true for ERROR" classname="network.columba.app.ui.components.OfflineModeBannerTest" time="0.0"/>
-  <testcase name="shouldShowOfflineBanner returns false for INITIALIZING" classname="network.columba.app.ui.components.OfflineModeBannerTest" time="0.001"/>
-  <testcase name="shouldShowOfflineBanner returns false for CONNECTING" classname="network.columba.app.ui.components.OfflineModeBannerTest" time="0.0"/>
+  <testcase name="shouldShowOfflineBanner returns false for INITIALIZING" classname="network.columba.app.ui.components.OfflineModeBannerTest" time="0.0"/>
+  <testcase name="shouldShowOfflineBanner returns false for CONNECTING" classname="network.columba.app.ui.components.OfflineModeBannerTest" time="0.001"/>
   <testcase name="shouldShowOfflineBanner returns true for SHUTDOWN" classname="network.columba.app.ui.components.OfflineModeBannerTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

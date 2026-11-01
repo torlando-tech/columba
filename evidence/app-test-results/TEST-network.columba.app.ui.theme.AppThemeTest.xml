@@ -1,81 +1,81 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.theme.AppThemeTest" tests="76" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:38:14.017Z" hostname="hermes-agent" time="0.438">
+<testsuite name="network.columba.app.ui.theme.AppThemeTest" tests="76" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:08:12.702Z" hostname="hermes-agent" time="0.05">
   <properties/>
-  <testcase name="presetTheme_ocean_getPreviewColors_light_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.235"/>
-  <testcase name="presetTheme_dynamic_hasNonEmptyDescription" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_expressive_darkScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.046"/>
-  <testcase name="presetTheme_vibrant_previewColors_areDistinct" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="presetTheme_ocean_getPreviewColors_light_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.025"/>
+  <testcase name="presetTheme_dynamic_hasNonEmptyDescription" classname="network.columba.app.ui.theme.AppThemeTest" time="0.003"/>
+  <testcase name="presetTheme_expressive_darkScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.009"/>
+  <testcase name="presetTheme_vibrant_previewColors_areDistinct" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_vibrant_hasNonEmptyDisplayName" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_ocean_hasNonEmptyDescription" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_dynamic_previewColors_areDistinct" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="presetTheme_dynamic_previewColors_areDistinct" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
   <testcase name="presetTheme_expressive_hasNonEmptyDescription" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_forest_getPreviewColors_dark_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_ocean_lightScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="presetTheme_ocean_lightScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_sunset_getPreviewColors_dark_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_expressive_getIdentifier_returnsCorrectFormat" classname="network.columba.app.ui.theme.AppThemeTest" time="0.004"/>
-  <testcase name="presetTheme_dynamic_darkScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="presetTheme_expressive_getIdentifier_returnsCorrectFormat" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="presetTheme_dynamic_darkScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
   <testcase name="presetTheme_forest_lightDark_areDifferent" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_ocean_previewColors_areDistinct" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
-  <testcase name="customTheme_getPreviewColors_light_extractsFromLightScheme" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
-  <testcase name="presetTheme_forest_darkScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="presetTheme_ocean_previewColors_areDistinct" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="customTheme_getPreviewColors_light_extractsFromLightScheme" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="presetTheme_forest_darkScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
   <testcase name="presetTheme_vibrant_getPreviewColors_light_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="customTheme_getPreviewColors_dark_extractsFromDarkScheme" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="customTheme_getPreviewColors_dark_extractsFromDarkScheme" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_monochrome_getIdentifier_returnsCorrectFormat" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_dynamic_getPreviewColors_light_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_vibrant_hasNonEmptyDescription" classname="network.columba.app.ui.theme.AppThemeTest" time="0.004"/>
+  <testcase name="presetTheme_vibrant_hasNonEmptyDescription" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_monochrome_previewColors_areDistinct" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_sunset_hasNonEmptyDisplayName" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_ocean_getPreviewColors_dark_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_monochrome_lightScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_forest_getPreviewColors_light_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="customTheme_displayName_isStored" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="customTheme_displayName_isStored" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_monochrome_hasNonEmptyDisplayName" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_ocean_lightDark_areDifferent" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="customTheme_withBaseTheme_storesReference" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_dynamic_getPreviewColors_dark_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_expressive_lightDark_areDifferent" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="presetTheme_expressive_lightDark_areDifferent" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_expressive_lightScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_sunset_previewColors_areDistinct" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
-  <testcase name="presetTheme_vibrant_getIdentifier_returnsCorrectFormat" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="presetTheme_sunset_previewColors_areDistinct" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="presetTheme_vibrant_getIdentifier_returnsCorrectFormat" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_monochrome_getPreviewColors_light_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_sunset_hasNonEmptyDescription" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="presetTheme_sunset_hasNonEmptyDescription" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
   <testcase name="presetTheme_vibrant_getPreviewColors_dark_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_vibrant_lightDark_areDifferent" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_monochrome_hasNonEmptyDescription" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="customTheme_description_isStored" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="customTheme_description_isStored" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_forest_hasNonEmptyDisplayName" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_expressive_previewColors_areDistinct" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="customTheme_getIdentifier_withDifferentId_returnsCorrectFormat" classname="network.columba.app.ui.theme.AppThemeTest" time="0.007"/>
-  <testcase name="allPresetThemes_identifiersStartWithPreset" classname="network.columba.app.ui.theme.AppThemeTest" time="0.058"/>
+  <testcase name="customTheme_getIdentifier_withDifferentId_returnsCorrectFormat" classname="network.columba.app.ui.theme.AppThemeTest" time="0.002"/>
+  <testcase name="allPresetThemes_identifiersStartWithPreset" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
   <testcase name="presetTheme_forest_getIdentifier_returnsCorrectFormat" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_ocean_darkScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_vibrant_lightScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
-  <testcase name="customTheme_getColorScheme_light_returnsLightScheme" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="presetTheme_vibrant_lightScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="customTheme_getColorScheme_light_returnsLightScheme" classname="network.columba.app.ui.theme.AppThemeTest" time="0.002"/>
   <testcase name="presetTheme_vibrant_darkScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_expressive_getPreviewColors_light_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="presetTheme_expressive_getPreviewColors_light_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="customTheme_getIdentifier_returnsCorrectFormat" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_monochrome_darkScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_monochrome_getPreviewColors_dark_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_dynamic_lightScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_sunset_darkScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="presetTheme_sunset_darkScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="customTheme_equalIds_areEqual" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_expressive_getPreviewColors_dark_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
-  <testcase name="presetTheme_dynamic_hasNonEmptyDisplayName" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="presetTheme_expressive_getPreviewColors_dark_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="presetTheme_dynamic_hasNonEmptyDisplayName" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_forest_hasNonEmptyDescription" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_ocean_hasNonEmptyDisplayName" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="presetTheme_ocean_hasNonEmptyDisplayName" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_ocean_getIdentifier_returnsCorrectFormat" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="allPresetThemes_haveUniqueIdentifiers" classname="network.columba.app.ui.theme.AppThemeTest" time="0.028"/>
-  <testcase name="presetTheme_sunset_lightDark_areDifferent" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
-  <testcase name="presetTheme_expressive_hasNonEmptyDisplayName" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="allPresetThemes_haveUniqueIdentifiers" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="presetTheme_sunset_lightDark_areDifferent" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="presetTheme_expressive_hasNonEmptyDisplayName" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_monochrome_lightDark_areDifferent" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
   <testcase name="customTheme_differentIds_areNotEqual" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_dynamic_getIdentifier_returnsCorrectFormat" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="customTheme_withoutBaseTheme_isNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="presetTheme_sunset_getPreviewColors_light_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.002"/>
-  <testcase name="presetTheme_forest_previewColors_areDistinct" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="presetTheme_sunset_getPreviewColors_light_returnsThreeColors" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
+  <testcase name="presetTheme_forest_previewColors_areDistinct" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_sunset_getIdentifier_returnsCorrectFormat" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_sunset_lightScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
-  <testcase name="customTheme_getColorScheme_dark_returnsDarkScheme" classname="network.columba.app.ui.theme.AppThemeTest" time="0.001"/>
+  <testcase name="customTheme_getColorScheme_dark_returnsDarkScheme" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <testcase name="presetTheme_forest_lightScheme_isNotNull" classname="network.columba.app.ui.theme.AppThemeTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

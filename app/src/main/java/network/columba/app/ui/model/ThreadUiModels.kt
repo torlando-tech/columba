@@ -60,6 +60,7 @@ sealed interface ThreadHeaderUi {
         val content: String,
         val isFromMe: Boolean,
         val timestamp: Long,
+        val signatureVerified: Boolean? = null,
     ) : ThreadHeaderUi
 
     /** Case-2 thread whose root was never received (or was deleted locally). */
@@ -215,5 +216,11 @@ object ThreadUiDerivation {
         return if (firstMessage?.replyToMessageId != null) ThreadHeaderUi.OffScreen else null
     }
 
-    private fun MessageEntity.toRootHeader() = ThreadHeaderUi.Root(content = content, isFromMe = isFromMe, timestamp = receivedAt ?: timestamp)
+    private fun MessageEntity.toRootHeader() =
+        ThreadHeaderUi.Root(
+            content = content,
+            isFromMe = isFromMe,
+            timestamp = receivedAt ?: timestamp,
+            signatureVerified = signatureVerified,
+        )
 }

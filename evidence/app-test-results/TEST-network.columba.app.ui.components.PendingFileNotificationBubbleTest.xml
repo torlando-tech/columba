@@ -1,31 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.PendingFileNotificationBubbleTest" tests="25" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:25:32.901Z" hostname="hermes-agent" time="8.509">
+<testsuite name="network.columba.app.ui.components.PendingFileNotificationBubbleTest" tests="25" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:04:14.023Z" hostname="hermes-agent" time="2.165">
   <properties/>
-  <testcase name="idle state shows tap to fetch text" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="5.822"/>
-  <testcase name="complete state shows download complete text" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.21"/>
-  <testcase name="starting state shows fetching file text" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.143"/>
-  <testcase name="displays KB for small files" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.12"/>
-  <testcase name="inProgress handles mixed case state names" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.111"/>
-  <testcase name="starting state does not register clicks" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.147"/>
-  <testcase name="inProgress does not register clicks" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.099"/>
-  <testcase name="inProgress with link_establishing shows establishing connection" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.086"/>
-  <testcase name="idle state shows peer name sent message" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.094"/>
-  <testcase name="starting state shows connecting text" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.105"/>
-  <testcase name="inProgress with link_established shows connected preparing" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.099"/>
-  <testcase name="inProgress with receiving and progress shows downloading percentage" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.092"/>
-  <testcase name="shows singular file text when fileCount is 2" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.083"/>
-  <testcase name="inProgress with unknown state shows processing" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.082"/>
-  <testcase name="inProgress with request_sent shows requesting messages" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.084"/>
-  <testcase name="complete state does not register clicks" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.08"/>
-  <testcase name="idle state shows filename and size" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.076"/>
-  <testcase name="displays GB for very large files" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.076"/>
-  <testcase name="hides additional files text during sync even with multiple files" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.108"/>
-  <testcase name="inProgress with receiving and zero progress shows downloading without percentage" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.073"/>
-  <testcase name="shows additional files count when fileCount greater than 1" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.076"/>
-  <testcase name="inProgress with downloading state name shows percentage" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.095"/>
-  <testcase name="inProgress with path_requested shows discovering network path" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.066"/>
-  <testcase name="hides additional files text when fileCount is 1" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.085"/>
-  <testcase name="idle state is clickable" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.113"/>
+  <testcase name="idle state shows tap to fetch text" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.372"/>
+  <testcase name="complete state shows download complete text" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.134"/>
+  <testcase name="starting state shows fetching file text" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.123"/>
+  <testcase name="displays KB for small files" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.076"/>
+  <testcase name="inProgress handles mixed case state names" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.114"/>
+  <testcase name="starting state does not register clicks" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.075"/>
+  <testcase name="inProgress does not register clicks" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.064"/>
+  <testcase name="inProgress with link_establishing shows establishing connection" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.058"/>
+  <testcase name="idle state shows peer name sent message" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.059"/>
+  <testcase name="starting state shows connecting text" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.067"/>
+  <testcase name="inProgress with link_established shows connected preparing" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.056"/>
+  <testcase name="inProgress with receiving and progress shows downloading percentage" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.056"/>
+  <testcase name="shows singular file text when fileCount is 2" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.055"/>
+  <testcase name="inProgress with unknown state shows processing" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.055"/>
+  <testcase name="inProgress with request_sent shows requesting messages" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.063"/>
+  <testcase name="complete state does not register clicks" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.063"/>
+  <testcase name="idle state shows filename and size" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.062"/>
+  <testcase name="displays GB for very large files" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.055"/>
+  <testcase name="hides additional files text during sync even with multiple files" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.055"/>
+  <testcase name="inProgress with receiving and zero progress shows downloading without percentage" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.055"/>
+  <testcase name="shows additional files count when fileCount greater than 1" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.065"/>
+  <testcase name="inProgress with downloading state name shows percentage" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.058"/>
+  <testcase name="inProgress with path_requested shows discovering network path" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.059"/>
+  <testcase name="hides additional files text when fileCount is 1" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.167"/>
+  <testcase name="idle state is clickable" classname="network.columba.app.ui.components.PendingFileNotificationBubbleTest" time="0.083"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

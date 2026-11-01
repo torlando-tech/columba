@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.db.Migration4To5Test" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:12.390Z" hostname="hermes-agent" time="0.212">
+<testsuite name="network.columba.app.data.db.Migration4To5Test" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:15.640Z" hostname="hermes-agent" time="0.115">
   <properties/>
-  <testcase name="migration preserves rows and leaves all pre-thread data in Main" classname="network.columba.app.data.db.Migration4To5Test" time="0.209"/>
+  <testcase name="migration 4 to 5 preserves pre-existing data" classname="network.columba.app.data.db.Migration4To5Test" time="0.113"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

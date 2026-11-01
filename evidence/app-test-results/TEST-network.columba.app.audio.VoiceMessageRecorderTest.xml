@@ -1,16 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.audio.VoiceMessageRecorderTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:17:08.193Z" hostname="hermes-agent" time="4.911">
+<testsuite name="network.columba.app.audio.VoiceMessageRecorderTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:00:01.671Z" hostname="hermes-agent" time="0.451">
   <properties/>
-  <testcase name="failed replacement start preserves finalized recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="4.04"/>
-  <testcase name="remove selected deletes finalized recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.055"/>
-  <testcase name="failed stop clears active recording and cancels backend" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.058"/>
-  <testcase name="start rejects unsupported devices" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.067"/>
-  <testcase name="close deletes finalized unsent recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.05"/>
-  <testcase name="cancel discards active recording and resets state" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.054"/>
-  <testcase name="repeated stop preserves one finalized recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.034"/>
-  <testcase name="identity cleanup cannot remove a replacement recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.036"/>
-  <testcase name="start and stop select finalized recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.044"/>
-  <testcase name="duration limit finalizes active recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.071"/>
+  <testcase name="failed replacement start preserves finalized recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.062"/>
+  <testcase name="remove selected deletes finalized recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.036"/>
+  <testcase name="LXST normalization failure publishes failed and deletes unpublished output" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.033"/>
+  <testcase name="failed stop clears active recording and cancels backend" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.029"/>
+  <testcase name="start rejects unsupported devices" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.039"/>
+  <testcase name="close deletes finalized unsent recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.028"/>
+  <testcase name="cancel discards active recording and resets state" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.028"/>
+  <testcase name="repeated stop preserves one finalized recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.022"/>
+  <testcase name="identity cleanup cannot remove a replacement recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.029"/>
+  <testcase name="support checks do not replace an active selected quality backend" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.048"/>
+  <testcase name="start and stop select finalized recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.03"/>
+  <testcase name="LXST backend withholds completed until normalization succeeds" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.027"/>
+  <testcase name="duration limit finalizes active recording" classname="network.columba.app.audio.VoiceMessageRecorderTest" time="0.029"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

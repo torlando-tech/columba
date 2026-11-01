@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.util.LogcatReaderTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:39:43.131Z" hostname="hermes-agent" time="4.104">
+<testsuite name="network.columba.app.util.LogcatReaderTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:09:11.882Z" hostname="hermes-agent" time="4.055">
   <properties/>
-  <testcase name="LogPriority DEBUG has correct flag" classname="network.columba.app.util.LogcatReaderTest" time="2.953"/>
-  <testcase name="LogPriority WARN has correct flag" classname="network.columba.app.util.LogcatReaderTest" time="0.037"/>
-  <testcase name="readAllRecentLogs does not throw" classname="network.columba.app.util.LogcatReaderTest" time="0.389"/>
-  <testcase name="readAllRecentLogs with custom maxLines does not throw" classname="network.columba.app.util.LogcatReaderTest" time="0.048"/>
-  <testcase name="LogPriority ERROR has correct flag" classname="network.columba.app.util.LogcatReaderTest" time="0.047"/>
-  <testcase name="LogPriority VERBOSE has correct flag" classname="network.columba.app.util.LogcatReaderTest" time="0.044"/>
-  <testcase name="readRecentLogs returns empty string on failure" classname="network.columba.app.util.LogcatReaderTest" time="0.041"/>
-  <testcase name="LogPriority INFO has correct flag" classname="network.columba.app.util.LogcatReaderTest" time="0.033"/>
-  <testcase name="readRecentLogs returns string type" classname="network.columba.app.util.LogcatReaderTest" time="0.046"/>
-  <testcase name="readRecentLogs with custom maxLines does not throw" classname="network.columba.app.util.LogcatReaderTest" time="0.037"/>
-  <testcase name="LogPriority enum has correct order" classname="network.columba.app.util.LogcatReaderTest" time="0.027"/>
-  <testcase name="readRecentLogs with custom priority does not throw" classname="network.columba.app.util.LogcatReaderTest" time="0.03"/>
-  <testcase name="readRecentLogs is suspendable and completes" classname="network.columba.app.util.LogcatReaderTest" time="0.032"/>
+  <testcase name="LogPriority DEBUG has correct flag" classname="network.columba.app.util.LogcatReaderTest" time="3.156"/>
+  <testcase name="LogPriority WARN has correct flag" classname="network.columba.app.util.LogcatReaderTest" time="0.047"/>
+  <testcase name="readAllRecentLogs does not throw" classname="network.columba.app.util.LogcatReaderTest" time="0.182"/>
+  <testcase name="readAllRecentLogs with custom maxLines does not throw" classname="network.columba.app.util.LogcatReaderTest" time="0.035"/>
+  <testcase name="LogPriority ERROR has correct flag" classname="network.columba.app.util.LogcatReaderTest" time="0.036"/>
+  <testcase name="LogPriority VERBOSE has correct flag" classname="network.columba.app.util.LogcatReaderTest" time="0.034"/>
+  <testcase name="readRecentLogs returns empty string on failure" classname="network.columba.app.util.LogcatReaderTest" time="0.032"/>
+  <testcase name="LogPriority INFO has correct flag" classname="network.columba.app.util.LogcatReaderTest" time="0.031"/>
+  <testcase name="readRecentLogs returns string type" classname="network.columba.app.util.LogcatReaderTest" time="0.028"/>
+  <testcase name="readRecentLogs with custom maxLines does not throw" classname="network.columba.app.util.LogcatReaderTest" time="0.027"/>
+  <testcase name="LogPriority enum has correct order" classname="network.columba.app.util.LogcatReaderTest" time="0.026"/>
+  <testcase name="readRecentLogs with custom priority does not throw" classname="network.columba.app.util.LogcatReaderTest" time="0.031"/>
+  <testcase name="readRecentLogs is suspendable and completes" classname="network.columba.app.util.LogcatReaderTest" time="0.038"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

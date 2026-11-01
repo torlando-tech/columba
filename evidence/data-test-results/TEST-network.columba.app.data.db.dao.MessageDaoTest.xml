@@ -1,27 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.db.dao.MessageDaoTest" tests="21" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:17.964Z" hostname="hermes-agent" time="0.725">
+<testsuite name="network.columba.app.data.db.dao.MessageDaoTest" tests="24" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:21.703Z" hostname="hermes-agent" time="0.581">
   <properties/>
-  <testcase name="getLastMessage_returnsNewestMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.031"/>
-  <testcase name="updateMessageDeliveryDetails_setsErrorMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.03"/>
-  <testcase name="getUnreadCount_countsOnlyUnreadReceivedMessages" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.032"/>
-  <testcase name="observeMessageById_flowEmitsOnStatusChange" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.025"/>
-  <testcase name="getReplyPreviewData_returnsNullForNonexistent" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.023"/>
-  <testcase name="deleteMessageById_removesMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.023"/>
+  <testcase name="getLastMessage_returnsNewestMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.046"/>
+  <testcase name="updateMessageDeliveryDetails_setsErrorMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.029"/>
+  <testcase name="applyDeliveryStatus_enforcesClosedMonotonicLifecycle" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.031"/>
+  <testcase name="getUnreadCount_countsOnlyUnreadReceivedMessages" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.026"/>
+  <testcase name="observeMessageById_flowEmitsOnStatusChange" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.024"/>
+  <testcase name="getReplyPreviewData_returnsNullForNonexistent" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.02"/>
+  <testcase name="deleteMessageById_removesMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.02"/>
   <testcase name="insertMessagesIgnoreDuplicates_preservesExisting" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.024"/>
-  <testcase name="getMessagesForConversation_orderedByTimestampAscending" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.029"/>
-  <testcase name="updateMessageFieldsJson_setsFieldsData" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.029"/>
-  <testcase name="updateMessageDeliveryDetails_setsDeliveryMethod" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.03"/>
-  <testcase name="insertMessages_bulkInsertsWithReplace" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.031"/>
-  <testcase name="insertMessage_replacesExistingMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.025"/>
-  <testcase name="updateMessage_modifiesContent" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.038"/>
-  <testcase name="deleteMessage_removesMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.071"/>
-  <testcase name="markMessagesAsRead_marksAllReceivedAsRead" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.063"/>
-  <testcase name="getMessagesForConversation_flowEmitsOnInsert" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.042"/>
-  <testcase name="messageExists_returnsTrueForExistingMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.033"/>
-  <testcase name="getReplyPreviewData_returnsMinimalData" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.038"/>
-  <testcase name="insertMessage_createsNewMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.036"/>
-  <testcase name="updateMessageStatus_changesStatus" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.037"/>
-  <testcase name="deleteMessagesForConversation_removesAllConversationMessages" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.028"/>
+  <testcase name="applyDeliveryStatus_rejectedRetryDoesNotMutateFailedMetadata" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.021"/>
+  <testcase name="getMessagesForConversation_orderedByTimestampAscending" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.024"/>
+  <testcase name="updateMessageFieldsJson_setsFieldsData" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.022"/>
+  <testcase name="updateMessageDeliveryDetails_setsDeliveryMethod" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.021"/>
+  <testcase name="insertMessages_bulkInsertsWithReplace" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.026"/>
+  <testcase name="insertMessage_replacesExistingMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.022"/>
+  <testcase name="updateMessage_modifiesContent" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.025"/>
+  <testcase name="deleteMessage_removesMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.021"/>
+  <testcase name="markMessagesAsRead_marksAllReceivedAsRead" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.021"/>
+  <testcase name="getMessagesForConversation_flowEmitsOnInsert" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.025"/>
+  <testcase name="messageExists_returnsTrueForExistingMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.021"/>
+  <testcase name="getReplyPreviewData_returnsMinimalData" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.019"/>
+  <testcase name="insertMessage_createsNewMessage" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.02"/>
+  <testcase name="updateMessageStatus_changesStatus" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.02"/>
+  <testcase name="deleteMessagesForConversation_removesAllConversationMessages" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.021"/>
+  <testcase name="applyDeliveryStatus_rejectedRetryDoesNotMutateDeliveredMetadata" classname="network.columba.app.data.db.dao.MessageDaoTest" time="0.023"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

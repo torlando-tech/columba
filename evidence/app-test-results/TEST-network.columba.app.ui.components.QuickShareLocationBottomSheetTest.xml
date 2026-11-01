@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:25:52.024Z" hostname="hermes-agent" time="9.366">
+<testsuite name="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:04:18.336Z" hostname="hermes-agent" time="1.745">
   <properties/>
-  <testcase name="quickShareLocationBottomSheet select 15 min duration" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="6.753"/>
-  <testcase name="quickShareLocationBottomSheet displays start sharing button" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.313"/>
-  <testcase name="quickShareLocationBottomSheet select 4 hours duration" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.284"/>
-  <testcase name="quickShareLocationBottomSheet displays duration label" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.258"/>
-  <testcase name="quickShareLocationBottomSheet start sharing invokes callback" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.242"/>
-  <testcase name="quickShareLocationBottomSheet displays contact name" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.237"/>
-  <testcase name="quickShareLocationBottomSheet displays all duration chips" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.185"/>
-  <testcase name="quickShareLocationBottomSheet select until midnight duration" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.178"/>
-  <testcase name="quickShareLocationBottomSheet default duration is one hour" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.197"/>
-  <testcase name="quickShareLocationBottomSheet select indefinite duration" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.2"/>
-  <testcase name="quickShareLocationBottomSheet displays title" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.188"/>
+  <testcase name="quickShareLocationBottomSheet select 15 min duration" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.35"/>
+  <testcase name="quickShareLocationBottomSheet displays start sharing button" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.137"/>
+  <testcase name="quickShareLocationBottomSheet select 4 hours duration" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.14"/>
+  <testcase name="quickShareLocationBottomSheet displays duration label" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.132"/>
+  <testcase name="quickShareLocationBottomSheet start sharing invokes callback" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.123"/>
+  <testcase name="quickShareLocationBottomSheet displays contact name" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.196"/>
+  <testcase name="quickShareLocationBottomSheet displays all duration chips" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.117"/>
+  <testcase name="quickShareLocationBottomSheet select until midnight duration" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.114"/>
+  <testcase name="quickShareLocationBottomSheet default duration is one hour" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.121"/>
+  <testcase name="quickShareLocationBottomSheet select indefinite duration" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.127"/>
+  <testcase name="quickShareLocationBottomSheet displays title" classname="network.columba.app.ui.components.QuickShareLocationBottomSheetTest" time="0.184"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -1,24 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.model.ModemPresetTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:17:40.864Z" hostname="hermes-agent" time="0.143">
+<testsuite name="network.columba.app.data.model.ModemPresetTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:00:05.967Z" hostname="hermes-agent" time="0.125">
   <properties/>
-  <testcase name="all presets have valid spreading factors" classname="network.columba.app.data.model.ModemPresetTest" time="0.006"/>
-  <testcase name="findByParams finds LONG_MODERATE" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
+  <testcase name="all presets have valid spreading factors" classname="network.columba.app.data.model.ModemPresetTest" time="0.004"/>
+  <testcase name="findByParams finds LONG_MODERATE" classname="network.columba.app.data.model.ModemPresetTest" time="0.001"/>
   <testcase name="findByParams finds SHORT_FAST" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
-  <testcase name="findByParams finds SHORT_SLOW" classname="network.columba.app.data.model.ModemPresetTest" time="0.001"/>
-  <testcase name="findByParams finds SHORT_TURBO" classname="network.columba.app.data.model.ModemPresetTest" time="0.001"/>
+  <testcase name="findByParams finds SHORT_SLOW" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
+  <testcase name="findByParams finds SHORT_TURBO" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
   <testcase name="all 8 presets exist" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
-  <testcase name="DEFAULT has expected parameters" classname="network.columba.app.data.model.ModemPresetTest" time="0.001"/>
-  <testcase name="DEFAULT is LONG_FAST" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
-  <testcase name="all presets have non-empty display names" classname="network.columba.app.data.model.ModemPresetTest" time="0.031"/>
-  <testcase name="findByParams finds LONG_FAST" classname="network.columba.app.data.model.ModemPresetTest" time="0.001"/>
+  <testcase name="DEFAULT has expected parameters" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
+  <testcase name="DEFAULT is LONG_FAST" classname="network.columba.app.data.model.ModemPresetTest" time="0.001"/>
+  <testcase name="all presets have non-empty display names" classname="network.columba.app.data.model.ModemPresetTest" time="0.025"/>
+  <testcase name="findByParams finds LONG_FAST" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
   <testcase name="findByParams finds LONG_SLOW" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
   <testcase name="findByParams returns null for partial match" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
-  <testcase name="all presets have valid bandwidths" classname="network.columba.app.data.model.ModemPresetTest" time="0.093"/>
-  <testcase name="all presets have non-empty descriptions" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
+  <testcase name="all presets have valid bandwidths" classname="network.columba.app.data.model.ModemPresetTest" time="0.087"/>
+  <testcase name="all presets have non-empty descriptions" classname="network.columba.app.data.model.ModemPresetTest" time="0.001"/>
   <testcase name="all presets have valid coding rates" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
-  <testcase name="findByParams returns null for non-matching params" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
+  <testcase name="findByParams returns null for non-matching params" classname="network.columba.app.data.model.ModemPresetTest" time="0.001"/>
   <testcase name="findByParams finds MEDIUM_FAST" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
-  <testcase name="findByParams finds MEDIUM_SLOW" classname="network.columba.app.data.model.ModemPresetTest" time="0.001"/>
+  <testcase name="findByParams finds MEDIUM_SLOW" classname="network.columba.app.data.model.ModemPresetTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

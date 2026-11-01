@@ -1,33 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.theme.MaterialDesignIconsTest" tests="27" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:38:15.862Z" hostname="hermes-agent" time="0.255">
+<testsuite name="network.columba.app.ui.theme.MaterialDesignIconsTest" tests="27" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:08:12.755Z" hostname="hermes-agent" time="0.057">
   <properties/>
-  <testcase name="iconCount_matchesGetAllIconNamesSize" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.221"/>
-  <testcase name="getPopularIcons_containsExpectedIcons" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
+  <testcase name="iconCount_matchesGetAllIconNamesSize" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.046"/>
+  <testcase name="getPopularIcons_containsExpectedIcons" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.001"/>
   <testcase name="iconsByCategory_containsExpectedCategories" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
-  <testcase name="sidebandCommonIcons_areAvailable" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.002"/>
-  <testcase name="getAllIconNames_returnsNonEmptyList" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.002"/>
+  <testcase name="sidebandCommonIcons_areAvailable" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.001"/>
+  <testcase name="getAllIconNames_returnsNonEmptyList" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.001"/>
   <testcase name="getCodepointOrNull_knownIcon_returnsCodepoint" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
   <testcase name="getAllIconNames_isSorted" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.003"/>
   <testcase name="differentIcons_haveDifferentCodepoints" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
-  <testcase name="getCodepointOrNull_emptyString_returnsNull" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
-  <testcase name="iconsByCategory_allIconsExist" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.006"/>
+  <testcase name="getCodepointOrNull_emptyString_returnsNull" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.001"/>
+  <testcase name="iconsByCategory_allIconsExist" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
   <testcase name="iconCount_isGreaterThan7000" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.001"/>
   <testcase name="getCodepoint_account_returnsNonEmptyString" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
-  <testcase name="getPopularIcons_allIconsExist" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.001"/>
+  <testcase name="getPopularIcons_allIconsExist" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
   <testcase name="mdiIconVariants_areAvailable" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
   <testcase name="iconsByCategory_allCategoriesHaveIcons" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
-  <testcase name="contains_isCaseSensitive" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.001"/>
+  <testcase name="contains_isCaseSensitive" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
   <testcase name="codepoints_areSurrogatePairs" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
   <testcase name="getPopularIcons_returnsNonEmptyList" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
   <testcase name="codepoints_haveValidSurrogates" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
   <testcase name="contains_knownIcons_returnsTrue" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
-  <testcase name="getCodepointOrNull_unknownIcon_returnsNull" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
+  <testcase name="getCodepointOrNull_unknownIcon_returnsNull" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.001"/>
   <testcase name="contains_unknownIcons_returnsFalse" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
-  <testcase name="getCodepoint_unknownIcon_returnsDefault" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.001"/>
-  <testcase name="getCodepoint_emptyString_returnsDefault" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.001"/>
+  <testcase name="getCodepoint_unknownIcon_returnsDefault" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
+  <testcase name="getCodepoint_emptyString_returnsDefault" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
   <testcase name="getCodepoint_star_returnsNonEmptyString" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
   <testcase name="iconsByCategory_isNotEmpty" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.0"/>
-  <testcase name="getAllIconNames_containsExpectedIcons" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.003"/>
+  <testcase name="getAllIconNames_containsExpectedIcons" classname="network.columba.app.ui.theme.MaterialDesignIconsTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

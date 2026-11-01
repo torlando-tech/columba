@@ -1,29 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.db.dao.LocalIdentityDaoTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:17.231Z" hostname="hermes-agent" time="0.719">
+<testsuite name="network.columba.app.data.db.dao.LocalIdentityDaoTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:21.193Z" hostname="hermes-agent" time="0.494">
   <properties/>
-  <testcase name="getAllIdentities_emitsEmptyList_whenNoIdentities" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.024"/>
-  <testcase name="delete_removesIdentity" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.024"/>
-  <testcase name="delete_nonexistentIdentity_doesNotThrow" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.021"/>
-  <testcase name="getActiveIdentity_returnsNull_whenNoActiveIdentity" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.039"/>
-  <testcase name="identityExists_returnsTrueWhenExists" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.025"/>
-  <testcase name="updateLastUsedTimestamp_changesTimestamp" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.031"/>
-  <testcase name="getIdentityCount_returnsCorrectCount" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.03"/>
-  <testcase name="setActive_updatesLastUsedTimestamp" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.034"/>
-  <testcase name="getIdentity_whenNotExists_returnsNull" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.023"/>
-  <testcase name="setActive_deactivatesAllOthers_andActivatesSpecified" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.034"/>
-  <testcase name="getActiveIdentitySync_returnsNull_whenNoActiveIdentity" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.031"/>
-  <testcase name="insertIdentity_withConflict_replacesExisting" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.034"/>
-  <testcase name="delete_emitsUpdate_toAllIdentitiesFlow" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.032"/>
-  <testcase name="deactivateAll_setsAllIdentitiesToInactive" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.03"/>
-  <testcase name="getAllIdentities_emitsAllIdentities_orderedByLastUsed" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.042"/>
-  <testcase name="getActiveIdentitySync_returnsActiveIdentity" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.059"/>
-  <testcase name="getAllIdentities_emitsUpdates_whenIdentityInserted" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.042"/>
-  <testcase name="insertIdentity_andRetrieve_returnsCorrectIdentity" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.027"/>
-  <testcase name="multipleActiveIdentities_setActiveEnsuresOnlyOne" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.028"/>
-  <testcase name="setActive_emitsUpdate_toActiveIdentityFlow" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.026"/>
-  <testcase name="updateDisplayName_changesName" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.028"/>
-  <testcase name="identityExists_returnsFalseWhenNotExists" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.021"/>
-  <testcase name="getActiveIdentity_returnsActiveIdentity" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.027"/>
+  <testcase name="getAllIdentities_emitsEmptyList_whenNoIdentities" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.022"/>
+  <testcase name="delete_removesIdentity" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.023"/>
+  <testcase name="delete_nonexistentIdentity_doesNotThrow" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.019"/>
+  <testcase name="getActiveIdentity_returnsNull_whenNoActiveIdentity" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.021"/>
+  <testcase name="identityExists_returnsTrueWhenExists" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.019"/>
+  <testcase name="updateLastUsedTimestamp_changesTimestamp" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.024"/>
+  <testcase name="getIdentityCount_returnsCorrectCount" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.021"/>
+  <testcase name="setActive_updatesLastUsedTimestamp" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.029"/>
+  <testcase name="getIdentity_whenNotExists_returnsNull" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.021"/>
+  <testcase name="setActive_deactivatesAllOthers_andActivatesSpecified" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.022"/>
+  <testcase name="getActiveIdentitySync_returnsNull_whenNoActiveIdentity" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.018"/>
+  <testcase name="insertIdentity_withConflict_replacesExisting" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.018"/>
+  <testcase name="delete_emitsUpdate_toAllIdentitiesFlow" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.021"/>
+  <testcase name="deactivateAll_setsAllIdentitiesToInactive" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.02"/>
+  <testcase name="getAllIdentities_emitsAllIdentities_orderedByLastUsed" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.022"/>
+  <testcase name="getActiveIdentitySync_returnsActiveIdentity" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.022"/>
+  <testcase name="getAllIdentities_emitsUpdates_whenIdentityInserted" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.025"/>
+  <testcase name="insertIdentity_andRetrieve_returnsCorrectIdentity" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.018"/>
+  <testcase name="multipleActiveIdentities_setActiveEnsuresOnlyOne" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.021"/>
+  <testcase name="setActive_emitsUpdate_toActiveIdentityFlow" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.022"/>
+  <testcase name="updateDisplayName_changesName" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.019"/>
+  <testcase name="identityExists_returnsFalseWhenNotExists" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.019"/>
+  <testcase name="getActiveIdentity_returnsActiveIdentity" classname="network.columba.app.data.db.dao.LocalIdentityDaoTest" time="0.022"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

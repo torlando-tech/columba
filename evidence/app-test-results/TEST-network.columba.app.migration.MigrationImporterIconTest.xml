@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.migration.MigrationImporterIconTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:19:23.712Z" hostname="hermes-agent" time="0.107">
+<testsuite name="network.columba.app.migration.MigrationImporterIconTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:01:25.885Z" hostname="hermes-agent" time="0.027">
   <properties/>
-  <testcase name="IdentityExport serializes icon fields" classname="network.columba.app.migration.MigrationImporterIconTest" time="0.077"/>
-  <testcase name="IdentityExport with icon data round trips correctly" classname="network.columba.app.migration.MigrationImporterIconTest" time="0.023"/>
+  <testcase name="IdentityExport serializes icon fields" classname="network.columba.app.migration.MigrationImporterIconTest" time="0.017"/>
+  <testcase name="IdentityExport with icon data round trips correctly" classname="network.columba.app.migration.MigrationImporterIconTest" time="0.008"/>
   <testcase name="IdentityExport deserializes icon fields" classname="network.columba.app.migration.MigrationImporterIconTest" time="0.0"/>
-  <testcase name="IdentityExport handles missing icon fields for backward compatibility" classname="network.columba.app.migration.MigrationImporterIconTest" time="0.0"/>
+  <testcase name="IdentityExport handles missing icon fields for backward compatibility" classname="network.columba.app.migration.MigrationImporterIconTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

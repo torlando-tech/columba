@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.CallDetailsViewModelTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:09:33.755Z" hostname="hermes-agent" time="1.047">
+  <properties/>
+  <testcase name="failed runtime block keeps durable authority for service reconciliation" classname="network.columba.app.viewmodel.CallDetailsViewModelTest" time="0.508"/>
+  <testcase name="call again failure navigation result is consumable" classname="network.columba.app.viewmodel.CallDetailsViewModelTest" time="0.013"/>
+  <testcase name="identity switch preserves details evidence and disables call again" classname="network.columba.app.viewmodel.CallDetailsViewModelTest" time="0.083"/>
+  <testcase name="active call collision disables call again" classname="network.columba.app.viewmodel.CallDetailsViewModelTest" time="0.062"/>
+  <testcase name="projection failure exits loading and clears actions" classname="network.columba.app.viewmodel.CallDetailsViewModelTest" time="0.018"/>
+  <testcase name="failed block persistence performs no runtime mutation" classname="network.columba.app.viewmodel.CallDetailsViewModelTest" time="0.07"/>
+  <testcase name="terminal exact runtime snapshot leaves unfinished row in recovery" classname="network.columba.app.viewmodel.CallDetailsViewModelTest" time="0.033"/>
+  <testcase name="unblock removes prior blackhole runtime state" classname="network.columba.app.viewmodel.CallDetailsViewModelTest" time="0.156"/>
+  <testcase name="view peer re-resolves destination at activation time" classname="network.columba.app.viewmodel.CallDetailsViewModelTest" time="0.026"/>
+  <testcase name="exact live ownership reacts while details remains open" classname="network.columba.app.viewmodel.CallDetailsViewModelTest" time="0.02"/>
+  <testcase name="unblock releases destination learned during durable removal" classname="network.columba.app.viewmodel.CallDetailsViewModelTest" time="0.047"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

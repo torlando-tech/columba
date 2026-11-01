@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:40:50.417Z" hostname="hermes-agent" time="0.121">
+<testsuite name="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:09:56.141Z" hostname="hermes-agent" time="0.01">
   <properties/>
-  <testcase name="InterfaceInfo offline without error represents temporary disconnection" classname="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" time="0.004"/>
+  <testcase name="InterfaceInfo offline without error represents temporary disconnection" classname="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" time="0.0"/>
   <testcase name="InterfaceInfo with error correctly identifies failed interfaces" classname="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" time="0.0"/>
-  <testcase name="DebugInfo interfaceCount reflects merged interfaces" classname="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" time="0.101"/>
-  <testcase name="merging active and failed interfaces" classname="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" time="0.004"/>
-  <testcase name="interface list correctly separates healthy, offline, and failed" classname="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" time="0.001"/>
+  <testcase name="DebugInfo interfaceCount reflects merged interfaces" classname="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" time="0.001"/>
+  <testcase name="merging active and failed interfaces" classname="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" time="0.0"/>
+  <testcase name="interface list correctly separates healthy, offline, and failed" classname="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" time="0.0"/>
   <testcase name="InterfaceInfo without error represents healthy interface" classname="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" time="0.0"/>
-  <testcase name="FailedInterface to InterfaceInfo conversion logic" classname="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" time="0.003"/>
+  <testcase name="FailedInterface to InterfaceInfo conversion logic" classname="network.columba.app.viewmodel.DebugViewModelFailedInterfacesTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

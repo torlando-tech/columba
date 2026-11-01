@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.AttachmentPanelTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:23:00.521Z" hostname="hermes-agent" time="7.337">
+<testsuite name="network.columba.app.ui.components.AttachmentPanelTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:03:32.255Z" hostname="hermes-agent" time="1.079">
   <properties/>
-  <testcase name="does not show permission prompt when photos are available" classname="network.columba.app.ui.components.AttachmentPanelTest" time="5.994"/>
-  <testcase name="tapping gallery button calls onGalleryClick" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.223"/>
-  <testcase name="gallery button is displayed" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.135"/>
-  <testcase name="shows permission prompt when no media permission" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.139"/>
-  <testcase name="tapping voice button calls onVoiceClick" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.105"/>
-  <testcase name="tapping file button calls onFileClick" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.105"/>
-  <testcase name="shows no photos found when permission granted but no photos" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.139"/>
-  <testcase name="file button is displayed" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.097"/>
-  <testcase name="tapping allow access button requests permission" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.114"/>
+  <testcase name="does not show permission prompt when photos are available" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.263"/>
+  <testcase name="tapping gallery button calls onGalleryClick" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.163"/>
+  <testcase name="gallery button is displayed" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.09"/>
+  <testcase name="shows permission prompt when no media permission" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.089"/>
+  <testcase name="tapping voice button calls onVoiceClick" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.097"/>
+  <testcase name="tapping file button calls onFileClick" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.096"/>
+  <testcase name="shows no photos found when permission granted but no photos" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.088"/>
+  <testcase name="file button is displayed" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.082"/>
+  <testcase name="tapping allow access button requests permission" classname="network.columba.app.ui.components.AttachmentPanelTest" time="0.105"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

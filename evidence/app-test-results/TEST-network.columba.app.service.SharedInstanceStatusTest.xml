@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.service.SharedInstanceStatusTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:03:10.271Z" hostname="hermes-agent" time="0.178">
+  <properties/>
+  <testcase name="persist - hosting persists false so the host is not mislabelled a client" classname="network.columba.app.service.SharedInstanceStatusTest" time="0.117"/>
+  <testcase name="persist - cancellation is rethrown not swallowed" classname="network.columba.app.service.SharedInstanceStatusTest" time="0.013"/>
+  <testcase name="persist - shared client persists true" classname="network.columba.app.service.SharedInstanceStatusTest" time="0.016"/>
+  <testcase name="persist - own instance persists false" classname="network.columba.app.service.SharedInstanceStatusTest" time="0.015"/>
+  <testcase name="persist - probe failure is best-effort and returns null" classname="network.columba.app.service.SharedInstanceStatusTest" time="0.008"/>
+  <testcase name="persist - persistence failure is best-effort and returns null" classname="network.columba.app.service.SharedInstanceStatusTest" time="0.009"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

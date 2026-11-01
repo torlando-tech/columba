@@ -1,45 +1,42 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.service.ConversationLinkManagerTest" tests="32" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:21:19.077Z" hostname="hermes-agent" time="2.739">
+<testsuite name="network.columba.app.service.ConversationLinkManagerTest" tests="33" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:02:32.699Z" hostname="hermes-agent" time="0.688">
   <properties/>
-  <testcase name="recommendPreset prefers link metrics over fast interface even for single hop" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.009"/>
-  <testcase name="estimateTransferTimeFormatted returns null when no rate" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
+  <testcase name="recordPeerActivity never moves last activity backward" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.211"/>
+  <testcase name="recommendPreset prefers link metrics over fast interface even for single hop" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.002"/>
+  <testcase name="estimateTransferTimeFormatted returns null when no rate" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.001"/>
   <testcase name="transfer time for ORIGINAL uses actual size not target" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="lastActivityTimestamp can be updated via copy" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
-  <testcase name="refreshAllLinkStatuses does not cleanup entry that becomes active during refresh" classname="network.columba.app.service.ConversationLinkManagerTest" time="2.27"/>
-  <testcase name="successful link records durable peer activity" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.232"/>
-  <testcase name="estimateTransferTimeSeconds prefers expectedRateBps over establishmentRateBps" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
+  <testcase name="refreshAllLinkStatuses does not cleanup entry that becomes active during refresh" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.178"/>
+  <testcase name="successful link records durable peer activity" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.083"/>
+  <testcase name="estimateTransferTimeSeconds prefers expectedRateBps over establishmentRateBps" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.001"/>
   <testcase name="estimateTransferTimeSeconds calculates correctly with expectedRateBps" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="LinkState with activity timestamp preserves other fields" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
-  <testcase name="formatTransferTime formats seconds correctly" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.002"/>
+  <testcase name="formatTransferTime formats seconds correctly" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="lastActivityTimestamp can be set during construction" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
-  <testcase name="formatTransferTime formats hours correctly" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.002"/>
+  <testcase name="formatTransferTime formats hours correctly" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="lastActivityTimestamp is preserved when copying state" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="recommendPreset uses link rate for multi-hop with fast first hop" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="estimateTransferTimeSeconds prefers establishmentRateBps over nextHopBitrateBps" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
-  <testcase name="recommendPreset returns MEDIUM for slow interface under 50kbps" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.001"/>
+  <testcase name="recommendPreset returns MEDIUM for slow interface under 50kbps" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="estimateTransferTimeSeconds returns null when no rate available" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="estimateTransferTimeSeconds calculates correctly with establishmentRateBps" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="estimateTransferTimeFormatted returns formatted string" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
-  <testcase name="failed link probe does not record peer activity" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.211"/>
+  <testcase name="failed link probe does not record peer activity" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.208"/>
   <testcase name="recommendPreset returns LOW on connection error" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="recommendPreset returns MEDIUM for multi-hop with no link metrics" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="recommendPreset uses expectedRateBps when available" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="recommendPreset trusts fast interface for single hop only when no link metrics" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
-  <testcase name="formatTransferTime formats minutes correctly" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
+  <testcase name="formatTransferTime formats minutes correctly" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.001"/>
   <testcase name="recommendPreset returns LOW for very slow interface under 5kbps" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="formatTransferTime formats sub-second correctly" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
-  <testcase name="recommendPreset falls back to hop count heuristics when no rate data" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
+  <testcase name="recommendPreset falls back to hop count heuristics when no rate data" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.001"/>
   <testcase name="recommendPreset prefers link rate over slow interface" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
-  <testcase name="inactive state with recent activity timestamp is valid" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.001"/>
+  <testcase name="inactive state with recent activity timestamp is valid" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="recommendPreset returns MEDIUM when no info available" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <testcase name="lastActivityTimestamp defaults to zero" classname="network.columba.app.service.ConversationLinkManagerTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation
 SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
 ]]></system-err>
 </testsuite>

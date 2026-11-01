@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.db.dao.CallHistoryDaoTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:19.820Z" hostname="hermes-agent" time="0.393">
+  <properties/>
+  <testcase name="history is identity-scoped" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.035"/>
+  <testcase name="finalizeUnconnectedCall accepts reduced outgoing outcomes" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.026"/>
+  <testcase name="finalizeUnconnectedCall rejects outcome for wrong direction" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.025"/>
+  <testcase name="immutable finalization - second finalize is rejected" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.032"/>
+  <testcase name="reconcileOpenAttempts interrupts stale service instance" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.027"/>
+  <testcase name="finalizeUnconnectedCall rejects removed outcome" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.026"/>
+  <testcase name="recordConnected and completeConnectedCall finalize to CONNECTED_ENDED" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.031"/>
+  <testcase name="insertInitial inserts and duplicate insert is ignored" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.023"/>
+  <testcase name="failCallAttempt persists Columba-observed reason" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.024"/>
+  <testcase name="deleted attempt cannot be resurrected" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.027"/>
+  <testcase name="deleteFinalized rejects unfinished call" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.023"/>
+  <testcase name="getOpenAttemptForService only returns matching open instance" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.031"/>
+  <testcase name="clearFinalized removes all finalized rows for identity" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.028"/>
+  <testcase name="deleteFinalized records deletion authority and removes row" classname="network.columba.app.data.db.dao.CallHistoryDaoTest" time="0.031"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

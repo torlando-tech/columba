@@ -903,15 +903,17 @@ fun MessagingScreen(
         }
     }
 
-    // Track if we've done the initial scroll for this conversation
-    // Resets when switching to a different conversation
-    var hasScrolledToBottom by remember(destinationHash, activeThread) { mutableStateOf(false) }
+    // Per-target initial-scroll flag: each thread (or Main) scrolls to the
+    // bottom once per conversation; returning to a target keeps the reader's
+    // position in that target's saved LazyListState.
+    val scrolledTargets = remember(destinationHash) { mutableStateMapOf<String, Boolean>() }
+    val scrollTargetKey = activeThread ?: "main"
 
     // Detect if user is at the bottom (index 0 with reverseLayout)
     // Wrapped in derivedStateOf to avoid recomposition on every scroll
     // Note: Use <= 1 instead of == 0 because when a new message arrives, it takes index 0
     // and the previously-newest message shifts to index 1 BEFORE the scroll effect runs
-    val isAtBottom by remember {
+    val isAtBottom by remember(listState) {
         derivedStateOf { listState.firstVisibleItemIndex <= 1 }
     }
 
@@ -927,10 +929,10 @@ fun MessagingScreen(
     // Initial scroll to bottom when messages first load for a conversation
     // This ensures opening a conversation always shows the most recent messages
     // Uses newestMessageId instead of itemCount to avoid triggering on pagination
-    LaunchedEffect(destinationHash, newestMessageId) {
-        if (newestMessageId != null && !hasScrolledToBottom) {
+    LaunchedEffect(destinationHash, activeThread, newestMessageId) {
+        if (newestMessageId != null && scrolledTargets[scrollTargetKey] != true) {
             listState.scrollToItem(0) // Instant scroll to index 0 (newest message)
-            hasScrolledToBottom = true
+            scrolledTargets[scrollTargetKey] = true
         }
     }
 
@@ -956,7 +958,7 @@ fun MessagingScreen(
         if (notifScrollCoordinator.shouldScroll()) {
             Log.d("MessagingScreen", "Notification entry: scrolling to newest message")
             listState.scrollToItem(0)
-            hasScrolledToBottom = true
+            scrolledTargets[scrollTargetKey] = true
         }
     }
 
@@ -967,7 +969,7 @@ fun MessagingScreen(
     // - itemCount changes when loading old messages during scroll → caused snap-back bug
     // - newestMessageId only changes when a NEW message arrives → correct behavior
     LaunchedEffect(newestMessageId) {
-        if (newestMessageId != null && hasScrolledToBottom) {
+        if (newestMessageId != null && scrolledTargets[scrollTargetKey] == true) {
             // Check if we should auto-scroll for this new message
             val newestMessage = pagingItems.itemSnapshotList.firstOrNull()
             val shouldScroll =
@@ -3674,6 +3676,9 @@ private fun ThreadPinnedHeader(
                             maxLines = 3,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (header.signatureVerified == false) {
+                            UnverifiedSenderChip(modifier = Modifier.padding(bottom = 4.dp))
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = formatThreadTimestamp(header.timestamp),

@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.nomadnet.NomadNetLinkFieldsTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:19:38.439Z" hostname="hermes-agent" time="0.138">
+<testsuite name="network.columba.app.nomadnet.NomadNetLinkFieldsTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:01:34.978Z" hostname="hermes-agent" time="0.022">
   <properties/>
-  <testcase name="bare field name pulls value from form fields" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.064"/>
-  <testcase name="path without backtick has no fields" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.001"/>
-  <testcase name="star adds form fields alongside explicit inline vars" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.056"/>
-  <testcase name="trailing backtick with no fields yields clean path and no fields" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.001"/>
-  <testcase name="key=value fields become var_-prefixed request data" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.001"/>
-  <testcase name="no fields produces null" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.0"/>
-  <testcase name="empty field tokens are dropped" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.001"/>
-  <testcase name="star submits all form fields" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.0"/>
-  <testcase name="value containing equals splits only on the first equals" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.001"/>
+  <testcase name="bare field name pulls value from form fields" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.011"/>
+  <testcase name="path without backtick has no fields" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.0"/>
+  <testcase name="star adds form fields alongside explicit inline vars" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.0"/>
+  <testcase name="trailing backtick with no fields yields clean path and no fields" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.0"/>
+  <testcase name="key=value fields become var_-prefixed request data" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.002"/>
+  <testcase name="no fields produces null" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.001"/>
+  <testcase name="empty field tokens are dropped" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.0"/>
+  <testcase name="star submits all form fields" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.001"/>
+  <testcase name="value containing equals splits only on the first equals" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.0"/>
   <testcase name="backtick block is split into clean path and pipe-separated fields" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.0"/>
   <testcase name="bare field with no form value submits empty string" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.0"/>
   <testcase name="star against an empty form resolves to nothing and returns null" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.001"/>
-  <testcase name="single field after backtick is captured" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.001"/>
+  <testcase name="single field after backtick is captured" classname="network.columba.app.nomadnet.NomadNetLinkFieldsTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

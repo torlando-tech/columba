@@ -1,26 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.model.DeviceClassifierTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:17:33.865Z" hostname="hermes-agent" time="1.412">
+<testsuite name="network.columba.app.data.model.DeviceClassifierTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:00:04.449Z" hostname="hermes-agent" time="0.675">
   <properties/>
-  <testcase name="shouldIncludeInDiscovery returns true for RNODE uppercase" classname="network.columba.app.data.model.DeviceClassifierTest" time="1.273"/>
-  <testcase name="classifyDevice returns Cached when device not in BLE scan but in cache" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.009"/>
-  <testcase name="shouldIncludeInDiscovery accepts exactly RNode with space" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.002"/>
+  <testcase name="shouldIncludeInDiscovery returns true for RNODE uppercase" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.667"/>
+  <testcase name="classifyDevice returns Cached when device not in BLE scan but in cache" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.001"/>
+  <testcase name="shouldIncludeInDiscovery accepts exactly RNode with space" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
   <testcase name="cacheDeviceType caches CLASSIC type" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.001"/>
   <testcase name="cacheDeviceType does not cache UNKNOWN type" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
-  <testcase name="classifyDevice prefers BLE scan over cache" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.001"/>
+  <testcase name="classifyDevice prefers BLE scan over cache" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
   <testcase name="shouldIncludeInDiscovery returns false for non-RNode device" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.001"/>
   <testcase name="classifyDevice returns ConfirmedBle when device found in BLE scan" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
   <testcase name="cacheDeviceType caches BLE type" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
-  <testcase name="shouldIncludeInDiscovery returns true for RNode device" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.001"/>
+  <testcase name="shouldIncludeInDiscovery returns true for RNode device" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
   <testcase name="classifyDevice handles BLE cache entry correctly" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
-  <testcase name="shouldIncludeInDiscovery returns false for empty device name" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.001"/>
+  <testcase name="shouldIncludeInDiscovery returns false for empty device name" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
   <testcase name="shouldIncludeInDiscovery requires space after RNode" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
   <testcase name="shouldIncludeInDiscovery returns false for device containing RNode but not starting with it" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
-  <testcase name="classifyDevice handles multiple devices in BLE scan" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.102"/>
-  <testcase name="shouldIncludeInDiscovery returns true for rnode lowercase" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.002"/>
+  <testcase name="classifyDevice handles multiple devices in BLE scan" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.001"/>
+  <testcase name="shouldIncludeInDiscovery returns true for rnode lowercase" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
   <testcase name="classifyDevice returns Unknown when device not in BLE scan and not in cache" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.001"/>
   <testcase name="cacheDeviceType handles multiple addresses independently" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
-  <testcase name="shouldIncludeInDiscovery returns false for null device name" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.001"/>
-  <testcase name="shouldIncludeInDiscovery returns true for mixed case RNode" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
+  <testcase name="shouldIncludeInDiscovery returns false for null device name" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.0"/>
+  <testcase name="shouldIncludeInDiscovery returns true for mixed case RNode" classname="network.columba.app.data.model.DeviceClassifierTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

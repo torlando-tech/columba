@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.db.Migration2To3Test" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:12.035Z" hostname="hermes-agent" time="0.11">
+<testsuite name="network.columba.app.data.db.Migration2To3Test" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:15.364Z" hostname="hermes-agent" time="0.107">
   <properties/>
-  <testcase name="migration deterministically keeps newest case variant announce" classname="network.columba.app.data.db.Migration2To3Test" time="0.035"/>
-  <testcase name="migration chooses newest trustworthy source per peer" classname="network.columba.app.data.db.Migration2To3Test" time="0.028"/>
-  <testcase name="migration rejects implausible future timestamps" classname="network.columba.app.data.db.Migration2To3Test" time="0.021"/>
-  <testcase name="migration backfills only trustworthy inbound reception timestamps" classname="network.columba.app.data.db.Migration2To3Test" time="0.022"/>
+  <testcase name="migration deterministically keeps newest case variant announce" classname="network.columba.app.data.db.Migration2To3Test" time="0.028"/>
+  <testcase name="migration chooses newest trustworthy source per peer" classname="network.columba.app.data.db.Migration2To3Test" time="0.025"/>
+  <testcase name="migration rejects implausible future timestamps" classname="network.columba.app.data.db.Migration2To3Test" time="0.024"/>
+  <testcase name="migration backfills only trustworthy inbound reception timestamps" classname="network.columba.app.data.db.Migration2To3Test" time="0.028"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -1,20 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.IdentityUnlockViewModelTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:41:10.262Z" hostname="hermes-agent" time="4.385">
+<testsuite name="network.columba.app.viewmodel.IdentityUnlockViewModelTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:10:08.067Z" hostname="hermes-agent" time="0.164">
   <properties/>
-  <testcase name="overlong identity file is rejected before backend or persistence" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="4.113"/>
-  <testcase name="matching identity rewraps existing row and clears recovery flag" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="0.049"/>
-  <testcase name="matching identity rewrap failure leaves recovery flag set" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="0.056"/>
-  <testcase name="missing active identity rejects import before opening selected file" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="0.047"/>
-  <testcase name="short identity file is rejected before backend or persistence" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="0.041"/>
-  <testcase name="backend parse error is surfaced without persistence mutation" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="0.035"/>
-  <testcase name="mismatched identity is rejected without any persistence mutation" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="0.038"/>
+  <testcase name="overlong identity file is rejected before backend or persistence" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="0.05"/>
+  <testcase name="matching identity rewraps existing row and clears recovery flag" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="0.024"/>
+  <testcase name="matching identity rewrap failure leaves recovery flag set" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="0.022"/>
+  <testcase name="missing active identity rejects import before opening selected file" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="0.02"/>
+  <testcase name="short identity file is rejected before backend or persistence" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="0.014"/>
+  <testcase name="backend parse error is surfaced without persistence mutation" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="0.016"/>
+  <testcase name="mismatched identity is rejected without any persistence mutation" classname="network.columba.app.viewmodel.IdentityUnlockViewModelTest" time="0.018"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

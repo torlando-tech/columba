@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.screens.MapLayersSheetContentTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:30:36.018Z" hostname="hermes-agent" time="7.15">
+<testsuite name="network.columba.app.ui.screens.MapLayersSheetContentTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:05:40.112Z" hostname="hermes-agent" time="6.99">
   <properties/>
-  <testcase name="clickingChipInvokesOnToggleWithThatCategory" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="6.051"/>
-  <testcase name="hidesInterfaceChipsSectionWhenNoCategories" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="0.147"/>
-  <testcase name="categoryMissingFromMapDefaultsToSelected" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="0.13"/>
-  <testcase name="chipSelectedStateReflectsFilterEnabledMap" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="0.135"/>
-  <testcase name="stylePickerSelectedReflectsPreference" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="0.134"/>
-  <testcase name="rendersStylePickerAndOneChipPerProvidedCategory" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="0.162"/>
-  <testcase name="clickingStylePickerInvokesCallback" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="0.119"/>
+  <testcase name="clickingChipInvokesOnToggleWithThatCategory" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="5.756"/>
+  <testcase name="hidesInterfaceChipsSectionWhenNoCategories" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="0.187"/>
+  <testcase name="categoryMissingFromMapDefaultsToSelected" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="0.134"/>
+  <testcase name="chipSelectedStateReflectsFilterEnabledMap" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="0.133"/>
+  <testcase name="stylePickerSelectedReflectsPreference" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="0.119"/>
+  <testcase name="rendersStylePickerAndOneChipPerProvidedCategory" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="0.137"/>
+  <testcase name="clickingStylePickerInvokesCallback" classname="network.columba.app.ui.screens.MapLayersSheetContentTest" time="0.122"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

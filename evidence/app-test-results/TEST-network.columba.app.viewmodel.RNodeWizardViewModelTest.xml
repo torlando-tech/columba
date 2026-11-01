@@ -1,165 +1,165 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.RNodeWizardViewModelTest" tests="152" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:43:38.893Z" hostname="hermes-agent" time="20.085">
+<testsuite name="network.columba.app.viewmodel.RNodeWizardViewModelTest" tests="159" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:11:56.158Z" hostname="hermes-agent" time="17.984">
   <properties/>
-  <testcase name="applyPendingParams populates all LoRa fields" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="3.142"/>
-  <testcase name="applyPendingParams enables custom mode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.131"/>
-  <testcase name="updateInterfaceName clears error on valid name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.127"/>
-  <testcase name="selectModemPreset updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.127"/>
-  <testcase name="canProceed false when no region selected on REGION_SELECTION" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.125"/>
-  <testcase name="DiscoveredUsbDevice displayName falls back to generic name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.118"/>
-  <testcase name="getRegionLimits returns correct limits for EU 868-P" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.115"/>
-  <testcase name="getPopularPresetsForRegion returns EU_L presets for EU 868 L region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.114"/>
-  <testcase name="updateStAlock sets error when exceeding duty cycle limit" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.126"/>
-  <testcase name="getPopularPresetsForRegion returns empty for Japan region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
-  <testcase name="setConnectionType to TCP_WIFI updates connectionType state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
-  <testcase name="DiscoveredUsbDevice displayName uses productName when available" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.114"/>
-  <testcase name="setInitialRadioParams stores all parameters" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.118"/>
-  <testcase name="getPopularPresetsForRegion returns empty for Brazil region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.118"/>
-  <testcase name="canProceed true when device selected on DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
-  <testcase name="getPopularPresetsForRegion returns US presets for US region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
+  <testcase name="applyPendingParams populates all LoRa fields" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.295"/>
+  <testcase name="applyPendingParams enables custom mode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.124"/>
+  <testcase name="updateInterfaceName clears error on valid name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.121"/>
+  <testcase name="selectModemPreset updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.119"/>
+  <testcase name="canProceed false when no region selected on REGION_SELECTION" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.114"/>
+  <testcase name="DiscoveredUsbDevice displayName falls back to generic name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
+  <testcase name="getRegionLimits returns correct limits for EU 868-P" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
+  <testcase name="getPopularPresetsForRegion returns EU_L presets for EU 868 L region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
+  <testcase name="pairing repair latches before config load" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.129"/>
+  <testcase name="updateStAlock sets error when exceeding duty cycle limit" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
+  <testcase name="getPopularPresetsForRegion returns empty for Japan region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
+  <testcase name="setConnectionType to TCP_WIFI updates connectionType state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
+  <testcase name="DiscoveredUsbDevice displayName uses productName when available" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="setInitialRadioParams stores all parameters" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.114"/>
+  <testcase name="getPopularPresetsForRegion returns empty for Brazil region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
+  <testcase name="canProceed true when device selected on DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="getPopularPresetsForRegion returns US presets for US region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
   <testcase name="setDeviceType updates discovered devices list" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.124"/>
   <testcase name="changing region clears frequency validation error from previous region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="applyPendingParams shows advanced settings" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.114"/>
-  <testcase name="clearPairingError clears error state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.118"/>
-  <testcase name="defaultInterfaceNameFor generates BLE suffix for BLE device" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="selectFrequencyRegion updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
-  <testcase name="updateBandwidth sets error for bandwidth above 1625000" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.114"/>
-  <testcase name="updateFrequency clears error for valid frequency" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="applyPendingParams shows advanced settings" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
+  <testcase name="clearPairingError clears error state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.116"/>
+  <testcase name="defaultInterfaceNameFor generates BLE suffix for BLE device" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="selectFrequencyRegion updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="updateBandwidth sets error for bandwidth above 1625000" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
+  <testcase name="updateFrequency clears error for valid frequency" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
   <testcase name="default modem preset is LONG_FAST" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.114"/>
-  <testcase name="updateCodingRate sets error for CR below 5" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
+  <testcase name="updateCodingRate sets error for CR below 5" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.114"/>
+  <testcase name="selectPreset without explicit tx power keeps region default and applies airtime limit" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
   <testcase name="updateSpreadingFactor sets error for SF above 12" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
-  <testcase name="loadExistingConfig loads Classic Bluetooth RNode and sets edit mode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.224"/>
-  <testcase name="hideManualEntry updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
-  <testcase name="getEffectiveDeviceName returns fallback when nothing set" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
-  <testcase name="goToNextStep from MODEM_PRESET goes to FREQUENCY_SLOT" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
-  <testcase name="saveConfiguration calls updateInterface in edit mode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.149"/>
-  <testcase name="getFrequencyForSlot returns valid frequency within region bounds" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
-  <testcase name="loadExistingConfig loads TCP RNode configuration correctly" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
-  <testcase name="goToPreviousStep from REGION_SELECTION goes to DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
-  <testcase name="loadExistingConfig populates all configuration fields" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
+  <testcase name="loadExistingConfig loads Classic Bluetooth RNode and sets edit mode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.249"/>
+  <testcase name="hideManualEntry updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
+  <testcase name="getEffectiveDeviceName returns fallback when nothing set" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
+  <testcase name="goToNextStep from MODEM_PRESET goes to FREQUENCY_SLOT" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.115"/>
+  <testcase name="saveConfiguration calls updateInterface in edit mode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.125"/>
+  <testcase name="getFrequencyForSlot returns valid frequency within region bounds" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="loadExistingConfig loads TCP RNode configuration correctly" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.118"/>
+  <testcase name="goToPreviousStep from REGION_SELECTION goes to DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
+  <testcase name="loadExistingConfig populates all configuration fields" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.119"/>
   <testcase name="getPopularPresetsForRegion returns AU presets for Australia region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="loadExistingConfig handles interface not found" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.114"/>
-  <testcase name="applyPendingParams populates frequency field" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
-  <testcase name="applyPendingParams does nothing when hasPendingParams is false" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
-  <testcase name="validateTcpConnection sets error for empty host" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
+  <testcase name="loadExistingConfig handles interface not found" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
+  <testcase name="applyPendingParams populates frequency field" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
+  <testcase name="applyPendingParams does nothing when hasPendingParams is false" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
+  <testcase name="validateTcpConnection sets error for empty host" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
   <testcase name="getPopularPresetsForRegion returns empty when no region selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="goToNextStep from REGION_SELECTION goes to MODEM_PRESET" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="updateManualPinInput trims to 6 digits" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
-  <testcase name="updateEnableFramebuffer to false disables framebuffer" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
-  <testcase name="validateTcpConnection sets error when host is blank" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
-  <testcase name="getEffectiveDeviceName returns selected device name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="showManualEntry clears selected device" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.114"/>
-  <testcase name="getPopularPresetsForRegion excludes 433 MHz from non-433 regions" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="saveConfiguration manual entry Classic uses classic connectionMode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.118"/>
-  <testcase name="selectDevice sets interface name with BLE suffix" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
-  <testcase name="getPopularPresetsForRegion returns 2_4 GHz presets for lora_24 region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="goToNextStep from REGION_SELECTION goes to MODEM_PRESET" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
+  <testcase name="updateManualPinInput trims to 6 digits" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
+  <testcase name="updateEnableFramebuffer to false disables framebuffer" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="validateTcpConnection sets error when host is blank" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="getEffectiveDeviceName returns selected device name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
+  <testcase name="showManualEntry clears selected device" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="getPopularPresetsForRegion excludes 433 MHz from non-433 regions" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="selectPreset with explicit tx power applies it over the region default" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="saveConfiguration manual entry Classic uses classic connectionMode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
+  <testcase name="selectDevice sets interface name with BLE suffix" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
+  <testcase name="getPopularPresetsForRegion returns 2_4 GHz presets for lora_24 region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
   <testcase name="saveConfiguration succeeds with unique interface name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
-  <testcase name="getPopularPresetsForRegion returns EU_P presets for EU 868 P region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
-  <testcase name="canProceed true with manual device name on DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
-  <testcase name="saveConfiguration fails with duplicate interface name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
-  <testcase name="selectDevice updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="setConnectionType clears selected device when switching from Bluetooth" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.113"/>
-  <testcase name="loadExistingConfig sets custom mode when no matching preset found" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
-  <testcase name="validateManualDeviceName returns warning for non-RNode name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="getPopularPresetsForRegion returns empty for Russia region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="getPopularPresetsForRegion returns EU_P presets for EU 868 P region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="canProceed true with manual device name on DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="saveConfiguration fails with duplicate interface name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="selectDevice updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
+  <testcase name="setConnectionType clears selected device when switching from Bluetooth" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
+  <testcase name="loadExistingConfig sets custom mode when no matching preset found" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
+  <testcase name="validateManualDeviceName returns warning for non-RNode name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="getPopularPresetsForRegion returns empty for Russia region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
   <testcase name="getModemPresets returns all 8 presets" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
-  <testcase name="updateManualPinInput filters non-digits" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
-  <testcase name="canProceed false when no device selected on DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
-  <testcase name="defaultInterfaceNameFor removes RNode prefix before adding suffix" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
-  <testcase name="validateManualDeviceName handles empty string" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
+  <testcase name="updateManualPinInput filters non-digits" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.115"/>
+  <testcase name="canProceed false when no device selected on DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
+  <testcase name="defaultInterfaceNameFor removes RNode prefix before adding suffix" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.105"/>
+  <testcase name="validateManualDeviceName handles empty string" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
   <testcase name="getPopularPresetsForRegion returns Asia-Pacific presets for Malaysia region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="goToNextStep skips to REVIEW_CONFIGURE when preset selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.116"/>
+  <testcase name="goToNextStep skips to REVIEW_CONFIGURE when preset selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
   <testcase name="DiscoveredUsbDevice stores all properties correctly" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.105"/>
-  <testcase name="updateEnableFramebuffer updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="validateManualDeviceName returns null for valid name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="loadExistingConfig handles non-RNode interface type" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.117"/>
-  <testcase name="updateInterfaceMode updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="validateManualDeviceName returns error for name over 32 chars" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="updateEnableFramebuffer updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
+  <testcase name="validateManualDeviceName returns null for valid name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="loadExistingConfig handles non-RNode interface type" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.115"/>
+  <testcase name="updateInterfaceMode updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="validateManualDeviceName returns error for name over 32 chars" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
   <testcase name="getFrequencyForSlot calculates correctly" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
   <testcase name="saveConfiguration BLE device uses ble connectionMode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="toggleAdvancedSettings flips showAdvancedSettings state twice" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="toggleAdvancedSettings flips showAdvancedSettings state twice" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
   <testcase name="defaultInterfaceNameFor generates BT suffix for Classic device" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.105"/>
   <testcase name="DiscoveredUsbDevice displayName falls back to manufacturerName" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.105"/>
+  <testcase name="ordinary edit legacy RNode requires explicit device selection" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.115"/>
   <testcase name="validateTcpConnection updates isTcpValidating state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.118"/>
-  <testcase name="isTcpMode returns false for BLUETOOTH connection type" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
-  <testcase name="selectSlot updates frequency based on region and slot" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
-  <testcase name="initial state has no pending params" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
-  <testcase name="goToNextStep from DEVICE_DISCOVERY goes to REGION_SELECTION" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="selectPreset without airtime limit preserves existing ltAlock" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="isTcpMode returns false for BLUETOOTH connection type" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
+  <testcase name="pairing repair requires live bond and configured address" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.213"/>
+  <testcase name="selectSlot updates frequency based on region and slot" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="initial state has no pending params" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="goToNextStep from DEVICE_DISCOVERY goes to REGION_SELECTION" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
   <testcase name="saveConfiguration fails with case-insensitive duplicate name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="getPopularPresetsForRegion returns EU_M presets for EU 868 M region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
-  <testcase name="DiscoveredUsbDevice vidPid pads with zeros" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
-  <testcase name="getNumSlots returns 0 when no region selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="saveConfiguration calls insertInterface for new config" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
-  <testcase name="saveConfiguration does not call repository when duplicate name detected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.114"/>
-  <testcase name="canProceed true when region selected on REGION_SELECTION" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
-  <testcase name="loadExistingConfig handles exception gracefully" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="applyPendingParams preserves existing values for null pending params" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
-  <testcase name="toggleAdvancedSettings updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
-  <testcase name="updateFrequency sets error for frequency above max" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
-  <testcase name="selectDevice sets interface name with BT suffix for Classic" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
+  <testcase name="getPopularPresetsForRegion returns EU_M presets for EU 868 M region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="DiscoveredUsbDevice vidPid pads with zeros" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.105"/>
+  <testcase name="getNumSlots returns 0 when no region selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="saveConfiguration calls insertInterface for new config" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="saveConfiguration does not call repository when duplicate name detected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
+  <testcase name="canProceed true when region selected on REGION_SELECTION" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.105"/>
+  <testcase name="loadExistingConfig handles exception gracefully" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="applyPendingParams preserves existing values for null pending params" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="toggleAdvancedSettings updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="updateFrequency sets error for frequency above max" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.114"/>
+  <testcase name="selectDevice sets interface name with BT suffix for Classic" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
   <testcase name="canProceed true when popular preset selected on REGION_SELECTION" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
   <testcase name="setInitialRadioParams with all null does not set hasPendingParams" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="saveConfiguration TCP mode uses custom port when valid" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="saveConfiguration TCP mode uses custom port when valid" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
   <testcase name="saveConfiguration manual entry BLE uses ble connectionMode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="setConnectionType to BLUETOOTH updates connectionType state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="saveConfiguration uses editingInterfaceId in edit mode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
+  <testcase name="setConnectionType to BLUETOOTH updates connectionType state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="saveConfiguration uses editingInterfaceId in edit mode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
   <testcase name="setInitialRadioParams with only frequency sets hasPendingParams" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
-  <testcase name="getPopularPresetsForRegion excludes 2_4 GHz from non-2_4 regions" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
+  <testcase name="getPopularPresetsForRegion excludes 2_4 GHz from non-2_4 regions" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
   <testcase name="retryPairing does nothing when lastPairingDeviceAddress is null" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
-  <testcase name="getNumSlots returns correct count for US region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
-  <testcase name="DiscoveredUsbDevice vidPid formats correctly" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.104"/>
-  <testcase name="updateBandwidth sets error for bandwidth below 7800" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="goToStep REVIEW_CONFIGURE applies pending params automatically" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="scan error state can be set and cleared" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="onAssociationIntentLaunched clears pending intent" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.185"/>
-  <testcase name="goToPreviousStep returns to REGION_SELECTION from REVIEW when preset selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
-  <testcase name="updateLtAlock sets error when exceeding 100 percent" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="getRegionLimits returns null when no region selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="setConnectionType to BLUETOOTH enables Bluetooth tab" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.116"/>
-  <testcase name="applyPendingParams clears pending values" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="getEffectiveBluetoothType returns selected device type" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
-  <testcase name="updateFrequency sets error for frequency below min" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="getNumSlots returns correct count for US region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
+  <testcase name="DiscoveredUsbDevice vidPid formats correctly" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.105"/>
+  <testcase name="updateBandwidth sets error for bandwidth below 7800" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="goToStep REVIEW_CONFIGURE applies pending params automatically" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="scan error state can be set and cleared" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="onAssociationIntentLaunched clears pending intent" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.195"/>
+  <testcase name="loadExistingConfig for pairing repair starts discovery without claiming current device is paired" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
+  <testcase name="goToPreviousStep returns to REGION_SELECTION from REVIEW when preset selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
+  <testcase name="updateLtAlock sets error when exceeding 100 percent" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="getRegionLimits returns null when no region selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.105"/>
+  <testcase name="setConnectionType to BLUETOOTH enables Bluetooth tab" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="applyPendingParams clears pending values" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="getEffectiveBluetoothType returns selected device type" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="updateFrequency sets error for frequency below min" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
   <testcase name="setConnectionType to USB enables USB tab" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
   <testcase name="saveConfiguration sets saveError on repository exception" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
   <testcase name="updateInterfaceMode to gateway changes mode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
-  <testcase name="saveConfiguration Unknown device type defaults to classic" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="goToNextStep from FREQUENCY_SLOT goes to REVIEW_CONFIGURE" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="saveConfiguration Unknown device type defaults to classic" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="goToNextStep from FREQUENCY_SLOT goes to REVIEW_CONFIGURE" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
   <testcase name="setDeviceType preserves interface name when already customized" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
   <testcase name="initial state is DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
   <testcase name="getPopularPresetsForRegion returns EU_Q presets for EU 868 Q region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
-  <testcase name="defaultInterfaceNameFor handles device without RNode prefix" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.105"/>
-  <testcase name="saveConfiguration succeeds in edit mode with same name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.12"/>
-  <testcase name="validateTcpConnection sets error when port above 65535" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="defaultInterfaceNameFor handles device without RNode prefix" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.104"/>
+  <testcase name="saveConfiguration succeeds in edit mode with same name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.112"/>
+  <testcase name="validateTcpConnection sets error when port above 65535" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
   <testcase name="isTcpMode returns true for TCP_WIFI connection type" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
-  <testcase name="updateCodingRate sets error for CR above 8" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
-  <testcase name="goToPreviousStep at DEVICE_DISCOVERY stays at DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
+  <testcase name="updateCodingRate sets error for CR above 8" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="goToPreviousStep at DEVICE_DISCOVERY stays at DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
   <testcase name="validateTcpConnection sets success on valid host and port" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
   <testcase name="updateTxPower sets error when exceeding region max" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="saveConfiguration Classic device uses classic connectionMode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.111"/>
-  <testcase name="getEffectiveDeviceName returns manual name when no device selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="getPopularPresetsForRegion returns 433 MHz presets for EU 433 region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="getPopularPresetsForRegion returns Asia-Pacific presets for Singapore region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="saveConfiguration returns early when validation fails" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
-  <testcase name="selectSlot updates state and clears custom frequency" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
-  <testcase name="getFrequencyRegions returns all regions" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="saveConfiguration TCP mode defaults port to 7633 when invalid" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="updateManualPinInput updates state correctly" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="updateManualBluetoothType updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="defaultInterfaceNameFor preserves custom interface name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.105"/>
-  <testcase name="updateSpreadingFactor sets error for SF below 5" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
-  <testcase name="saveConfiguration TCP mode uses tcp connectionMode and calls insertInterface" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="getEffectiveBluetoothType returns manual type when no device selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.105"/>
+  <testcase name="saveConfiguration Classic device uses classic connectionMode" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.119"/>
+  <testcase name="getEffectiveDeviceName returns manual name when no device selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
+  <testcase name="getPopularPresetsForRegion returns 433 MHz presets for EU 433 region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
+  <testcase name="getPopularPresetsForRegion returns Asia-Pacific presets for Singapore region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
+  <testcase name="saveConfiguration returns early when validation fails" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="selectSlot updates state and clears custom frequency" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="getFrequencyRegions returns all regions" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
+  <testcase name="saveConfiguration TCP mode defaults port to 7633 when invalid" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="updateManualPinInput updates state correctly" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="updateManualBluetoothType updates state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
+  <testcase name="defaultInterfaceNameFor preserves custom interface name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.104"/>
+  <testcase name="updateSpreadingFactor sets error for SF below 5" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.11"/>
+  <testcase name="saveConfiguration TCP mode uses tcp connectionMode and calls insertInterface" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.118"/>
+  <testcase name="getEffectiveBluetoothType returns manual type when no device selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.106"/>
   <testcase name="getRegionLimits returns correct limits for US region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.105"/>
   <testcase name="onAssociationCancelled clears associating state" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="saveConfiguration manual entry Unknown defaults to classic" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.109"/>
-  <testcase name="validateTcpConnection sets error when port below 1" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="saveConfiguration manual entry Unknown defaults to classic" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.108"/>
+  <testcase name="validateTcpConnection sets error when port below 1" classname="network.columba.app.viewmodel.RNodeWizardViewModelTest" time="0.107"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

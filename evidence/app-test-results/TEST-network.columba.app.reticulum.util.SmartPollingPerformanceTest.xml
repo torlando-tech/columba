@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.reticulum.util.SmartPollingPerformanceTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:20:51.278Z" hostname="hermes-agent" time="3.573">
+<testsuite name="network.columba.app.reticulum.util.SmartPollingPerformanceTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:02:15.571Z" hostname="hermes-agent" time="0.131">
   <properties/>
-  <testcase name="validateIdlePollingFrequency" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="3.096"/>
-  <testcase name="simulate24HourPolling" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="0.045"/>
-  <testcase name="validateTransitionFromActiveToIdle" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="0.037"/>
-  <testcase name="validateResetRestoresInitialState" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="0.034"/>
-  <testcase name="measureGetNextIntervalPerformance" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="0.031"/>
-  <testcase name="stressTestRapidStateChanges" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="0.034"/>
-  <testcase name="validateActivePollingFrequency" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="0.029"/>
+  <testcase name="validateIdlePollingFrequency" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="0.017"/>
+  <testcase name="simulate24HourPolling" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="0.02"/>
+  <testcase name="validateTransitionFromActiveToIdle" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="0.017"/>
+  <testcase name="validateResetRestoresInitialState" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="0.017"/>
+  <testcase name="measureGetNextIntervalPerformance" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="0.016"/>
+  <testcase name="stressTestRapidStateChanges" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="0.02"/>
+  <testcase name="validateActivePollingFrequency" classname="network.columba.app.reticulum.util.SmartPollingPerformanceTest" time="0.019"/>
   <system-out><![CDATA[Idle polling validation: 10 polls in 5 minutes (virtual time)
 24-hour polling comparison:
   Constant 2s: 43200 polls

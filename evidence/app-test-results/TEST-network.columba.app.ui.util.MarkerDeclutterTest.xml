@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.util.MarkerDeclutterTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:38:38.046Z" hostname="hermes-agent" time="0.123">
+<testsuite name="network.columba.app.ui.util.MarkerDeclutterTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:08:28.765Z" hostname="hermes-agent" time="0.007">
   <properties/>
-  <testcase name="two distant markers are not offset" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.084"/>
-  <testcase name="custom overlap threshold groups markers differently" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.006"/>
-  <testcase name="offset markers have display positions different from original" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.0"/>
-  <testcase name="large group uses scaled radius" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.012"/>
-  <testcase name="all marker hashes are preserved in output" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.009"/>
+  <testcase name="two distant markers are not offset" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.002"/>
+  <testcase name="custom overlap threshold groups markers differently" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.002"/>
+  <testcase name="offset markers have display positions different from original" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.001"/>
+  <testcase name="large group uses scaled radius" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.0"/>
+  <testcase name="all marker hashes are preserved in output" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.0"/>
   <testcase name="markers just outside threshold are not grouped" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.0"/>
-  <testcase name="transitive overlap groups markers in chain" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.0"/>
-  <testcase name="radius scales with group size" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.005"/>
+  <testcase name="transitive overlap groups markers in chain" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.001"/>
+  <testcase name="radius scales with group size" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.0"/>
   <testcase name="mixed isolated and clustered markers" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.0"/>
-  <testcase name="two offset markers are equidistant from centroid" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.0"/>
-  <testcase name="empty list returns empty" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.002"/>
+  <testcase name="two offset markers are equidistant from centroid" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.001"/>
+  <testcase name="empty list returns empty" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.0"/>
   <testcase name="offset markers preserve original positions" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.0"/>
   <testcase name="two separate clusters are handled independently" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.0"/>
   <testcase name="single marker is not offset" classname="network.columba.app.ui.util.MarkerDeclutterTest" time="0.0"/>

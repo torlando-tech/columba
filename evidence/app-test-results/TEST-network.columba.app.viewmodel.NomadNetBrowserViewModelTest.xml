@@ -1,64 +1,77 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" tests="51" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:42:24.698Z" hostname="hermes-agent" time="10.163">
+<testsuite name="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" tests="71" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:11:14.269Z" hostname="hermes-agent" time="13.99">
   <properties/>
-  <testcase name="loadPage seeds parser-declared field defaults into form state" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="3.16"/>
-  <testcase name="getCurrentUrl returns null in Loading state" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.235"/>
-  <testcase name="identifyToNode succeeds and triggers refresh" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.227"/>
-  <testcase name="navigateToLink user-cleared field submits empty string not default" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.237"/>
-  <testcase name="clearIdentifyError resets error" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.107"/>
-  <testcase name="init falls back to default when no rendering mode persisted" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.111"/>
-  <testcase name="cancelLoading emits Error state" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.112"/>
-  <testcase name="refresh fetches from network bypassing cache" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.121"/>
-  <testcase name="loadPage network failure emits Error" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.212"/>
-  <testcase name="navigateToLink user-typed value wins over field default" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.212"/>
-  <testcase name="goBack restores previous page and form fields" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.113"/>
-  <testcase name="setRenderingMode updates state" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.109"/>
-  <testcase name="init restores the persisted rendering mode" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.109"/>
-  <testcase name="identifyToNode failure sets error" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.21"/>
-  <testcase name="navigateToUrl with lxmf@ emits OpenConversation event" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.113"/>
-  <testcase name="loadPage with cache hit emits PageLoaded immediately" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.111"/>
-  <testcase name="navigateToLink with partial reload prefix does not navigate" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.116"/>
-  <testcase name="retry with no previous fetch is no-op" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.108"/>
-  <testcase name="navigateToLink with lxmf@ does not push history" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.11"/>
-  <testcase name="updateField overwrites previous value for same key" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.106"/>
+  <testcase name="loadPage seeds parser-declared field defaults into form state" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="1.008"/>
+  <testcase name="a var-bearing page persists the full path with its backtick field block" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.253"/>
+  <testcase name="getCurrentUrl returns null in Loading state" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.124"/>
+  <testcase name="identifyToNode does not persist the always-identify opt-in (the toggle owns it)" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.163"/>
+  <testcase name="identifyToNode succeeds and triggers refresh" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.222"/>
+  <testcase name="navigateToLink user-cleared field submits empty string not default" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.222"/>
+  <testcase name="navigating to a flagged node while a stale identify is in flight fetches fresh" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.134"/>
+  <testcase name="loadPage to an unflagged node uses the cache and does not fetch" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.12"/>
+  <testcase name="clearIdentifyError resets error" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.114"/>
+  <testcase name="init falls back to default when no rendering mode persisted" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.114"/>
+  <testcase name="cancelLoading emits Error state" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.114"/>
+  <testcase name="a deep in-browser navigation persists the deep path for tab re-entry" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.117"/>
+  <testcase name="refresh fetches from network bypassing cache" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.144"/>
+  <testcase name="loadPage network failure emits Error" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.218"/>
+  <testcase name="navigateToLink user-typed value wins over field default" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.216"/>
+  <testcase name="goBack restores previous page and form fields" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.115"/>
+  <testcase name="setRenderingMode updates state" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.111"/>
+  <testcase name="init restores the persisted rendering mode" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.112"/>
+  <testcase name="goBack to a flagged node's stored form page does not re-submit the form" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.172"/>
+  <testcase name="identifyToNode failure sets error" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.215"/>
+  <testcase name="navigateToUrl with lxmf@ emits OpenConversation event" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.116"/>
+  <testcase name="loadPage with cache hit emits PageLoaded immediately" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.113"/>
+  <testcase name="clearImageCache wipes the disk cache and resets in-flight image states" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.116"/>
+  <testcase name="navigateToLink with partial reload prefix does not navigate" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.113"/>
+  <testcase name="retry with no previous fetch is no-op" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.111"/>
+  <testcase name="navigateToLink with lxmf@ does not push history" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.114"/>
+  <testcase name="updateField overwrites previous value for same key" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.109"/>
   <testcase name="navigateToLink submits parser-declared default for unmodified field" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.216"/>
-  <testcase name="getCurrentUrl returns null in Error state" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.109"/>
-  <testcase name="identifyToNode does nothing when already identified" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.115"/>
-  <testcase name="retry after failed page load retries the same page" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.313"/>
-  <testcase name="loadPage to different node resets identity" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.108"/>
-  <testcase name="loadPage with cache miss fetches from network" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.212"/>
-  <testcase name="navigateToUrl pushes current page to history" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.107"/>
-  <testcase name="navigateToUrl with hash colon path navigates to page" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.108"/>
-  <testcase name="navigateToUrl with empty input is no-op" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.106"/>
-  <testcase name="init restore does not clobber a selection made before the read completes" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.12"/>
-  <testcase name="navigateToLink with form fields submits data and skips cache" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.217"/>
-  <testcase name="refresh on non-loaded state is no-op" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.108"/>
+  <testcase name="retry on a failed var-bearing page preserves the field tokens for persist" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.321"/>
+  <testcase name="getCurrentUrl returns null in Error state" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.127"/>
+  <testcase name="refresh after goBack re-submits the displayed page's own vars, not a later page's" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.422"/>
+  <testcase name="flagging a node after a form page loads does not re-submit the form" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.12"/>
+  <testcase name="loadPage to a flagged node syncs the set, bypasses the cache, and fetches fresh" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.121"/>
+  <testcase name="setImageLoadingMode updates state and persists the choice" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.113"/>
+  <testcase name="identifyToNode does nothing when already identified" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.141"/>
+  <testcase name="retry after failed page load retries the same page" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.328"/>
+  <testcase name="loadPage to different node resets identity" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.111"/>
+  <testcase name="loadPage with cache miss fetches from network" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.214"/>
+  <testcase name="navigateToUrl pushes current page to history" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.112"/>
+  <testcase name="navigateToUrl with hash colon path navigates to page" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.112"/>
+  <testcase name="navigateToUrl with empty input is no-op" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.112"/>
+  <testcase name="unflagging the displayed node resets isIdentified" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.144"/>
+  <testcase name="init restore does not clobber a selection made before the read completes" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.148"/>
+  <testcase name="closeSite resets state clears history and forgets last node" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.115"/>
+  <testcase name="navigateToLink with form fields submits data and skips cache" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.219"/>
+  <testcase name="refresh on non-loaded state is no-op" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.109"/>
   <testcase name="loadPage with custom path uses that path" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.109"/>
-  <testcase name="setRenderingMode persists the selection" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.111"/>
-  <testcase name="navigateToUrl with hash only defaults to index path" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.109"/>
-  <testcase name="navigateToUrl strips nomadnetwork scheme and navigates" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.112"/>
-  <testcase name="getShareableUrl prepends nomadnetwork scheme" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.109"/>
-  <testcase name="goBack with empty history returns false" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.105"/>
-  <testcase name="navigateToLink pushes current page to history" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.11"/>
-  <testcase name="updateField accumulates form fields" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.105"/>
-  <testcase name="navigateToLink with lxmf@ emits OpenConversation event" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.11"/>
-  <testcase name="navigateToUrl trims whitespace" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.108"/>
-  <testcase name="getShareableUrl returns null when not loaded" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.106"/>
-  <testcase name="multiple goBack pops stack correctly" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.115"/>
-  <testcase name="loadPage clears form fields" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.108"/>
-  <testcase name="initial state is correct" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.105"/>
-  <testcase name="loadPage strips backtick field block from path and submits it as var data" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.212"/>
-  <testcase name="getCurrentUrl returns null in Initial state" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.105"/>
-  <testcase name="retry after failed form submission resubmits form data" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.317"/>
-  <testcase name="navigateToUrl lowercases node hash" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.109"/>
-  <testcase name="getCurrentUrl returns hash colon path when PageLoaded" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.109"/>
+  <testcase name="unflagging a node does not re-fetch the loaded page" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.118"/>
+  <testcase name="setRenderingMode persists the selection" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.11"/>
+  <testcase name="navigateToUrl with hash only defaults to index path" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.111"/>
+  <testcase name="navigateToUrl strips nomadnetwork scheme and navigates" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.116"/>
+  <testcase name="getShareableUrl prepends nomadnetwork scheme" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.115"/>
+  <testcase name="stale identify outcome is dropped when the user navigates to another node" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="2.173"/>
+  <testcase name="goBack with empty history returns false" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.109"/>
+  <testcase name="goBack resets identification when returning to a different node" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.188"/>
+  <testcase name="navigateToLink pushes current page to history" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.123"/>
+  <testcase name="updateField accumulates form fields" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.122"/>
+  <testcase name="navigateToLink with lxmf@ emits OpenConversation event" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.143"/>
+  <testcase name="refresh on a var-bearing page re-submits the request data, not a bare fetch" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.343"/>
+  <testcase name="goBack to a flagged node's stored plain page re-fetches identified content" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.264"/>
+  <testcase name="navigateToUrl trims whitespace" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.13"/>
+  <testcase name="getShareableUrl returns null when not loaded" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.116"/>
+  <testcase name="multiple goBack pops stack correctly" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.118"/>
+  <testcase name="loadPage clears form fields" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.121"/>
+  <testcase name="initial state is correct" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.108"/>
+  <testcase name="flagging a node while a plain page is loaded re-fetches it" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.128"/>
+  <testcase name="loadPage strips backtick field block from path and submits it as var data" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.226"/>
+  <testcase name="getCurrentUrl returns null in Initial state" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.137"/>
+  <testcase name="retry after failed form submission resubmits form data" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.4"/>
+  <testcase name="navigateToUrl lowercases node hash" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.136"/>
+  <testcase name="getCurrentUrl returns hash colon path when PageLoaded" classname="network.columba.app.viewmodel.NomadNetBrowserViewModelTest" time="0.11"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

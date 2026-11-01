@@ -1,36 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.db.dao.ConversationDaoTest" tests="30" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:16.034Z" hostname="hermes-agent" time="1.178">
+<testsuite name="network.columba.app.data.db.dao.ConversationDaoTest" tests="30" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:20.374Z" hostname="hermes-agent" time="0.806">
   <properties/>
-  <testcase name="searchConversations_findsByPeerName" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.043"/>
-  <testcase name="getEnrichedConversations_displayNameFallsToPeerHash" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.029"/>
-  <testcase name="updatePeerName_changesName" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.028"/>
-  <testcase name="getEnrichedConversations_displayNameShowsPeerNameWhenNoNicknameOrAnnounce" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.034"/>
-  <testcase name="searchConversations_emptyResultsForNoMatch" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.032"/>
-  <testcase name="updateConversation_modifiesFields" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.029"/>
-  <testcase name="deleteConversation_removesConversation" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.031"/>
-  <testcase name="deleteConversationByKey_removesConversation" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.044"/>
-  <testcase name="getEnrichedConversations_nicknameOverridesAnnounceName" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.047"/>
-  <testcase name="getAllConversations_flowEmitsOnDelete" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.041"/>
-  <testcase name="getAllConversations_flowEmitsOnInsert" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.034"/>
-  <testcase name="searchConversations_caseInsensitiveSearch" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.055"/>
-  <testcase name="searchEnrichedConversations_findsByAnnounceName" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.095"/>
-  <testcase name="getEnrichedConversations_displayNameShowsNicknameWhenSet" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.043"/>
-  <testcase name="getAllConversations_flowEmitsOnUpdate" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.048"/>
-  <testcase name="incrementUnreadCount_increasesCount" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.037"/>
-  <testcase name="markAsRead_resetsCountAndUpdatesTimestamp" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.032"/>
-  <testcase name="compositePrimaryKey_allowsSamePeerForDifferentIdentities" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.034"/>
-  <testcase name="insertConversations_bulkInserts" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.046"/>
-  <testcase name="searchConversations_partialMatch" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.036"/>
-  <testcase name="getEnrichedConversations_contactWithoutNicknameUsesAnnounceName" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.057"/>
-  <testcase name="getAllConversationsList_returnsAllForIdentity" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.034"/>
-  <testcase name="insertConversation_replacesExisting" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.058"/>
-  <testcase name="getEnrichedConversations_displayNameShowsAnnounceNameWhenNoNickname" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.036"/>
-  <testcase name="searchEnrichedConversations_noResultsWhenNoMatch" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.033"/>
-  <testcase name="getAllConversations_orderedByLastMessageTimestamp" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.031"/>
-  <testcase name="insertConversation_createsNewConversation" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.023"/>
-  <testcase name="searchEnrichedConversations_findsByPeerHash" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.027"/>
-  <testcase name="searchEnrichedConversations_findsByNickname" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.03"/>
-  <testcase name="getConversation_returnsNullForNonexistent" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.022"/>
+  <testcase name="searchConversations_findsByPeerName" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.027"/>
+  <testcase name="getEnrichedConversations_displayNameFallsToPeerHash" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.033"/>
+  <testcase name="updatePeerName_changesName" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.025"/>
+  <testcase name="getEnrichedConversations_displayNameShowsPeerNameWhenNoNicknameOrAnnounce" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.025"/>
+  <testcase name="searchConversations_emptyResultsForNoMatch" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.024"/>
+  <testcase name="updateConversation_modifiesFields" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.023"/>
+  <testcase name="deleteConversation_removesConversation" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.023"/>
+  <testcase name="deleteConversationByKey_removesConversation" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.037"/>
+  <testcase name="getEnrichedConversations_nicknameOverridesAnnounceName" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.048"/>
+  <testcase name="getAllConversations_flowEmitsOnDelete" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.024"/>
+  <testcase name="getAllConversations_flowEmitsOnInsert" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.023"/>
+  <testcase name="searchConversations_caseInsensitiveSearch" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.024"/>
+  <testcase name="searchEnrichedConversations_findsByAnnounceName" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.024"/>
+  <testcase name="getEnrichedConversations_displayNameShowsNicknameWhenSet" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.023"/>
+  <testcase name="getAllConversations_flowEmitsOnUpdate" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.023"/>
+  <testcase name="incrementUnreadCount_increasesCount" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.023"/>
+  <testcase name="markAsRead_resetsCountAndUpdatesTimestamp" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.024"/>
+  <testcase name="compositePrimaryKey_allowsSamePeerForDifferentIdentities" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.022"/>
+  <testcase name="insertConversations_bulkInserts" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.023"/>
+  <testcase name="searchConversations_partialMatch" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.023"/>
+  <testcase name="getEnrichedConversations_contactWithoutNicknameUsesAnnounceName" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.026"/>
+  <testcase name="getAllConversationsList_returnsAllForIdentity" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.022"/>
+  <testcase name="insertConversation_replacesExisting" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.03"/>
+  <testcase name="getEnrichedConversations_displayNameShowsAnnounceNameWhenNoNickname" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.026"/>
+  <testcase name="searchEnrichedConversations_noResultsWhenNoMatch" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.022"/>
+  <testcase name="getAllConversations_orderedByLastMessageTimestamp" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.025"/>
+  <testcase name="insertConversation_createsNewConversation" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.032"/>
+  <testcase name="searchEnrichedConversations_findsByPeerHash" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.036"/>
+  <testcase name="searchEnrichedConversations_findsByNickname" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.033"/>
+  <testcase name="getConversation_returnsNullForNonexistent" classname="network.columba.app.data.db.dao.ConversationDaoTest" time="0.024"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

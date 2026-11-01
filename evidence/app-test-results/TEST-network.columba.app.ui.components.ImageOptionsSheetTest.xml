@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.ImageOptionsSheetTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:24:31.473Z" hostname="hermes-agent" time="8.824">
+<testsuite name="network.columba.app.ui.components.ImageOptionsSheetTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:03:56.552Z" hostname="hermes-agent" time="1.05">
   <properties/>
-  <testcase name="displays Save to device description" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="6.564"/>
-  <testcase name="tap Save to device invokes onSaveToDevice callback" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.367"/>
-  <testcase name="displays Share description" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.26"/>
-  <testcase name="both options are independently clickable" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.231"/>
-  <testcase name="tap Save description also invokes onSaveToDevice callback" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.24"/>
-  <testcase name="displays Save to device option" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.206"/>
-  <testcase name="displays Image title" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.179"/>
-  <testcase name="tap Share invokes onShare callback" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.178"/>
-  <testcase name="tap Share description also invokes onShare callback" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.151"/>
-  <testcase name="displays Share option" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.153"/>
+  <testcase name="displays Save to device description" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.133"/>
+  <testcase name="tap Save to device invokes onSaveToDevice callback" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.108"/>
+  <testcase name="displays Share description" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.087"/>
+  <testcase name="both options are independently clickable" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.092"/>
+  <testcase name="tap Save description also invokes onSaveToDevice callback" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.117"/>
+  <testcase name="displays Save to device option" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.089"/>
+  <testcase name="displays Image title" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.092"/>
+  <testcase name="tap Share invokes onShare callback" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.151"/>
+  <testcase name="tap Share description also invokes onShare callback" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.094"/>
+  <testcase name="displays Share option" classname="network.columba.app.ui.components.ImageOptionsSheetTest" time="0.083"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.audio.OggOpusMetadataReaderTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:16:57.852Z" hostname="hermes-agent" time="0.22">
+<testsuite name="network.columba.app.audio.OggOpusMetadataReaderTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:59:56.362Z" hostname="hermes-agent" time="0.002">
   <properties/>
-  <testcase name="rejects truncated ogg data" classname="network.columba.app.audio.OggOpusMetadataReaderTest" time="0.062"/>
-  <testcase name="reads duration from final granule before playback" classname="network.columba.app.audio.OggOpusMetadataReaderTest" time="0.146"/>
+  <testcase name="rejects truncated ogg data" classname="network.columba.app.audio.OggOpusMetadataReaderTest" time="0.001"/>
+  <testcase name="reads duration from final granule before playback" classname="network.columba.app.audio.OggOpusMetadataReaderTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

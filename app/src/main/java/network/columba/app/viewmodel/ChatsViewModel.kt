@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -228,6 +229,18 @@ class ChatsViewModel
         // expanded cards / open sheets subscribe (same pattern as
         // contactSavedCache).
         private val cardThreadsCache = ConcurrentHashMap<String, kotlinx.coroutines.flow.StateFlow<ChatCardThreadsUi>>()
+
+        // Identity switch must not leave cards showing the previous
+        // identity's thread titles/previews (the flows resolve the active
+        // identity once at subscription): drop every cached bundle so the
+        // next subscription re-resolves against the new identity.
+        init {
+            viewModelScope.launch {
+                callHistoryRepository.observeActiveIdentityHash()
+                    .distinctUntilChanged()
+                    .collect { cardThreadsCache.clear() }
+            }
+        }
 
         /** Threads + Main preview for one conversation (card + sheet share it). */
         fun cardThreads(peerHash: String): kotlinx.coroutines.flow.StateFlow<ChatCardThreadsUi> =

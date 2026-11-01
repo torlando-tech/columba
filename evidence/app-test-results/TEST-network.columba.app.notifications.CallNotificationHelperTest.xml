@@ -1,36 +1,40 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.notifications.CallNotificationHelperTest" tests="31" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:19:52.722Z" hostname="hermes-agent" time="4.256">
+<testsuite name="network.columba.app.notifications.CallNotificationHelperTest" tests="35" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:01:43.278Z" hostname="hermes-agent" time="0.835">
   <properties/>
-  <testcase name="EXTRA_IDENTITY_HASH is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="3.026"/>
-  <testcase name="NOTIFICATION_ID_ONGOING_CALL is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.041"/>
-  <testcase name="ongoing notification formats hour plus duration correctly" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.101"/>
-  <testcase name="long identity hash is truncated" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.068"/>
-  <testcase name="cancelIncomingCallNotification cancels correct notification" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.042"/>
-  <testcase name="showOngoingCallNotification posts notification with correct ID" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.035"/>
-  <testcase name="creates incoming call notification channel" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.03"/>
-  <testcase name="showIncomingCallNotification respects permission" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.03"/>
-  <testcase name="creates both notification channels" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.028"/>
-  <testcase name="showOngoingCallNotification respects permission" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.026"/>
-  <testcase name="ongoing notification formats minute duration correctly" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.028"/>
-  <testcase name="showOngoingCallNotification with null name uses formatted hash" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.043"/>
-  <testcase name="incoming call notification has caller name as content" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.035"/>
-  <testcase name="ongoing call notification has correct title" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.028"/>
-  <testcase name="EXTRA_CALLER_NAME is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.026"/>
-  <testcase name="ongoing notification formats zero duration correctly" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.037"/>
-  <testcase name="cancelAllCallNotifications cancels both notifications" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.033"/>
-  <testcase name="short identity hash is displayed as-is" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.023"/>
-  <testcase name="ACTION_ANSWER_CALL is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.023"/>
-  <testcase name="ongoing call notification shows peer name and duration" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.028"/>
-  <testcase name="showIncomingCallNotification posts notification with correct ID" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.024"/>
-  <testcase name="ongoing call notification is ongoing" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.021"/>
-  <testcase name="ACTION_END_CALL is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.018"/>
-  <testcase name="NOTIFICATION_ID_INCOMING_CALL is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.018"/>
-  <testcase name="ACTION_DECLINE_CALL is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.019"/>
-  <testcase name="showIncomingCallNotification with null name uses formatted hash" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.02"/>
-  <testcase name="creates ongoing call notification channel" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.018"/>
-  <testcase name="incoming call notification is ongoing" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.019"/>
-  <testcase name="incoming call notification has correct title" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.02"/>
-  <testcase name="ACTION_OPEN_CALL is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.023"/>
+  <testcase name="EXTRA_IDENTITY_HASH is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.018"/>
+  <testcase name="NOTIFICATION_ID_ONGOING_CALL is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.019"/>
+  <testcase name="ongoing notification formats hour plus duration correctly" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.087"/>
+  <testcase name="long identity hash is truncated" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.049"/>
+  <testcase name="cancelIncomingCallNotification cancels correct notification" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.02"/>
+  <testcase name="full screen intents not usable when appop at default mode" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.019"/>
+  <testcase name="showOngoingCallNotification posts notification with correct ID" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.02"/>
+  <testcase name="creates incoming call notification channel" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.019"/>
+  <testcase name="showIncomingCallNotification respects permission" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.02"/>
+  <testcase name="creates both notification channels" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.019"/>
+  <testcase name="showOngoingCallNotification respects permission" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.019"/>
+  <testcase name="ongoing notification formats minute duration correctly" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.024"/>
+  <testcase name="showOngoingCallNotification with null name uses formatted hash" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.019"/>
+  <testcase name="incoming call notification has caller name as content" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.019"/>
+  <testcase name="ongoing call notification has correct title" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.018"/>
+  <testcase name="EXTRA_CALLER_NAME is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.016"/>
+  <testcase name="ongoing notification formats zero duration correctly" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.018"/>
+  <testcase name="cancelAllCallNotifications cancels both notifications" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.017"/>
+  <testcase name="short identity hash is displayed as-is" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.016"/>
+  <testcase name="ACTION_ANSWER_CALL is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.016"/>
+  <testcase name="ongoing call notification shows peer name and duration" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.017"/>
+  <testcase name="showIncomingCallNotification posts notification with correct ID" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.015"/>
+  <testcase name="ongoing call notification is ongoing" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.015"/>
+  <testcase name="ACTION_END_CALL is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.016"/>
+  <testcase name="full screen intents not usable when preflight check fails" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.021"/>
+  <testcase name="NOTIFICATION_ID_INCOMING_CALL is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.016"/>
+  <testcase name="full screen intents not usable when appop ignored" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.016"/>
+  <testcase name="ACTION_DECLINE_CALL is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.021"/>
+  <testcase name="full screen intents usable when preflight and appop both allow" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.031"/>
+  <testcase name="showIncomingCallNotification with null name uses formatted hash" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.033"/>
+  <testcase name="creates ongoing call notification channel" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.039"/>
+  <testcase name="incoming call notification is ongoing" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.03"/>
+  <testcase name="incoming call notification has correct title" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.027"/>
+  <testcase name="ACTION_OPEN_CALL is correct" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.032"/>
   <testcase name="cancelOngoingCallNotification cancels correct notification" classname="network.columba.app.notifications.CallNotificationHelperTest" time="0.02"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

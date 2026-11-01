@@ -1,33 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.util.CrashReportManagerTest" tests="27" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:38:59.061Z" hostname="hermes-agent" time="4.271">
+<testsuite name="network.columba.app.util.CrashReportManagerTest" tests="27" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:08:37.232Z" hostname="hermes-agent" time="1.125">
   <properties/>
-  <testcase name="installCrashHandler sets default exception handler" classname="network.columba.app.util.CrashReportManagerTest" time="2.863"/>
-  <testcase name="crash handler persists crash data when exception occurs" classname="network.columba.app.util.CrashReportManagerTest" time="0.134"/>
-  <testcase name="filterSensitiveData preserves short hashes" classname="network.columba.app.util.CrashReportManagerTest" time="0.037"/>
-  <testcase name="generateBugReport uses logsAtCrash when provided" classname="network.columba.app.util.CrashReportManagerTest" time="0.276"/>
-  <testcase name="crash handler includes cause chain in stack trace" classname="network.columba.app.util.CrashReportManagerTest" time="0.035"/>
-  <testcase name="hasPendingCrashReport returns false when no crash data exists" classname="network.columba.app.util.CrashReportManagerTest" time="0.03"/>
-  <testcase name="crash handler persists crash data for exception without message" classname="network.columba.app.util.CrashReportManagerTest" time="0.032"/>
-  <testcase name="filterSensitiveData handles empty string" classname="network.columba.app.util.CrashReportManagerTest" time="0.026"/>
-  <testcase name="generateBugReport includes crash info when provided" classname="network.columba.app.util.CrashReportManagerTest" time="0.029"/>
-  <testcase name="filterSensitiveData redacts home directory paths" classname="network.columba.app.util.CrashReportManagerTest" time="0.025"/>
-  <testcase name="captureRecentLogs returns string" classname="network.columba.app.util.CrashReportManagerTest" time="0.033"/>
-  <testcase name="filterSensitiveData redacts storage paths" classname="network.columba.app.util.CrashReportManagerTest" time="0.023"/>
-  <testcase name="generateBugReport shows no logs message when logs are blank" classname="network.columba.app.util.CrashReportManagerTest" time="0.028"/>
+  <testcase name="installCrashHandler sets default exception handler" classname="network.columba.app.util.CrashReportManagerTest" time="0.028"/>
+  <testcase name="crash handler persists crash data when exception occurs" classname="network.columba.app.util.CrashReportManagerTest" time="0.108"/>
+  <testcase name="filterSensitiveData preserves short hashes" classname="network.columba.app.util.CrashReportManagerTest" time="0.075"/>
+  <testcase name="generateBugReport uses logsAtCrash when provided" classname="network.columba.app.util.CrashReportManagerTest" time="0.061"/>
+  <testcase name="crash handler includes cause chain in stack trace" classname="network.columba.app.util.CrashReportManagerTest" time="0.047"/>
+  <testcase name="hasPendingCrashReport returns false when no crash data exists" classname="network.columba.app.util.CrashReportManagerTest" time="0.038"/>
+  <testcase name="crash handler persists crash data for exception without message" classname="network.columba.app.util.CrashReportManagerTest" time="0.049"/>
+  <testcase name="filterSensitiveData handles empty string" classname="network.columba.app.util.CrashReportManagerTest" time="0.041"/>
+  <testcase name="generateBugReport includes crash info when provided" classname="network.columba.app.util.CrashReportManagerTest" time="0.027"/>
+  <testcase name="filterSensitiveData redacts home directory paths" classname="network.columba.app.util.CrashReportManagerTest" time="0.032"/>
+  <testcase name="captureRecentLogs returns string" classname="network.columba.app.util.CrashReportManagerTest" time="0.04"/>
+  <testcase name="filterSensitiveData redacts storage paths" classname="network.columba.app.util.CrashReportManagerTest" time="0.036"/>
+  <testcase name="generateBugReport shows no logs message when logs are blank" classname="network.columba.app.util.CrashReportManagerTest" time="0.031"/>
   <testcase name="generateBugReport shows no logs message when logs are empty" classname="network.columba.app.util.CrashReportManagerTest" time="0.026"/>
-  <testcase name="filterSensitiveData preserves normal text" classname="network.columba.app.util.CrashReportManagerTest" time="0.024"/>
-  <testcase name="filterSensitiveData truncates long hashes to 8 characters" classname="network.columba.app.util.CrashReportManagerTest" time="0.031"/>
-  <testcase name="generateBugReport omits message line when crash message is null" classname="network.columba.app.util.CrashReportManagerTest" time="0.029"/>
-  <testcase name="generateBugReport includes logs section" classname="network.columba.app.util.CrashReportManagerTest" time="0.055"/>
-  <testcase name="filterSensitiveData redacts IP addresses" classname="network.columba.app.util.CrashReportManagerTest" time="0.036"/>
-  <testcase name="clearPendingCrashReport completes without error when no crash exists" classname="network.columba.app.util.CrashReportManagerTest" time="0.037"/>
-  <testcase name="generateBugReport truncates identity hash for privacy" classname="network.columba.app.util.CrashReportManagerTest" time="0.026"/>
-  <testcase name="generateBugReport filters sensitive data in logs" classname="network.columba.app.util.CrashReportManagerTest" time="0.024"/>
-  <testcase name="filterSensitiveData redacts cryptographic keys" classname="network.columba.app.util.CrashReportManagerTest" time="0.02"/>
-  <testcase name="generateBugReport includes protocol versions" classname="network.columba.app.util.CrashReportManagerTest" time="0.024"/>
-  <testcase name="getPendingCrashReport returns null when no crash data exists" classname="network.columba.app.util.CrashReportManagerTest" time="0.02"/>
-  <testcase name="generateBugReport includes system info" classname="network.columba.app.util.CrashReportManagerTest" time="0.025"/>
-  <testcase name="filterSensitiveData handles multiple patterns in same text" classname="network.columba.app.util.CrashReportManagerTest" time="0.019"/>
+  <testcase name="filterSensitiveData preserves normal text" classname="network.columba.app.util.CrashReportManagerTest" time="0.021"/>
+  <testcase name="filterSensitiveData truncates long hashes to 8 characters" classname="network.columba.app.util.CrashReportManagerTest" time="0.023"/>
+  <testcase name="generateBugReport omits message line when crash message is null" classname="network.columba.app.util.CrashReportManagerTest" time="0.031"/>
+  <testcase name="generateBugReport includes logs section" classname="network.columba.app.util.CrashReportManagerTest" time="0.068"/>
+  <testcase name="filterSensitiveData redacts IP addresses" classname="network.columba.app.util.CrashReportManagerTest" time="0.035"/>
+  <testcase name="clearPendingCrashReport completes without error when no crash exists" classname="network.columba.app.util.CrashReportManagerTest" time="0.071"/>
+  <testcase name="generateBugReport truncates identity hash for privacy" classname="network.columba.app.util.CrashReportManagerTest" time="0.027"/>
+  <testcase name="generateBugReport filters sensitive data in logs" classname="network.columba.app.util.CrashReportManagerTest" time="0.037"/>
+  <testcase name="filterSensitiveData redacts cryptographic keys" classname="network.columba.app.util.CrashReportManagerTest" time="0.022"/>
+  <testcase name="generateBugReport includes protocol versions" classname="network.columba.app.util.CrashReportManagerTest" time="0.045"/>
+  <testcase name="getPendingCrashReport returns null when no crash data exists" classname="network.columba.app.util.CrashReportManagerTest" time="0.031"/>
+  <testcase name="generateBugReport includes system info" classname="network.columba.app.util.CrashReportManagerTest" time="0.034"/>
+  <testcase name="filterSensitiveData handles multiple patterns in same text" classname="network.columba.app.util.CrashReportManagerTest" time="0.026"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

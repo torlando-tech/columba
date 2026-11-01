@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.ReplyComponentsTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:26:13.428Z" hostname="hermes-agent" time="7.856">
+<testsuite name="network.columba.app.ui.components.ReplyComponentsTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:04:23.005Z" hostname="hermes-agent" time="0.924">
   <properties/>
-  <testcase name="ReplyInputBar displays replying to sender name" classname="network.columba.app.ui.components.ReplyComponentsTest" time="5.683"/>
-  <testcase name="SwipeableMessageBubble displays for received message" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.162"/>
-  <testcase name="ReplyInputBar calls onCancelReply when close button tapped" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.207"/>
-  <testcase name="SwipeableMessageBubble displays content" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.105"/>
-  <testcase name="ReplyPreviewBubble displays Message placeholder for empty content" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.104"/>
-  <testcase name="ReplyInputBar displays content preview" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.098"/>
-  <testcase name="ReplyPreviewBubble calls onClick when tapped" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.1"/>
-  <testcase name="ReplyInputBar displays Photo text for image attachment" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.119"/>
-  <testcase name="ReplyInputBar displays filename for file attachment" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.09"/>
-  <testcase name="ReplyPreviewBubble displays image icon when hasImage is true" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.093"/>
-  <testcase name="ReplyInputBar displays content preview when no attachments" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.104"/>
-  <testcase name="SwipeableMessageBubble displays for sent message" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.084"/>
-  <testcase name="ReplyPreviewBubble displays file icon when hasFileAttachment is true" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.081"/>
-  <testcase name="ReplyPreviewBubble displays both file and content" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.09"/>
-  <testcase name="ReplyPreviewBubble displays for isFromMe true" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.119"/>
-  <testcase name="ReplyPreviewBubble displays sender name" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.078"/>
-  <testcase name="ReplyInputBar hides file icon when no filename" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.086"/>
-  <testcase name="ReplyPreviewBubble displays both image and content" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.071"/>
-  <testcase name="ReplyPreviewBubble displays content preview" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.072"/>
+  <testcase name="ReplyInputBar displays replying to sender name" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.056"/>
+  <testcase name="SwipeableMessageBubble displays for received message" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.048"/>
+  <testcase name="ReplyInputBar calls onCancelReply when close button tapped" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.051"/>
+  <testcase name="SwipeableMessageBubble displays content" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.043"/>
+  <testcase name="ReplyPreviewBubble displays Message placeholder for empty content" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.044"/>
+  <testcase name="ReplyInputBar displays content preview" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.042"/>
+  <testcase name="ReplyPreviewBubble calls onClick when tapped" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.044"/>
+  <testcase name="ReplyInputBar displays Photo text for image attachment" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.043"/>
+  <testcase name="ReplyInputBar displays filename for file attachment" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.095"/>
+  <testcase name="ReplyPreviewBubble displays image icon when hasImage is true" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.066"/>
+  <testcase name="ReplyInputBar displays content preview when no attachments" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.041"/>
+  <testcase name="SwipeableMessageBubble displays for sent message" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.04"/>
+  <testcase name="ReplyPreviewBubble displays file icon when hasFileAttachment is true" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.043"/>
+  <testcase name="ReplyPreviewBubble displays both file and content" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.043"/>
+  <testcase name="ReplyPreviewBubble displays for isFromMe true" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.042"/>
+  <testcase name="ReplyPreviewBubble displays sender name" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.048"/>
+  <testcase name="ReplyInputBar hides file icon when no filename" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.043"/>
+  <testcase name="ReplyPreviewBubble displays both image and content" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.043"/>
+  <testcase name="ReplyPreviewBubble displays content preview" classname="network.columba.app.ui.components.ReplyComponentsTest" time="0.043"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

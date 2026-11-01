@@ -1,83 +1,79 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" tests="70" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:42:42.551Z" hostname="hermes-agent" time="16.424">
+<testsuite name="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" tests="70" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:11:29.505Z" hostname="hermes-agent" time="14.754">
   <properties/>
-  <testcase name="state with isGeocoderAvailable false is valid" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="5.967"/>
-  <testcase name="error callback updates error message" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.358"/>
-  <testcase name="download uses default name when name is blank" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.17"/>
-  <testcase name="progress IDLE status is reflected in state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.174"/>
-  <testcase name="initial viewmodel state has geocoder availability set" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.181"/>
-  <testcase name="setLocation at min latitude does not crash with updateEstimate" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.129"/>
-  <testcase name="getEstimatedSizeString returns GB for gigabyte sizes" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.13"/>
-  <testcase name="getEstimatedSizeString returns KB for kilobyte sizes" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.131"/>
-  <testcase name="downloading progress updates repository" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.139"/>
-  <testcase name="previousStep transitions from RADIUS to LOCATION" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.178"/>
-  <testcase name="hasLocation is false when only longitude is set" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.189"/>
-  <testcase name="setLocation clamps latitude exceeding 90 to 90" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.154"/>
-  <testcase name="DownloadWizardStep has all expected values" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.146"/>
-  <testcase name="nextStep transitions from RADIUS to CONFIRM" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.142"/>
-  <testcase name="setName updates state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.169"/>
-  <testcase name="initial state reflects httpEnabled from flow" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.16"/>
-  <testcase name="nextStep from CONFIRM starts download and transitions to DOWNLOADING" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.124"/>
-  <testcase name="error marks region with error in repository" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.129"/>
-  <testcase name="initForUpdate pre-fills state from existing region" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.218"/>
-  <testcase name="httpAutoDisabled is false initially" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.132"/>
-  <testcase name="setLocationFromCurrent updates state from Location object" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.436"/>
-  <testcase name="hasLocation is false when only latitude is set" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.141"/>
-  <testcase name="enableHttp does not throw when called multiple times" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.187"/>
-  <testcase name="enableHttp sets httpEnabledForDownload flag and enables HTTP" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.157"/>
-  <testcase name="setRadiusOption updates state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.126"/>
-  <testcase name="setLocation at max latitude does not crash with updateEstimate" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.141"/>
-  <testcase name="setLocation clamps longitude below negative 180 to negative 180" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.129"/>
-  <testcase name="download progress updates are reflected in state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.131"/>
-  <testcase name="reset resets all state to initial values" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.125"/>
-  <testcase name="setLocation clamps longitude exceeding 180 to 180" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.132"/>
-  <testcase name="hasLocation is true when both coordinates are set" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.132"/>
-  <testcase name="initial state has empty address search fields" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.128"/>
-  <testcase name="setLocation updates state with coordinates" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.152"/>
-  <testcase name="download creates region in repository" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.168"/>
-  <testcase name="clearAddressSearch resets all address search state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.141"/>
-  <testcase name="setName with blank string has invalid name" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.128"/>
-  <testcase name="download complete marks download as complete" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.171"/>
-  <testcase name="initial state has correct defaults" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.177"/>
-  <testcase name="RadiusOption has correct labels" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.119"/>
-  <testcase name="setName with empty string has invalid name" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.112"/>
-  <testcase name="download complete sets both httpAutoDisabled and styleCacheWarning when applicable" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.119"/>
-  <testcase name="previousStep from DOWNLOADING cancels download" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.117"/>
-  <testcase name="setAddressQuery updates state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.125"/>
+  <testcase name="state with isGeocoderAvailable false is valid" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="4.01"/>
+  <testcase name="error callback updates error message" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.307"/>
+  <testcase name="download uses default name when name is blank" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.177"/>
+  <testcase name="progress IDLE status is reflected in state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.17"/>
+  <testcase name="initial viewmodel state has geocoder availability set" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.144"/>
+  <testcase name="setLocation at min latitude does not crash with updateEstimate" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.142"/>
+  <testcase name="getEstimatedSizeString returns GB for gigabyte sizes" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.135"/>
+  <testcase name="getEstimatedSizeString returns KB for kilobyte sizes" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.134"/>
+  <testcase name="downloading progress updates repository" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.166"/>
+  <testcase name="previousStep transitions from RADIUS to LOCATION" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.141"/>
+  <testcase name="hasLocation is false when only longitude is set" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.161"/>
+  <testcase name="setLocation clamps latitude exceeding 90 to 90" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.142"/>
+  <testcase name="DownloadWizardStep has all expected values" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.144"/>
+  <testcase name="nextStep transitions from RADIUS to CONFIRM" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.139"/>
+  <testcase name="setName updates state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.139"/>
+  <testcase name="initial state reflects httpEnabled from flow" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.155"/>
+  <testcase name="nextStep from CONFIRM starts download and transitions to DOWNLOADING" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.139"/>
+  <testcase name="error marks region with error in repository" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.163"/>
+  <testcase name="initForUpdate pre-fills state from existing region" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.202"/>
+  <testcase name="httpAutoDisabled is false initially" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.147"/>
+  <testcase name="setLocationFromCurrent updates state from Location object" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.44"/>
+  <testcase name="hasLocation is false when only latitude is set" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.133"/>
+  <testcase name="enableHttp does not throw when called multiple times" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.181"/>
+  <testcase name="enableHttp sets httpEnabledForDownload flag and enables HTTP" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.139"/>
+  <testcase name="setRadiusOption updates state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.127"/>
+  <testcase name="setLocation at max latitude does not crash with updateEstimate" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.159"/>
+  <testcase name="setLocation clamps longitude below negative 180 to negative 180" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.151"/>
+  <testcase name="download progress updates are reflected in state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.133"/>
+  <testcase name="reset resets all state to initial values" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.152"/>
+  <testcase name="setLocation clamps longitude exceeding 180 to 180" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.133"/>
+  <testcase name="hasLocation is true when both coordinates are set" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.147"/>
+  <testcase name="initial state has empty address search fields" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.159"/>
+  <testcase name="setLocation updates state with coordinates" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.15"/>
+  <testcase name="download creates region in repository" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.131"/>
+  <testcase name="clearAddressSearch resets all address search state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.129"/>
+  <testcase name="setName with blank string has invalid name" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.15"/>
+  <testcase name="download complete marks download as complete" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.163"/>
+  <testcase name="initial state has correct defaults" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.132"/>
+  <testcase name="RadiusOption has correct labels" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.131"/>
+  <testcase name="setName with empty string has invalid name" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.139"/>
+  <testcase name="download complete sets both httpAutoDisabled and styleCacheWarning when applicable" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.163"/>
+  <testcase name="previousStep from DOWNLOADING cancels download" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.129"/>
+  <testcase name="setAddressQuery updates state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.128"/>
   <testcase name="httpEnabled false initially when flow starts with false" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.133"/>
-  <testcase name="isGeocoderAvailable defaults to true in state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.131"/>
-  <testcase name="previousStep from DOWNLOADING cancels and returns to CONFIRM" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.118"/>
-  <testcase name="nextStep transitions from LOCATION to RADIUS" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.113"/>
-  <testcase name="initForUpdate does nothing for non-existent region" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.115"/>
-  <testcase name="searchAddress does nothing when query is blank" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.125"/>
-  <testcase name="selectAddressResult updates hasLocation to true" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.144"/>
-  <testcase name="clearError clears error message" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.161"/>
-  <testcase name="setLocation clamps latitude below negative 90 to negative 90" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.141"/>
-  <testcase name="initForUpdate snaps to nearest radius for non-standard km" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.122"/>
-  <testcase name="previousStep from LOCATION stays at LOCATION" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.113"/>
-  <testcase name="setLocation near pole with large radius does not crash" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.122"/>
-  <testcase name="httpEnabled state updates when flow changes" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.114"/>
-  <testcase name="nextStep from DOWNLOADING stays at DOWNLOADING" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.125"/>
-  <testcase name="searchAddress does nothing when query is only whitespace" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.112"/>
-  <testcase name="previousStep transitions from CONFIRM to RADIUS" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.153"/>
-  <testcase name="setLocation triggers estimate update" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.117"/>
-  <testcase name="download complete sets styleCacheWarning when style caching fails" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.139"/>
-  <testcase name="getEstimatedSizeString returns MB for megabyte sizes" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.148"/>
-  <testcase name="setZoomRange updates state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.149"/>
-  <testcase name="setZoomRange clamps values to valid range" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.135"/>
-  <testcase name="setRadiusOption with all options works correctly" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.122"/>
-  <testcase name="setZoomRange triggers estimate update" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.12"/>
-  <testcase name="RadiusOption has correct km values" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.115"/>
-  <testcase name="cancelDownload sets isDownloading to false" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.116"/>
-  <testcase name="selectAddressResult sets location and clears search" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.122"/>
-  <testcase name="getEstimatedSizeString returns bytes for small sizes" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.124"/>
+  <testcase name="isGeocoderAvailable defaults to true in state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.126"/>
+  <testcase name="previousStep from DOWNLOADING cancels and returns to CONFIRM" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.148"/>
+  <testcase name="nextStep transitions from LOCATION to RADIUS" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.143"/>
+  <testcase name="initForUpdate does nothing for non-existent region" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.148"/>
+  <testcase name="searchAddress does nothing when query is blank" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.138"/>
+  <testcase name="selectAddressResult updates hasLocation to true" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.139"/>
+  <testcase name="clearError clears error message" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.131"/>
+  <testcase name="setLocation clamps latitude below negative 90 to negative 90" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.157"/>
+  <testcase name="initForUpdate snaps to nearest radius for non-standard km" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.144"/>
+  <testcase name="previousStep from LOCATION stays at LOCATION" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.126"/>
+  <testcase name="setLocation near pole with large radius does not crash" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.127"/>
+  <testcase name="httpEnabled state updates when flow changes" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.126"/>
+  <testcase name="nextStep from DOWNLOADING stays at DOWNLOADING" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.133"/>
+  <testcase name="searchAddress does nothing when query is only whitespace" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.131"/>
+  <testcase name="previousStep transitions from CONFIRM to RADIUS" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.165"/>
+  <testcase name="setLocation triggers estimate update" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.145"/>
+  <testcase name="download complete sets styleCacheWarning when style caching fails" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.134"/>
+  <testcase name="getEstimatedSizeString returns MB for megabyte sizes" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.129"/>
+  <testcase name="setZoomRange updates state" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.133"/>
+  <testcase name="setZoomRange clamps values to valid range" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.129"/>
+  <testcase name="setRadiusOption with all options works correctly" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.132"/>
+  <testcase name="setZoomRange triggers estimate update" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.129"/>
+  <testcase name="RadiusOption has correct km values" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.136"/>
+  <testcase name="cancelDownload sets isDownloading to false" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.162"/>
+  <testcase name="selectAddressResult sets location and clears search" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.153"/>
+  <testcase name="getEstimatedSizeString returns bytes for small sizes" classname="network.columba.app.viewmodel.OfflineMapDownloadViewModelTest" time="0.143"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation
 SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
 ]]></system-err>
 </testsuite>

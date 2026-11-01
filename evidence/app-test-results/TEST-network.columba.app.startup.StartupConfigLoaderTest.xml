@@ -1,21 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.startup.StartupConfigLoaderTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:22:29.493Z" hostname="hermes-agent" time="2.726">
+<testsuite name="network.columba.app.startup.StartupConfigLoaderTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:03:20.639Z" hostname="hermes-agent" time="1.016">
   <properties/>
-  <testcase name="loadConfig handles multiple interfaces" classname="network.columba.app.startup.StartupConfigLoaderTest" time="2.538"/>
-  <testcase name="loadConfig returns complete config when all repositories succeed" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.023"/>
-  <testcase name="loadConfig handles null identity correctly" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.036"/>
-  <testcase name="StartupConfig data class equals and hashCode work correctly" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.008"/>
-  <testcase name="loadConfig surfaces autoconnect IFAC-only setting" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.027"/>
-  <testcase name="loadConfig completes successfully with all repository calls" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.029"/>
-  <testcase name="StartupConfig data class properties are accessible" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.024"/>
-  <testcase name="loadConfig calls all repositories" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.036"/>
+  <testcase name="loadConfig handles multiple interfaces" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.877"/>
+  <testcase name="loadConfig returns complete config when all repositories succeed" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.022"/>
+  <testcase name="loadConfig handles null identity correctly" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.022"/>
+  <testcase name="StartupConfig data class equals and hashCode work correctly" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.007"/>
+  <testcase name="loadConfig surfaces autoconnect IFAC-only setting" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.021"/>
+  <testcase name="loadConfig completes successfully with all repository calls" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.02"/>
+  <testcase name="StartupConfig data class properties are accessible" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.019"/>
+  <testcase name="loadConfig calls all repositories" classname="network.columba.app.startup.StartupConfigLoaderTest" time="0.028"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

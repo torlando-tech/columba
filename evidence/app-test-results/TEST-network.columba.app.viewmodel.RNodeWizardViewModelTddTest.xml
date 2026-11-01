@@ -1,26 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:43:34.829Z" hostname="hermes-agent" time="3.178">
+<testsuite name="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:11:56.013Z" hostname="hermes-agent" time="0.128">
   <properties/>
-  <testcase name="user-modified frequency error is preserved when navigating forward from region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="3.041"/>
-  <testcase name="manual device name at exactly 32 characters is valid" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.013"/>
+  <testcase name="user-modified frequency error is preserved when navigating forward from region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.016"/>
+  <testcase name="manual device name at exactly 32 characters is valid" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.011"/>
   <testcase name="custom mode allows proceeding without region selection" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.009"/>
-  <testcase name="region defaults replace values when user re-selects same region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.012"/>
-  <testcase name="custom mode shows regulatory warning when no region selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.01"/>
-  <testcase name="custom mode without airtime limits shows duty cycle warning for EU" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.014"/>
-  <testcase name="navigation forward does not clear errors when user has modified fields" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.011"/>
-  <testcase name="manual device name shows warning for non-RNode name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.009"/>
-  <testcase name="manual device name accepts valid RNode name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.01"/>
-  <testcase name="custom mode with region selected has no regulatory warning" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.009"/>
-  <testcase name="navigation forward preserves user-modified txPower error" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.017"/>
-  <testcase name="manual device name rejects empty input for proceed" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.009"/>
-  <testcase name="manual device name rejects names over 32 characters" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.009"/>
+  <testcase name="region defaults replace values when user re-selects same region" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.011"/>
+  <testcase name="custom mode shows regulatory warning when no region selected" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.009"/>
+  <testcase name="custom mode without airtime limits shows duty cycle warning for EU" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.011"/>
+  <testcase name="navigation forward does not clear errors when user has modified fields" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.008"/>
+  <testcase name="manual device name shows warning for non-RNode name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.008"/>
+  <testcase name="manual device name accepts valid RNode name" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.008"/>
+  <testcase name="custom mode with region selected has no regulatory warning" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.008"/>
+  <testcase name="navigation forward preserves user-modified txPower error" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.008"/>
+  <testcase name="manual device name rejects empty input for proceed" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.008"/>
+  <testcase name="manual device name rejects names over 32 characters" classname="network.columba.app.viewmodel.RNodeWizardViewModelTddTest" time="0.011"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

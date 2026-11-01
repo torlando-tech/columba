@@ -257,6 +257,48 @@ class InterfaceModeWiringTest {
     }
 
     @Test
+    fun framingEditOnRunningInterface_restartsInterface() {
+        // Regression for PR #1226 review P1: KISS framing is baked into the
+        // TCPClientInterface at construction, so saving a framing-only change
+        // for a running interface must restart it too - the old sync compared
+        // only the mode and silently kept the old framing.
+        val raw =
+            InterfaceConfig.TCPClient(
+                name = "tcp-framing",
+                enabled = true,
+                targetHost = "127.0.0.1",
+                targetPort = 4243,
+                mode = "full",
+                kissFraming = false,
+            )
+        try {
+            NativeInterfaceFactory.syncInterfaces(listOf(raw))
+            val initial = NativeInterfaceFactory.currentInterfaces.first { it.name == "tcp-framing" }
+
+            // Same name + mode, framing flipped: must replace the running object.
+            val kiss = raw.copy(kissFraming = true)
+            NativeInterfaceFactory.syncInterfaces(listOf(kiss))
+            val updated = NativeInterfaceFactory.currentInterfaces.first { it.name == "tcp-framing" }
+            assertNotSame(
+                "a saved framing edit must replace the running interface object",
+                initial,
+                updated,
+            )
+
+            // Syncing the unchanged framing again must NOT restart (no churn).
+            NativeInterfaceFactory.syncInterfaces(listOf(kiss))
+            val stable = NativeInterfaceFactory.currentInterfaces.first { it.name == "tcp-framing" }
+            assertSame(
+                "an unchanged framing must not restart the running interface",
+                updated,
+                stable,
+            )
+        } finally {
+            NativeInterfaceFactory.shutdownAll()
+        }
+    }
+
+    @Test
     fun unchangedRunningInterface_isNotRestartedOnSync() {
         // Guard against the fix over-firing: if only the mode is the comparison
         // key, a sync with the same mode must NOT restart the interface (no

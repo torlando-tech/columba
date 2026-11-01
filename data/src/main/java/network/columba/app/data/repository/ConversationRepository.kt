@@ -1442,15 +1442,13 @@ class ConversationRepository
             return threadDao.threadsForConversation(identityHash, peerHash, includeArchived)
         }
 
-        /** Messages of one thread, oldest first (pinned-root thread view). */
-        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
-        suspend fun messagesForThread(
+        /** Oldest message of one thread (thread-view header); LIMIT 1 read. */
+        suspend fun firstMessageInThread(
             peerHash: String,
             threadId: ByteArray,
-        ): Flow<List<MessageEntity>> {
-            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
-                ?: return flowOf(emptyList())
-            return messageDao.getMessagesForThread(peerHash, identityHash, threadId)
+        ): MessageEntity? {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return null
+            return messageDao.getFirstMessageForThread(peerHash, identityHash, threadId)
         }
 
         /** Paged thread messages (newest first), mirroring [getMessagesPaged] for Main. */

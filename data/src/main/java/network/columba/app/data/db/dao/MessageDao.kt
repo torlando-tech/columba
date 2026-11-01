@@ -368,6 +368,25 @@ interface MessageDao {
         threadId: ByteArray,
     ): Flow<List<MessageEntity>>
 
+    /**
+     * Oldest message of one thread (thread-view header preview). LIMIT 1 so
+     * deriving the header never reads the whole reply history.
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId = :threadId
+        ORDER BY COALESCE(receivedAt, timestamp) ASC
+        LIMIT 1
+        """,
+    )
+    suspend fun getFirstMessageForThread(
+        peerHash: String,
+        identityHash: String,
+        threadId: ByteArray,
+    ): MessageEntity?
+
     /** Paged thread messages (newest first), mirroring the Main conversation paging. */
     @Query(
         """

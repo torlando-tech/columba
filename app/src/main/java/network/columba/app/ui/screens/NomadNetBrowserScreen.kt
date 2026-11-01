@@ -113,6 +113,7 @@ fun NomadNetBrowserScreen(
     destinationHash: String,
     initialPath: String = "/page/index.mu",
     showHomeEntry: Boolean = false,
+    fromSessionRestore: Boolean = false,
     onBackClick: () -> Unit,
     onCloseSite: (() -> Unit)? = null,
     onOpenConversation: (String) -> Unit = {},
@@ -150,10 +151,13 @@ fun NomadNetBrowserScreen(
     var urlFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     val urlFocusRequester = remember { FocusRequester() }
 
-    // Load initial page
+    // Load initial page. A session restore (the NomadNet tab home reopening
+    // the persisted page) serves the in-memory session store first, so
+    // returning to the tab shows the page instantly - even `#!c=0` pages
+    // that no file cache holds - instead of re-fetching on every tab tap.
     LaunchedEffect(destinationHash, initialPath) {
         if (browserState is BrowserState.Initial && destinationHash.isNotEmpty()) {
-            viewModel.loadPage(destinationHash, initialPath)
+            viewModel.loadPage(destinationHash, initialPath, fromSessionRestore)
         }
     }
 

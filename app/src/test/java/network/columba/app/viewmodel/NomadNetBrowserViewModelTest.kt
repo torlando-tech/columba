@@ -72,6 +72,8 @@ class NomadNetBrowserViewModelTest {
         // no transition and does nothing, so a static flow is enough.
         every { rnsCore.networkStatus } returns MutableStateFlow(NetworkStatus.READY)
         every { pageCache.put(any(), any(), any(), any()) } just Runs
+        every { pageCache.putSession(any(), any(), any()) } just Runs
+        every { pageCache.getSession(any(), any()) } returns null
         // Page-image cache: only the explicit clear (clearImageCache) and the
         // loader's miss-path get() are reachable from these tests; stub both
         // explicitly rather than using a relaxed mock.
@@ -202,6 +204,129 @@ class NomadNetBrowserViewModelTest {
                     any(),
                 )
             }
+        }
+
+    @Test
+    fun `restoring a var-bearing path serves the cache instead of re-submitting`() =
+        runTest(testDispatcher) {
+            // Regression: the NomadNet tab reopens the persisted full path
+            // (backtick block included) on every tab tap. loadPage must serve
+            // the response cached under that full path; submitting on every
+            // restore would repeat the request - a site whose submission
+            // changes data would redo its action without another click.
+            val varPath = "/page/forum/thread.mu`cat=general|thread=a-gentle-look-at-prns"
+            every { pageCache.get(nodeHash, varPath) } returns simplePage
+
+            viewModel.loadPage(nodeHash, varPath)
+            advanceUntilIdle()
+
+            val state = viewModel.browserState.value
+            assertTrue("Should be PageLoaded, was $state", state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals("/page/forum/thread.mu", (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).path)
+            coVerify(exactly = 0) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
+            // Re-persisting must keep the backtick block so the next restore
+            // hits this same cache key instead of a bare path the node rejects.
+            coVerify { settingsRepository.saveNomadNetLastNodeHash(nodeHash, varPath, any()) }
+        }
+
+    @Test
+    fun `a cold restore of a var-bearing path submits the variables on cache miss`() =
+        runTest(testDispatcher) {
+            // Cold start (empty cache) must still re-submit the variables: a
+            // dynamic node rejects the bare path, so the submission IS the
+            // restore there. And the response must be cached under the full
+            // path so the next restore takes the cache-first route.
+            val varPath = "/page/forum/thread.mu`cat=general|thread=a-gentle-look-at-prns"
+            every { pageCache.get(nodeHash, varPath) } returns null
+            coEvery {
+                protocol.requestNomadnetPage(
+                    nodeHash,
+                    "/page/forum/thread.mu",
+                    match { it != null },
+                    any(),
+                )
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+
+            viewModel.loadPage(nodeHash, varPath)
+            advanceUntilIdle()
+            Thread.sleep(100) // Wait for the Dispatchers.IO fetch
+
+            assertTrue(
+                "cold restore must still load the page, was ${viewModel.browserState.value}",
+                viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+            coVerify(exactly = 1) {
+                protocol.requestNomadnetPage(nodeHash, "/page/forum/thread.mu", match { it != null }, any())
+            }
+            coVerify(exactly = 1) { pageCache.put(nodeHash, varPath, simplePage, any()) }
+        }
+
+    @Test
+    fun `a tab session restore shows the last page without re-fetching even when the site opts out of caching`() =
+        runTest(testDispatcher) {
+            // A `#!c=0` page (the majority of executable NomadNet pages) never
+            // enters the file cache - get always misses, as it does for a real
+            // opted-out page. The in-memory session store must serve the tab
+            // restore so returning to the NomadNet tab never re-fetches the
+            // page the user is already looking at.
+            every { pageCache.get(any(), any()) } returns null
+            val session = java.util.concurrent.atomic.AtomicReference<Triple<String, String, String>?>(null)
+            every { pageCache.putSession(any(), any(), any()) } answers {
+                session.set(Triple(firstArg(), secondArg(), thirdArg()))
+            }
+            every { pageCache.getSession(any(), any()) } answers {
+                val node = firstArg<String>()
+                val path = secondArg<String>()
+                session.get()?.takeIf { it.first == node && it.second == path }?.third
+            }
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            Thread.sleep(100)
+            assertTrue(
+                "initial load should be PageLoaded, was ${viewModel.browserState.value}",
+                viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+
+            viewModel.loadPage(nodeHash, fromSessionRestore = true)
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            assertTrue(
+                "restore must show the page, was ${viewModel.browserState.value}",
+                viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `ordinary navigation to an opted-out page still re-fetches`() =
+        runTest(testDispatcher) {
+            // Only the session restore may serve the in-memory page. A plain
+            // loadPage (deep link, URL bar, address entry) must still honour
+            // the site's `#!c=0` directive and fetch again.
+            every { pageCache.get(any(), any()) } returns null
+            val session = java.util.concurrent.atomic.AtomicReference<Triple<String, String, String>?>(null)
+            every { pageCache.putSession(any(), any(), any()) } answers {
+                session.set(Triple(firstArg(), secondArg(), thirdArg()))
+            }
+            every { pageCache.getSession(any(), any()) } answers {
+                val node = firstArg<String>()
+                val path = secondArg<String>()
+                session.get()?.takeIf { it.first == node && it.second == path }?.third
+            }
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            Thread.sleep(100)
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            Thread.sleep(100)
+            assertTrue(
+                "the re-fetch must land on the page, was ${viewModel.browserState.value}",
+                viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+            coVerify(exactly = 2) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
         }
 
     @Test
@@ -1239,10 +1364,10 @@ class NomadNetBrowserViewModelTest {
             // collector re-emits and - without the form guard - calls refresh(),
             // which re-submits the form (refresh re-submits when
             // lastFetchFormDataJson is set), double-firing the form's side
-            // effects. Form submissions are never cached, so an identify refresh
-            // has no benefit there: the form's own fetch already establishes the
-            // link and identifies at establishment. The guard must skip the
-            // identify refresh for form pages so the form submits exactly once.
+            // effects. The identify refresh must never re-submit a form for a
+            // cache benefit either: the form's own fetch already establishes
+            // the link and identifies at establishment. The guard must skip
+            // the identify refresh for form pages so the form submits exactly once.
             val nodesFlow = MutableStateFlow<Set<String>>(emptySet())
             every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
             every { pageCache.get(any(), any()) } returns null

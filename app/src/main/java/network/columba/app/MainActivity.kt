@@ -2453,6 +2453,7 @@ fun ColumbaNavigation(
                                     destinationHash = lastNodeHash.orEmpty(),
                                     initialPath = lastViewPath,
                                     showHomeEntry = lastNodeHash.isNullOrEmpty() || sessionEnded,
+                                    fromSessionRestore = true,
                                     onBackClick = { navController.popBackStack() },
                                     // Close Site on the tab home: closeSite() drops the
                                     // persisted last-node hash, the state flow flips

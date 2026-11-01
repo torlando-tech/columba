@@ -55,7 +55,9 @@ class IdentityManagerScreenExportTest {
             every { this@mockk.identities } returns identitiesFlow
             every { this@mockk.activeIdentity } returns activeIdentityFlow
             every { this@mockk.uiState } returns uiStateFlow
-            every { this@mockk.resetUiState() } returns Unit
+            every { this@mockk.resetUiState() } answers {
+                uiStateFlow.value = IdentityManagerUiState.Idle
+            }
         }
 
     @Before

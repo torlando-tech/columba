@@ -168,6 +168,28 @@ interface ConversationDao {
         identityHash: String,
     )
 
+    /**
+     * Recompute the conversation badge from the actual unread-message rows
+     * (Main + every thread). Threads-spec §8 Phase 3 roll-up: the contact-card
+     * badge must equal the sum of per-thread unread counts, so the thread-aware
+     * read paths (mark Main / mark one thread) re-derive the counter instead
+     * of blindly zeroing or leaving it stale.
+     */
+    @Query(
+        """
+        UPDATE conversations SET unreadCount = (
+            SELECT COUNT(*) FROM messages
+            WHERE conversationHash = :peerHash AND identityHash = :identityHash
+            AND isFromMe = 0 AND isRead = 0
+        )
+        WHERE peerHash = :peerHash AND identityHash = :identityHash
+        """,
+    )
+    suspend fun syncUnreadCountFromMessages(
+        peerHash: String,
+        identityHash: String,
+    )
+
     @Query(
         """
         UPDATE conversations SET peerName = :peerName

@@ -23,6 +23,10 @@ object NotificationIntentParser {
      * - [NotificationHelper.EXTRA_DESTINATION_HASH] extra
      * - [NotificationHelper.EXTRA_PEER_NAME] extra
      *
+     * Optional: [NotificationHelper.EXTRA_THREAD_ID] (threads P3, spec §6.7) —
+     * lowercase-hex FIELD_THREAD bytes; carried through so the messaging route
+     * opens with the thread's chip selected.
+     *
      * @return a [PendingNavigation.Conversation] with [fromNotification] = `true`, or `null`
      */
     fun parseOpenConversation(intent: Intent): PendingNavigation.Conversation? {
@@ -38,6 +42,7 @@ object NotificationIntentParser {
             peerName = peerName,
             fromNotification = true,
             notificationEventId = notificationEventIds.incrementAndGet(),
+            threadId = intent.getStringExtra(NotificationHelper.EXTRA_THREAD_ID)?.takeIf { it.isNotEmpty() },
         )
     }
 }

@@ -1468,13 +1468,19 @@ class ConversationRepository
             return messageDao.observeUnreadCountsPerThread(peerHash, identityHash)
         }
 
-        /** Mark one thread's received messages read (opening a thread view). */
+        /**
+         * Mark one thread's received messages read (opening a thread view),
+         * then re-derive the conversation badge from the remaining unread
+         * rows so the contact-card count stays equal to the per-thread
+         * unread sum (threads-spec §8 Phase 3 roll-up).
+         */
         suspend fun markThreadAsRead(
             peerHash: String,
             threadId: ByteArray,
         ) {
             val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
             messageDao.markThreadMessagesAsRead(peerHash, identityHash, threadId)
+            conversationDao.syncUnreadCountFromMessages(peerHash, identityHash)
         }
 
         /** Thread row for one (conversation, thread) pair, or null. */
@@ -1529,14 +1535,17 @@ class ConversationRepository
         }
 
         /**
-         * Thread-aware read path for opening Main: clears the conversation
-         * badge and Main's unread messages only — thread unread dots survive
-         * (threads-spec §6.2).
+         * Thread-aware read path for opening Main: clears Main's unread
+         * messages and re-derives the conversation badge from the remaining
+         * unread rows — thread unread dots AND the contact-card count for
+         * still-unread threads survive (threads-spec §6.2, §8 Phase 3
+         * roll-up: card badge = sum of per-thread unread).
          */
         suspend fun markMainAsRead(peerHash: String) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
-            conversationDao.markAsRead(peerHash, activeIdentity.identityHash)
             messageDao.markMainMessagesAsRead(peerHash, activeIdentity.identityHash)
+            conversationDao.markAsRead(peerHash, activeIdentity.identityHash)
+            conversationDao.syncUnreadCountFromMessages(peerHash, activeIdentity.identityHash)
         }
 
         /** Total message counts per thread ("N replies" hook); null-threadId row = Main. */

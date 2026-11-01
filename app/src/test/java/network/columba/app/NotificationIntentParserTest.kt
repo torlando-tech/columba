@@ -158,4 +158,49 @@ class NotificationIntentParserTest {
             second.notificationEventId,
         )
     }
+
+    @Test
+    fun `parseOpenConversation carries thread id extra through for the deep link`() {
+        val intent = Intent().apply {
+            action = NotificationHelper.ACTION_OPEN_CONVERSATION
+            putExtra(NotificationHelper.EXTRA_DESTINATION_HASH, "hash")
+            putExtra(NotificationHelper.EXTRA_PEER_NAME, "Peer")
+            putExtra(NotificationHelper.EXTRA_THREAD_ID, "000102030405060708090a0b0c0d0e0f")
+        }
+
+        val result = NotificationIntentParser.parseOpenConversation(intent)!!
+
+        assertEquals(
+            "Thread notification taps must navigate with the thread chip selected",
+            "000102030405060708090a0b0c0d0e0f",
+            result.threadId,
+        )
+    }
+
+    @Test
+    fun `parseOpenConversation without thread extra yields null threadId`() {
+        val intent = Intent().apply {
+            action = NotificationHelper.ACTION_OPEN_CONVERSATION
+            putExtra(NotificationHelper.EXTRA_DESTINATION_HASH, "hash")
+            putExtra(NotificationHelper.EXTRA_PEER_NAME, "Peer")
+        }
+
+        val result = NotificationIntentParser.parseOpenConversation(intent)!!
+
+        assertNull("Main notifications must keep opening Main", result.threadId)
+    }
+
+    @Test
+    fun `parseOpenConversation treats empty thread extra as Main`() {
+        val intent = Intent().apply {
+            action = NotificationHelper.ACTION_OPEN_CONVERSATION
+            putExtra(NotificationHelper.EXTRA_DESTINATION_HASH, "hash")
+            putExtra(NotificationHelper.EXTRA_PEER_NAME, "Peer")
+            putExtra(NotificationHelper.EXTRA_THREAD_ID, "")
+        }
+
+        val result = NotificationIntentParser.parseOpenConversation(intent)!!
+
+        assertNull(result.threadId)
+    }
 }

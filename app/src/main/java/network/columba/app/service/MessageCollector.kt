@@ -164,6 +164,8 @@ class MessageCollector
                                         peerName = peerName,
                                         messagePreview = receivedMessage.content.take(100),
                                         isFavorite = isFavorite,
+                                        // Threads P3: persisted row carries the FIELD_THREAD bytes.
+                                        threadId = existingMessage.threadId,
                                     )
                                     Log.d(TAG, "Posted notification for already-persisted unread message")
                                 } catch (e: Exception) {
@@ -302,6 +304,8 @@ class MessageCollector
                                     // Truncate preview
                                     messagePreview = receivedMessage.content.take(100),
                                     isFavorite = isFavorite,
+                                    // Threads P3: subtitle + thread deep link (spec §6.7).
+                                    threadId = dataMessage.threadId,
                                 )
                                 Log.d(TAG, "Posted notification for message (favorite: $isFavorite)")
                             } catch (e: Exception) {

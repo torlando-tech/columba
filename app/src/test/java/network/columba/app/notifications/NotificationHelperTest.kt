@@ -2,18 +2,25 @@ package network.columba.app.notifications
 
 import android.Manifest
 import android.app.Application
+import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
+import network.columba.app.data.db.entity.ThreadEntity
+import network.columba.app.data.repository.Conversation
+import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.service.ActiveConversationManager
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.coVerify
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -35,6 +42,7 @@ class NotificationHelperTest {
     private lateinit var context: Context
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var activeConversationManager: ActiveConversationManager
+    private lateinit var conversationRepository: ConversationRepository
     private lateinit var notificationManager: NotificationManager
     private lateinit var notificationHelper: NotificationHelper
 
@@ -58,6 +66,11 @@ class NotificationHelperTest {
         // All repository methods are explicitly stubbed below (no relaxed mocks needed)
         settingsRepository = mockk()
         activeConversationManager = mockk()
+        conversationRepository = mockk()
+
+        // Threads P3: default stubs — flag off, no conversation row (setNumber falls back to 1).
+        coEvery { settingsRepository.getThreadsEnabled() } returns false
+        coEvery { conversationRepository.getConversation(any()) } returns null
 
         // Mock active conversation
         every { activeConversationManager.activeConversation } returns activeConversationFlow
@@ -70,7 +83,7 @@ class NotificationHelperTest {
         coEvery { settingsRepository.notificationBleConnectedFlow } returns flowOf(true)
         coEvery { settingsRepository.notificationBleDisconnectedFlow } returns flowOf(true)
 
-        notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager)
+        notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager, conversationRepository)
     }
 
     // ========== Master Toggle Tests ==========
@@ -82,7 +95,7 @@ class NotificationHelperTest {
             coEvery { settingsRepository.notificationsEnabledFlow } returns flowOf(false)
 
             // Recreate helper with new settings
-            notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager)
+            notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager, conversationRepository)
 
             // When
             notificationHelper.notifyMessageReceived(
@@ -125,7 +138,7 @@ class NotificationHelperTest {
             // Given: General message notifications OFF
             coEvery { settingsRepository.notificationReceivedMessageFlow } returns flowOf(false)
             coEvery { settingsRepository.notificationReceivedMessageFavoriteFlow } returns flowOf(false)
-            notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager)
+            notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager, conversationRepository)
 
             // When: Non-favorite peer sends message
             notificationHelper.notifyMessageReceived(
@@ -147,7 +160,7 @@ class NotificationHelperTest {
             // Given: General OFF but favorite ON
             coEvery { settingsRepository.notificationReceivedMessageFlow } returns flowOf(false)
             coEvery { settingsRepository.notificationReceivedMessageFavoriteFlow } returns flowOf(true)
-            notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager)
+            notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager, conversationRepository)
 
             // When: Favorite peer sends message
             notificationHelper.notifyMessageReceived(
@@ -169,7 +182,7 @@ class NotificationHelperTest {
             // Given: General ON, favorite OFF
             coEvery { settingsRepository.notificationReceivedMessageFlow } returns flowOf(true)
             coEvery { settingsRepository.notificationReceivedMessageFavoriteFlow } returns flowOf(false)
-            notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager)
+            notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager, conversationRepository)
 
             // When: Favorite peer sends message
             notificationHelper.notifyMessageReceived(
@@ -280,7 +293,7 @@ class NotificationHelperTest {
             app.denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
             // Recreate helper after permission change
-            notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager)
+            notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager, conversationRepository)
 
             // When
             notificationHelper.notifyMessageReceived(
@@ -533,4 +546,157 @@ class NotificationHelperTest {
             // Then
             assertTrue("All notifications should be cancelled", shadowNotificationManager.allNotifications.isEmpty())
         }
+
+    // ========== Threads P3: thread subtitle + deep link (spec §6.7) ==========
+
+    private val threadIdBytes = ByteArray(16) { it.toByte() }
+    private val threadIdHex = "000102030405060708090a0b0c0d0e0f"
+
+    private fun threadEntity(title: String?) =
+        ThreadEntity(
+            threadId = threadIdBytes,
+            conversationHash = "abc123def456",
+            identityHash = "id",
+            title = title,
+            createdAt = 1L,
+            lastActivityAt = 1L,
+        )
+
+    private fun rolledUpConversation(unread: Int) =
+        Conversation(
+            peerHash = "abc123def456",
+            peerName = "Test Peer",
+            displayName = "Test Peer",
+            lastMessage = "Hello",
+            lastMessageTimestamp = 1L,
+            unreadCount = unread,
+        )
+
+    @Test
+    fun `threaded message shows thread title as subtitle and deep-links to the thread`() =
+        runBlocking {
+            coEvery { settingsRepository.getThreadsEnabled() } returns true
+            coEvery { conversationRepository.getThread("abc123def456", threadIdBytes) } returns threadEntity("Roadmap talk")
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+                threadId = threadIdBytes,
+            )
+
+            val notification = messageNotification("abc123def456")?.notification
+            assertNotNull("Thread notification should be posted", notification)
+            assertEquals(
+                "Thread title must render as the notification subtitle",
+                "Roadmap talk",
+                notification!!.extras.getString(Notification.EXTRA_SUB_TEXT),
+            )
+            assertEquals(
+                "Tap must deep-link into the thread view (correct chip)",
+                threadIdHex,
+                shadowOf(notification.contentIntent).savedIntent
+                    .getStringExtra(NotificationHelper.EXTRA_THREAD_ID),
+            )
+        }
+
+    @Test
+    fun `untitled thread notification uses the untitled placeholder subtitle`() =
+        runBlocking {
+            coEvery { settingsRepository.getThreadsEnabled() } returns true
+            coEvery { conversationRepository.getThread("abc123def456", threadIdBytes) } returns threadEntity(null)
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+                threadId = threadIdBytes,
+            )
+
+            assertEquals(
+                "Untitled threads reuse the chip bar placeholder",
+                network.columba.app.R.string.thread_untitled.let { context.getString(it) },
+                messageNotification("abc123def456")!!.notification
+                    .extras.getString(Notification.EXTRA_SUB_TEXT),
+            )
+        }
+
+    @Test
+    fun `threads flag off ignores threadId - no subtitle and no deep link extra`() =
+        runBlocking {
+            // Default setup stubs getThreadsEnabled() = false.
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+                threadId = threadIdBytes,
+            )
+
+            val notification = messageNotification("abc123def456")!!.notification
+            assertNull(
+                "Flag off must not add a subtitle",
+                notification.extras.getString(Notification.EXTRA_SUB_TEXT),
+            )
+            assertNull(
+                "Flag off must not deep-link to a thread",
+                shadowOf(notification.contentIntent).savedIntent
+                    .getStringExtra(NotificationHelper.EXTRA_THREAD_ID),
+            )
+            coVerify(exactly = 0) { conversationRepository.getThread(any(), any()) }
+        }
+
+    @Test
+    fun `main message notification has no subtitle even with threads flag on`() =
+        runBlocking {
+            coEvery { settingsRepository.getThreadsEnabled() } returns true
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+                threadId = null,
+            )
+
+            assertNull(
+                "Main messages keep the plain layout",
+                messageNotification("abc123def456")!!.notification
+                    .extras.getString(Notification.EXTRA_SUB_TEXT),
+            )
+        }
+
+    @Test
+    fun `flag on sets notification number to the rolled-up conversation unread count`() =
+        runBlocking {
+            coEvery { settingsRepository.getThreadsEnabled() } returns true
+            coEvery { conversationRepository.getThread("abc123def456", threadIdBytes) } returns threadEntity("Roadmap talk")
+            coEvery { conversationRepository.getConversation("abc123def456") } returns rolledUpConversation(unread = 7)
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+                threadId = threadIdBytes,
+            )
+
+            assertEquals(
+                "App-icon badge count = conversation unread roll-up (Main + every thread)",
+                7,
+                messageNotification("abc123def456")!!.notification.number,
+            )
+        }
+
+    @Test
+    fun `thread and main notifications from the same peer get distinct pending intent request codes`() {
+        val main = NotificationHelper.messagePendingIntentRequestCode("abc123def456", null)
+        val thread = NotificationHelper.messagePendingIntentRequestCode("abc123def456", threadIdBytes)
+        val otherThread = NotificationHelper.messagePendingIntentRequestCode("abc123def456", byteArrayOf(9, 9))
+
+        assertNotEquals("Thread PI must not overwrite the Main PI", main, thread)
+        assertNotEquals("Distinct threads must not share a PI", thread, otherThread)
+    }
 }

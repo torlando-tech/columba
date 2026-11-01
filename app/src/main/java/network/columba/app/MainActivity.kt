@@ -592,6 +592,8 @@ sealed class PendingNavigation {
         val peerName: String,
         val fromNotification: Boolean = false,
         val notificationEventId: Long = 0L,
+        /** Threads P3 (spec §6.7): lowercase-hex thread id — route opens with this chip selected. */
+        val threadId: String? = null,
     ) : PendingNavigation()
 
     data class AddContact(
@@ -846,6 +848,7 @@ fun ColumbaNavigation(
                             encodedPeerName = encodedName,
                             fromNotification = navigation.fromNotification,
                             notificationEventId = navigation.notificationEventId,
+                            threadId = navigation.threadId,
                         )
 
                         if (navigationAction == ConversationNavigation.Action.REUSE_CURRENT) {

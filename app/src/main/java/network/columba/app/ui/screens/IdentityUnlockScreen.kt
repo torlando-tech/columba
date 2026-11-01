@@ -39,10 +39,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
+import network.columba.app.util.launchSafely
+import network.columba.app.util.showNoFileManagerToast
 import network.columba.app.viewmodel.IdentityUnlockUiState
 import network.columba.app.viewmodel.IdentityUnlockViewModel
 
@@ -58,6 +62,7 @@ fun IdentityUnlockScreen(
     onResolved: () -> Unit,
     viewModel: IdentityUnlockViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val activeIdentity by viewModel.activeIdentity.collectAsState()
 
@@ -160,7 +165,9 @@ fun IdentityUnlockScreen(
                 onClick = {
                     // `.identity` files don't have a well-known MIME, so we
                     // open anything and let the parser reject invalid files.
-                    importLauncher.launch(arrayOf("*/*"))
+                    if (!importLauncher.launchSafely(arrayOf("*/*"))) {
+                        context.showNoFileManagerToast()
+                    }
                 },
                 modifier =
                     Modifier

@@ -238,6 +238,8 @@ import network.columba.app.util.LocationPermissionManager
 import network.columba.app.util.MediaPermissionManager
 import network.columba.app.util.formatRelativeTime
 import network.columba.app.util.formatTimeSince
+import network.columba.app.util.launchSafely
+import network.columba.app.util.showNoFileManagerToast
 import network.columba.app.util.validation.ValidationConstants
 import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.MessagingViewModel
@@ -1592,23 +1594,18 @@ fun MessagingScreen(
                                 inputPanelMode = InputPanelMode.NONE
                             },
                             onGalleryClick = {
-                                imageLauncher.launch("image/*")
+                                if (!imageLauncher.launchSafely("image/*")) {
+                                    context.showNoFileManagerToast()
+                                }
                                 inputPanelMode = InputPanelMode.NONE
                             },
-                    onFileClick = {
-                                try {
-                                    filePickerLauncher.launch(arrayOf("*/*"))
-                                } catch (e: android.content.ActivityNotFoundException) {
-                                    Log.w("MessagingScreen", "No file manager found", e)
-                                    Toast
-                                        .makeText(
-                                            context,
-                                            context.getString(R.string.error_no_file_manager),
-                                            Toast.LENGTH_SHORT,
-                                        ).show()
-                            }
-                            inputPanelMode = InputPanelMode.NONE
-                        },
+                            onFileClick = {
+                                if (!filePickerLauncher.launchSafely(arrayOf("*/*"))) {
+                                    Log.w("MessagingScreen", "No file manager found")
+                                    context.showNoFileManagerToast()
+                                }
+                                inputPanelMode = InputPanelMode.NONE
+                            },
                         onVoiceClick = {
                             showVoiceMessageQualityDialog = true
                             inputPanelMode = InputPanelMode.NONE
@@ -1795,7 +1792,9 @@ fun MessagingScreen(
             onSaveToDevice = {
                 showFileOptionsSheet = false
                 pendingFileSave = Triple(messageId, fileIndex, filename)
-                fileSaveLauncher.launch(filename)
+                if (!fileSaveLauncher.launchSafely(filename)) {
+                    context.showNoFileManagerToast()
+                }
             },
             onUpdatePyxis =
                 if (isPyxisUpdateFilename(filename)) {
@@ -1835,7 +1834,9 @@ fun MessagingScreen(
                 scope.launch {
                     val extension = viewModel.getImageExtension(messageId)
                     pendingImageSave = Pair(messageId, extension)
-                    imageSaveLauncher.launch("image.$extension")
+                    if (!imageSaveLauncher.launchSafely("image.$extension")) {
+                        context.showNoFileManagerToast()
+                    }
                 }
             },
             onShare = {

@@ -33,8 +33,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
 import network.columba.app.ui.screens.flasher.components.FlasherStepIndicator
 import network.columba.app.ui.screens.flasher.steps.DeviceDetectionStep
 import network.columba.app.ui.screens.flasher.steps.DeviceSelectionStep
@@ -42,6 +44,8 @@ import network.columba.app.ui.screens.flasher.steps.FirmwareSelectionStep
 import network.columba.app.ui.screens.flasher.steps.FlashCompleteStep
 import network.columba.app.ui.screens.flasher.steps.FlashProgressStep
 import network.columba.app.ui.screens.flasher.steps.TncConfigurationStep
+import network.columba.app.util.launchSafely
+import network.columba.app.util.showNoFileManagerToast
 import network.columba.app.viewmodel.FlasherStep
 import network.columba.app.viewmodel.FlasherViewModel
 
@@ -70,6 +74,7 @@ fun RNodeFlasherScreen(
     preselectedUsbDeviceId: Int? = null,
     viewModel: FlasherViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     var showExitConfirmation by remember { mutableStateOf(false) }
 
@@ -286,7 +291,11 @@ fun RNodeFlasherScreen(
                             useManualSelection = state.useManualBoardSelection,
                             onFirmwareSourceSelected = { viewModel.selectFirmwareSource(it) },
                             onCustomUrlChanged = { viewModel.setCustomFirmwareUrl(it) },
-                            onPickFile = { pickFileLauncher.launch("*/*") },
+                            onPickFile = {
+                                if (!pickFileLauncher.launchSafely("*/*")) {
+                                    context.showNoFileManagerToast()
+                                }
+                            },
                             onBoardSelected = { viewModel.selectBoard(it) },
                             onBandSelected = { viewModel.selectFrequencyBand(it) },
                             onFirmwareSelected = { viewModel.selectFirmware(it) },

@@ -149,7 +149,13 @@ fun PyxisUpdaterScreen(
                             progress = { state.flashProgress.coerceIn(0, 100) / 100f },
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        Text(stringResource(R.string.pyxis_update_progress, state.flashProgress, state.flashMessage))
+                        Text(
+                            stringResource(
+                                R.string.pyxis_update_progress,
+                                state.flashProgress,
+                                state.flashMessage?.asString() ?: "",
+                            ),
+                        )
                         Text(
                             stringResource(R.string.pyxis_update_keep_connected),
                             style = MaterialTheme.typography.bodySmall,
@@ -220,7 +226,8 @@ fun PyxisUpdaterScreen(
         )
     }
 
-    state.flashError?.let { error ->
+    state.flashError?.let { flashError ->
+        val error = flashError.asString()
         AlertDialog(
             onDismissRequest = viewModel::clearFlashError,
             title = { Text(stringResource(R.string.pyxis_update_failed_title)) },

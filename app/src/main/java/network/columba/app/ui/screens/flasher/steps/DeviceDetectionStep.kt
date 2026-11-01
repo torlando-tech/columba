@@ -27,8 +27,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.rns.host.flasher.FrequencyBand
 import network.columba.app.rns.host.flasher.RNodeBoard
 import network.columba.app.rns.host.flasher.RNodeDeviceInfo
@@ -55,12 +57,12 @@ fun DeviceDetectionStep(
                 .padding(16.dp),
     ) {
         Text(
-            text = "Device Detection",
+            text = stringResource(R.string.flasher_title_device_detection),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
         )
         Text(
-            text = "Identifying your RNode device",
+            text = stringResource(R.string.flasher_detecting_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -144,7 +146,7 @@ private fun DetectedState(
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Text(
-                        text = "Device Detected",
+                        text = stringResource(R.string.flasher_detected),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -177,7 +179,7 @@ private fun DetectedState(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Device Information",
+                        text = stringResource(R.string.flasher_device_information),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,
                     )
@@ -185,26 +187,31 @@ private fun DetectedState(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                DeviceInfoRow("Board", deviceInfo.board.displayName)
-                DeviceInfoRow("Platform", deviceInfo.platform.name)
-                DeviceInfoRow("MCU", deviceInfo.mcu.name)
+                DeviceInfoRow(label = stringResource(R.string.flasher_label_board), value = deviceInfo.board.displayName)
+                DeviceInfoRow(label = stringResource(R.string.flasher_label_platform), value = deviceInfo.platform.name)
+                DeviceInfoRow(label = stringResource(R.string.flasher_label_mcu), value = deviceInfo.mcu.name)
 
                 deviceInfo.firmwareVersion?.let { version ->
-                    DeviceInfoRow("Firmware", "v$version")
+                    DeviceInfoRow(label = stringResource(R.string.flasher_label_firmware), value = "v$version")
                 }
 
                 val band = FrequencyBand.fromModelCode(deviceInfo.model)
                 if (band != FrequencyBand.UNKNOWN) {
-                    DeviceInfoRow("Frequency Band", band.displayName)
+                    DeviceInfoRow(label = stringResource(R.string.flasher_label_frequency_band), value = band.displayName)
                 }
 
                 deviceInfo.serialNumber?.let { serial ->
-                    DeviceInfoRow("Serial", "#$serial")
+                    DeviceInfoRow(label = stringResource(R.string.flasher_label_serial), value = "#$serial")
                 }
 
                 DeviceInfoRow(
-                    "Status",
-                    if (deviceInfo.isProvisioned) "Provisioned" else "Not Provisioned",
+                    label = stringResource(R.string.flasher_label_status),
+                    value =
+                        if (deviceInfo.isProvisioned) {
+                            stringResource(R.string.flasher_status_provisioned)
+                        } else {
+                            stringResource(R.string.flasher_status_not_provisioned)
+                        },
                 )
             }
         }
@@ -268,13 +275,13 @@ private fun UnknownBoardState(
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Text(
-                        text = "Device Detected",
+                        text = stringResource(R.string.flasher_detected),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
                     Text(
-                        text = "Board type unknown (EEPROM may be wiped)",
+                        text = stringResource(R.string.flasher_board_unknown),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
@@ -301,7 +308,7 @@ private fun UnknownBoardState(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Device Information",
+                        text = stringResource(R.string.flasher_device_information),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,
                     )
@@ -309,14 +316,14 @@ private fun UnknownBoardState(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                DeviceInfoRow("Platform", deviceInfo.platform.name)
-                DeviceInfoRow("MCU", deviceInfo.mcu.name)
+                DeviceInfoRow(label = stringResource(R.string.flasher_label_platform), value = deviceInfo.platform.name)
+                DeviceInfoRow(label = stringResource(R.string.flasher_label_mcu), value = deviceInfo.mcu.name)
 
                 deviceInfo.firmwareVersion?.let { version ->
-                    DeviceInfoRow("Firmware", "v$version")
+                    DeviceInfoRow(label = stringResource(R.string.flasher_label_firmware), value = "v$version")
                 }
 
-                DeviceInfoRow("Status", "Not Provisioned")
+                DeviceInfoRow(label = stringResource(R.string.flasher_label_status), value = stringResource(R.string.flasher_status_not_provisioned))
             }
         }
 
@@ -338,13 +345,13 @@ private fun UnknownBoardState(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Select Board Type",
+                        text = stringResource(R.string.flasher_title_select_board_type),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,
                     )
                 }
                 Text(
-                    text = "Since the board type couldn't be determined automatically, please select it manually in the next step.",
+                    text = stringResource(R.string.flasher_board_unknown_hint),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -352,7 +359,7 @@ private fun UnknownBoardState(
                     onClick = onManualSelection,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Continue with Manual Selection")
+                    Text(stringResource(R.string.flasher_btn_continue_manual))
                 }
             }
         }
@@ -393,7 +400,7 @@ private fun ErrorState(
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Text(
-                        text = "Detection Failed",
+                        text = stringResource(R.string.flasher_detection_failed),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onErrorContainer,
@@ -425,13 +432,13 @@ private fun ErrorState(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Manual Selection",
+                        text = stringResource(R.string.flasher_title_manual_selection),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,
                     )
                 }
                 Text(
-                    text = "If your device wasn't detected automatically, you can manually select the board type in the next step.",
+                    text = stringResource(R.string.flasher_manual_selection_hint),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -439,7 +446,7 @@ private fun ErrorState(
                     onClick = onManualSelection,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Continue with Manual Selection")
+                    Text(stringResource(R.string.flasher_btn_continue_manual))
                 }
             }
         }

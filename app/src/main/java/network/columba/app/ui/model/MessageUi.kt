@@ -308,6 +308,8 @@ data class FileAttachmentUi(
  * @property hasImage Whether the original message has an image attachment
  * @property hasFileAttachment Whether the original message has file attachments
  * @property firstFileName First filename if file attachments present
+ * @property isDeletedPlaceholder True when the quoted message is gone; the UI
+ *   renders the localized "message deleted" placeholder instead of [contentPreview].
  */
 @Immutable
 data class ReplyPreviewUi(
@@ -317,6 +319,7 @@ data class ReplyPreviewUi(
     val hasImage: Boolean = false,
     val hasFileAttachment: Boolean = false,
     val firstFileName: String? = null,
+    val isDeletedPlaceholder: Boolean = false,
 )
 
 /**

@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothAdapter
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
+import network.columba.app.R
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.repository.BleStatusRepository
@@ -16,6 +17,7 @@ import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.PendingInterfaceChanges
+import network.columba.app.viewmodel.UiMessage
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -663,7 +665,7 @@ class InterfaceManagementViewModelStatusEventTest {
             viewModel.configState.test {
                 val configState = awaitItem()
                 assertNotNull(configState.nameError)
-                assertTrue(configState.nameError!!.contains("already exists"))
+                assertEquals(R.string.validation_interface_name_duplicate, (configState.nameError as UiMessage.Text).id)
             }
         }
 
@@ -721,7 +723,7 @@ class InterfaceManagementViewModelStatusEventTest {
             viewModel.configState.test {
                 val configState = awaitItem()
                 assertNotNull(configState.nameError)
-                assertTrue(configState.nameError!!.contains("already exists"))
+                assertEquals(R.string.validation_interface_name_duplicate, (configState.nameError as UiMessage.Text).id)
             }
         }
 
@@ -835,7 +837,7 @@ class InterfaceManagementViewModelStatusEventTest {
             viewModel.configState.test {
                 val configState = awaitItem()
                 assertNotNull(configState.nameError)
-                assertTrue(configState.nameError!!.contains("already exists"))
+                assertEquals(R.string.validation_interface_name_duplicate, (configState.nameError as UiMessage.Text).id)
             }
         }
 

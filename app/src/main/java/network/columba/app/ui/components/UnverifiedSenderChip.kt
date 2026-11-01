@@ -14,8 +14,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 
 /**
  * Inline warning banner for messages whose LXMF signature could not be verified
@@ -52,7 +54,7 @@ fun UnverifiedSenderChip(modifier: Modifier = Modifier) {
                 modifier = Modifier.size(14.dp),
             )
             Text(
-                text = "Unverified sender — may be forged",
+                text = stringResource(R.string.message_unverified_sender_chip),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 fontWeight = FontWeight.Medium,

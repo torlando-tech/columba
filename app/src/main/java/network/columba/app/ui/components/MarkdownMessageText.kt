@@ -214,7 +214,7 @@ private class SafeMarkdownUriHandler(
             context.startActivity(Intent(Intent.ACTION_VIEW, safeUri))
         } catch (e: Exception) {
             Log.w(TAG, "Unable to open Markdown link: $safeUri", e)
-            Toast.makeText(context, "Unable to open link", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.markdown_unable_to_open_link), Toast.LENGTH_SHORT).show()
         }
     }
 }

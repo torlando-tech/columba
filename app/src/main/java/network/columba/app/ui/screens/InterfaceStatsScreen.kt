@@ -41,10 +41,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
 import network.columba.app.ui.components.RNodeBatteryIndicator
 import network.columba.app.util.InterfaceFormattingUtils
 import network.columba.app.viewmodel.InterfaceStatsViewModel
@@ -62,6 +65,7 @@ fun InterfaceStatsScreen(
     viewModel: InterfaceStatsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
 
     SideEffect {
         Log.d("InterfaceStatsScreen", "🖥️ InterfaceStatsScreen COMPOSING - interface: ${state.interfaceEntity?.name}")
@@ -70,10 +74,10 @@ fun InterfaceStatsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(state.interfaceEntity?.name ?: "Interface Stats") },
+                title = { Text(state.interfaceEntity?.name ?: stringResource(R.string.iface_stats_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 colors =
@@ -98,7 +102,7 @@ fun InterfaceStatsScreen(
                 }
                 state.errorMessage != null -> {
                     ErrorContent(
-                        errorMessage = state.errorMessage!!,
+                        errorMessage = state.errorMessage!!.resolve(context),
                         onBack = onNavigateBack,
                     )
                 }
@@ -140,7 +144,7 @@ private fun ErrorContent(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onBack) {
-            Text("Go Back")
+            Text(stringResource(R.string.iface_stats_go_back))
         }
     }
 }
@@ -223,7 +227,7 @@ private fun StatsContent(
             ) {
                 Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Edit Configuration")
+                Text(stringResource(R.string.iface_stats_edit))
             }
         }
     }
@@ -264,7 +268,7 @@ private fun StatusCard(
             ) {
                 Column {
                     Text(
-                        text = "Status",
+                        text = stringResource(R.string.iface_stats_status),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -274,18 +278,18 @@ private fun StatusCard(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         StatusBadge(
-                            text = if (isEnabled) "ENABLED" else "DISABLED",
+                            text = if (isEnabled) stringResource(R.string.iface_stats_badge_enabled) else stringResource(R.string.iface_stats_badge_disabled),
                             isPositive = isEnabled,
                         )
                         if (isEnabled) {
                             StatusBadge(
                                 text =
                                     if (isOnline) {
-                                        "ONLINE"
+                                        stringResource(R.string.iface_stats_badge_online)
                                     } else if (isConnecting) {
-                                        "CONNECTING"
+                                        stringResource(R.string.iface_stats_badge_connecting)
                                     } else {
-                                        "OFFLINE"
+                                        stringResource(R.string.iface_stats_badge_offline)
                                     },
                                 isPositive = isOnline,
                                 showSpinner = isConnecting && !isOnline,
@@ -323,14 +327,14 @@ private fun StatusCard(
                                 .padding(12.dp),
                     ) {
                         Text(
-                            text = "USB permission required",
+                            text = stringResource(R.string.iface_stats_usb_permission_required),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Grant permission to connect to the USB device",
+                            text = stringResource(R.string.iface_stats_usb_permission_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
                         )
@@ -345,7 +349,7 @@ private fun StatusCard(
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Grant USB Permission")
+                            Text(stringResource(R.string.iface_stats_grant_usb))
                         }
                     }
                 }
@@ -411,7 +415,7 @@ private fun ConnectionCard(
                     .padding(16.dp),
         ) {
             Text(
-                text = "Connection",
+                text = stringResource(R.string.iface_stats_connection),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
@@ -421,7 +425,7 @@ private fun ConnectionCard(
             val (icon, typeLabel) = InterfaceFormattingUtils.getConnectionIcon(interfaceType, connectionMode)
             StatsInfoRow(
                 icon = icon,
-                label = "Type",
+                label = stringResource(R.string.iface_stats_type),
                 value = typeLabel,
             )
 
@@ -429,31 +433,31 @@ private fun ConnectionCard(
             when {
                 connectionMode == "tcp" && tcpHost != null -> {
                     StatsInfoRow(
-                        label = "Host",
+                        label = stringResource(R.string.iface_stats_host),
                         value = "$tcpHost:${tcpPort ?: 7633}",
                     )
                 }
                 connectionMode == "usb" && usbDeviceId != null -> {
                     StatsInfoRow(
-                        label = "USB Device",
+                        label = stringResource(R.string.iface_stats_usb_device),
                         value = "ID: $usbDeviceId",
                     )
                 }
                 targetDeviceName != null && targetDeviceName.isNotBlank() -> {
                     StatsInfoRow(
-                        label = "Device",
+                        label = stringResource(R.string.iface_stats_device),
                         value = targetDeviceName,
                     )
                 }
                 interfaceType == "TCPClient" && tcpHost != null -> {
                     StatsInfoRow(
-                        label = "Server",
+                        label = stringResource(R.string.iface_stats_server),
                         value = "$tcpHost:${tcpPort ?: 4242}",
                     )
                 }
                 interfaceType == "TCPServer" && tcpPort != null -> {
                     StatsInfoRow(
-                        label = "Listen Port",
+                        label = stringResource(R.string.iface_stats_listen_port),
                         value = tcpPort.toString(),
                     )
                 }
@@ -479,29 +483,29 @@ private fun RNodeSettingsCard(
                     .padding(16.dp),
         ) {
             Text(
-                text = "Radio Settings",
+                text = stringResource(R.string.iface_stats_radio_settings),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(modifier = Modifier.height(12.dp))
 
             frequency?.let {
-                StatsInfoRow(label = "Frequency", value = InterfaceFormattingUtils.formatFrequency(it))
+                StatsInfoRow(label = stringResource(R.string.iface_stats_frequency), value = InterfaceFormattingUtils.formatFrequency(it))
             }
             bandwidth?.let {
-                StatsInfoRow(label = "Bandwidth", value = InterfaceFormattingUtils.formatBandwidth(it))
+                StatsInfoRow(label = stringResource(R.string.iface_stats_bandwidth), value = InterfaceFormattingUtils.formatBandwidth(it))
             }
             spreadingFactor?.let {
-                StatsInfoRow(label = "Spreading Factor", value = "SF$it")
+                StatsInfoRow(label = stringResource(R.string.iface_stats_spreading_factor), value = "SF$it")
             }
             codingRate?.let {
-                StatsInfoRow(label = "Coding Rate", value = "4/$it")
+                StatsInfoRow(label = stringResource(R.string.iface_stats_coding_rate), value = "4/$it")
             }
             txPower?.let {
-                StatsInfoRow(label = "TX Power", value = "$it dBm")
+                StatsInfoRow(label = stringResource(R.string.iface_stats_tx_power), value = "$it dBm")
             }
             interfaceMode?.let {
-                StatsInfoRow(label = "Mode", value = it.replaceFirstChar { c -> c.uppercase() })
+                StatsInfoRow(label = stringResource(R.string.iface_stats_mode), value = it.replaceFirstChar { c -> c.uppercase() })
             }
         }
     }
@@ -522,7 +526,7 @@ private fun TrafficStatsCard(
                     .padding(16.dp),
         ) {
             Text(
-                text = "Traffic Statistics",
+                text = stringResource(R.string.iface_stats_traffic),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
@@ -533,11 +537,11 @@ private fun TrafficStatsCard(
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 StatBox(
-                    label = "Received",
+                    label = stringResource(R.string.iface_stats_received),
                     value = InterfaceFormattingUtils.formatBytes(rxBytes),
                 )
                 StatBox(
-                    label = "Transmitted",
+                    label = stringResource(R.string.iface_stats_transmitted),
                     value = InterfaceFormattingUtils.formatBytes(txBytes),
                 )
             }
@@ -550,13 +554,13 @@ private fun TrafficStatsCard(
                 ) {
                     rssi?.let {
                         StatBox(
-                            label = "RSSI",
+                            label = stringResource(R.string.iface_stats_rssi),
                             value = "$it dBm",
                         )
                     }
                     snr?.let {
                         StatBox(
-                            label = "SNR",
+                            label = stringResource(R.string.iface_stats_snr),
                             value = String.format(Locale.US, "%.1f dB", it),
                         )
                     }

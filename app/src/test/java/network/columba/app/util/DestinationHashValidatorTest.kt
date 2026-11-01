@@ -55,8 +55,8 @@ class DestinationHashValidatorTest {
 
         assertTrue(result is DestinationHashValidator.ValidationResult.Error)
         assertEquals(
-            "Hash cannot be empty",
-            (result as DestinationHashValidator.ValidationResult.Error).message,
+            DestinationHashValidator.HashErrorReason.EMPTY,
+            (result as DestinationHashValidator.ValidationResult.Error).reason,
         )
     }
 
@@ -66,8 +66,8 @@ class DestinationHashValidatorTest {
 
         assertTrue(result is DestinationHashValidator.ValidationResult.Error)
         assertEquals(
-            "Hash cannot be empty",
-            (result as DestinationHashValidator.ValidationResult.Error).message,
+            DestinationHashValidator.HashErrorReason.EMPTY,
+            (result as DestinationHashValidator.ValidationResult.Error).reason,
         )
     }
 
@@ -81,8 +81,8 @@ class DestinationHashValidatorTest {
 
         assertTrue(result is DestinationHashValidator.ValidationResult.Error)
         val error = result as DestinationHashValidator.ValidationResult.Error
-        assertTrue(error.message.contains("16"))
-        assertTrue(error.message.contains("32"))
+        assertEquals(DestinationHashValidator.HashErrorReason.LENGTH, error.reason)
+        assertEquals(listOf(32, 16), error.args)
     }
 
     @Test
@@ -93,8 +93,8 @@ class DestinationHashValidatorTest {
 
         assertTrue(result is DestinationHashValidator.ValidationResult.Error)
         val error = result as DestinationHashValidator.ValidationResult.Error
-        assertTrue(error.message.contains("48"))
-        assertTrue(error.message.contains("32"))
+        assertEquals(DestinationHashValidator.HashErrorReason.LENGTH, error.reason)
+        assertEquals(listOf(32, 48), error.args)
     }
 
     // ==================== Invalid Character Tests ====================
@@ -106,9 +106,9 @@ class DestinationHashValidatorTest {
         val result = DestinationHashValidator.validate(hashWithG)
 
         assertTrue(result is DestinationHashValidator.ValidationResult.Error)
-        assertTrue(
-            (result as DestinationHashValidator.ValidationResult.Error)
-                .message.contains("hex"),
+        assertEquals(
+            DestinationHashValidator.HashErrorReason.NOT_HEX,
+            (result as DestinationHashValidator.ValidationResult.Error).reason,
         )
     }
 

@@ -34,12 +34,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
 import network.columba.app.viewmodel.OnboardingViewModel
 
 /**
@@ -53,6 +56,7 @@ fun WelcomeScreen(
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
 
     Surface(
@@ -82,7 +86,7 @@ fun WelcomeScreen(
                 // App branding
                 Icon(
                     imageVector = Icons.Default.Sensors,
-                    contentDescription = "Columba",
+                    contentDescription = stringResource(R.string.welcome_app_name),
                     modifier = Modifier.size(80.dp),
                     tint = MaterialTheme.colorScheme.primary,
                 )
@@ -90,7 +94,7 @@ fun WelcomeScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
-                    text = "Welcome to Columba",
+                    text = stringResource(R.string.welcome_title),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
@@ -99,7 +103,7 @@ fun WelcomeScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Secure mesh messaging over Reticulum",
+                    text = stringResource(R.string.welcome_subtitle),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -124,14 +128,14 @@ fun WelcomeScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         Text(
-                            text = "Choose Your Display Name",
+                            text = stringResource(R.string.welcome_choose_name),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
 
                         Text(
-                            text = "This name will be visible to other peers when you send messages and announces.",
+                            text = stringResource(R.string.welcome_name_desc),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -139,8 +143,8 @@ fun WelcomeScreen(
                         OutlinedTextField(
                             value = state.displayName,
                             onValueChange = { viewModel.updateDisplayName(it) },
-                            label = { Text("Display Name") },
-                            placeholder = { Text("Anonymous Peer") },
+                            label = { Text(stringResource(R.string.welcome_display_name)) },
+                            placeholder = { Text(stringResource(R.string.welcome_anonymous_peer)) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             keyboardOptions =
@@ -157,7 +161,7 @@ fun WelcomeScreen(
                             isError = state.error != null,
                             supportingText =
                                 state.error?.let {
-                                    { Text(it, color = MaterialTheme.colorScheme.error) }
+                                    { Text(it.resolve(context), color = MaterialTheme.colorScheme.error) }
                                 },
                         )
                     }
@@ -188,9 +192,9 @@ fun WelcomeScreen(
                         Text(
                             text =
                                 if (state.displayName.isBlank()) {
-                                    "Continue as Anonymous Peer"
+                                    stringResource(R.string.welcome_continue_anonymous)
                                 } else {
-                                    "Continue"
+                                    stringResource(R.string.welcome_continue)
                                 },
                             style = MaterialTheme.typography.titleMedium,
                         )
@@ -208,7 +212,7 @@ fun WelcomeScreen(
                     enabled = !state.isSaving,
                 ) {
                     Text(
-                        text = "Skip",
+                        text = stringResource(R.string.welcome_skip),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -221,7 +225,7 @@ fun WelcomeScreen(
                     enabled = !state.isSaving,
                 ) {
                     Text(
-                        text = "Restore from backup",
+                        text = stringResource(R.string.welcome_restore_backup),
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
@@ -230,7 +234,7 @@ fun WelcomeScreen(
 
                 // Footer
                 Text(
-                    text = "You can change this later in Settings",
+                    text = stringResource(R.string.welcome_change_later),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center,

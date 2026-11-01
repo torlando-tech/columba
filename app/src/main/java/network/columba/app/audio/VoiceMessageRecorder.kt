@@ -14,6 +14,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import network.columba.app.R
+import network.columba.app.viewmodel.UiMessage
+import network.columba.app.viewmodel.UiMessageException
+import network.columba.app.viewmodel.toUiMessage
 import tech.torlando.lxst.recording.AudioFileRecorder
 import tech.torlando.lxst.recording.RecordedAudio
 import tech.torlando.lxst.recording.RecordingConfig
@@ -107,7 +111,7 @@ data class VoiceMessageRecordingState(
     val selectedRecording: RecordedAudio? = null,
     val selectedFormat: VoiceMessageFormat? = null,
     val activeRecordingFile: File? = null,
-    val errorMessage: String? = null,
+    val errorMessage: UiMessage? = null,
     val elapsedMillis: Long = 0L,
 )
 
@@ -171,7 +175,7 @@ class VoiceMessageRecorder(
                                 is RecorderState.Failed -> current.copy(
                                     recorderState = backendState,
                                     activeRecordingFile = null,
-                                    errorMessage = backendState.cause.message ?: "Recording failed",
+                                    errorMessage = backendState.cause.toUiMessage(R.string.voice_recording_failed),
                                 )
                                 else -> current.copy(recorderState = backendState)
                             }
@@ -199,7 +203,7 @@ class VoiceMessageRecorder(
             backend.start(output)
         } catch (error: Throwable) {
             output.delete()
-            _state.value = _state.value.copy(errorMessage = error.message ?: "Unable to start recording")
+            _state.value = _state.value.copy(errorMessage = error.toUiMessage(R.string.voice_start_failed))
             throw error
         }
         previousRecording?.file?.delete()
@@ -234,7 +238,9 @@ class VoiceMessageRecorder(
                 elapsedJob?.cancel()
                 _state.value.activeRecordingFile?.delete()
                 runCatching { backend.cancel() }
-                _state.value = VoiceMessageRecordingState(errorMessage = error.message)
+                _state.value = VoiceMessageRecordingState(
+                    errorMessage = (error as? UiMessageException)?.uiMessage ?: error.message?.let { UiMessage.Raw(it) },
+                )
                 throw error
             }
         deadlineJob?.cancel()

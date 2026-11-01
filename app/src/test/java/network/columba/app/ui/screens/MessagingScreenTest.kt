@@ -35,6 +35,7 @@ import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
 import network.columba.app.ui.model.ReplyPreviewUi
+import network.columba.app.viewmodel.ContactToggleErrorReason
 import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.MessagingViewModel
 import network.columba.app.viewmodel.ComposerSendResult
@@ -1471,7 +1472,9 @@ class MessagingScreenTest {
     fun contactToggleResult_error_triggersToastCollection() {
         // Given - a flow with replay
         val contactToggleFlow = MutableSharedFlow<ContactToggleResult>(replay = 1)
-        contactToggleFlow.tryEmit(ContactToggleResult.Error("Identity not available"))
+        contactToggleFlow.tryEmit(
+            ContactToggleResult.Error(ContactToggleErrorReason.IDENTITY_NOT_AVAILABLE),
+        )
         every { mockViewModel.contactToggleResult } returns contactToggleFlow
 
         // When - render screen

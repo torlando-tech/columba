@@ -117,7 +117,7 @@ class BleGattServerKeepaliveTest {
      * Test that keepalive loop exits when target is no longer tracked.
      *
      * This simulates the defensive break added in the keepalive loop:
-     * if (error.contains("No connected centrals")) break
+     * if (result.exceptionOrNull() is NoConnectedCentralsException) break
      */
     @Test
     fun `keepalive loop exits on no connected centrals error`() =
@@ -136,7 +136,7 @@ class BleGattServerKeepaliveTest {
                         // Simulate checking if central is still connected
                         val target = connectedCentrals[address]
                         if (target == null) {
-                            // This is the fix: detect "No connected centrals" and break
+                            // This is the fix: detect NoConnectedCentralsException and break
                             loopExitedCleanly.set(true)
                             break
                         }
@@ -193,38 +193,6 @@ class BleGattServerKeepaliveTest {
             assertFalse("Keepalive job should complete after central removed", keepaliveJob.isActive)
         }
 
-    /**
-     * Test error message detection pattern.
-     */
-    @Test
-    fun `error message contains expected no connected centrals substring`() {
-        val errorMessage = "No connected centrals to notify"
-
-        assertTrue(
-            "Error should contain 'No connected centrals'",
-            errorMessage.contains("No connected centrals"),
-        )
-    }
-
-    /**
-     * Test that partial match also works.
-     */
-    @Test
-    fun `partial error message match works for detection`() {
-        val possibleErrors =
-            listOf(
-                "No connected centrals to notify",
-                "Error: No connected centrals found",
-                "IllegalStateException: No connected centrals",
-            )
-
-        possibleErrors.forEach { error ->
-            assertTrue(
-                "Should detect 'No connected centrals' in: $error",
-                error.contains("No connected centrals"),
-            )
-        }
-    }
 
     // ========== Multiple Address Handling Tests ==========
 

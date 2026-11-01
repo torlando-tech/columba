@@ -15,11 +15,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import network.columba.app.R
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsNomadnet
 import network.columba.app.rns.api.model.NomadnetLinkStats
 import network.columba.app.rns.api.model.NomadnetMediaResult
+import network.columba.app.viewmodel.UiMessage
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -278,7 +280,7 @@ class PageImageLoaderTest {
 
         loader.scan(listOf(ref(":/media/toolarge.webp", "img")))
         val state = awaitState("img") { it.status == PageImageStatus.FAILED }
-        assertTrue(state.error!!.contains("too large"))
+        assertTrue((state.error as UiMessage.Raw).text.contains("too large"))
     }
 
     // ── Manual / never / explicit ──────────────────────────────────────────
@@ -395,7 +397,7 @@ class PageImageLoaderTest {
         loader.scan(listOf(ref(":/media/broken.webp", "img")))
 
         val state = awaitState("img") { it.status == PageImageStatus.FAILED }
-        assertEquals("link reset", state.error)
+        assertEquals(UiMessage.Raw("link reset"), state.error)
     }
 
     @Test
@@ -408,7 +410,7 @@ class PageImageLoaderTest {
         loader.scan(listOf(ref(":/media/fake.webp", "img")))
 
         val state = awaitState("img") { it.status == PageImageStatus.FAILED }
-        assertTrue(state.error!!.contains("WebP"))
+        assertEquals(R.string.page_image_not_webp, (state.error as UiMessage.Text).id)
     }
 
     @Test
@@ -422,7 +424,7 @@ class PageImageLoaderTest {
         loader.scan(listOf(ref(":/media/big.webp", "img")))
 
         val state = awaitState("img") { it.status == PageImageStatus.FAILED }
-        assertTrue(state.error!!.contains("too large"))
+        assertEquals(R.string.page_image_too_large, (state.error as UiMessage.Text).id)
     }
 
     // ── URL resolution / reload ────────────────────────────────────────────
@@ -437,7 +439,7 @@ class PageImageLoaderTest {
         // dead "tap to load", and retry is a no-op.
         assertEquals(PageImageStatus.MALFORMED, state!!.status)
         assertNotNull(state.error)
-        assertTrue(state.error!!.startsWith("Malformed image URL"))
+        assertEquals(R.string.page_image_malformed_url, (state.error as UiMessage.Text).id)
         coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any(), any()) }
 
         loader.retryImage("img")

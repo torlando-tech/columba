@@ -55,6 +55,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -65,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
 import network.columba.app.migration.ExportResult
 import network.columba.app.migration.MigrationPreview
 import network.columba.app.viewmodel.MigrationUiState
@@ -153,7 +156,7 @@ fun MigrationScreen(
                 viewModel.onExportSaveDialogLaunched()
             }
             is MigrationUiState.ExportSaved -> {
-                snackbarHostState.showSnackbar("Export saved successfully")
+                snackbarHostState.showSnackbar(context.getString(R.string.migration_export_saved))
                 viewModel.resetState()
             }
             is MigrationUiState.ImportPreview -> {
@@ -166,14 +169,17 @@ fun MigrationScreen(
             }
             is MigrationUiState.ImportComplete -> {
                 snackbarHostState.showSnackbar(
-                    "Import complete! ${state.result.identitiesImported} identities, " +
-                        "${state.result.messagesImported} messages, " +
-                        "${state.result.announcesImported} announces, " +
-                        "${state.result.interfacesImported} interfaces imported.",
+                    context.getString(
+                        R.string.migration_import_complete_summary,
+                        state.result.identitiesImported,
+                        state.result.messagesImported,
+                        state.result.announcesImported,
+                        state.result.interfacesImported,
+                    ),
                 )
             }
             is MigrationUiState.Error -> {
-                snackbarHostState.showSnackbar(state.message)
+                snackbarHostState.showSnackbar(state.message.resolve(context))
             }
             else -> {}
         }
@@ -182,10 +188,10 @@ fun MigrationScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Data Migration") },
+                title = { Text(stringResource(R.string.settings_migration_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Navigate back")
+                        Icon(Icons.Default.ArrowBack, stringResource(R.string.identity_navigate_back))
                     }
                 },
             )
@@ -238,9 +244,8 @@ fun MigrationScreen(
     // Export Password Dialog
     if (showExportPasswordDialog) {
         PasswordDialog(
-            title = "Encrypt Export",
-            description = "Choose a password to protect your export file. " +
-                "You will need this password to import the data on another device.",
+            title = stringResource(R.string.migration_encrypt_export_title),
+            description = stringResource(R.string.migration_encrypt_export_description),
             isConfirmMode = true,
             isWrongPassword = false,
             onConfirm = { password ->
@@ -263,9 +268,8 @@ fun MigrationScreen(
         }
         if (fileUri != null) {
             PasswordDialog(
-                title = "Encrypted Backup",
-                description = "This backup file is encrypted. " +
-                    "Enter the password that was used during export.",
+                title = stringResource(R.string.migration_encrypted_backup_title),
+                description = stringResource(R.string.migration_encrypted_backup_description),
                 isConfirmMode = false,
                 isWrongPassword = currentState is MigrationUiState.WrongPassword,
                 onConfirm = { password ->
@@ -327,6 +331,7 @@ private fun ExportSection(
     onIncludeAttachmentsChange: (Boolean) -> Unit,
     onExport: () -> Unit,
 ) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors =
@@ -348,15 +353,14 @@ private fun ExportSection(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "Export Data",
+                    stringResource(R.string.migration_export_data_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
             }
 
             Text(
-                "Export all your data (identities, messages, contacts, settings) " +
-                    "to a file that can be imported into a new installation.",
+                stringResource(R.string.migration_export_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
@@ -375,22 +379,25 @@ private fun ExportSection(
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             Text(
-                                "Data to export:",
+                                stringResource(R.string.migration_data_to_export),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            Text("${exportPreview.identityCount} identities")
-                            Text("${exportPreview.messageCount} messages")
-                            Text("${exportPreview.contactCount} contacts")
-                            Text("${exportPreview.announceCount} announces")
-                            Text("${exportPreview.interfaceCount} interfaces")
-                            Text("${exportPreview.customThemeCount} custom themes")
+                            Text(pluralStringResource(R.plurals.migration_count_identities, exportPreview.identityCount, exportPreview.identityCount))
+                            Text(pluralStringResource(R.plurals.migration_count_messages, exportPreview.messageCount, exportPreview.messageCount))
+                            Text(pluralStringResource(R.plurals.migration_count_contacts, exportPreview.contactCount, exportPreview.contactCount))
+                            Text(pluralStringResource(R.plurals.migration_count_announces, exportPreview.announceCount, exportPreview.announceCount))
+                            Text(pluralStringResource(R.plurals.migration_count_interfaces, exportPreview.interfaceCount, exportPreview.interfaceCount))
+                            Text(pluralStringResource(R.plurals.migration_count_custom_themes, exportPreview.customThemeCount, exportPreview.customThemeCount))
                         }
                     }
                 }
                 is ExportResult.Error -> {
                     Text(
-                        "Could not load preview: ${exportPreview.message}",
+                        stringResource(
+                            R.string.migration_could_not_load_preview,
+                            exportPreview.message.resolve(context),
+                        ),
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
@@ -424,7 +431,7 @@ private fun ExportSection(
                             tint = MaterialTheme.colorScheme.primary,
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Export complete! Save dialog opened.")
+                        Text(stringResource(R.string.migration_export_complete_save_dialog))
                     }
                 }
                 else -> {}
@@ -454,12 +461,12 @@ private fun ExportSection(
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Include file attachments",
+                        stringResource(R.string.migration_include_attachments),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     if (!includeAttachments) {
                         Text(
-                            "Images and files won't be included in export",
+                            stringResource(R.string.migration_no_attachments_note),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -481,7 +488,7 @@ private fun ExportSection(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
-                Text("Export All Data")
+                Text(stringResource(R.string.migration_export_all_data))
             }
         }
     }
@@ -494,6 +501,7 @@ private fun ImportSection(
     onSelectFile: () -> Unit,
     onImportComplete: () -> Unit,
 ) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors =
@@ -515,15 +523,14 @@ private fun ImportSection(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "Import Data",
+                    stringResource(R.string.migration_import_data_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
             }
 
             Text(
-                "Import data from a previous export. This will add identities, " +
-                    "messages, and contacts from the backup file.",
+                stringResource(R.string.migration_import_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
@@ -538,7 +545,7 @@ private fun ImportSection(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "Importing... ${(importProgress * 100).toInt()}%",
+                            stringResource(R.string.migration_importing_percent, (importProgress * 100).toInt()),
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -571,16 +578,19 @@ private fun ImportSection(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    "Import complete!",
+                                    stringResource(R.string.migration_import_complete_title),
                                     fontWeight = FontWeight.Bold,
                                 )
                                 Text(
-                                    "${uiState.result.identitiesImported} identities, " +
-                                        "${uiState.result.messagesImported} messages, " +
-                                        "${uiState.result.contactsImported} contacts, " +
-                                        "${uiState.result.announcesImported} announces, " +
-                                        "${uiState.result.interfacesImported} interfaces, " +
-                                        "${uiState.result.customThemesImported} themes",
+                                    stringResource(
+                                        R.string.migration_import_result_counts,
+                                        uiState.result.identitiesImported,
+                                        uiState.result.messagesImported,
+                                        uiState.result.contactsImported,
+                                        uiState.result.announcesImported,
+                                        uiState.result.interfacesImported,
+                                        uiState.result.customThemesImported,
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
@@ -605,7 +615,7 @@ private fun ImportSection(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                uiState.message,
+                                uiState.message.resolve(context),
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                             )
                         }
@@ -628,7 +638,7 @@ private fun ImportSection(
                     CircularProgressIndicator(modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                 }
-                Text("Select Migration File")
+                Text(stringResource(R.string.migration_select_file))
             }
         }
     }
@@ -644,13 +654,13 @@ private fun ImportConfirmDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Import Data?") },
+        title = { Text(stringResource(R.string.migration_import_confirm_title)) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    "This backup was created on:",
+                    stringResource(R.string.migration_backup_created_on),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -662,7 +672,7 @@ private fun ImportConfirmDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    "Data to import:",
+                    stringResource(R.string.migration_data_to_import),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -677,7 +687,7 @@ private fun ImportConfirmDialog(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Text("${preview.identityCount} identities")
+                        Text(pluralStringResource(R.plurals.migration_count_identities, preview.identityCount, preview.identityCount))
                         if (preview.identityNames.isNotEmpty()) {
                             Text(
                                 preview.identityNames.joinToString(", "),
@@ -685,19 +695,19 @@ private fun ImportConfirmDialog(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        Text("${preview.conversationCount} conversations")
-                        Text("${preview.messageCount} messages")
-                        Text("${preview.contactCount} contacts")
-                        Text("${preview.announceCount} announces")
-                        Text("${preview.interfaceCount} interfaces")
-                        Text("${preview.customThemeCount} custom themes")
+                        Text(pluralStringResource(R.plurals.migration_count_conversations, preview.conversationCount, preview.conversationCount))
+                        Text(pluralStringResource(R.plurals.migration_count_messages, preview.messageCount, preview.messageCount))
+                        Text(pluralStringResource(R.plurals.migration_count_contacts, preview.contactCount, preview.contactCount))
+                        Text(pluralStringResource(R.plurals.migration_count_announces, preview.announceCount, preview.announceCount))
+                        Text(pluralStringResource(R.plurals.migration_count_interfaces, preview.interfaceCount, preview.interfaceCount))
+                        Text(pluralStringResource(R.plurals.migration_count_custom_themes, preview.customThemeCount, preview.customThemeCount))
                     }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    "Existing identities with the same ID will be skipped.",
+                    stringResource(R.string.migration_existing_identities_skipped),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -706,12 +716,12 @@ private fun ImportConfirmDialog(
         },
         confirmButton = {
             Button(onClick = onConfirm) {
-                Text("Import")
+                Text(stringResource(R.string.migration_import_button))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         },
     )
@@ -728,19 +738,19 @@ private fun RestartingServiceDialog() {
         icon = {
             CircularProgressIndicator(modifier = Modifier.size(48.dp))
         },
-        title = { Text("Restarting Service") },
+        title = { Text(stringResource(R.string.migration_restarting_service_title)) },
         text = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    "Restarting network service...",
+                    stringResource(R.string.identity_restarting_network_service),
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "This may take a few seconds",
+                    stringResource(R.string.identity_may_take_few_seconds),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -770,30 +780,30 @@ private fun NotificationPermissionDialog(
                 modifier = Modifier.size(48.dp),
             )
         },
-        title = { Text("Enable Notifications?") },
+        title = { Text(stringResource(R.string.migration_enable_notifications_title)) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    "Your backup data has been restored, including your notification preferences.",
+                    stringResource(R.string.migration_notif_restored_body),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "To receive notifications for new messages, you'll need to grant notification permission.",
+                    stringResource(R.string.migration_notif_permission_body),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
         },
         confirmButton = {
             Button(onClick = onConfirm) {
-                Text("Enable")
+                Text(stringResource(R.string.onboarding_perms_enable))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Not Now")
+                Text(stringResource(R.string.ble_perm_not_now))
             }
         },
     )
@@ -856,7 +866,7 @@ internal fun PasswordDialog(
                         password = it
                         errorMessage = null
                     },
-                    label = { Text("Password") },
+                    label = { Text(stringResource(R.string.migration_password_label)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     visualTransformation =
@@ -864,7 +874,7 @@ internal fun PasswordDialog(
                         else PasswordVisualTransformation(),
                     trailingIcon = {
                         TextButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Text(if (passwordVisible) "Hide" else "Show")
+                            Text(if (passwordVisible) stringResource(R.string.migration_hide) else stringResource(R.string.migration_show))
                         }
                     },
                     isError = errorMessage != null,
@@ -878,7 +888,7 @@ internal fun PasswordDialog(
                             confirmPassword = it
                             errorMessage = null
                         },
-                        label = { Text("Confirm password") },
+                        label = { Text(stringResource(R.string.migration_confirm_password_label)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         visualTransformation =
@@ -907,12 +917,12 @@ internal fun PasswordDialog(
                 },
                 enabled = password.isNotEmpty(),
             ) {
-                Text(if (isConfirmMode) "Export" else "Unlock")
+                Text(if (isConfirmMode) stringResource(R.string.migration_export_action) else stringResource(R.string.migration_unlock_action))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         },
     )

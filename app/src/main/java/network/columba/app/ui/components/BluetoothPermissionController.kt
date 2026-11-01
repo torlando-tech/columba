@@ -14,6 +14,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import network.columba.app.R
 import network.columba.app.rns.host.ble.util.BlePermissionManager
 
 /**
@@ -142,7 +144,12 @@ fun rememberBluetoothPermissionController(
                 }
             },
             sheetState = sheetState,
-            primaryActionLabel = if (useAppSettings) "Open Settings" else "Grant Permissions",
+            primaryActionLabel =
+                if (useAppSettings) {
+                    stringResource(R.string.ble_ctrl_open_settings)
+                } else {
+                    stringResource(R.string.ble_ctrl_grant_permissions)
+                },
         )
     }
 

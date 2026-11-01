@@ -1,5 +1,6 @@
 package network.columba.app.rns.host.flasher
 
+import network.columba.app.rns.host.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -473,15 +474,14 @@ class ESPToolFlasherInterfaceVsChipTypeTest {
  */
 class ESPToolFlasherManualBootModeRequiredTest {
     @Test
-    fun `ManualBootModeRequired exception contains message`() {
-        val message = "Test message"
-        val exception = ESPToolFlasher.ManualBootModeRequired(message)
-        assertEquals(message, exception.message)
+    fun `ManualBootModeRequired carries its display resource`() {
+        val exception = ESPToolFlasher.ManualBootModeRequired(R.string.esptool_manual_boot_instructions)
+        assertEquals(R.string.esptool_manual_boot_instructions, exception.messageRes)
     }
 
     @Test
     fun `ManualBootModeRequired is an Exception`() {
-        val exception = ESPToolFlasher.ManualBootModeRequired("Test")
+        val exception = ESPToolFlasher.ManualBootModeRequired(R.string.esptool_manual_boot_instructions)
         assertTrue(exception is Exception)
     }
 }

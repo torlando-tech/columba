@@ -8,7 +8,9 @@ import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.util.Log
+import network.columba.app.R
 import network.columba.app.data.model.ImageCompressionPreset
+import network.columba.app.viewmodel.UiMessage
 import java.io.ByteArrayOutputStream
 import kotlin.math.max
 
@@ -38,7 +40,7 @@ object ImageUtils {
      */
     data class TransferTimeEstimate(
         val seconds: Int,
-        val formattedTime: String,
+        val formattedTime: UiMessage,
     )
 
     /**
@@ -572,27 +574,29 @@ object ImageUtils {
         bandwidthBps: Int,
     ): TransferTimeEstimate {
         if (bandwidthBps <= 0) {
-            return TransferTimeEstimate(0, "Unknown")
+            return TransferTimeEstimate(0, UiMessage.Text(R.string.label_unknown))
         }
 
         val sizeBits = sizeBytes * 8
         val seconds = (sizeBits / bandwidthBps).toInt()
 
-        val formattedTime =
-            when {
-                seconds < 1 -> "< 1s"
-                seconds < 60 -> "${seconds}s"
-                seconds < 3600 -> {
-                    val minutes = seconds / 60
-                    val remainingSeconds = seconds % 60
-                    if (remainingSeconds > 0) "${minutes}m ${remainingSeconds}s" else "${minutes}m"
-                }
-                else -> {
-                    val hours = seconds / 3600
-                    val remainingMinutes = (seconds % 3600) / 60
-                    if (remainingMinutes > 0) "${hours}h ${remainingMinutes}m" else "${hours}h"
-                }
-            }
+        val formattedTime: UiMessage =
+            UiMessage.Raw(
+                when {
+                    seconds < 1 -> "< 1s"
+                    seconds < 60 -> "${seconds}s"
+                    seconds < 3600 -> {
+                        val minutes = seconds / 60
+                        val remainingSeconds = seconds % 60
+                        if (remainingSeconds > 0) "${minutes}m ${remainingSeconds}s" else "${minutes}m"
+                    }
+                    else -> {
+                        val hours = seconds / 3600
+                        val remainingMinutes = (seconds % 3600) / 60
+                        if (remainingMinutes > 0) "${hours}h ${remainingMinutes}m" else "${hours}h"
+                    }
+                },
+            )
 
         return TransferTimeEstimate(seconds, formattedTime)
     }

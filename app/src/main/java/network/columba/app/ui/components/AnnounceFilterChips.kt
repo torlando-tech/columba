@@ -1,5 +1,6 @@
 package network.columba.app.ui.components
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,28 +24,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.rns.api.model.NodeType
 
 private enum class AspectChip(
-    val label: String,
+    @StringRes val labelRes: Int,
 ) {
-    PEER("Peers"),
-    NODE("Sites"),
-    RELAY("Relays"),
-    AUDIO("Audio"),
+    PEER(R.string.announce_filter_aspect_peers),
+    NODE(R.string.announce_filter_aspect_sites),
+    RELAY(R.string.announce_filter_aspect_relays),
+    AUDIO(R.string.announce_filter_aspect_audio),
 }
 
-private val INTERFACE_OPTIONS: List<Pair<InterfaceType, String>> =
+private val INTERFACE_OPTIONS: List<Pair<InterfaceType, Int>> =
     listOf(
-        InterfaceType.AUTO to "Local",
-        InterfaceType.TCP_CLIENT to "TCP",
-        InterfaceType.TCP_SERVER to "TCP Server",
-        InterfaceType.BLE to "Bluetooth",
-        InterfaceType.RNODE to "RNode",
-        InterfaceType.UNKNOWN to "Other",
+        InterfaceType.AUTO to R.string.announce_filter_iface_local,
+        InterfaceType.TCP_CLIENT to R.string.discovered_filter_tcp,
+        InterfaceType.TCP_SERVER to R.string.announce_filter_iface_tcp_server,
+        InterfaceType.BLE to R.string.rnode_wizard_conn_bt,
+        InterfaceType.RNODE to R.string.announce_filter_iface_rnode,
+        InterfaceType.UNKNOWN to R.string.discovered_filter_other,
     )
 
 /**
@@ -97,8 +100,8 @@ fun AnnounceFilterChips(
     // Resolve the active labels using the same single-active rule the chip
     // rows themselves use — anything that isn't "exactly one chip" reads as
     // "All" (no pill) so the collapsed state matches the expanded highlights.
-    val activeAspectLabel = activeAspects.singleOrNull()?.label
-    val activeInterfaceLabel =
+    val activeAspectRes = activeAspects.singleOrNull()?.labelRes
+    val activeInterfaceRes =
         selectedInterfaceTypes.singleOrNull()?.let { type ->
             INTERFACE_OPTIONS.firstOrNull { it.first == type }?.second
         }
@@ -147,11 +150,11 @@ fun AnnounceFilterChips(
                 }
             }
             AnimatedVisibility(
-                visible = !expanded && (activeAspectLabel != null || activeInterfaceLabel != null),
+                visible = !expanded && (activeAspectRes != null || activeInterfaceRes != null),
             ) {
                 ActiveFilterPillRow(
-                    aspectLabel = activeAspectLabel,
-                    interfaceLabel = activeInterfaceLabel,
+                    aspectLabelRes = activeAspectRes,
+                    interfaceLabelRes = activeInterfaceRes,
                     onClick = onExpandRequest,
                 )
             }
@@ -167,12 +170,13 @@ fun AnnounceFilterChips(
  */
 @Composable
 private fun ActiveFilterPillRow(
-    aspectLabel: String?,
-    interfaceLabel: String?,
+    @StringRes aspectLabelRes: Int?,
+    @StringRes interfaceLabelRes: Int?,
     onClick: () -> Unit,
 ) {
-    val labels = listOfNotNull(aspectLabel, interfaceLabel)
+    val labels = listOfNotNull(aspectLabelRes, interfaceLabelRes).map { stringResource(it) }
     val joined = labels.joinToString(" • ")
+    val activeDesc = stringResource(R.string.announce_filter_active_desc, joined)
     Row(
         modifier =
             Modifier
@@ -180,12 +184,12 @@ private fun ActiveFilterPillRow(
                 .clickable(onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 10.dp)
                 .semantics {
-                    contentDescription = "Active filters: $joined. Tap to edit."
+                    contentDescription = activeDesc
                 },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "Filtering: ",
+            text = stringResource(R.string.announce_filter_label),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -227,7 +231,7 @@ private fun AspectChipRow(
             FilterChip(
                 selected = isAllActive,
                 onClick = onAllClick,
-                label = { Text("All") },
+                label = { Text(stringResource(R.string.announce_filter_all)) },
                 colors = FilterChipDefaults.filterChipColors(),
             )
         }
@@ -235,7 +239,7 @@ private fun AspectChipRow(
             FilterChip(
                 selected = !isAllActive && activeAspects.contains(aspect),
                 onClick = { onAspectSelect(aspect) },
-                label = { Text(aspect.label) },
+                label = { Text(stringResource(aspect.labelRes)) },
             )
         }
     }
@@ -262,14 +266,14 @@ private fun InterfaceChipRow(
             FilterChip(
                 selected = isAllActive,
                 onClick = onAllClick,
-                label = { Text("All") },
+                label = { Text(stringResource(R.string.announce_filter_all)) },
             )
         }
         items(INTERFACE_OPTIONS, key = { "iface-${it.first.name}" }) { (type, label) ->
             FilterChip(
                 selected = !isAllActive && selected.contains(type),
                 onClick = { onSelect(type) },
-                label = { Text(label) },
+                label = { Text(stringResource(label)) },
             )
         }
     }

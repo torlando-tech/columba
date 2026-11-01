@@ -86,30 +86,30 @@ class NotificationHelper
                 val messagesChannel =
                     NotificationChannel(
                         CHANNEL_ID_MESSAGES,
-                        "Messages",
+                        context.getString(R.string.notif_channel_messages),
                         NotificationManager.IMPORTANCE_HIGH,
                     ).apply {
-                        description = "Notifications for received messages"
+                        description = context.getString(R.string.notif_channel_messages_desc)
                         enableVibration(true)
                     }
 
                 val announcesChannel =
                     NotificationChannel(
                         CHANNEL_ID_ANNOUNCES,
-                        "Announces",
+                        context.getString(R.string.notif_channel_announces),
                         NotificationManager.IMPORTANCE_DEFAULT,
                     ).apply {
-                        description = "Notifications for heard announces"
+                        description = context.getString(R.string.notif_channel_announces_desc)
                         enableVibration(false)
                     }
 
                 val bleEventsChannel =
                     NotificationChannel(
                         CHANNEL_ID_BLE_EVENTS,
-                        "Bluetooth Events",
+                        context.getString(R.string.notif_channel_ble),
                         NotificationManager.IMPORTANCE_LOW,
                     ).apply {
-                        description = "Notifications for Bluetooth connection events"
+                        description = context.getString(R.string.notif_channel_ble_desc)
                         enableVibration(false)
                     }
 
@@ -117,6 +117,10 @@ class NotificationHelper
                 manager.createNotificationChannel(messagesChannel)
                 manager.createNotificationChannel(announcesChannel)
                 manager.createNotificationChannel(bleEventsChannel)
+
+                // Re-creating an existing channel id replaces its name/description with
+                // the current-locale text on every app start (user-set importance is
+                // preserved by the platform); channel ids never change.
             }
         }
 
@@ -302,15 +306,15 @@ class NotificationHelper
 
             // Build notification text with interface info
             val interfaceLabel = extractInterfaceLabel(receivingInterface, interfaceType)
-            val hopsText = if (hops == 1) "1 hop" else "$hops hops"
-            val contentText = "via $interfaceLabel \u00b7 $hopsText"
+            val hopsText = context.resources.getQuantityString(R.plurals.notif_hops, hops, hops)
+            val contentText = context.getString(R.string.notif_via_hops, interfaceLabel, hopsText)
 
             // Create notification
             val notification =
                 NotificationCompat
                     .Builder(context, CHANNEL_ID_ANNOUNCES)
                     .setSmallIcon(R.drawable.ic_notification_stat)
-                    .setContentTitle("Announce from $peerName")
+                    .setContentTitle(context.getString(R.string.notif_announce_from, peerName))
                     .setContentText(contentText)
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                     .setCategory(NotificationCompat.CATEGORY_STATUS)
@@ -356,8 +360,8 @@ class NotificationHelper
                 NotificationCompat
                     .Builder(context, CHANNEL_ID_BLE_EVENTS)
                     .setSmallIcon(R.drawable.ic_notification_stat)
-                    .setContentTitle("BLE Peer Connected")
-                    .setContentText("Connected to $displayName")
+                    .setContentTitle(context.getString(R.string.notif_ble_peer_connected))
+                    .setContentText(context.getString(R.string.notif_ble_connected_to, displayName))
                     .setPriority(NotificationCompat.PRIORITY_LOW)
                     .setCategory(NotificationCompat.CATEGORY_STATUS)
                     .setAutoCancel(true)
@@ -401,8 +405,8 @@ class NotificationHelper
                 NotificationCompat
                     .Builder(context, CHANNEL_ID_BLE_EVENTS)
                     .setSmallIcon(R.drawable.ic_notification_stat)
-                    .setContentTitle("BLE Peer Disconnected")
-                    .setContentText("Disconnected from $displayName")
+                    .setContentTitle(context.getString(R.string.notif_ble_peer_disconnected))
+                    .setContentText(context.getString(R.string.notif_ble_disconnected_from, displayName))
                     .setPriority(NotificationCompat.PRIORITY_LOW)
                     .setCategory(NotificationCompat.CATEGORY_STATUS)
                     .setAutoCancel(true)

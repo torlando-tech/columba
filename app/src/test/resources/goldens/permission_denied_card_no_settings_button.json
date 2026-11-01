@@ -1,0 +1,4 @@
+[
+  "Permissions Required",
+  "Bluetooth permissions have been denied. To use BLE features in Columba, please grant Bluetooth permissions in your device settings.\n\nWithout these permissions, Columba cannot discover or connect to nearby devices via Bluetooth."
+]

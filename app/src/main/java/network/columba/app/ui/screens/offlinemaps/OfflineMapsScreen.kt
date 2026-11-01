@@ -53,15 +53,20 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
+import network.columba.app.R
 import network.columba.app.data.repository.OfflineMapRegion
 import network.columba.app.viewmodel.OfflineMapsViewModel
 import network.columba.app.viewmodel.UpdateCheckResult
+import network.columba.app.util.launchSafely
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -74,8 +79,12 @@ fun OfflineMapsScreen(
     onNavigateToUpdate: (Long) -> Unit = {},
     viewModel: OfflineMapsViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Surfaces the "no file manager" snackbar from the import action
+    val snackbarScope = rememberCoroutineScope()
 
     // File picker launcher for MBTiles import
     val importLauncher =
@@ -116,7 +125,11 @@ fun OfflineMapsScreen(
                 actions = {
                     IconButton(
                         onClick = {
-                            importLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                            if (!importLauncher.launchSafely(arrayOf("application/octet-stream", "*/*"))) {
+                                snackbarScope.launch {
+                                    snackbarHostState.showSnackbar(context.getString(R.string.error_no_file_manager))
+                                }
+                            }
                         },
                         enabled = !state.isImporting,
                     ) {

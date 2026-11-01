@@ -88,6 +88,30 @@ fun NavController.openNomadNetPage(
     )
 }
 
+/**
+ * [androidx.lifecycle.SavedStateHandle] key on the NomadNet tab home entry:
+ * set when a site session ends via Back or Close Site, so the revealed home
+ * shows the address-entry prompt instead of auto-reopening the site that was
+ * just ended. See [endNomadNetSessionAndPop].
+ */
+const val KEY_NOMADNET_SESSION_ENDED = "nomadnet_session_ended"
+
+/**
+ * Ends the current NomadNet site session: marks the NomadNet tab home beneath
+ * the browser as session-ended, then pops the browser to reveal it.
+ *
+ * The home normally reopens the last-browsed node (tab restore, cold start).
+ * An explicitly ended session overrides that reopen: without the mark the
+ * home would immediately reload the same site and Back would look like a
+ * no-op. The mark travels with the home entry through save/restore and
+ * process death, so the session stays ended until the user enters a new
+ * address.
+ */
+fun NavController.endNomadNetSessionAndPop() {
+    previousBackStackEntry?.savedStateHandle?.set(KEY_NOMADNET_SESSION_ENDED, true)
+    popBackStack()
+}
+
 /** True when the top entry is the browser showing exactly this node and path. */
 private fun NavController.isShowingBrowserEntity(
     nodeHash: String,

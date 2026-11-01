@@ -105,6 +105,43 @@ class NomadNetPageCache
         }
 
         /**
+         * The last page the browser displayed, held in memory only.
+         *
+         * Reopening the NomadNet tab restores the session's page, and pages
+         * marked `#!c=0` (dynamic; the majority of executable NomadNet pages)
+         * are deliberately absent from the file cache - without this store,
+         * every tab tap would re-fetch the page the user is already looking
+         * at. It is consulted ONLY for a session restore, so ordinary
+         * navigation (link taps, deep links, URL bar, pull-to-refresh) still
+         * honours the site's freshness directive. Memory-only by design: a
+         * process restart is a genuine cold start and fetches fresh, and no
+         * `#!c=0` content is ever written to disk.
+         */
+        private data class SessionEntry(
+            val nodeHash: String,
+            val path: String,
+            val content: String,
+        )
+
+        @Volatile
+        private var sessionEntry: SessionEntry? = null
+
+        /** Record the page the browser just displayed, keyed by full path. */
+        fun putSession(
+            nodeHash: String,
+            path: String,
+            content: String,
+        ) {
+            sessionEntry = SessionEntry(nodeHash, path, content)
+        }
+
+        /** The displayed page for exactly this node and full path, if any. */
+        fun getSession(
+            nodeHash: String,
+            path: String,
+        ): String? = sessionEntry?.takeIf { it.nodeHash == nodeHash && it.path == path }?.content
+
+        /**
          * Remove a specific cache entry.
          */
         fun remove(

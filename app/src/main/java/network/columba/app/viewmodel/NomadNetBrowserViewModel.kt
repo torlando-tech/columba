@@ -480,6 +480,7 @@ class NomadNetBrowserViewModel
         fun loadPage(
             destinationHash: String,
             path: String = DEFAULT_PATH,
+            fromSessionRestore: Boolean = false,
         ) {
             partialManager.clear()
             if (destinationHash != currentNodeHash) {
@@ -501,36 +502,70 @@ class NomadNetBrowserViewModel
             val (parsedPath, fieldNames) = splitNomadNetPathFields(path)
             val requestPath = parsedPath.ifEmpty { DEFAULT_PATH }
             val formDataJson = buildNomadNetRequestData(fieldNames, _formFields.value)
-            if (formDataJson != null) {
-                // Variable submissions always fetch fresh (response depends on data).
-                submitFormAndNavigate(destinationHash, requestPath, formDataJson, fieldNames)
-                return
+
+            // Restoring the NomadNet tab session shows the page the user was
+            // looking at, immediately, from the in-memory session store -
+            // even a `#!c=0` page, which no file cache ever holds. Ordinary
+            // navigation (link taps, deep links, URL bar, pull-to-refresh)
+            // never sets [fromSessionRestore] and so still honours the
+            // site's freshness directive.
+            if (fromSessionRestore) {
+                val session = pageCache.getSession(destinationHash, path)
+                if (session != null) {
+                    fetchEpoch++ // Invalidate any in-flight request
+                    stopStatusCollection()
+                    stopProgressCollection()
+                    emitPageLoaded(MicronParser.parse(session), requestPath, destinationHash, fieldNames)
+                    return
+                }
             }
 
-            // Check cache before showing loading spinner.
+            // Check cache before showing loading spinner or submitting.
             //
-            // Flagged nodes ("Always identify to this node") bypass the cache:
-            // the cached content may be anonymous (from a prior unflagged
-            // visit), and "always identify" means the node should always see
-            // the user's identity. A fresh fetch establishes the link (or
-            // reuses it) so the backend identifies at link establishment time
-            // - the Python equivalent of upstream Browser.link_established -
-            // and the node serves identified content.
+            // The cache key is the full request path - including the backtick
+            // field block for variable submissions, the bare path otherwise.
+            // Serving a cached var-submission response on restore (NomadNet
+            // tab reopen, deep link, URL bar) is what keeps a tab tap from
+            // re-submitting the request: a site whose submission changes
+            // data would otherwise redo that action without another click.
+            // Only a cache miss submits, so a cold start still re-sends the
+            // variables a dynamic node needs.
+            //
+            // Flagged nodes ("Always identify to this node") bypass the
+            // cache: the cached content may be anonymous (from a prior
+            // unflagged visit), and "always identify" means the node should
+            // always see the user's identity. A fresh fetch establishes the
+            // link (or reuses it) so the backend identifies at link
+            // establishment time - the Python equivalent of upstream
+            // Browser.link_established - and the node serves identified
+            // content.
             //
             // The set is synced from DataStore via the reactive collector's
-            // first emission. In the narrow first-launch window where loadPage
-            // runs before that emission, _autoIdentifyNodes is still empty and
-            // the cache is served (possibly anonymous); the backend's
-            // identifyIfFlagged fires on the next fetch (any navigation or
-            // refresh), which is immediate for a user interacting with the page.
+            // first emission. In the narrow first-launch window where
+            // loadPage runs before that emission, _autoIdentifyNodes is
+            // still empty and the cache is served (possibly anonymous); the
+            // backend's identifyIfFlagged fires on the next fetch (any
+            // navigation or refresh), which is immediate for a user
+            // interacting with the page.
             val bypassCache = destinationHash in _autoIdentifyNodes.value
-            val cached = if (bypassCache) null else pageCache.get(destinationHash, requestPath)
+            val cachePath = if (formDataJson != null) path else requestPath
+            val cached = if (bypassCache) null else pageCache.get(destinationHash, cachePath)
             if (cached != null) {
                 fetchEpoch++ // Invalidate any in-flight request
                 stopStatusCollection()
                 stopProgressCollection()
                 val document = MicronParser.parse(cached)
-                emitPageLoaded(document, requestPath, destinationHash)
+                // Keep the session store warm so the next tab restore is
+                // instant even if this entry then expires from the file cache.
+                pageCache.putSession(destinationHash, path, cached)
+                // Pass the field tokens through so re-persisting keeps the
+                // backtick block: the next restore must hit this same key.
+                emitPageLoaded(document, requestPath, destinationHash, fieldNames)
+                return
+            }
+            if (formDataJson != null) {
+                // Miss: submit the variables (response depends on data).
+                submitFormAndNavigate(destinationHash, requestPath, formDataJson, fieldNames)
                 return
             }
 
@@ -643,6 +678,16 @@ class NomadNetBrowserViewModel
                         onSuccess = { pageResult ->
                             currentNodeHash = nodeHash
                             val document = MicronParser.parse(pageResult.content)
+                            // Cache under the full path with the backtick field
+                            // block - the same key loadPage restores with - so a
+                            // later restore (tab reopen, deep link) serves this
+                            // response instead of re-submitting the request.
+                            val persistPath = buildNomadNetPersistPath(pageResult.path, lastFetchFieldTokens)
+                            pageCache.put(nodeHash, persistPath, pageResult.content, document.cacheTime)
+                            // And hold it in the session store: a `#!c=0` page
+                            // never reaches the file cache, yet a tab restore
+                            // must still show it without re-submitting.
+                            pageCache.putSession(nodeHash, persistPath, pageResult.content)
                             emitPageLoaded(document, pageResult.path, nodeHash, lastFetchFieldTokens)
                         },
                         onFailure = { error ->
@@ -1249,6 +1294,10 @@ class NomadNetBrowserViewModel
                                 if (cacheResponse) {
                                     pageCache.put(nodeHash, pageResult.path, pageResult.content, document.cacheTime)
                                 }
+                                // The session store tracks the displayed page even when
+                                // the site opts out of the file cache (`#!c=0`), so a
+                                // NomadNet tab restore shows it without a re-fetch.
+                                pageCache.putSession(nodeHash, pageResult.path, pageResult.content)
                                 emitPageLoaded(document, pageResult.path, nodeHash)
                             }
                         },

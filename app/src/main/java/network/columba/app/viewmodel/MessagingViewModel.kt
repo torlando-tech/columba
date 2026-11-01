@@ -422,19 +422,24 @@ class MessagingViewModel
             viewModelScope.launch {
                 try {
                     conversationRepository.deleteThread(peerHash, threadIdHex.hexToBytes())
-                    if (_selectedThread.value == threadIdHex) {
-                        // The deleted thread must not resurrect itself: the switch to
-                        // Main flushes the composer to the thread being left, and
-                        // saveDraft would recreate its draft AND thread row. Clear the
-                        // composer state first (under the switch mutex so an in-flight
-                        // flush cannot slip between the clear and the switch).
-                        threadSwitchMutex.withLock {
+                    // Decide INSIDE the switch mutex: a queued switch may
+                    // complete while deletion waits, and its freshly loaded
+                    // draft must not be cleared as if it were the deleted
+                    // thread's (that saved an empty text over the other
+                    // thread's real draft). Clearing the deleted thread's own
+                    // composer keeps the later Main-flush harmless (empty
+                    // flush cannot recreate the deleted rows).
+                    val wasOpen = threadSwitchMutex.withLock {
+                        if (_selectedThread.value == threadIdHex) {
                             draftSaveJob?.cancel()
                             lastDraftText = ""
                             _draftText.value = null
+                            true
+                        } else {
+                            false
                         }
-                        selectThread(null)
                     }
+                    if (wasOpen) selectThread(null)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error deleting thread", e)
                 }

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadBackTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:33:00.283Z" hostname="hermes-agent" time="9.73">
+<testsuite name="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadBackTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:06:36.698Z" hostname="hermes-agent" time="11.59">
   <properties/>
-  <testcase name="toolbarAndSystemBack_onLocation_bothExitWizard" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadBackTest" time="8.586"/>
-  <testcase name="toolbarAndSystemBack_onSetupStep_bothMoveToPreviousStep" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadBackTest" time="0.547"/>
-  <testcase name="toolbarAndSystemBack_duringDownload_bothRequireCancellationConfirmation" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadBackTest" time="0.309"/>
+  <testcase name="toolbarAndSystemBack_onLocation_bothExitWizard" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadBackTest" time="10.255"/>
+  <testcase name="toolbarAndSystemBack_onSetupStep_bothMoveToPreviousStep" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadBackTest" time="0.581"/>
+  <testcase name="toolbarAndSystemBack_duringDownload_bothRequireCancellationConfirmation" classname="network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadBackTest" time="0.31"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation

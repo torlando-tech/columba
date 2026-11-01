@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.service.IncomingCallPresenterTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:02:33.405Z" hostname="hermes-agent" time="0.899">
+  <properties/>
+  <testcase name="same-identity re-call during the lookup is presented with the lookup result" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.765"/>
+  <testcase name="incoming call posts notification with the resolved name after the lookup" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.01"/>
+  <testcase name="incoming call is not posted while MainActivity is visible" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.014"/>
+  <testcase name="incoming call keeps null name for unknown caller" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.012"/>
+  <testcase name="backgrounding mid-ring with the app reopened before the lookup does not post" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.016"/>
+  <testcase name="start is idempotent" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.006"/>
+  <testcase name="lookup failure fails open to null name" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.007"/>
+  <testcase name="incoming call falls back to announce peer name when no nickname" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.006"/>
+  <testcase name="transition to Active cancels the incoming notification" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.008"/>
+  <testcase name="lookup completing after MainActivity took over does not post" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.008"/>
+  <testcase name="foreground claim after the post cancels it in the same atomic section" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.007"/>
+  <testcase name="backgrounding mid-ring hands presentation back to the presenter" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.007"/>
+  <testcase name="queued post is dropped when the notification was declined during the enqueue window" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.006"/>
+  <testcase name="backgrounding while idle posts nothing" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.002"/>
+  <testcase name="queued post is dropped when the call ends before the main-thread runnable runs" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.007"/>
+  <testcase name="outgoing states never post an incoming notification" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.004"/>
+  <testcase name="rotation mid-ring does not post the background notification" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.005"/>
+  <testcase name="superseded lookup does not post after the call ended" classname="network.columba.app.service.IncomingCallPresenterTest" time="0.007"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

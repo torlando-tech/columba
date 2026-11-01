@@ -1,73 +1,77 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" tests="60" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:40:53.202Z" hostname="hermes-agent" time="9.325">
+<testsuite name="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" tests="71" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:09:56.200Z" hostname="hermes-agent" time="10.231">
   <properties/>
-  <testcase name="setSearchQuery filters by name case-insensitively" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="3.905"/>
-  <testcase name="setSortMode PROXIMITY - sorts interfaces by distance when user location available" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.134"/>
-  <testcase name="setSortMode - changes sort mode to PROXIMITY when user location available" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.124"/>
-  <testcase name="setUserLocation - does NOT re-sort when in AVAILABILITY_AND_QUALITY mode" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.114"/>
-  <testcase name="loadDiscoveredInterfaces - sets error message on failure" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.194"/>
-  <testcase name="setSortMode AVAILABILITY_AND_QUALITY - preserves original order from Python" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.139"/>
-  <testcase name="toggleTypeFilter restricts to selected types" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.128"/>
-  <testcase name="setAutoconnectCount - clamps value to minimum of 0" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.202"/>
-  <testcase name="calculateDistance - returns distance when both locations set" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.127"/>
-  <testcase name="setUserLocation - updates state with coordinates" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.112"/>
-  <testcase name="isAutoconnected - returns false when interface has no host" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.094"/>
-  <testcase name="isAutoconnected - returns false when interface has no port" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.098"/>
-  <testcase name="isDiscoveryEnabled - loads from protocol" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.087"/>
-  <testcase name="setSortMode PROXIMITY - places interfaces without location at end" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.089"/>
-  <testcase name="loadDiscoverySettings - loads bootstrap interface names" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.077"/>
-  <testcase name="setUserLocation - re-sorts interfaces when in PROXIMITY mode" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.086"/>
-  <testcase name="setAutoconnectCount - updates state with new count" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.085"/>
-  <testcase name="setSearchQuery also matches host and ifac network name" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.099"/>
-  <testcase name="setSortMode - changes sort mode back to AVAILABILITY_AND_QUALITY" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.094"/>
-  <testcase name="toggleDiscovery on restart-only backend triggers applyInterfaceChanges" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.119"/>
-  <testcase name="autoconnectedEndpoints - updates on reload" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.081"/>
-  <testcase name="setSortMode PROXIMITY - handles empty interfaces list" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.09"/>
-  <testcase name="loadDiscoverySettings pushes persisted IFAC-only value to protocol" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.092"/>
-  <testcase name="isAutoconnected - matches multiple endpoints correctly" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.081"/>
-  <testcase name="setAutoconnectCount - saves to settings repository" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.079"/>
-  <testcase name="toggleAutoconnectIfacOnly on restart-only backend triggers applyInterfaceChanges" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.09"/>
-  <testcase name="clearError - sets error message to null" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.075"/>
-  <testcase name="toggleDiscovery - when enabling preserves existing autoconnect count" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.075"/>
-  <testcase name="setAutoconnectCount - clamps value to maximum of 10" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.071"/>
-  <testcase name="setAutoconnectCount - applies limit directly without service restart" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.072"/>
-  <testcase name="toggleDiscovery - applies setting directly without service restart" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.09"/>
-  <testcase name="setAutoconnectCount on restart-only backend triggers applyInterfaceChanges" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.082"/>
-  <testcase name="setAutoconnectCount - clears isRestarting after completion" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.091"/>
-  <testcase name="setAutoconnectCount - sets error message on hot-apply failure" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.077"/>
-  <testcase name="toggleDiscovery - when disabling sets UI autoconnect to 0 but preserves saved preference" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.084"/>
-  <testcase name="toggleDiscovery - when enabling and autoconnect is never configured defaults to 3" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.081"/>
-  <testcase name="calculateDistance - returns null when user location not set" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.102"/>
-  <testcase name="clearFilters resets search and type filters" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.071"/>
-  <testcase name="toggleDiscovery - sets error message on direct apply failure" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.083"/>
-  <testcase name="toggleDiscovery - preserves user preference through disable and re-enable cycle" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.079"/>
-  <testcase name="setSortMode PROXIMITY - ignored when user location not available" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.073"/>
-  <testcase name="toggleDiscovery - when enabling preserves explicit 0 setting" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.076"/>
-  <testcase name="state - initial state has empty autoconnectedEndpoints" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.082"/>
-  <testcase name="isAutoconnected - returns false when endpoints empty" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.073"/>
-  <testcase name="autoconnectedEndpoints - loads from protocol" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.088"/>
-  <testcase name="toggleAutoconnectIfacOnly flips state, persists, and forwards to protocol" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.103"/>
-  <testcase name="isAutoconnected - returns false when endpoint not in set" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.08"/>
-  <testcase name="loadDiscoveredInterfaces - updates interfaces list" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.071"/>
-  <testcase name="loadDiscoveredInterfaces - applies current sort mode" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.073"/>
-  <testcase name="isAutoconnected - returns true when endpoint matches" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.07"/>
-  <testcase name="loadDiscoveredInterfaces - calculates status counts" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.075"/>
-  <testcase name="loadDiscoveredInterfaces - resets sortMode to QUALITY if location unavailable" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.073"/>
-  <testcase name="autoconnectedEndpoints - handles protocol error gracefully" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.073"/>
-  <testcase name="loadDiscoverySettings - loads setting enabled state" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.075"/>
-  <testcase name="state - initial state has empty interfaces list" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.082"/>
-  <testcase name="setSortMode PROXIMITY - handles all interfaces without location" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.078"/>
-  <testcase name="toggleDiscovery - saves enabled state to settings repository" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.082"/>
-  <testcase name="restart-only backend surfaces applyInterfaceChanges failure as error" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.076"/>
-  <testcase name="sortMode - initial state is AVAILABILITY_AND_QUALITY" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.081"/>
-  <testcase name="calculateDistance - returns null when interface location not set" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.076"/>
+  <testcase name="applyPendingDiscoveryRestart is a no-op when nothing is pending" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.489"/>
+  <testcase name="setSearchQuery filters by name case-insensitively" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.162"/>
+  <testcase name="setSortMode PROXIMITY - sorts interfaces by distance when user location available" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.154"/>
+  <testcase name="setSortMode - changes sort mode to PROXIMITY when user location available" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.155"/>
+  <testcase name="setUserLocation - does NOT re-sort when in AVAILABILITY_AND_QUALITY mode" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.113"/>
+  <testcase name="loadDiscoveredInterfaces - sets error message on failure" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.154"/>
+  <testcase name="setSortMode AVAILABILITY_AND_QUALITY - preserves original order from Python" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.199"/>
+  <testcase name="toggleTypeFilter restricts to selected types" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.196"/>
+  <testcase name="setAutoconnectCount - clamps value to minimum of 0" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.151"/>
+  <testcase name="calculateDistance - returns distance when both locations set" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.277"/>
+  <testcase name="setUserLocation - updates state with coordinates" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.198"/>
+  <testcase name="isAutoconnected - returns false when interface has no host" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.171"/>
+  <testcase name="isAutoconnected - returns false when interface has no port" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.255"/>
+  <testcase name="isDiscoveryEnabled - loads from protocol" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.138"/>
+  <testcase name="setSortMode PROXIMITY - places interfaces without location at end" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.131"/>
+  <testcase name="loadDiscoverySettings - loads bootstrap interface names" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.162"/>
+  <testcase name="setUserLocation - re-sorts interfaces when in PROXIMITY mode" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.146"/>
+  <testcase name="setAutoconnectCount - updates state with new count" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.132"/>
+  <testcase name="setSearchQuery also matches host and ifac network name" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.174"/>
+  <testcase name="setSortMode - changes sort mode back to AVAILABILITY_AND_QUALITY" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.14"/>
+  <testcase name="toggleDiscovery on restart-only backend triggers applyInterfaceChanges" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.161"/>
+  <testcase name="autoconnectedEndpoints - updates on reload" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.126"/>
+  <testcase name="setSortMode PROXIMITY - handles empty interfaces list" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.123"/>
+  <testcase name="loadDiscoverySettings pushes persisted IFAC-only value to protocol" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.152"/>
+  <testcase name="isAutoconnected - matches multiple endpoints correctly" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.116"/>
+  <testcase name="setAutoconnectCount - saves to settings repository" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.143"/>
+  <testcase name="toggleAutoconnectIfacOnly on restart-only backend triggers applyInterfaceChanges" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.136"/>
+  <testcase name="clearError - sets error message to null" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.107"/>
+  <testcase name="setAutoconnectInterfaceMode updates state and persists" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.116"/>
+  <testcase name="toggleDiscovery - when enabling preserves existing autoconnect count" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.143"/>
+  <testcase name="setAutoconnectCount - clamps value to maximum of 10" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.112"/>
+  <testcase name="setAutoconnectCount - applies limit directly without service restart" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.124"/>
+  <testcase name="toggleDiscovery - applies setting directly without service restart" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.112"/>
+  <testcase name="setAutoconnectCount on restart-only backend defers restart and marks pending" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.107"/>
+  <testcase name="setAutoconnectCount - clears isRestarting after completion" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.095"/>
+  <testcase name="applyPendingDiscoveryRestart uses the restart's own read as its baseline" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.107"/>
+  <testcase name="setAutoconnectCount - sets error message on hot-apply failure" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.127"/>
+  <testcase name="toggleDiscovery - when disabling sets UI autoconnect to 0 but preserves saved preference" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.108"/>
+  <testcase name="toggleDiscovery clears a pending autoconnect change since its restart applies it" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.162"/>
+  <testcase name="toggleDiscovery - when enabling and autoconnect is never configured defaults to 3" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.157"/>
+  <testcase name="calculateDistance - returns null when user location not set" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.144"/>
+  <testcase name="clearFilters resets search and type filters" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.113"/>
+  <testcase name="toggleDiscovery - sets error message on direct apply failure" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.148"/>
+  <testcase name="toggleDiscovery - preserves user preference through disable and re-enable cycle" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.098"/>
+  <testcase name="setSortMode PROXIMITY - ignored when user location not available" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.094"/>
+  <testcase name="toggleDiscovery - when enabling preserves explicit 0 setting" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.166"/>
+  <testcase name="loadDiscoverySettings pushes persisted autoconnect interface mode to state" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.116"/>
+  <testcase name="state - initial state has empty autoconnectedEndpoints" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.134"/>
+  <testcase name="isAutoconnected - returns false when endpoints empty" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.114"/>
+  <testcase name="applyPendingDiscoveryRestart keeps pending on failure for retry" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.118"/>
+  <testcase name="autoconnectedEndpoints - loads from protocol" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.119"/>
+  <testcase name="toggleAutoconnectIfacOnly flips state, persists, and forwards to protocol" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.182"/>
+  <testcase name="isAutoconnected - returns false when endpoint not in set" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.117"/>
+  <testcase name="autoconnectInterfaceMode defaults to null when nothing persisted" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.111"/>
+  <testcase name="loadDiscoveredInterfaces - updates interfaces list" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.117"/>
+  <testcase name="setAutoconnectInterfaceMode on restart-only backend defers restart and marks pending" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.213"/>
+  <testcase name="loadDiscoveredInterfaces - applies current sort mode" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.16"/>
+  <testcase name="isAutoconnected - returns true when endpoint matches" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.203"/>
+  <testcase name="loadDiscoveredInterfaces - calculates status counts" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.159"/>
+  <testcase name="loadDiscoveredInterfaces - resets sortMode to QUALITY if location unavailable" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.147"/>
+  <testcase name="autoconnectedEndpoints - handles protocol error gracefully" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.123"/>
+  <testcase name="loadDiscoverySettings - loads setting enabled state" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.114"/>
+  <testcase name="applyPendingDiscoveryRestart keeps Apply visible when a newer change was saved during the restart" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.12"/>
+  <testcase name="applyPendingDiscoveryRestart performs one restart and clears pending" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.135"/>
+  <testcase name="state - initial state has empty interfaces list" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.105"/>
+  <testcase name="setSortMode PROXIMITY - handles all interfaces without location" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.099"/>
+  <testcase name="setAutoconnectInterfaceMode null clears persisted value" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.109"/>
+  <testcase name="toggleDiscovery - saves enabled state to settings repository" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.111"/>
+  <testcase name="restart-only backend surfaces applyInterfaceChanges failure as error" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.102"/>
+  <testcase name="sortMode - initial state is AVAILABILITY_AND_QUALITY" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.092"/>
+  <testcase name="calculateDistance - returns null when interface location not set" classname="network.columba.app.viewmodel.DiscoveredInterfacesViewModelTest" time="0.094"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

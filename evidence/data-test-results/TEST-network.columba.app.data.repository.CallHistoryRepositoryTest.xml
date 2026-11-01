@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.repository.CallHistoryRepositoryTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:23.370Z" hostname="hermes-agent" time="0.662">
+  <properties/>
+  <testcase name="incoming row prefers announce-derived destination for icon lookup" classname="network.columba.app.data.repository.CallHistoryRepositoryTest" time="0.65"/>
+  <testcase name="outgoing row resolves icon from dialed destination without an announce" classname="network.columba.app.data.repository.CallHistoryRepositoryTest" time="0.006"/>
+  <testcase name="row without any stored icon keeps null icon fields" classname="network.columba.app.data.repository.CallHistoryRepositoryTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

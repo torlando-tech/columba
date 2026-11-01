@@ -1,39 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" tests="26" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:18:08.585Z" hostname="hermes-agent" time="12.793">
+<testsuite name="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" tests="26" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:00:19.858Z" hostname="hermes-agent" time="2.701">
   <properties/>
-  <testcase name="getActiveIdentitySync returns null when no active identity" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="9.933"/>
-  <testcase name="allIdentities flow emits on insert" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.194"/>
-  <testcase name="switchActiveIdentity deactivates previous active identity" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.133"/>
-  <testcase name="ensureIdentityFileExists recovers file from keyData when missing" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.097"/>
-  <testcase name="ensureIdentityFileExists fails when no keyData available" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.089"/>
-  <testcase name="getIdentity returns existing identity" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.073"/>
-  <testcase name="migrateDefaultIdentityIfNeeded removes placeholder when file content is invalid" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.095"/>
-  <testcase name="ensureIdentityFileExists updates database path when file exists at canonical location" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.085"/>
-  <testcase name="exportIdentity creates file and returns URI" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.772"/>
-  <testcase name="ensureIdentityFileExists recovers from encryptedKeyData when no file or legacy keyData" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.14"/>
-  <testcase name="createIdentity inserts identity into database" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.048"/>
-  <testcase name="getIdentity returns null for nonexistent identity" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.044"/>
-  <testcase name="deleteIdentity removes identity from database" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.047"/>
-  <testcase name="getIdentityCount returns correct count" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.055"/>
-  <testcase name="identityExists returns correct boolean" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.077"/>
-  <testcase name="createIdentity with keyData stores encrypted key data" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.043"/>
-  <testcase name="ensureIdentityFileExists does not overwrite existing encryptedKeyData" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.042"/>
-  <testcase name="ensureIdentityFileExists recovers from stored filePath when canonical missing" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.042"/>
+  <testcase name="getActiveIdentitySync returns null when no active identity" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="1.101"/>
+  <testcase name="allIdentities flow emits on insert" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.043"/>
+  <testcase name="switchActiveIdentity deactivates previous active identity" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.041"/>
+  <testcase name="ensureIdentityFileExists recovers file from keyData when missing" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.055"/>
+  <testcase name="ensureIdentityFileExists fails when no keyData available" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.051"/>
+  <testcase name="getIdentity returns existing identity" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.045"/>
+  <testcase name="migrateDefaultIdentityIfNeeded removes placeholder when file content is invalid" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.061"/>
+  <testcase name="ensureIdentityFileExists updates database path when file exists at canonical location" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.044"/>
+  <testcase name="exportIdentity creates file and returns URI" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.475"/>
+  <testcase name="ensureIdentityFileExists recovers from encryptedKeyData when no file or legacy keyData" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.126"/>
+  <testcase name="createIdentity inserts identity into database" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.041"/>
+  <testcase name="getIdentity returns null for nonexistent identity" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.032"/>
+  <testcase name="deleteIdentity removes identity from database" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.039"/>
+  <testcase name="getIdentityCount returns correct count" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.041"/>
+  <testcase name="identityExists returns correct boolean" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.036"/>
+  <testcase name="createIdentity with keyData stores encrypted key data" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.036"/>
+  <testcase name="ensureIdentityFileExists does not overwrite existing encryptedKeyData" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.043"/>
+  <testcase name="ensureIdentityFileExists recovers from stored filePath when canonical missing" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.046"/>
   <testcase name="getActiveIdentitySync returns active identity" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.047"/>
-  <testcase name="ensureIdentityFileExists performs opportunistic key backup" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.043"/>
-  <testcase name="migrateDefaultIdentityIfNeeded aborts when encryption fails" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.051"/>
-  <testcase name="importIdentity creates identity in database" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.039"/>
-  <testcase name="updateLastUsedTimestamp updates timestamp" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.043"/>
-  <testcase name="switchActiveIdentity activates specified identity" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.044"/>
-  <testcase name="updateDisplayName changes identity display name" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.054"/>
-  <testcase name="activeIdentity flow emits on activation change" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.059"/>
+  <testcase name="ensureIdentityFileExists performs opportunistic key backup" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.048"/>
+  <testcase name="migrateDefaultIdentityIfNeeded aborts when encryption fails" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.043"/>
+  <testcase name="importIdentity creates identity in database" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.045"/>
+  <testcase name="updateLastUsedTimestamp updates timestamp" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.042"/>
+  <testcase name="switchActiveIdentity activates specified identity" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.034"/>
+  <testcase name="updateDisplayName changes identity display name" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.037"/>
+  <testcase name="activeIdentity flow emits on activation change" classname="network.columba.app.data.repository.IdentityRepositoryDatabaseTest" time="0.034"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

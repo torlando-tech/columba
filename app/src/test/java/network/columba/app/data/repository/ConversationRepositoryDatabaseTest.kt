@@ -66,6 +66,7 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
                 attachmentStorage = mockAttachmentStorage,
                 draftDao = draftDao,
                 threadDao = threadDao,
+                database = database,
             )
     }
 

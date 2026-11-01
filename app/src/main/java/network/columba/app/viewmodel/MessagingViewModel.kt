@@ -303,32 +303,40 @@ class MessagingViewModel
         /** Switch the message list + composer to a thread (null = Main), in place. */
         fun selectThread(threadIdHex: String?) {
             if (_selectedThread.value == threadIdHex) return
+            viewModelScope.launch { switchThread(threadIdHex) }
+        }
+
+        private suspend fun switchThread(threadIdHex: String?) {
             val peerHash = _currentConversation.value ?: return
             val fromThreadHex = _selectedThread.value
             _pendingThreadRoot.value = null
-            viewModelScope.launch {
-                try {
-                    // Flush the composer draft to the thread being left
-                    // (empty text deletes the draft row).
-                    draftSaveJob?.cancel()
-                    conversationRepository.saveDraft(peerHash, lastDraftText, fromThreadHex.hexToBytesOrNull())
-                    lastDraftText = ""
-                    // Swap the draft BEFORE announcing the new selection: the screen
-                    // retargets its composer when `selectedThread` changes, so the new
-                    // target's draft must already be visible at that point.
-                    val draft = conversationRepository.getDraft(peerHash, threadIdHex.hexToBytesOrNull())
-                    lastDraftText = draft.orEmpty()
-                    _draftText.value = draft
-                    _selectedThread.value = threadIdHex
-                    // Thread-aware read path: opening a target clears only its unread.
-                    if (threadIdHex != null) {
-                        conversationRepository.markThreadAsRead(peerHash, threadIdHex.hexToBytes())
-                    } else {
-                        conversationRepository.markMainAsRead(peerHash)
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error switching thread", e)
+            try {
+                // A thread can be selected immediately after loadMessages
+                // (opening from a chat card); wait for that Main-draft
+                // restore to finish, otherwise the flush below would save
+                // the still-empty lastDraftText over the real Main draft.
+                draftRestoreJob?.join()
+                // Flush the composer draft to the thread being left
+                // (empty text deletes the draft row).
+                draftSaveJob?.cancel()
+                conversationRepository.saveDraft(peerHash, lastDraftText, fromThreadHex.hexToBytesOrNull())
+                lastDraftText = ""
+                // Swap the draft BEFORE announcing the new selection: the
+                // screen retargets its composer when `selectedThread`
+                // changes, so the new target's draft must already be
+                // visible at that point.
+                val draft = conversationRepository.getDraft(peerHash, threadIdHex.hexToBytesOrNull())
+                lastDraftText = draft.orEmpty()
+                _draftText.value = draft
+                _selectedThread.value = threadIdHex
+                // Thread-aware read path: opening a target clears only its unread.
+                if (threadIdHex != null) {
+                    conversationRepository.markThreadAsRead(peerHash, threadIdHex.hexToBytes())
+                } else {
+                    conversationRepository.markMainAsRead(peerHash)
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error switching thread", e)
             }
         }
 
@@ -346,9 +354,15 @@ class MessagingViewModel
             rootMessageId: String,
             rootContent: String,
         ) {
-            selectThread(ThreadPolicy.newThreadId().toHex())
-            _pendingThreadRoot.value = rootMessageId
-            _threadComposerPrefill.tryEmit("> ${ThreadPolicy.quoteExcerpt(rootContent)}\n")
+            viewModelScope.launch {
+                switchThread(ThreadPolicy.newThreadId().toHex())
+                // Emit the quote only after the switch completed: the
+                // switch swaps the composer draft, so a prefill emitted
+                // before it can be replaced by the new target's (empty)
+                // draft.
+                _pendingThreadRoot.value = rootMessageId
+                _threadComposerPrefill.tryEmit("> ${ThreadPolicy.quoteExcerpt(rootContent)}\n")
+            }
         }
 
         // Thread sheet management (spec §6.3) — local-only, never wire traffic.
@@ -812,6 +826,9 @@ class MessagingViewModel
 
         // Debounce job for draft saving - cancels previous save when new text arrives
         private var draftSaveJob: kotlinx.coroutines.Job? = null
+        // Draft-restore coroutine of loadMessages; selectThread joins it
+        // before flushing so a fast thread-open cannot erase the Main draft.
+        private var draftRestoreJob: kotlinx.coroutines.Job? = null
 
         // Tracks the latest text from onDraftTextChanged so loadMessages can flush it on switch
         private var lastDraftText: String = ""
@@ -1629,7 +1646,7 @@ class MessagingViewModel
             }
 
             // Restore draft for this conversation
-            viewModelScope.launch {
+            draftRestoreJob = viewModelScope.launch {
                 try {
                     val draft = conversationRepository.getDraft(destinationHash)
                     _draftText.value = draft

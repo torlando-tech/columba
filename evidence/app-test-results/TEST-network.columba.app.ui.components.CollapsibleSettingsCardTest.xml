@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.CollapsibleSettingsCardTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:23:19.616Z" hostname="hermes-agent" time="8.056">
+<testsuite name="network.columba.app.ui.components.CollapsibleSettingsCardTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:03:36.669Z" hostname="hermes-agent" time="0.906">
   <properties/>
-  <testcase name="collapsibleSettingsCard_whenExpanded_showsCollapseContentDescription" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="6.09"/>
-  <testcase name="collapsibleSettingsCard_chevronClick_whenCollapsed_callsOnExpandedChangeWithTrue" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.282"/>
-  <testcase name="collapsibleSettingsCard_withHeaderAction_displaysHeaderAction" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.159"/>
-  <testcase name="collapsibleSettingsCard_whenCollapsed_hidesContent" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.107"/>
-  <testcase name="collapsibleSettingsCard_whenExpanded_showsContent" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.109"/>
-  <testcase name="collapsibleSettingsCard_titleClick_whenExpanded_callsOnExpandedChange" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.106"/>
-  <testcase name="collapsibleSettingsCard_titleClick_whenCollapsed_callsOnExpandedChange" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.089"/>
-  <testcase name="collapsibleSettingsCard_chevronClick_whenExpanded_callsOnExpandedChangeWithFalse" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.107"/>
-  <testcase name="collapsibleSettingsCard_displaysTitle" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.09"/>
-  <testcase name="collapsibleSettingsCard_stateChange_updatesChevronContentDescription" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.196"/>
-  <testcase name="collapsibleSettingsCard_stateChange_showsAndHidesContent" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.16"/>
-  <testcase name="collapsibleSettingsCard_whenCollapsed_showsExpandContentDescription" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.082"/>
-  <testcase name="collapsibleSettingsCard_chevronClickWithHeaderAction_stillWorks" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.087"/>
+  <testcase name="collapsibleSettingsCard_whenExpanded_showsCollapseContentDescription" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.083"/>
+  <testcase name="collapsibleSettingsCard_chevronClick_whenCollapsed_callsOnExpandedChangeWithTrue" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.057"/>
+  <testcase name="collapsibleSettingsCard_withHeaderAction_displaysHeaderAction" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.08"/>
+  <testcase name="collapsibleSettingsCard_whenCollapsed_hidesContent" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.053"/>
+  <testcase name="collapsibleSettingsCard_whenExpanded_showsContent" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.058"/>
+  <testcase name="collapsibleSettingsCard_titleClick_whenExpanded_callsOnExpandedChange" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.064"/>
+  <testcase name="collapsibleSettingsCard_titleClick_whenCollapsed_callsOnExpandedChange" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.106"/>
+  <testcase name="collapsibleSettingsCard_chevronClick_whenExpanded_callsOnExpandedChangeWithFalse" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.067"/>
+  <testcase name="collapsibleSettingsCard_displaysTitle" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.051"/>
+  <testcase name="collapsibleSettingsCard_stateChange_updatesChevronContentDescription" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.078"/>
+  <testcase name="collapsibleSettingsCard_stateChange_showsAndHidesContent" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.091"/>
+  <testcase name="collapsibleSettingsCard_whenCollapsed_showsExpandContentDescription" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.05"/>
+  <testcase name="collapsibleSettingsCard_chevronClickWithHeaderAction_stillWorks" classname="network.columba.app.ui.components.CollapsibleSettingsCardTest" time="0.064"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

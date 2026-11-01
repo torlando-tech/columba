@@ -1,33 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.map.MapTileSourceManagerTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:18:41.329Z" hostname="hermes-agent" time="4.784">
+<testsuite name="network.columba.app.map.MapTileSourceManagerTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:00:23.956Z" hostname="hermes-agent" time="2.579">
   <properties/>
-  <testcase name="SourceAvailability hasAnySource is false when RMSP enabled but no servers" classname="network.columba.app.map.MapTileSourceManagerTest" time="3.651"/>
-  <testcase name="getMapStyle returns Offline fallback when HTTP disabled and offline maps have no cached style" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.796"/>
-  <testcase name="SourceAvailability hasAnySource is true when offline maps available" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.013"/>
-  <testcase name="getMapStyle returns OfflineWithLocalStyle when cached inlined style exists" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.033"/>
-  <testcase name="MapStyleResult Online holds style URL" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.012"/>
-  <testcase name="getMapStyle returns Offline when offline region covers location" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.022"/>
-  <testcase name="MapStyleResult Offline holds style URL" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.013"/>
-  <testcase name="MapStyleResult Unavailable holds reason" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.014"/>
-  <testcase name="SourceAvailability hasAnySource is true when RMSP enabled with servers" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.009"/>
-  <testcase name="rmspEnabled setter overrides repository value" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.017"/>
-  <testcase name="MapStyleResult Rmsp holds server and style JSON" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.03"/>
-  <testcase name="getMapStyle returns Online when HTTP is enabled with null location" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.018"/>
-  <testcase name="getMapStyle returns Online when HTTP is enabled and no offline regions" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.015"/>
-  <testcase name="SourceAvailability hasAnySource is false when nothing available" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.011"/>
-  <testcase name="SourceAvailability hasAnySource is true when HTTP enabled" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.011"/>
-  <testcase name="httpEnabled setter overrides repository value" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.013"/>
-  <testcase name="getMapStyle returns Unavailable when RMSP enabled but no servers available" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.019"/>
-  <testcase name="getMapStyle returns Rmsp when HTTP is disabled and RMSP is enabled with server" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.018"/>
+  <testcase name="SourceAvailability hasAnySource is false when RMSP enabled but no servers" classname="network.columba.app.map.MapTileSourceManagerTest" time="1.479"/>
+  <testcase name="getMapStyle returns Offline fallback when HTTP disabled and offline maps have no cached style" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.648"/>
+  <testcase name="SourceAvailability hasAnySource is true when offline maps available" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.047"/>
+  <testcase name="getMapStyle returns OfflineWithLocalStyle when cached inlined style exists" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.069"/>
+  <testcase name="MapStyleResult Online holds style URL" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.045"/>
+  <testcase name="getMapStyle returns Offline when offline region covers location" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.034"/>
+  <testcase name="MapStyleResult Offline holds style URL" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.015"/>
+  <testcase name="MapStyleResult Unavailable holds reason" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.011"/>
+  <testcase name="SourceAvailability hasAnySource is true when RMSP enabled with servers" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.016"/>
+  <testcase name="rmspEnabled setter overrides repository value" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.027"/>
+  <testcase name="MapStyleResult Rmsp holds server and style JSON" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.023"/>
+  <testcase name="getMapStyle returns Online when HTTP is enabled with null location" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.016"/>
+  <testcase name="getMapStyle returns Online when HTTP is enabled and no offline regions" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.012"/>
+  <testcase name="SourceAvailability hasAnySource is false when nothing available" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.013"/>
+  <testcase name="SourceAvailability hasAnySource is true when HTTP enabled" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.008"/>
+  <testcase name="httpEnabled setter overrides repository value" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.011"/>
+  <testcase name="getMapStyle returns Unavailable when RMSP enabled but no servers available" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.024"/>
+  <testcase name="getMapStyle returns Rmsp when HTTP is disabled and RMSP is enabled with server" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.024"/>
   <testcase name="getMapStyle returns Unavailable when both HTTP and RMSP are disabled" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.016"/>
-  <testcase name="observeSourceAvailability combines all sources correctly" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.044"/>
+  <testcase name="observeSourceAvailability combines all sources correctly" classname="network.columba.app.map.MapTileSourceManagerTest" time="0.039"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation
 SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
 ]]></system-err>
 </testsuite>

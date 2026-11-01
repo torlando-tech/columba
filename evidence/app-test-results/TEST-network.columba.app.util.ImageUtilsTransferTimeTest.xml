@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.util.ImageUtilsTransferTimeTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:39:36.081Z" hostname="hermes-agent" time="0.118">
+<testsuite name="network.columba.app.util.ImageUtilsTransferTimeTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:09:07.026Z" hostname="hermes-agent" time="0.034">
   <properties/>
-  <testcase name="calculateTransferTime realistic BLE example" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.089"/>
+  <testcase name="calculateTransferTime realistic BLE example" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.005"/>
   <testcase name="calculateTransferTime returns correct seconds for simple case" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.001"/>
-  <testcase name="calculateTransferTime realistic TCP example" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.0"/>
+  <testcase name="calculateTransferTime realistic TCP example" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.001"/>
   <testcase name="calculateTransferTime handles sub-second transfers" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.0"/>
   <testcase name="calculateTransferTime formats hours correctly" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.0"/>
   <testcase name="calculateTransferTime formats hours and minutes" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.0"/>
   <testcase name="calculateTransferTime handles negative bandwidth" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.0"/>
-  <testcase name="calculateTransferTime formats minutes correctly" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.001"/>
+  <testcase name="calculateTransferTime formats minutes correctly" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.0"/>
   <testcase name="calculateTransferTime returns correct formatted time for seconds" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.0"/>
   <testcase name="calculateTransferTime handles zero bandwidth" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.0"/>
-  <testcase name="calculateTransferTime realistic LoRa example" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.021"/>
-  <testcase name="calculateTransferTime formats minutes and seconds" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.0"/>
+  <testcase name="calculateTransferTime realistic LoRa example" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.025"/>
+  <testcase name="calculateTransferTime formats minutes and seconds" classname="network.columba.app.util.ImageUtilsTransferTimeTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -1,43 +1,43 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.AnnounceStreamViewModelTest" tests="38" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:40:05.942Z" hostname="hermes-agent" time="4.846">
+<testsuite name="network.columba.app.viewmodel.AnnounceStreamViewModelTest" tests="38" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:09:20.281Z" hostname="hermes-agent" time="5.764">
   <properties/>
-  <testcase name="reachable count loop stops when viewModelScope is cancelled" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="3.704"/>
-  <testcase name="interfaceFilter_isPassedToPagingQuery" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.098"/>
-  <testcase name="handles database save errors gracefully" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.049"/>
-  <testcase name="search query filters announces" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.041"/>
-  <testcase name="clearAnnounceStatus resets error state" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.039"/>
-  <testcase name="interfaceFilterPager_isRecreatedWhenRetentionWindowAdvances" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.074"/>
-  <testcase name="triggerAnnounce works with base ReticulumProtocol" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.034"/>
+  <testcase name="reachable count loop stops when viewModelScope is cancelled" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="4.548"/>
+  <testcase name="interfaceFilter_isPassedToPagingQuery" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.168"/>
+  <testcase name="handles database save errors gracefully" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.083"/>
+  <testcase name="search query filters announces" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.09"/>
+  <testcase name="clearAnnounceStatus resets error state" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.064"/>
+  <testcase name="interfaceFilterPager_isRecreatedWhenRetentionWindowAdvances" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.058"/>
+  <testcase name="triggerAnnounce works with base ReticulumProtocol" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.033"/>
   <testcase name="updateReachableCount skips when network is SHUTDOWN" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.033"/>
-  <testcase name="deleteAllAnnounces falls back to deleteAll when no active identity" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.044"/>
-  <testcase name="handles ERROR status and stops waiting" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.067"/>
-  <testcase name="updateReachableCount skips when network transitions to SHUTDOWN" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.038"/>
-  <testcase name="triggerAnnounce fails when NativeReticulumProtocol returns error" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.031"/>
-  <testcase name="triggerAnnounce succeeds with NativeReticulumProtocol" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.033"/>
-  <testcase name="clearAnnounceStatus resets success and error" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.029"/>
-  <testcase name="deleteAnnounce calls repository with correct hash" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.026"/>
+  <testcase name="deleteAllAnnounces falls back to deleteAll when no active identity" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.039"/>
+  <testcase name="handles ERROR status and stops waiting" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.055"/>
+  <testcase name="updateReachableCount skips when network transitions to SHUTDOWN" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.028"/>
+  <testcase name="triggerAnnounce fails when NativeReticulumProtocol returns error" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.023"/>
+  <testcase name="triggerAnnounce succeeds with NativeReticulumProtocol" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.027"/>
+  <testcase name="clearAnnounceStatus resets success and error" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.023"/>
+  <testcase name="deleteAnnounce calls repository with correct hash" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.022"/>
   <testcase name="announceCount starts with initial value of zero" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.02"/>
-  <testcase name="processes announces and saves to database" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.03"/>
-  <testcase name="deleteAllAnnounces preserves contact announces via identity-aware delete" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.023"/>
-  <testcase name="deleteAllAnnounces handles errors gracefully" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.022"/>
-  <testcase name="default filter is PEER only" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.022"/>
-  <testcase name="announce success auto-dismisses after delay" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.021"/>
-  <testcase name="announceCount is wired to repository flow" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.02"/>
-  <testcase name="initial announce state is correct" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.017"/>
-  <testcase name="announceCount updates reactively when repository emits" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.022"/>
-  <testcase name="extractsPeerName from announce appData" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.021"/>
-  <testcase name="handles timeout waiting for READY" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.026"/>
-  <testcase name="triggerAnnounce uses Unknown when no active identity" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.03"/>
-  <testcase name="empty filter returns empty announces" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.025"/>
-  <testcase name="announces flow comes from repository filtered by default PEER type" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.022"/>
-  <testcase name="deleteAnnounce handles errors gracefully" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.022"/>
-  <testcase name="updateSelectedNodeTypes changes filter" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.025"/>
-  <testcase name="triggerAnnounce handles exception gracefully" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.019"/>
-  <testcase name="announce error auto-dismisses after delay" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.019"/>
-  <testcase name="triggerAnnounce sets isAnnouncing during execution" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.019"/>
-  <testcase name="processes multiple announces sequentially" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.024"/>
-  <testcase name="interfaceFilter_matchesRecentHistoryAfterCurrentPathChanges" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.014"/>
-  <testcase name="waits for READY status before collecting announces" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.017"/>
+  <testcase name="processes announces and saves to database" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.025"/>
+  <testcase name="deleteAllAnnounces preserves contact announces via identity-aware delete" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.024"/>
+  <testcase name="deleteAllAnnounces handles errors gracefully" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.024"/>
+  <testcase name="default filter is PEER only" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.02"/>
+  <testcase name="announce success auto-dismisses after delay" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.02"/>
+  <testcase name="announceCount is wired to repository flow" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.021"/>
+  <testcase name="initial announce state is correct" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.018"/>
+  <testcase name="announceCount updates reactively when repository emits" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.035"/>
+  <testcase name="extractsPeerName from announce appData" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.02"/>
+  <testcase name="handles timeout waiting for READY" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.02"/>
+  <testcase name="triggerAnnounce uses Unknown when no active identity" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.02"/>
+  <testcase name="empty filter returns empty announces" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.021"/>
+  <testcase name="announces flow comes from repository filtered by default PEER type" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.019"/>
+  <testcase name="deleteAnnounce handles errors gracefully" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.019"/>
+  <testcase name="updateSelectedNodeTypes changes filter" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.024"/>
+  <testcase name="triggerAnnounce handles exception gracefully" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.018"/>
+  <testcase name="announce error auto-dismisses after delay" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.017"/>
+  <testcase name="triggerAnnounce sets isAnnouncing during execution" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.017"/>
+  <testcase name="processes multiple announces sequentially" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.022"/>
+  <testcase name="interfaceFilter_matchesRecentHistoryAfterCurrentPathChanges" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.012"/>
+  <testcase name="waits for READY status before collecting announces" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.016"/>
   <testcase name="transitions through INITIALIZING to READY" classname="network.columba.app.viewmodel.AnnounceStreamViewModelTest" time="0.016"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.

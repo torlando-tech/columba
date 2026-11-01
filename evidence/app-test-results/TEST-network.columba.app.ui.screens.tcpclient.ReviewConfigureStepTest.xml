@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:37:35.679Z" hostname="hermes-agent" time="11.458">
+<testsuite name="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:08:02.743Z" hostname="hermes-agent" time="5.756">
   <properties/>
-  <testcase name="reviewStep_customMode_displaysCustomServerText" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="8.966"/>
-  <testcase name="reviewStep_displaysInterfaceNameField" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.257"/>
-  <testcase name="reviewStep_displaysTargetHostField" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.21"/>
-  <testcase name="reviewStep_onTargetPortChange_callsViewModel" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.443"/>
-  <testcase name="reviewStep_displaysServerLabel" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.168"/>
-  <testcase name="reviewStep_onTargetHostChange_callsViewModel" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.347"/>
-  <testcase name="reviewStep_displaysTargetPortField" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.162"/>
-  <testcase name="reviewStep_displaysCurrentFieldValues" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.156"/>
-  <testcase name="reviewStep_onInterfaceNameChange_callsViewModel" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.276"/>
-  <testcase name="reviewStep_selectedServer_displaysServerName" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.166"/>
+  <testcase name="reviewStep_customMode_displaysCustomServerText" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="3.039"/>
+  <testcase name="reviewStep_displaysInterfaceNameField" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.651"/>
+  <testcase name="reviewStep_displaysTargetHostField" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.299"/>
+  <testcase name="reviewStep_onTargetPortChange_callsViewModel" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.705"/>
+  <testcase name="reviewStep_displaysServerLabel" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.147"/>
+  <testcase name="reviewStep_onTargetHostChange_callsViewModel" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.226"/>
+  <testcase name="reviewStep_displaysTargetPortField" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.138"/>
+  <testcase name="reviewStep_displaysCurrentFieldValues" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.16"/>
+  <testcase name="reviewStep_onInterfaceNameChange_callsViewModel" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.209"/>
+  <testcase name="reviewStep_selectedServer_displaysServerName" classname="network.columba.app.ui.screens.tcpclient.ReviewConfigureStepTest" time="0.172"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation

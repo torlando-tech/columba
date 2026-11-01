@@ -1,28 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.map.MBTilesWriterTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:18:31.462Z" hostname="hermes-agent" time="0.197">
+<testsuite name="network.columba.app.map.MBTilesWriterTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:00:23.431Z" hostname="hermes-agent" time="0.007">
   <properties/>
-  <testcase name="boundsFromCenter scales with radius" classname="network.columba.app.map.MBTilesWriterTest" time="0.007"/>
-  <testcase name="Bounds toString produces correct format" classname="network.columba.app.map.MBTilesWriterTest" time="0.01"/>
+  <testcase name="boundsFromCenter scales with radius" classname="network.columba.app.map.MBTilesWriterTest" time="0.002"/>
+  <testcase name="Bounds toString produces correct format" classname="network.columba.app.map.MBTilesWriterTest" time="0.001"/>
   <testcase name="tmsToXyzY is inverse of flipY" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
   <testcase name="boundsFromCenter handles high latitudes correctly" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
   <testcase name="flipY converts XYZ to TMS at zoom 10" classname="network.columba.app.map.MBTilesWriterTest" time="0.001"/>
-  <testcase name="Center data class holds correct values" classname="network.columba.app.map.MBTilesWriterTest" time="0.002"/>
-  <testcase name="Center toString produces correct format" classname="network.columba.app.map.MBTilesWriterTest" time="0.01"/>
+  <testcase name="Center data class holds correct values" classname="network.columba.app.map.MBTilesWriterTest" time="0.001"/>
+  <testcase name="Center toString produces correct format" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
   <testcase name="boundsFromCenter contains center point" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
-  <testcase name="Center equals works correctly" classname="network.columba.app.map.MBTilesWriterTest" time="0.001"/>
+  <testcase name="Center equals works correctly" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
   <testcase name="flipY converts XYZ to TMS at zoom 0" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
-  <testcase name="flipY converts XYZ to TMS at zoom 1" classname="network.columba.app.map.MBTilesWriterTest" time="0.002"/>
+  <testcase name="flipY converts XYZ to TMS at zoom 1" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
   <testcase name="tmsToXyzY converts TMS to XYZ at zoom 0" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
-  <testcase name="tmsToXyzY converts TMS to XYZ at zoom 1" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
+  <testcase name="tmsToXyzY converts TMS to XYZ at zoom 1" classname="network.columba.app.map.MBTilesWriterTest" time="0.001"/>
   <testcase name="boundsFromCenter calculates correct bounds for San Francisco" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
-  <testcase name="flipY handles high zoom levels" classname="network.columba.app.map.MBTilesWriterTest" time="0.001"/>
+  <testcase name="flipY handles high zoom levels" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
   <testcase name="TMS and XYZ have consistent relationship across zoom levels" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
   <testcase name="Bounds data class holds correct values" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
   <testcase name="boundsFromCenter handles southern hemisphere" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
   <testcase name="Bounds equals works correctly" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
   <testcase name="flipY is its own inverse" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
-  <testcase name="tmsToXyzY and flipY are identical functions" classname="network.columba.app.map.MBTilesWriterTest" time="0.152"/>
-  <testcase name="bounds calculation is symmetric around center" classname="network.columba.app.map.MBTilesWriterTest" time="0.001"/>
+  <testcase name="tmsToXyzY and flipY are identical functions" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
+  <testcase name="bounds calculation is symmetric around center" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
   <testcase name="boundsFromCenter handles equator correctly" classname="network.columba.app.map.MBTilesWriterTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.DebugViewModelPersistenceTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:40:52.208Z" hostname="hermes-agent" time="0.055">
+<testsuite name="network.columba.app.viewmodel.DebugViewModelPersistenceTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:09:56.173Z" hostname="hermes-agent" time="0.003">
   <properties/>
-  <testcase name="persistence fields work with all other DebugInfo fields" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.032"/>
-  <testcase name="heartbeat age 0 indicates very fresh heartbeat" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.001"/>
-  <testcase name="failedInterfaceCount extraction from debug info map" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.008"/>
-  <testcase name="DebugInfo copy preserves persistence fields" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.001"/>
+  <testcase name="persistence fields work with all other DebugInfo fields" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
+  <testcase name="heartbeat age 0 indicates very fresh heartbeat" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
+  <testcase name="failedInterfaceCount extraction from debug info map" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.001"/>
+  <testcase name="DebugInfo copy preserves persistence fields" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
   <testcase name="full persistence debug info extraction" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
   <testcase name="healthCheckRunning extraction from debug info map" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
-  <testcase name="heartbeatAgeSeconds defaults to -1 when missing" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.001"/>
-  <testcase name="heartbeatAgeSeconds extraction from debug info map" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.001"/>
+  <testcase name="heartbeatAgeSeconds defaults to -1 when missing" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
+  <testcase name="heartbeatAgeSeconds extraction from debug info map" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
   <testcase name="lastLockRefreshAgeSeconds extraction from debug info map" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
   <testcase name="DebugInfo persistence fields have correct defaults" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
   <testcase name="DebugInfo copy can update persistence fields" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
   <testcase name="heartbeat age -1 indicates no heartbeat received" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
   <testcase name="DebugInfo persistence fields can be set" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.001"/>
   <testcase name="networkMonitorRunning extraction from debug info map" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
-  <testcase name="last lock refresh age -1 indicates never refreshed" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
+  <testcase name="last lock refresh age -1 indicates never refreshed" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.001"/>
   <testcase name="healthCheckRunning defaults to false when missing" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
   <testcase name="maintenanceRunning extraction from debug info map" classname="network.columba.app.viewmodel.DebugViewModelPersistenceTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>

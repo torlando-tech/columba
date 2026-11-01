@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.ui.screens.VoiceHistoryContentTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:06:34.896Z" hostname="hermes-agent" time="0.665">
+  <properties/>
+  <testcase name="timezone broadcast immediately regroups unchanged history" classname="network.columba.app.ui.screens.VoiceHistoryContentTest" time="0.203"/>
+  <testcase name="voice card is one focusable announcement with a touch target at 200 percent text" classname="network.columba.app.ui.screens.VoiceHistoryContentTest" time="0.114"/>
+  <testcase name="contradictory duration evidence is presented as unavailable" classname="network.columba.app.ui.screens.VoiceHistoryContentTest" time="0.059"/>
+  <testcase name="call outcome severity preserves warning and error distinction" classname="network.columba.app.ui.screens.VoiceHistoryContentTest" time="0.04"/>
+  <testcase name="voice card shows user evidence and opens exact attempt" classname="network.columba.app.ui.screens.VoiceHistoryContentTest" time="0.057"/>
+  <testcase name="voice card uses immutable peer fallback and explicit non-connection outcome" classname="network.columba.app.ui.screens.VoiceHistoryContentTest" time="0.067"/>
+  <testcase name="voice history exposes loading empty and error states" classname="network.columba.app.ui.screens.VoiceHistoryContentTest" time="0.057"/>
+  <testcase name="active connected call shows its live duration" classname="network.columba.app.ui.screens.VoiceHistoryContentTest" time="0.063"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[Intent = Intent { act=android.intent.action.TIMEZONE_CHANGED }; Matching wrappers: [Wrapper[receiver=[androidx.work.impl.background.systemalarm.RescheduleReceiver@1ea7d9b3], context=[android.app.ContextImpl@515a2f79], intentFilter=[android.content.IntentFilter@40482c31]], Wrapper[receiver=[network.columba.app.ui.screens.VoiceHistoryContentKt$temporalRefreshSignal$signal$2$1$receiver$1@23c34009], context=[android.app.ContextImpl@515a2f79], intentFilter=[android.content.IntentFilter@3897f83]]]
+]]></system-err>
+</testsuite>

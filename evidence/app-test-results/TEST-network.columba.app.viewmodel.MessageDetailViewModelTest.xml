@@ -1,32 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.MessageDetailViewModelTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:41:51.557Z" hostname="hermes-agent" time="3.56">
+<testsuite name="network.columba.app.viewmodel.MessageDetailViewModelTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:10:20.431Z" hostname="hermes-agent" time="0.452">
   <properties/>
-  <testcase name="message state updates when delivery method changes" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="3.114"/>
-  <testcase name="handles all status values correctly" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.057"/>
-  <testcase name="loadMessage converts entity to MessageUi correctly" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.039"/>
-  <testcase name="handles all delivery methods correctly" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.043"/>
-  <testcase name="multiple rapid status updates are all reflected" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.018"/>
-  <testcase name="loadMessage triggers observation of the message" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.031"/>
-  <testcase name="switching messages cancels previous observation (flatMapLatest behavior)" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.022"/>
-  <testcase name="loadMessage handles null message (not found) gracefully" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.025"/>
-  <testcase name="message state updates when status changes from pending to delivered" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.019"/>
-  <testcase name="initial message state is null before loadMessage is called" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.02"/>
-  <testcase name="switching to a different message updates the observed message" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.018"/>
-  <testcase name="sent message does not use receivedHopCount and receivedInterface" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.021"/>
-  <testcase name="handles message with null optional fields" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.02"/>
-  <testcase name="message state updates when status changes from pending to failed" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.012"/>
-  <testcase name="received message updates hop count reactively" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.016"/>
-  <testcase name="loadMessage handles null hopCount and interface for received message" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.015"/>
-  <testcase name="loadMessage maps both hopCount and interface for received message" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.014"/>
-  <testcase name="loadMessage maps receivedInterface correctly for received message" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.017"/>
-  <testcase name="loadMessage maps receivedHopCount correctly for received message" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.016"/>
+  <testcase name="message state updates when delivery method changes" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.203"/>
+  <testcase name="handles all status values correctly" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.041"/>
+  <testcase name="loadMessage converts entity to MessageUi correctly" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.011"/>
+  <testcase name="handles all delivery methods correctly" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.04"/>
+  <testcase name="multiple rapid status updates are all reflected" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.011"/>
+  <testcase name="loadMessage triggers observation of the message" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.01"/>
+  <testcase name="switching messages cancels previous observation (flatMapLatest behavior)" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.011"/>
+  <testcase name="loadMessage handles null message (not found) gracefully" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.009"/>
+  <testcase name="message state updates when status changes from pending to delivered" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.01"/>
+  <testcase name="initial message state is null before loadMessage is called" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.009"/>
+  <testcase name="switching to a different message updates the observed message" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.01"/>
+  <testcase name="sent message does not use receivedHopCount and receivedInterface" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.015"/>
+  <testcase name="handles message with null optional fields" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.01"/>
+  <testcase name="message state updates when status changes from pending to failed" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.011"/>
+  <testcase name="received message updates hop count reactively" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.009"/>
+  <testcase name="loadMessage handles null hopCount and interface for received message" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.009"/>
+  <testcase name="loadMessage maps both hopCount and interface for received message" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.011"/>
+  <testcase name="loadMessage maps receivedInterface correctly for received message" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.011"/>
+  <testcase name="loadMessage maps receivedHopCount correctly for received message" classname="network.columba.app.viewmodel.MessageDetailViewModelTest" time="0.009"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

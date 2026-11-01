@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.db.dao.ContactDaoRelayTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:15.788Z" hostname="hermes-agent" time="0.227">
+<testsuite name="network.columba.app.data.db.dao.ContactDaoRelayTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:20.215Z" hostname="hermes-agent" time="0.143">
   <properties/>
-  <testcase name="switchingRelays_onlyAffectsIsMyRelay" classname="network.columba.app.data.db.dao.ContactDaoRelayTest" time="0.031"/>
-  <testcase name="setAsMyRelay_setsIsMyRelayTrue" classname="network.columba.app.data.db.dao.ContactDaoRelayTest" time="0.042"/>
-  <testcase name="setAsMyRelay_doesNotAffectIsPinned" classname="network.columba.app.data.db.dao.ContactDaoRelayTest" time="0.053"/>
-  <testcase name="getMyRelay_returnsRelayContact" classname="network.columba.app.data.db.dao.ContactDaoRelayTest" time="0.045"/>
-  <testcase name="clearMyRelay_onlyAffectsRelayContacts" classname="network.columba.app.data.db.dao.ContactDaoRelayTest" time="0.026"/>
-  <testcase name="clearMyRelay_clearsIsMyRelayOnly" classname="network.columba.app.data.db.dao.ContactDaoRelayTest" time="0.025"/>
+  <testcase name="switchingRelays_onlyAffectsIsMyRelay" classname="network.columba.app.data.db.dao.ContactDaoRelayTest" time="0.025"/>
+  <testcase name="setAsMyRelay_setsIsMyRelayTrue" classname="network.columba.app.data.db.dao.ContactDaoRelayTest" time="0.022"/>
+  <testcase name="setAsMyRelay_doesNotAffectIsPinned" classname="network.columba.app.data.db.dao.ContactDaoRelayTest" time="0.022"/>
+  <testcase name="getMyRelay_returnsRelayContact" classname="network.columba.app.data.db.dao.ContactDaoRelayTest" time="0.024"/>
+  <testcase name="clearMyRelay_onlyAffectsRelayContacts" classname="network.columba.app.data.db.dao.ContactDaoRelayTest" time="0.025"/>
+  <testcase name="clearMyRelay_clearsIsMyRelayOnly" classname="network.columba.app.data.db.dao.ContactDaoRelayTest" time="0.023"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -1,33 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.map.MapLibreOfflineManagerTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:18:32.992Z" hostname="hermes-agent" time="7.159">
+<testsuite name="network.columba.app.map.MapLibreOfflineManagerTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:00:23.447Z" hostname="hermes-agent" time="0.484">
   <properties/>
-  <testcase name="OfflineRegionInfo with max long id" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="5.72"/>
-  <testcase name="OfflineRegionInfo with different names are not equal" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.077"/>
-  <testcase name="OfflineRegionInfo toString contains id" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.24"/>
-  <testcase name="EXTENDED_TILE_LIMIT is 50000" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.041"/>
-  <testcase name="DEFAULT_TILE_LIMIT is 6000" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.039"/>
-  <testcase name="OfflineRegionInfo toString contains name" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.039"/>
-  <testcase name="OfflineRegionInfo copy with id change" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.038"/>
-  <testcase name="OfflineRegionInfo with id zero" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.04"/>
-  <testcase name="OfflineRegionInfo holds correct values" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.041"/>
-  <testcase name="OfflineRegionInfo with empty name" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.037"/>
-  <testcase name="OfflineRegionInfo with negative id" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.034"/>
-  <testcase name="DEFAULT_STYLE_URL has correct value" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.032"/>
-  <testcase name="OfflineRegionInfo component functions work" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.042"/>
-  <testcase name="OfflineRegionInfo copy preserves unchanged fields" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.049"/>
-  <testcase name="DEFAULT_PIXEL_RATIO is 1 point 0" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.04"/>
-  <testcase name="OfflineRegionInfo with unicode name" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.04"/>
-  <testcase name="OfflineRegionInfo hashCode is consistent for equal objects" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.051"/>
-  <testcase name="OfflineRegionInfo with different ids are not equal" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.034"/>
-  <testcase name="OfflineRegionInfo with same values are equal" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.045"/>
-  <testcase name="TILE_LIMIT constants have expected relationship" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.029"/>
+  <testcase name="OfflineRegionInfo with max long id" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.085"/>
+  <testcase name="OfflineRegionInfo with different names are not equal" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.017"/>
+  <testcase name="OfflineRegionInfo toString contains id" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.019"/>
+  <testcase name="EXTENDED_TILE_LIMIT is 50000" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.015"/>
+  <testcase name="DEFAULT_TILE_LIMIT is 6000" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.016"/>
+  <testcase name="OfflineRegionInfo toString contains name" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.016"/>
+  <testcase name="OfflineRegionInfo copy with id change" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.017"/>
+  <testcase name="OfflineRegionInfo with id zero" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.017"/>
+  <testcase name="OfflineRegionInfo holds correct values" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.018"/>
+  <testcase name="OfflineRegionInfo with empty name" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.015"/>
+  <testcase name="OfflineRegionInfo with negative id" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.015"/>
+  <testcase name="DEFAULT_STYLE_URL has correct value" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.016"/>
+  <testcase name="OfflineRegionInfo component functions work" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.016"/>
+  <testcase name="OfflineRegionInfo copy preserves unchanged fields" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.017"/>
+  <testcase name="DEFAULT_PIXEL_RATIO is 1 point 0" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.017"/>
+  <testcase name="OfflineRegionInfo with unicode name" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.029"/>
+  <testcase name="OfflineRegionInfo hashCode is consistent for equal objects" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.05"/>
+  <testcase name="OfflineRegionInfo with different ids are not equal" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.029"/>
+  <testcase name="OfflineRegionInfo with same values are equal" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.022"/>
+  <testcase name="TILE_LIMIT constants have expected relationship" classname="network.columba.app.map.MapLibreOfflineManagerTest" time="0.025"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

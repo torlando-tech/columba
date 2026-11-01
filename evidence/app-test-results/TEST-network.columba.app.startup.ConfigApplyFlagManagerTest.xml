@@ -1,25 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.startup.ConfigApplyFlagManagerTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:22:22.872Z" hostname="hermes-agent" time="3.0">
+<testsuite name="network.columba.app.startup.ConfigApplyFlagManagerTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:03:17.444Z" hostname="hermes-agent" time="0.226">
   <properties/>
-  <testcase name="isStaleFlag returns false for INITIALIZING status" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="2.865"/>
-  <testcase name="isApplyingConfig returns false when flag not set" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.022"/>
-  <testcase name="isApplyingConfig returns true when flag is set" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.016"/>
-  <testcase name="setFlag sets flag to true" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.012"/>
-  <testcase name="clearFlag sets flag to false" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.01"/>
-  <testcase name="isStaleFlag returns false for RESTARTING status" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.01"/>
-  <testcase name="isStaleFlag returns false for empty string" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.009"/>
-  <testcase name="isStaleFlag returns true for SHUTDOWN status" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.009"/>
-  <testcase name="isStaleFlag returns true for ERROR prefix status" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.009"/>
-  <testcase name="isStaleFlag returns true for null status" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.009"/>
-  <testcase name="uses correct SharedPreferences name" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.013"/>
-  <testcase name="isStaleFlag returns false for READY status" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.009"/>
+  <testcase name="isStaleFlag returns false for INITIALIZING status" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.145"/>
+  <testcase name="isApplyingConfig returns false when flag not set" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.008"/>
+  <testcase name="isApplyingConfig returns true when flag is set" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.009"/>
+  <testcase name="setFlag sets flag to true" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.008"/>
+  <testcase name="clearFlag sets flag to false" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.007"/>
+  <testcase name="isStaleFlag returns false for RESTARTING status" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.007"/>
+  <testcase name="isStaleFlag returns false for empty string" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.007"/>
+  <testcase name="isStaleFlag returns true for SHUTDOWN status" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.006"/>
+  <testcase name="isStaleFlag returns true for ERROR prefix status" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.008"/>
+  <testcase name="isStaleFlag returns true for null status" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.006"/>
+  <testcase name="uses correct SharedPreferences name" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.007"/>
+  <testcase name="isStaleFlag returns false for READY status" classname="network.columba.app.startup.ConfigApplyFlagManagerTest" time="0.007"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

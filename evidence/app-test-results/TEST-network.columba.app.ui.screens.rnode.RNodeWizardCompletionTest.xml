@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.screens.rnode.RNodeWizardCompletionTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:35:02Z" hostname="hermes-agent" time="10.11">
+<testsuite name="network.columba.app.ui.screens.rnode.RNodeWizardCompletionTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:07:10.903Z" hostname="hermes-agent" time="9.999">
   <properties/>
-  <testcase name="toolbarAndSystemBack_onLaterStep_bothMoveToPreviousStep" classname="network.columba.app.ui.screens.rnode.RNodeWizardCompletionTest" time="9.164"/>
-  <testcase name="saveSuccess_isConsumedBeforeCompletionNavigation" classname="network.columba.app.ui.screens.rnode.RNodeWizardCompletionTest" time="0.447"/>
-  <testcase name="toolbarAndSystemBack_onFirstStep_bothExitWizard" classname="network.columba.app.ui.screens.rnode.RNodeWizardCompletionTest" time="0.179"/>
+  <testcase name="repairModePendingConfig_doesNotExposeOrdinaryWizard" classname="network.columba.app.ui.screens.rnode.RNodeWizardCompletionTest" time="8.038"/>
+  <testcase name="toolbarAndSystemBack_onLaterStep_bothMoveToPreviousStep" classname="network.columba.app.ui.screens.rnode.RNodeWizardCompletionTest" time="0.968"/>
+  <testcase name="saveSuccess_isConsumedBeforeCompletionNavigation" classname="network.columba.app.ui.screens.rnode.RNodeWizardCompletionTest" time="0.384"/>
+  <testcase name="toolbarAndSystemBack_onFirstStep_bothExitWizard" classname="network.columba.app.ui.screens.rnode.RNodeWizardCompletionTest" time="0.308"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation

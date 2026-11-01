@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.UsbDeviceClassificationTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:16:49.222Z" hostname="hermes-agent" time="0.084">
+<testsuite name="network.columba.app.UsbDeviceClassificationTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:59:55.955Z" hostname="hermes-agent" time="0.004">
   <properties/>
-  <testcase name="detach does not dismiss unrelated routes or devices" classname="network.columba.app.UsbDeviceClassificationTest" time="0.071"/>
+  <testcase name="detach does not dismiss unrelated routes or devices" classname="network.columba.app.UsbDeviceClassificationTest" time="0.001"/>
   <testcase name="detach dismisses action screen for the same device" classname="network.columba.app.UsbDeviceClassificationTest" time="0.0"/>
   <testcase name="positive RNode protocol response identifies configured RNode" classname="network.columba.app.UsbDeviceClassificationTest" time="0.001"/>
   <testcase name="no protocol identity remains inconclusive" classname="network.columba.app.UsbDeviceClassificationTest" time="0.0"/>

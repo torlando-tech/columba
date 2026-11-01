@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.call.PttMediaSessionManagerTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:17:14.764Z" hostname="hermes-agent" time="4.882">
+<testsuite name="network.columba.app.call.PttMediaSessionManagerTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:00:02.190Z" hostname="hermes-agent" time="0.33">
   <properties/>
-  <testcase name="activate is idempotent" classname="network.columba.app.call.PttMediaSessionManagerTest" time="4.062"/>
-  <testcase name="callback receives false on deactivate even if not previously active" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.075"/>
-  <testcase name="deactivate sends false PTT state" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.092"/>
-  <testcase name="activate sets active state" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.084"/>
-  <testcase name="deactivate is idempotent" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.035"/>
-  <testcase name="deactivate clears active state" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.052"/>
-  <testcase name="release cleans up resources" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.039"/>
-  <testcase name="initial state is inactive" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.033"/>
+  <testcase name="activate is idempotent" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.178"/>
+  <testcase name="callback receives false on deactivate even if not previously active" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.019"/>
+  <testcase name="deactivate sends false PTT state" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.02"/>
+  <testcase name="activate sets active state" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.022"/>
+  <testcase name="deactivate is idempotent" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.024"/>
+  <testcase name="deactivate clears active state" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.02"/>
+  <testcase name="release cleans up resources" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.02"/>
+  <testcase name="initial state is inactive" classname="network.columba.app.call.PttMediaSessionManagerTest" time="0.021"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

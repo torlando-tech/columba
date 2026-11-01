@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.navigation.NomadNetTabStateSurvivalTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:01:33.737Z" hostname="hermes-agent" time="0.093">
+  <properties/>
+  <testcase name="leaving and returning to the NomadNet tab preserves the live browser view model" classname="network.columba.app.navigation.NomadNetTabStateSurvivalTest" time="0.09"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

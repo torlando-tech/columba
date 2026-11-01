@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.service.NetworkChangeCallbackTest" tests="10" skipped="3" failures="0" errors="0" timestamp="2026-10-31T21:21:42.493Z" hostname="hermes-agent" time="2.474">
+<testsuite name="network.columba.app.service.NetworkChangeCallbackTest" tests="10" skipped="3" failures="0" errors="0" timestamp="2026-11-01T00:02:46.271Z" hostname="hermes-agent" time="2.275">
   <properties/>
-  <testcase name="network change callback skips announce when not initialized" classname="network.columba.app.service.NetworkChangeCallbackTest" time="2.261"/>
-  <testcase name="network change callback completes normally if announce is fast" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.113"/>
+  <testcase name="network change callback skips announce when not initialized" classname="network.columba.app.service.NetworkChangeCallbackTest" time="2.085"/>
+  <testcase name="network change callback completes normally if announce is fast" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.115"/>
   <testcase name="network change callback does not save timestamps on timeout" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.001">
     <skipped/>
   </testcase>
   <testcase name="network change callback returns immediately when using coroutine" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.0">
     <skipped/>
   </testcase>
-  <testcase name="network change callback catches and handles exceptions" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.021"/>
-  <testcase name="network change callback does not save timestamps on announce failure" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.032"/>
+  <testcase name="network change callback catches and handles exceptions" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.012"/>
+  <testcase name="network change callback does not save timestamps on announce failure" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.023"/>
   <testcase name="network change callback times out after 5 seconds" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.0">
     <skipped/>
   </testcase>
-  <testcase name="network change callback saves timestamps after successful announce" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.015"/>
-  <testcase name="network change callback proceeds when initialized" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.01"/>
-  <testcase name="network change callback does not crash on exception" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.015"/>
+  <testcase name="network change callback saves timestamps after successful announce" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.013"/>
+  <testcase name="network change callback proceeds when initialized" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.011"/>
+  <testcase name="network change callback does not crash on exception" classname="network.columba.app.service.NetworkChangeCallbackTest" time="0.01"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation

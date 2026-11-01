@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.ReactionComponentsTest" tests="43" skipped="5" failures="0" errors="0" timestamp="2026-10-31T21:26:02.421Z" hostname="hermes-agent" time="9.995">
+<testsuite name="network.columba.app.ui.components.ReactionComponentsTest" tests="47" skipped="5" failures="0" errors="0" timestamp="2026-11-01T00:04:20.125Z" hostname="hermes-agent" time="2.862">
   <properties/>
   <testcase name="ReactionDisplayRow displays all reactions when many are present" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.0">
     <skipped/>
@@ -16,44 +16,48 @@
   <testcase name="ReactionPickerDialog displays add more button" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.0">
     <skipped/>
   </testcase>
-  <testcase name="EXTENDED_EMOJIS contains hundred points emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="4.951"/>
-  <testcase name="ReactionDisplayRow does not display count for single reaction" classname="network.columba.app.ui.components.ReactionComponentsTest" time="1.043"/>
-  <testcase name="calculateMessageScaleForOverlay respects minimum scale for very large message" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.084"/>
-  <testcase name="calculateMessageScaleForOverlay returns 1f for negative height message" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.075"/>
-  <testcase name="REACTION_EMOJIS contains expected emojis in order" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.079"/>
-  <testcase name="calculateMessageScaleForOverlay with custom minScale" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.086"/>
-  <testcase name="ReactionDisplayRow displays complex emoji with ZWJ sequence" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.097"/>
-  <testcase name="ReactionPickerDialog displays laughing emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.346"/>
-  <testcase name="REACTION_EMOJIS contains thumbs up emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.073"/>
-  <testcase name="SelectableMessageText renders empty string without crashing" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.23"/>
-  <testcase name="ReactionPickerDialog displays thumbs up emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.145"/>
-  <testcase name="FullEmojiPickerDialog displays title" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.415"/>
-  <testcase name="EXTENDED_EMOJIS contains fire emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.082"/>
-  <testcase name="ReactionPickerDialog calls onReactionSelected with correct emoji when thumbs up tapped" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.201"/>
-  <testcase name="REACTION_EMOJIS contains heart emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.062"/>
-  <testcase name="ReactionPickerDialog calls onReactionSelected with correct emoji when heart tapped" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.118"/>
-  <testcase name="SelectableMessageText displays multiline text" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.081"/>
-  <testcase name="ReactionPickerDialog displays heart emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.112"/>
-  <testcase name="ReactionPickerDialog displays angry emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.115"/>
-  <testcase name="EXTENDED_EMOJIS contains more than 100 emojis" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.059"/>
-  <testcase name="calculateMessageScaleForOverlay returns scale less than 1 for large message" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.054"/>
-  <testcase name="ReactionDisplayRow displays single reaction emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.075"/>
-  <testcase name="ReactionDisplayRow displays reaction for received message (isFromMe false)" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.068"/>
-  <testcase name="calculateMessageScaleForOverlay returns 1f for zero height message" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.052"/>
-  <testcase name="REACTION_EMOJIS contains exactly six emojis" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.048"/>
-  <testcase name="ReactionPickerDialog displays all six emojis" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.149"/>
-  <testcase name="calculateMessageScaleForOverlay with small screen" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.057"/>
-  <testcase name="ReactionPickerDialog displays surprised emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.094"/>
-  <testcase name="ReactionDisplayRow displays multiple different reactions" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.068"/>
-  <testcase name="calculateMessageScaleForOverlay with message exactly at boundary" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.052"/>
-  <testcase name="ReactionDisplayRow does not display when reactions list is empty" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.054"/>
-  <testcase name="ReactionPickerDialog displays crying emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.094"/>
-  <testcase name="ReactionDisplayRow displays flag emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.066"/>
-  <testcase name="ReactionDisplayRow displays reaction with large count" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.061"/>
-  <testcase name="ReactionDisplayRow displays reaction for sent message (isFromMe true)" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.062"/>
-  <testcase name="SelectableMessageText displays the provided text" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.069"/>
-  <testcase name="ReactionDisplayRow displays count when reaction has multiple senders" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.065"/>
-  <testcase name="calculateMessageScaleForOverlay returns 1f for small message that fits on screen" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.044"/>
+  <testcase name="EXTENDED_EMOJIS contains hundred points emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.07"/>
+  <testcase name="overlay layout keeps a positive preview in a compact window" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.046"/>
+  <testcase name="overlay layout treats zero and negative message heights as non-overflow" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.041"/>
+  <testcase name="ReactionDisplayRow does not display count for single reaction" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.053"/>
+  <testcase name="overlay layout message is scrollable only when the scaled preview still overflows" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.043"/>
+  <testcase name="overlay layout keeps a small message centered with bars adjacent" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.043"/>
+  <testcase name="REACTION_EMOJIS contains expected emojis in order" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.064"/>
+  <testcase name="overlay layout pins bars and scales the preview to fit for a long message" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.086"/>
+  <testcase name="ReactionDisplayRow displays complex emoji with ZWJ sequence" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.06"/>
+  <testcase name="reaction overlay keeps the context menu on screen for an extremely long message" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.162"/>
+  <testcase name="ReactionPickerDialog displays laughing emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.097"/>
+  <testcase name="REACTION_EMOJIS contains thumbs up emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.053"/>
+  <testcase name="SelectableMessageText renders empty string without crashing" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.062"/>
+  <testcase name="overlay layout never scales below the minimum legible scale" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.04"/>
+  <testcase name="ReactionPickerDialog displays thumbs up emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.084"/>
+  <testcase name="FullEmojiPickerDialog displays title" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.264"/>
+  <testcase name="EXTENDED_EMOJIS contains fire emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.066"/>
+  <testcase name="ReactionPickerDialog calls onReactionSelected with correct emoji when thumbs up tapped" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.105"/>
+  <testcase name="REACTION_EMOJIS contains heart emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.041"/>
+  <testcase name="ReactionPickerDialog calls onReactionSelected with correct emoji when heart tapped" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.07"/>
+  <testcase name="reaction overlay keeps the context menu on screen for a small message" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.075"/>
+  <testcase name="SelectableMessageText displays multiline text" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.048"/>
+  <testcase name="ReactionPickerDialog displays heart emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.065"/>
+  <testcase name="ReactionPickerDialog displays angry emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.074"/>
+  <testcase name="EXTENDED_EMOJIS contains more than 100 emojis" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.039"/>
+  <testcase name="ReactionDisplayRow displays single reaction emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.048"/>
+  <testcase name="ReactionDisplayRow displays reaction for received message (isFromMe false)" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.05"/>
+  <testcase name="REACTION_EMOJIS contains exactly six emojis" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.045"/>
+  <testcase name="overlay layout fits a message that is large but fits centered" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.041"/>
+  <testcase name="ReactionPickerDialog displays all six emojis" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.072"/>
+  <testcase name="overlay layout keeps a non-blank preview when the window is shorter than both bars" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.054"/>
+  <testcase name="ReactionPickerDialog displays surprised emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.101"/>
+  <testcase name="ReactionDisplayRow displays multiple different reactions" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.069"/>
+  <testcase name="reaction overlay falls back to message text when the snapshot bitmap is missing" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.077"/>
+  <testcase name="ReactionDisplayRow does not display when reactions list is empty" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.047"/>
+  <testcase name="reaction overlay keeps the context menu on screen when the snapshot bitmap is missing" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.072"/>
+  <testcase name="ReactionPickerDialog displays crying emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.084"/>
+  <testcase name="ReactionDisplayRow displays flag emoji" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.048"/>
+  <testcase name="ReactionDisplayRow displays reaction with large count" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.048"/>
+  <testcase name="ReactionDisplayRow displays reaction for sent message (isFromMe true)" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.047"/>
+  <testcase name="SelectableMessageText displays the provided text" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.046"/>
+  <testcase name="ReactionDisplayRow displays count when reaction has multiple senders" classname="network.columba.app.ui.components.ReactionComponentsTest" time="0.045"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

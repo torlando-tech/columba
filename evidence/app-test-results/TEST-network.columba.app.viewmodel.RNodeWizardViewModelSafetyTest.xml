@@ -1,16 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.RNodeWizardViewModelSafetyTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:43:30.952Z" hostname="hermes-agent" time="3.075">
+<testsuite name="network.columba.app.viewmodel.RNodeWizardViewModelSafetyTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:11:55.879Z" hostname="hermes-agent" time="0.131">
   <properties/>
-  <testcase name="startDeviceScan sets error when bluetooth adapter is null" classname="network.columba.app.viewmodel.RNodeWizardViewModelSafetyTest" time="3.025"/>
-  <testcase name="rssiPollingJob is cancelled when navigating away from DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelSafetyTest" time="0.033"/>
-  <testcase name="rssiPollingJob is cancelled when onCleared is called" classname="network.columba.app.viewmodel.RNodeWizardViewModelSafetyTest" time="0.012"/>
+  <testcase name="startDeviceScan sets error when bluetooth adapter is null" classname="network.columba.app.viewmodel.RNodeWizardViewModelSafetyTest" time="0.106"/>
+  <testcase name="rssiPollingJob is cancelled when navigating away from DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelSafetyTest" time="0.015"/>
+  <testcase name="rssiPollingJob is cancelled when onCleared is called" classname="network.columba.app.viewmodel.RNodeWizardViewModelSafetyTest" time="0.01"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

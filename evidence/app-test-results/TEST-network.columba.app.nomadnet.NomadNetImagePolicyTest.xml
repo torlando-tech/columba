@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.nomadnet.NomadNetImagePolicyTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:01:34.953Z" hostname="hermes-agent" time="0.021">
+  <properties/>
+  <testcase name="auto rtt exactly at the limit does not load" classname="network.columba.app.nomadnet.NomadNetImagePolicyTest" time="0.011"/>
+  <testcase name="auto falls back to measured page response speed when no expected rate" classname="network.columba.app.nomadnet.NomadNetImagePolicyTest" time="0.001"/>
+  <testcase name="loopback always loads regardless of mode" classname="network.columba.app.nomadnet.NomadNetImagePolicyTest" time="0.001"/>
+  <testcase name="never mode never auto-loads" classname="network.columba.app.nomadnet.NomadNetImagePolicyTest" time="0.0"/>
+  <testcase name="auto rate exactly at the limit does not load" classname="network.columba.app.nomadnet.NomadNetImagePolicyTest" time="0.0"/>
+  <testcase name="auto without any link data does not load" classname="network.columba.app.nomadnet.NomadNetImagePolicyTest" time="0.0"/>
+  <testcase name="always mode auto-loads without any link data" classname="network.columba.app.nomadnet.NomadNetImagePolicyTest" time="0.0"/>
+  <testcase name="auto slow rtt does not load" classname="network.columba.app.nomadnet.NomadNetImagePolicyTest" time="0.0"/>
+  <testcase name="auto fast link with sufficient rate loads" classname="network.columba.app.nomadnet.NomadNetImagePolicyTest" time="0.001"/>
+  <testcase name="fromName maps config values case-insensitively with auto default" classname="network.columba.app.nomadnet.NomadNetImagePolicyTest" time="0.003"/>
+  <testcase name="manual mode never auto-loads even on a fast link" classname="network.columba.app.nomadnet.NomadNetImagePolicyTest" time="0.0"/>
+  <testcase name="auto low rate does not load" classname="network.columba.app.nomadnet.NomadNetImagePolicyTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

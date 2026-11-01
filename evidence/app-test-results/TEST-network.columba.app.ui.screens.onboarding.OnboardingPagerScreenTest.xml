@@ -1,42 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" tests="29" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:33:36.024Z" hostname="hermes-agent" time="13.914">
+<testsuite name="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" tests="29" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:06:56.122Z" hostname="hermes-agent" time="2.826">
   <properties/>
-  <testcase name="skipButton_hiddenOnLastPage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="9.099"/>
-  <testcase name="skipButton_isVisible" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.209"/>
-  <testcase name="pageIndicator_rendersWithoutCrash" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.185"/>
-  <testcase name="skipButton_triggersSkipOnboarding" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.319"/>
-  <testcase name="skipButton_passesCompletionCallback" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.134"/>
-  <testcase name="initialRender_showsWelcomePage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.123"/>
-  <testcase name="pagerContainsAllPages_page2_connectivityPage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.47"/>
-  <testcase name="pagerContainsAllPages_page4_completePage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.219"/>
-  <testcase name="navigation_restoreFromBackup_triggersOnImportData" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.144"/>
-  <testcase name="initialRender_showsPrivacyFeatures" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.144"/>
-  <testcase name="savingState_disablesSkipButton" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.099"/>
-  <testcase name="initialRender_showsGetStartedButton" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.123"/>
-  <testcase name="pageIndicator_hasCorrectNumberOfDots" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.118"/>
-  <testcase name="topBar_displaysSkipButton_onPage0" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.143"/>
-  <testcase name="topBar_displaysSkipButton_onPage1" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.162"/>
-  <testcase name="topBar_displaysSkipButton_onPage2" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.18"/>
-  <testcase name="topBar_displaysSkipButton_onPage3" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.172"/>
-  <testcase name="initialRender_showsRestoreFromBackupOption" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.108"/>
-  <testcase name="skipButton_isEnabled" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.108"/>
-  <testcase name="completePage_triggersRefreshIdentityData" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.193"/>
-  <testcase name="navigation_getStartedButton_navigatesToNextPage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.098"/>
-  <testcase name="pagerContainsAllPages_page1_identityPage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.157"/>
-  <testcase name="skipButton_isClickable" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.092"/>
-  <testcase name="lifecycleObserver_onResume_refreshesAllPermissionStatuses" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.111"/>
-  <testcase name="loadingState_showsProgressIndicator" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.103"/>
-  <testcase name="pagerContainsAllPages_page3_permissionsPage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.165"/>
-  <testcase name="completionCallback_invokedWithFalse_whenNoLoRaSelected" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.141"/>
-  <testcase name="pagerContainsAllPages_page0_welcomePage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.083"/>
-  <testcase name="completionCallback_invokedWithTrue_whenLoRaSelected" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.205"/>
+  <testcase name="skipButton_hiddenOnLastPage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.604"/>
+  <testcase name="skipButton_isVisible" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.074"/>
+  <testcase name="pageIndicator_rendersWithoutCrash" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.063"/>
+  <testcase name="skipButton_triggersSkipOnboarding" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.091"/>
+  <testcase name="skipButton_passesCompletionCallback" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.066"/>
+  <testcase name="initialRender_showsWelcomePage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.066"/>
+  <testcase name="pagerContainsAllPages_page2_connectivityPage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.151"/>
+  <testcase name="pagerContainsAllPages_page4_completePage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.096"/>
+  <testcase name="navigation_restoreFromBackup_triggersOnImportData" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.071"/>
+  <testcase name="initialRender_showsPrivacyFeatures" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.068"/>
+  <testcase name="savingState_disablesSkipButton" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.066"/>
+  <testcase name="initialRender_showsGetStartedButton" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.063"/>
+  <testcase name="pageIndicator_hasCorrectNumberOfDots" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.062"/>
+  <testcase name="topBar_displaysSkipButton_onPage0" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.063"/>
+  <testcase name="topBar_displaysSkipButton_onPage1" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.084"/>
+  <testcase name="topBar_displaysSkipButton_onPage2" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.093"/>
+  <testcase name="topBar_displaysSkipButton_onPage3" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.098"/>
+  <testcase name="initialRender_showsRestoreFromBackupOption" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.072"/>
+  <testcase name="skipButton_isEnabled" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.061"/>
+  <testcase name="completePage_triggersRefreshIdentityData" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.089"/>
+  <testcase name="navigation_getStartedButton_navigatesToNextPage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.059"/>
+  <testcase name="pagerContainsAllPages_page1_identityPage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.074"/>
+  <testcase name="skipButton_isClickable" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.069"/>
+  <testcase name="lifecycleObserver_onResume_refreshesAllPermissionStatuses" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.081"/>
+  <testcase name="loadingState_showsProgressIndicator" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.054"/>
+  <testcase name="pagerContainsAllPages_page3_permissionsPage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.098"/>
+  <testcase name="completionCallback_invokedWithFalse_whenNoLoRaSelected" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.098"/>
+  <testcase name="pagerContainsAllPages_page0_welcomePage" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.078"/>
+  <testcase name="completionCallback_invokedWithTrue_whenLoRaSelected" classname="network.columba.app.ui.screens.onboarding.OnboardingPagerScreenTest" time="0.099"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

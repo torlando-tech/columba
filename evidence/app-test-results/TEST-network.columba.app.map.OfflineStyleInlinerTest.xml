@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.map.OfflineStyleInlinerTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:18:48.112Z" hostname="hermes-agent" time="0.423">
+<testsuite name="network.columba.app.map.OfflineStyleInlinerTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:00:27.947Z" hostname="hermes-agent" time="0.335">
   <properties/>
-  <testcase name="copies bounds from TileJSON" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.324"/>
-  <testcase name="copies minzoom and maxzoom from TileJSON" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.007"/>
-  <testcase name="skips non-http urls" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.006"/>
-  <testcase name="handles missing sources key" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.005"/>
-  <testcase name="leaves source unchanged when fetch fails" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.008"/>
+  <testcase name="copies bounds from TileJSON" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.245"/>
+  <testcase name="copies minzoom and maxzoom from TileJSON" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.006"/>
+  <testcase name="skips non-http urls" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.005"/>
+  <testcase name="handles missing sources key" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.008"/>
+  <testcase name="leaves source unchanged when fetch fails" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.01"/>
   <testcase name="handles multiple TileJSON sources" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.009"/>
-  <testcase name="partial fetch failure inlines successful sources and leaves failed ones" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.005"/>
+  <testcase name="partial fetch failure inlines successful sources and leaves failed ones" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.007"/>
   <testcase name="does not copy absent TileJSON fields" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.005"/>
-  <testcase name="preserves raster source with inline tiles" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.007"/>
-  <testcase name="works with realistic OpenFreeMap style structure" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.007"/>
-  <testcase name="inlines vector source with TileJSON url" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.004"/>
-  <testcase name="handles TileJSON with empty tiles array" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.005"/>
-  <testcase name="handles malformed TileJSON response" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.003"/>
-  <testcase name="handles TileJSON without tiles array" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.002"/>
-  <testcase name="handles mixed sources - inlines url, preserves inline tiles" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.002"/>
+  <testcase name="preserves raster source with inline tiles" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.005"/>
+  <testcase name="works with realistic OpenFreeMap style structure" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.003"/>
+  <testcase name="inlines vector source with TileJSON url" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.005"/>
+  <testcase name="handles TileJSON with empty tiles array" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.003"/>
+  <testcase name="handles malformed TileJSON response" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.002"/>
+  <testcase name="handles TileJSON without tiles array" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.004"/>
+  <testcase name="handles mixed sources - inlines url, preserves inline tiles" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.004"/>
   <testcase name="preserves source type after inlining" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.004"/>
   <testcase name="handles empty sources" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.002"/>
   <testcase name="copies attribution from TileJSON" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.003"/>
-  <testcase name="preserves other style properties" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.004"/>
+  <testcase name="preserves other style properties" classname="network.columba.app.map.OfflineStyleInlinerTest" time="0.002"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

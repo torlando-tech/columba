@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.FileAttachmentPreviewRowTest" tests="21" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:24:02.440Z" hostname="hermes-agent" time="8.343">
+<testsuite name="network.columba.app.ui.components.FileAttachmentPreviewRowTest" tests="21" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:03:52.108Z" hostname="hermes-agent" time="1.459">
   <properties/>
-  <testcase name="handles unicode in filename" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="5.895"/>
-  <testcase name="remove button displays for attachment" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.126"/>
-  <testcase name="total size indicator shows correct size" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.114"/>
-  <testcase name="remove button click invokes callback with correct index" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.243"/>
-  <testcase name="displays single attachment size" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.117"/>
-  <testcase name="displays total size indicator for small files" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.108"/>
-  <testcase name="handles very long filename with truncation" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.124"/>
-  <testcase name="displays complete attachment info with filename size and remove button" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.109"/>
-  <testcase name="displays total size indicator" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.095"/>
-  <testcase name="multiple sizes display correctly" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.109"/>
-  <testcase name="displays archive icon for zip MIME type" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.091"/>
-  <testcase name="displays text icon for text MIME type" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.092"/>
-  <testcase name="handles empty attachment list gracefully" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.079"/>
-  <testcase name="handles many attachments" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.138"/>
-  <testcase name="displays PDF icon for PDF MIME type" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.086"/>
-  <testcase name="all attachments have remove buttons" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.088"/>
-  <testcase name="handles special characters in filename" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.079"/>
-  <testcase name="remove button click on first attachment invokes callback with index 0" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.081"/>
-  <testcase name="displays multiple attachment filenames" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.083"/>
-  <testcase name="displays single attachment filename" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.088"/>
-  <testcase name="displays total size for large files" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.109"/>
+  <testcase name="handles unicode in filename" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.116"/>
+  <testcase name="remove button displays for attachment" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.065"/>
+  <testcase name="total size indicator shows correct size" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.056"/>
+  <testcase name="remove button click invokes callback with correct index" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.075"/>
+  <testcase name="displays single attachment size" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.062"/>
+  <testcase name="displays total size indicator for small files" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.071"/>
+  <testcase name="handles very long filename with truncation" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.068"/>
+  <testcase name="displays complete attachment info with filename size and remove button" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.082"/>
+  <testcase name="displays total size indicator" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.074"/>
+  <testcase name="multiple sizes display correctly" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.076"/>
+  <testcase name="displays archive icon for zip MIME type" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.062"/>
+  <testcase name="displays text icon for text MIME type" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.056"/>
+  <testcase name="handles empty attachment list gracefully" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.053"/>
+  <testcase name="handles many attachments" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.099"/>
+  <testcase name="displays PDF icon for PDF MIME type" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.062"/>
+  <testcase name="all attachments have remove buttons" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.062"/>
+  <testcase name="handles special characters in filename" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.058"/>
+  <testcase name="remove button click on first attachment invokes callback with index 0" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.062"/>
+  <testcase name="displays multiple attachment filenames" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.068"/>
+  <testcase name="displays single attachment filename" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.065"/>
+  <testcase name="displays total size for large files" classname="network.columba.app.ui.components.FileAttachmentPreviewRowTest" time="0.059"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

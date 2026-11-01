@@ -1,73 +1,67 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.screens.ContactsScreenTest" tests="60" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:29:13.056Z" hostname="hermes-agent" time="18.348">
+<testsuite name="network.columba.app.ui.screens.ContactsScreenTest" tests="61" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:05:24.432Z" hostname="hermes-agent" time="6.803">
   <properties/>
-  <testcase name="contactListItem_displaysContactName" classname="network.columba.app.ui.screens.ContactsScreenTest" time="5.904"/>
-  <testcase name="contactsScreen_searchBar_closeButton_hidesSearchBar" classname="network.columba.app.ui.screens.ContactsScreenTest" time="4.071"/>
-  <testcase name="manualEntryDialog_displaysIdentityField" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.557"/>
-  <testcase name="contextMenu_viewDetailsClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.327"/>
-  <testcase name="contactsScreen_relayAutoSelected_showsAutoBadge" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.315"/>
-  <testcase name="contactsScreen_emptyList_displaysEmptyState" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.144"/>
-  <testcase name="pendingContactBottomSheet_retryClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.348"/>
-  <testcase name="contactsScreen_searchButtonClick_togglesSearchBar" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.209"/>
-  <testcase name="addContactBottomSheet_displaysTitle" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.241"/>
-  <testcase name="contextMenu_pinnedContact_showsUnpinOption" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.141"/>
-  <testcase name="contactsScreen_displaysTitle" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.13"/>
-  <testcase name="manualEntryDialog_displaysCancelButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.209"/>
-  <testcase name="contactListItem_pinned_showsFilledStar" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.084"/>
-  <testcase name="emptyContactsState_displaysSecondaryMessage" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.074"/>
-  <testcase name="contactListItem_pending_showsSearchingMessage" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.109"/>
-  <testcase name="pendingContactBottomSheet_pending_displaysSearchingTitle" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.238"/>
-  <testcase name="contactsScreen_searchBar_textInput_updatesViewModel" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.326"/>
-  <testcase name="manualEntryDialog_displaysTitle" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.23"/>
-  <testcase name="contactsScreen_withPinnedContacts_displaysPinnedSection" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.11"/>
-  <testcase name="contactListItem_pinClick_invokesOnPinClick" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.065"/>
-  <testcase name="contactListItem_relay_showsRelayBadge" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.064"/>
-  <testcase name="contactListItem_onlineFlag_doesNotClaimLiveOnlineState" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.067"/>
-  <testcase name="addContactBottomSheet_displaysScanQrCodeOption" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.19"/>
-  <testcase name="editNicknameDialog_displaysContactHash" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.172"/>
-  <testcase name="contactsScreen_searchBar_clearButton_clearsText" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.168"/>
+  <testcase name="contactListItem_displaysContactName" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.096"/>
+  <testcase name="contactsScreen_searchBar_closeButton_hidesSearchBar" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.814"/>
+  <testcase name="manualEntryDialog_displaysIdentityField" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.205"/>
+  <testcase name="contextMenu_viewDetailsClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.089"/>
+  <testcase name="contactsScreen_relayAutoSelected_showsAutoBadge" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.114"/>
+  <testcase name="contactsScreen_emptyList_displaysEmptyState" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.08"/>
+  <testcase name="pendingContactBottomSheet_retryClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.204"/>
+  <testcase name="contactsScreen_searchButtonClick_togglesSearchBar" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.215"/>
+  <testcase name="addContactBottomSheet_displaysTitle" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.135"/>
+  <testcase name="contextMenu_pinnedContact_showsUnpinOption" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.076"/>
+  <testcase name="contactsScreen_displaysTitle" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.071"/>
+  <testcase name="manualEntryDialog_displaysCancelButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.146"/>
+  <testcase name="contactListItem_pinned_showsFilledStar" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.054"/>
+  <testcase name="emptyContactsState_displaysSecondaryMessage" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.052"/>
+  <testcase name="contactListItem_pending_showsSearchingMessage" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.053"/>
+  <testcase name="pendingContactBottomSheet_pending_displaysSearchingTitle" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.137"/>
+  <testcase name="contactsScreen_searchBar_textInput_updatesViewModel" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.207"/>
+  <testcase name="manualEntryDialog_displaysTitle" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.171"/>
+  <testcase name="contactsScreen_withPinnedContacts_displaysPinnedSection" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.1"/>
+  <testcase name="contactListItem_pinClick_invokesOnPinClick" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.062"/>
+  <testcase name="contactListItem_relay_showsRelayBadge" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.057"/>
+  <testcase name="contactListItem_onlineFlag_doesNotClaimLiveOnlineState" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.065"/>
+  <testcase name="addContactBottomSheet_displaysScanQrCodeOption" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.126"/>
+  <testcase name="editNicknameDialog_displaysContactHash" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.123"/>
+  <testcase name="contactsScreen_searchBar_clearButton_clearsText" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.132"/>
   <testcase name="contactListItem_click_invokesOnClick" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.068"/>
-  <testcase name="addContactBottomSheet_displaysManualEntryOption" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.139"/>
-  <testcase name="contactListItem_unresolved_showsErrorMessage" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.062"/>
-  <testcase name="contactsScreen_displaysSearchButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.089"/>
-  <testcase name="pendingContactBottomSheet_displaysRetryButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.142"/>
-  <testcase name="addContactBottomSheet_manualEntryClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.123"/>
-  <testcase name="editNicknameDialog_withCurrentNickname_prefillsField" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.101"/>
-  <testcase name="contactListItem_onlineFlag_doesNotDisplayLiveRouteHops" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.067"/>
-  <testcase name="contactListItem_displaysFullHash" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.059"/>
-  <testcase name="manualEntryDialog_displaysNicknameField" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.158"/>
-  <testcase name="addContactBottomSheet_scanQrCodeClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.114"/>
-  <testcase name="contextMenu_relayContact_showsUnsetOption" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.081"/>
-  <testcase name="contactsScreen_displaysBothTabButtons" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.088"/>
-  <testcase name="contactsScreen_withRelayContact_displaysRelaySection" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.099"/>
-  <testcase name="contactsScreen_myContactsTabSelected_showsEmptyStateOrContacts" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.081"/>
-  <testcase name="emptyContactsState_displaysIcon" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.067"/>
-  <testcase name="emptyContactsState_displaysPrimaryMessage" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.054"/>
-  <testcase name="contactListItem_notPinned_showsOutlinedStar" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.059"/>
-  <testcase name="contextMenu_expanded_displaysAllOptions" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.084"/>
-  <testcase name="contactListItem_relativeTimeUsesInjectedLifecycleClock" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.06"/>
-  <testcase name="editNicknameDialog_displaysCancelButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.191"/>
-  <testcase name="pendingContactBottomSheet_removeClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.122"/>
-  <testcase name="contactsScreen_contactClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.09"/>
-  <testcase name="contextMenu_pinClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.077"/>
-  <testcase name="contextMenu_removeClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.098"/>
-  <testcase name="contactListItem_longPress_invokesOnLongPress" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.088"/>
-  <testcase name="contactsScreen_displaysContactCount_plural" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.108"/>
-  <testcase name="editNicknameDialog_displaysTitle" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.144"/>
-  <testcase name="manualEntryDialog_displaysAddButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.123"/>
-  <testcase name="editNicknameDialog_displaysSaveButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.117"/>
-  <testcase name="pendingContactBottomSheet_displaysContactName" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.102"/>
-  <testcase name="contextMenu_editNicknameClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.089"/>
-  <testcase name="pendingContactBottomSheet_unresolved_displaysErrorTitle" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.134"/>
-  <testcase name="contactsScreen_displaysContactCount_singular" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.091"/>
-  <testcase name="pendingContactBottomSheet_displaysRemoveButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.114"/>
+  <testcase name="addContactBottomSheet_displaysManualEntryOption" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.133"/>
+  <testcase name="contactListItem_unresolved_showsErrorMessage" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.069"/>
+  <testcase name="contactsScreen_displaysSearchButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.071"/>
+  <testcase name="pendingContactBottomSheet_displaysRetryButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.104"/>
+  <testcase name="addContactBottomSheet_manualEntryClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.101"/>
+  <testcase name="editNicknameDialog_withCurrentNickname_prefillsField" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.083"/>
+  <testcase name="contactListItem_onlineFlag_doesNotDisplayLiveRouteHops" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.052"/>
+  <testcase name="contactListItem_displaysFullHash" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.067"/>
+  <testcase name="manualEntryDialog_displaysNicknameField" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.156"/>
+  <testcase name="addContactBottomSheet_scanQrCodeClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.121"/>
+  <testcase name="contactsScreen_searchBar_preservesSpacesInQuery" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.144"/>
+  <testcase name="contextMenu_relayContact_showsUnsetOption" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.067"/>
+  <testcase name="contactsScreen_displaysBothTabButtons" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.075"/>
+  <testcase name="contactsScreen_withRelayContact_displaysRelaySection" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.073"/>
+  <testcase name="contactsScreen_myContactsTabSelected_showsEmptyStateOrContacts" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.062"/>
+  <testcase name="emptyContactsState_displaysIcon" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.046"/>
+  <testcase name="emptyContactsState_displaysPrimaryMessage" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.043"/>
+  <testcase name="contactListItem_notPinned_showsOutlinedStar" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.046"/>
+  <testcase name="contextMenu_expanded_displaysAllOptions" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.068"/>
+  <testcase name="contactListItem_relativeTimeUsesInjectedLifecycleClock" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.048"/>
+  <testcase name="editNicknameDialog_displaysCancelButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.133"/>
+  <testcase name="pendingContactBottomSheet_removeClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.107"/>
+  <testcase name="contactsScreen_contactClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.082"/>
+  <testcase name="contextMenu_pinClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.144"/>
+  <testcase name="contextMenu_removeClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.077"/>
+  <testcase name="contactListItem_longPress_invokesOnLongPress" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.055"/>
+  <testcase name="contactsScreen_displaysContactCount_plural" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.076"/>
+  <testcase name="editNicknameDialog_displaysTitle" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.104"/>
+  <testcase name="manualEntryDialog_displaysAddButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.102"/>
+  <testcase name="editNicknameDialog_displaysSaveButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.112"/>
+  <testcase name="pendingContactBottomSheet_displaysContactName" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.109"/>
+  <testcase name="contextMenu_editNicknameClick_invokesCallback" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.088"/>
+  <testcase name="pendingContactBottomSheet_unresolved_displaysErrorTitle" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.111"/>
+  <testcase name="contactsScreen_displaysContactCount_singular" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.079"/>
+  <testcase name="pendingContactBottomSheet_displaysRemoveButton" classname="network.columba.app.ui.screens.ContactsScreenTest" time="0.112"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

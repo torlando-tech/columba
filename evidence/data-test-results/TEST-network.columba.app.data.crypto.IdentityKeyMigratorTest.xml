@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.crypto.IdentityKeyMigratorTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:05.117Z" hostname="hermes-agent" time="4.245">
+<testsuite name="network.columba.app.data.crypto.IdentityKeyMigratorTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:08.208Z" hostname="hermes-agent" time="4.164">
   <properties/>
-  <testcase name="migrateUnencryptedIdentities skips identity with no key data" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="3.718"/>
-  <testcase name="isMigrationCompleted returns false when not completed" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.086"/>
-  <testcase name="isMigrationCompleted returns true when completed" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.066"/>
-  <testcase name="migrateUnencryptedIdentities skips identity with invalid key size" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.096"/>
-  <testcase name="getMigrationStats returns correct values" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.056"/>
-  <testcase name="migrateUnencryptedIdentities handles multiple identities" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.054"/>
-  <testcase name="resetMigrationState clears preferences" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.056"/>
-  <testcase name="migrateUnencryptedIdentities returns success with zero count when no identities need migration" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.053"/>
-  <testcase name="migrateUnencryptedIdentities encrypts identity with keyData" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.051"/>
+  <testcase name="migrateUnencryptedIdentities skips identity with no key data" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="3.672"/>
+  <testcase name="isMigrationCompleted returns false when not completed" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.091"/>
+  <testcase name="isMigrationCompleted returns true when completed" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.056"/>
+  <testcase name="migrateUnencryptedIdentities skips identity with invalid key size" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.063"/>
+  <testcase name="getMigrationStats returns correct values" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.06"/>
+  <testcase name="migrateUnencryptedIdentities handles multiple identities" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.055"/>
+  <testcase name="resetMigrationState clears preferences" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.046"/>
+  <testcase name="migrateUnencryptedIdentities returns success with zero count when no identities need migration" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.063"/>
+  <testcase name="migrateUnencryptedIdentities encrypts identity with keyData" classname="network.columba.app.data.crypto.IdentityKeyMigratorTest" time="0.05"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
 WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning

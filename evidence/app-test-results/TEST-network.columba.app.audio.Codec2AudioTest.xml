@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.audio.Codec2AudioTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:59:56.132Z" hostname="hermes-agent" time="0.199">
+  <properties/>
+  <testcase name="codec2 recorder writes raw concatenated frames and reports duration" classname="network.columba.app.audio.Codec2AudioTest" time="0.088"/>
+  <testcase name="raw decoder consumes complete codec2 frames without an LXST mode header" classname="network.columba.app.audio.Codec2AudioTest" time="0.025"/>
+  <testcase name="worker failure overlapping stop rejects and deletes partial recording" classname="network.columba.app.audio.Codec2AudioTest" time="0.023"/>
+  <testcase name="capture failure releases microphone codec and partial output" classname="network.columba.app.audio.Codec2AudioTest" time="0.027"/>
+  <testcase name="raw decoder rejects incomplete and over-duration payloads before allocation" classname="network.columba.app.audio.Codec2AudioTest" time="0.02"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

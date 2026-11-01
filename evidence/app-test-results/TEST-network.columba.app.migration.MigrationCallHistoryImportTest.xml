@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.migration.MigrationCallHistoryImportTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:00:39.856Z" hostname="hermes-agent" time="4.835">
+  <properties/>
+  <testcase name="unconnected outcome with connection evidence rolls back the transaction" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="1.303"/>
+  <testcase name="valid incoming failed call imports without rejecting the bundle" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="0.136"/>
+  <testcase name="encrypted v8 import carries deletion authority through production decryption" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="1.398"/>
+  <testcase name="import preserves attempt id and duplicate import is idempotent" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="0.076"/>
+  <testcase name="v7 manifest cannot smuggle v8 deletion authority" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="0.063"/>
+  <testcase name="malformed identity hash rolls back the entire database transaction" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="0.056"/>
+  <testcase name="conflicting attempt is skipped without overwriting local evidence" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="0.062"/>
+  <testcase name="uppercase call history identity hashes are canonicalized" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="0.048"/>
+  <testcase name="deletion authority for unfinished local call rolls back entire import" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="0.054"/>
+  <testcase name="malformed call history rolls back the entire database transaction" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="0.044"/>
+  <testcase name="conflicting deletion timestamp is rejected as immutable evidence" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="0.071"/>
+  <testcase name="transfer deletion authority removes and suppresses finalized evidence" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="0.064"/>
+  <testcase name="open call whose recovery timestamp would overflow is rejected transactionally" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="0.057"/>
+  <testcase name="reimport cannot resurrect a deleted finalized call" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="0.062"/>
+  <testcase name="historical encrypted v7 manifest without deletion field imports with empty authority" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="1.269"/>
+  <testcase name="open call evidence is transferred with non-live imported ownership" classname="network.columba.app.migration.MigrationCallHistoryImportTest" time="0.043"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

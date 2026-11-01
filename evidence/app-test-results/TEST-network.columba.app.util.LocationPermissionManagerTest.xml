@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.util.LocationPermissionManagerTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:39:37.926Z" hostname="hermes-agent" time="4.158">
+<testsuite name="network.columba.app.util.LocationPermissionManagerTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:09:07.144Z" hostname="hermes-agent" time="4.409">
   <properties/>
-  <testcase name="needsPreciseLocationUpgrade false when approximate radius chosen even without fine" classname="network.columba.app.util.LocationPermissionManagerTest" time="1.954"/>
-  <testcase name="getPreciseLocationRationale mentions precise and approximate" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.075"/>
-  <testcase name="getPermissionRationale returns non-empty string" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.071"/>
-  <testcase name="getPermissionRationale mentions peer-to-peer sharing" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.078"/>
-  <testcase name="needsPreciseLocationUpgrade false when precise selected and fine granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.061"/>
-  <testcase name="hasPermission returns true when COARSE location granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.517"/>
-  <testcase name="checkPermissionStatus returns Granted when FINE granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.071"/>
-  <testcase name="hasPermission returns false when no location permissions granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.07"/>
-  <testcase name="needsPreciseLocationUpgrade true when sharing on, precise selected, fine not granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.071"/>
-  <testcase name="hasFineLocationPermission returns true when FINE granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.074"/>
-  <testcase name="checkPermissionStatus returns Denied when no permissions" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.065"/>
-  <testcase name="getRequiredPermissions returns non-empty list" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.066"/>
-  <testcase name="hasPermission returns true when FINE location granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.07"/>
-  <testcase name="needsPreciseLocationUpgrade false when sharing disabled despite precise and no fine" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.06"/>
-  <testcase name="checkPermissionStatus returns Granted when COARSE granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.068"/>
-  <testcase name="hasFineLocationPermission returns false when FINE denied" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.06"/>
-  <testcase name="isLocationSupported returns false when device lacks location feature" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.582"/>
-  <testcase name="hasPermission returns true when both locations granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.067"/>
-  <testcase name="isLocationSupported returns true when device has location feature" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.069"/>
+  <testcase name="needsPreciseLocationUpgrade false when approximate radius chosen even without fine" classname="network.columba.app.util.LocationPermissionManagerTest" time="1.873"/>
+  <testcase name="getPreciseLocationRationale mentions precise and approximate" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.073"/>
+  <testcase name="getPermissionRationale returns non-empty string" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.076"/>
+  <testcase name="getPermissionRationale mentions peer-to-peer sharing" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.065"/>
+  <testcase name="needsPreciseLocationUpgrade false when precise selected and fine granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.076"/>
+  <testcase name="hasPermission returns true when COARSE location granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.529"/>
+  <testcase name="checkPermissionStatus returns Granted when FINE granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.074"/>
+  <testcase name="hasPermission returns false when no location permissions granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.067"/>
+  <testcase name="needsPreciseLocationUpgrade true when sharing on, precise selected, fine not granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.062"/>
+  <testcase name="hasFineLocationPermission returns true when FINE granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.067"/>
+  <testcase name="checkPermissionStatus returns Denied when no permissions" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.081"/>
+  <testcase name="getRequiredPermissions returns non-empty list" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.071"/>
+  <testcase name="hasPermission returns true when FINE location granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.069"/>
+  <testcase name="needsPreciseLocationUpgrade false when sharing disabled despite precise and no fine" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.063"/>
+  <testcase name="checkPermissionStatus returns Granted when COARSE granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.081"/>
+  <testcase name="hasFineLocationPermission returns false when FINE denied" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.082"/>
+  <testcase name="isLocationSupported returns false when device lacks location feature" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.822"/>
+  <testcase name="hasPermission returns true when both locations granted" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.089"/>
+  <testcase name="isLocationSupported returns true when device has location feature" classname="network.columba.app.util.LocationPermissionManagerTest" time="0.083"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation

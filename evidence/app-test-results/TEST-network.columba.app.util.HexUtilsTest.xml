@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.util.HexUtilsTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:39:19.646Z" hostname="hermes-agent" time="0.133">
+<testsuite name="network.columba.app.util.HexUtilsTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:08:54.569Z" hostname="hermes-agent" time="0.004">
   <properties/>
-  <testcase name="hexStringToByteArray parses uppercase hex" classname="network.columba.app.util.HexUtilsTest" time="0.051"/>
-  <testcase name="hexStringToByteArray handles single byte" classname="network.columba.app.util.HexUtilsTest" time="0.001"/>
-  <testcase name="toHexString handles single byte" classname="network.columba.app.util.HexUtilsTest" time="0.072"/>
+  <testcase name="hexStringToByteArray parses uppercase hex" classname="network.columba.app.util.HexUtilsTest" time="0.001"/>
+  <testcase name="hexStringToByteArray handles single byte" classname="network.columba.app.util.HexUtilsTest" time="0.0"/>
+  <testcase name="toHexString handles single byte" classname="network.columba.app.util.HexUtilsTest" time="0.001"/>
   <testcase name="toHexString pads single digit bytes with zero" classname="network.columba.app.util.HexUtilsTest" time="0.0"/>
   <testcase name="hexStringToByteArray handles empty string" classname="network.columba.app.util.HexUtilsTest" time="0.0"/>
   <testcase name="hexStringToByteArray parses mixed case hex" classname="network.columba.app.util.HexUtilsTest" time="0.0"/>
   <testcase name="toHexString handles empty array" classname="network.columba.app.util.HexUtilsTest" time="0.0"/>
-  <testcase name="toHexString converts bytes correctly" classname="network.columba.app.util.HexUtilsTest" time="0.0"/>
+  <testcase name="toHexString converts bytes correctly" classname="network.columba.app.util.HexUtilsTest" time="0.001"/>
   <testcase name="hexStringToByteArray parses lowercase hex" classname="network.columba.app.util.HexUtilsTest" time="0.0"/>
   <testcase name="toHexString produces lowercase output" classname="network.columba.app.util.HexUtilsTest" time="0.0"/>
-  <testcase name="round trip conversion preserves data" classname="network.columba.app.util.HexUtilsTest" time="0.001"/>
+  <testcase name="round trip conversion preserves data" classname="network.columba.app.util.HexUtilsTest" time="0.0"/>
   <testcase name="hexStringToByteArray throws on invalid hex character" classname="network.columba.app.util.HexUtilsTest" time="0.0"/>
   <testcase name="round trip with identity hash length" classname="network.columba.app.util.HexUtilsTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>

@@ -1,30 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.notifications.CallActionReceiverTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:19:45.050Z" hostname="hermes-agent" time="6.604">
+<testsuite name="network.columba.app.notifications.CallActionReceiverTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:01:42.187Z" hostname="hermes-agent" time="1.059">
   <properties/>
-  <testcase name="onReceive with ANSWER_CALL action starts MainActivity" classname="network.columba.app.notifications.CallActionReceiverTest" time="5.301"/>
-  <testcase name="onReceive with DECLINE_CALL action does not start activity" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.091"/>
-  <testcase name="onReceive with ANSWER_CALL action sets correct intent action" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.082"/>
-  <testcase name="answer action with full identity hash works correctly" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.072"/>
-  <testcase name="onReceive with unknown action does not start activity" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.069"/>
-  <testcase name="onReceive with DECLINE_CALL action calls goAsync for background work" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.068"/>
-  <testcase name="onReceive with ANSWER_CALL action passes identity hash" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.049"/>
-  <testcase name="onReceive with DECLINE_CALL action finishes pending result when app unavailable" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.153"/>
-  <testcase name="onReceive with END_CALL action calls goAsync for background work" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.038"/>
-  <testcase name="onReceive with ANSWER_CALL action sets auto answer flag" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.035"/>
-  <testcase name="onReceive with ANSWER_CALL action handles null identity hash" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.032"/>
-  <testcase name="EXTRA_AUTO_ANSWER constant has correct value" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.035"/>
-  <testcase name="multiple sequential answer actions work correctly" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.032"/>
-  <testcase name="onReceive with END_CALL action finishes pending result when app unavailable" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.139"/>
-  <testcase name="onReceive with null action does not crash" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.04"/>
-  <testcase name="onReceive with ANSWER_CALL action sets correct intent flags" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.041"/>
-  <testcase name="onReceive with END_CALL action does not start activity" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.034"/>
+  <testcase name="onReceive with ANSWER_CALL action starts MainActivity" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.467"/>
+  <testcase name="onReceive with DECLINE_CALL action does not start activity" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.055"/>
+  <testcase name="onReceive with ANSWER_CALL action sets correct intent action" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.023"/>
+  <testcase name="answer action with full identity hash works correctly" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.02"/>
+  <testcase name="onReceive with unknown action does not start activity" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.019"/>
+  <testcase name="onReceive with DECLINE_CALL action calls goAsync for background work" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.02"/>
+  <testcase name="onReceive with ANSWER_CALL action passes identity hash" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.02"/>
+  <testcase name="onReceive with DECLINE_CALL action finishes pending result when app unavailable" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.122"/>
+  <testcase name="onReceive with END_CALL action calls goAsync for background work" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.022"/>
+  <testcase name="onReceive with ANSWER_CALL action sets auto answer flag" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.024"/>
+  <testcase name="onReceive with ANSWER_CALL action handles null identity hash" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.02"/>
+  <testcase name="EXTRA_AUTO_ANSWER constant has correct value" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.019"/>
+  <testcase name="multiple sequential answer actions work correctly" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.02"/>
+  <testcase name="onReceive with END_CALL action finishes pending result when app unavailable" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.121"/>
+  <testcase name="onReceive with null action does not crash" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.025"/>
+  <testcase name="onReceive with ANSWER_CALL action sets correct intent flags" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.029"/>
+  <testcase name="onReceive with END_CALL action does not start activity" classname="network.columba.app.notifications.CallActionReceiverTest" time="0.025"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

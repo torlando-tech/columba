@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ColumbaApplicationTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:16:24.425Z" hostname="hermes-agent" time="3.638">
+<testsuite name="network.columba.app.ColumbaApplicationTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:59:44.939Z" hostname="hermes-agent" time="3.275">
   <properties/>
-  <testcase name="IPC_TIMEOUT_MS is set to 5 seconds" classname="network.columba.app.ColumbaApplicationTest" time="2.412"/>
-  <testcase name="withTimeoutOrNull for getLxmfIdentity returns identity when fast" classname="network.columba.app.ColumbaApplicationTest" time="1.176"/>
-  <testcase name="getLxmfIdentity returns identity when mock succeeds" classname="network.columba.app.ColumbaApplicationTest" time="0.02"/>
-  <testcase name="hexStringToByteArray handles empty string" classname="network.columba.app.ColumbaApplicationTest" time="0.013"/>
+  <testcase name="IPC_TIMEOUT_MS is set to 5 seconds" classname="network.columba.app.ColumbaApplicationTest" time="1.999"/>
+  <testcase name="withTimeoutOrNull for getLxmfIdentity returns identity when fast" classname="network.columba.app.ColumbaApplicationTest" time="1.244"/>
+  <testcase name="getLxmfIdentity returns identity when mock succeeds" classname="network.columba.app.ColumbaApplicationTest" time="0.013"/>
+  <testcase name="hexStringToByteArray handles empty string" classname="network.columba.app.ColumbaApplicationTest" time="0.004"/>
   <testcase name="toHexString converts byte array correctly" classname="network.columba.app.ColumbaApplicationTest" time="0.002"/>
-  <testcase name="hexStringToByteArray parses hex string correctly" classname="network.columba.app.ColumbaApplicationTest" time="0.001"/>
-  <testcase name="toHexString handles empty array" classname="network.columba.app.ColumbaApplicationTest" time="0.002"/>
+  <testcase name="hexStringToByteArray parses hex string correctly" classname="network.columba.app.ColumbaApplicationTest" time="0.002"/>
+  <testcase name="toHexString handles empty array" classname="network.columba.app.ColumbaApplicationTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation

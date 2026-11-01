@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.db.dao.PeerActivityDaoTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:15:18.692Z" hostname="hermes-agent" time="0.19">
+<testsuite name="network.columba.app.data.db.dao.PeerActivityDaoTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:22.292Z" hostname="hermes-agent" time="0.178">
   <properties/>
-  <testcase name="enriched contact uses peer activity rather than outgoing conversation time" classname="network.columba.app.data.db.dao.PeerActivityDaoTest" time="0.038"/>
-  <testcase name="activity survives database restart" classname="network.columba.app.data.db.dao.PeerActivityDaoTest" time="0.041"/>
-  <testcase name="recordActivityOnce rejects replayed protocol event" classname="network.columba.app.data.db.dao.PeerActivityDaoTest" time="0.026"/>
+  <testcase name="enriched contact uses peer activity rather than outgoing conversation time" classname="network.columba.app.data.db.dao.PeerActivityDaoTest" time="0.036"/>
+  <testcase name="activity survives database restart" classname="network.columba.app.data.db.dao.PeerActivityDaoTest" time="0.051"/>
+  <testcase name="recordActivityOnce rejects replayed protocol event" classname="network.columba.app.data.db.dao.PeerActivityDaoTest" time="0.038"/>
   <testcase name="recordActivity is monotonic and preserves newest source" classname="network.columba.app.data.db.dao.PeerActivityDaoTest" time="0.029"/>
-  <testcase name="observeActivity emits persisted updates" classname="network.columba.app.data.db.dao.PeerActivityDaoTest" time="0.053"/>
+  <testcase name="observeActivity emits persisted updates" classname="network.columba.app.data.db.dao.PeerActivityDaoTest" time="0.022"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.navigation.NavTabTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:01:30.077Z" hostname="hermes-agent" time="0.029">
+  <properties/>
+  <testcase name="sanitize drops unknown ids and dedupes" classname="network.columba.app.navigation.NavTabTest" time="0.026"/>
+  <testcase name="voice and chats tabs never highlight each other" classname="network.columba.app.navigation.NavTabTest" time="0.001"/>
+  <testcase name="sanitize always appends pinned settings last" classname="network.columba.app.navigation.NavTabTest" time="0.0"/>
+  <testcase name="settings can never be removed" classname="network.columba.app.navigation.NavTabTest" time="0.0"/>
+  <testcase name="matchesRoute highlights across parameterized routes" classname="network.columba.app.navigation.NavTabTest" time="0.0"/>
+  <testcase name="every tab navigates to a route matching its own prefix" classname="network.columba.app.navigation.NavTabTest" time="0.001"/>
+  <testcase name="sanitize of already valid layout is a fixed point" classname="network.columba.app.navigation.NavTabTest" time="0.0"/>
+  <testcase name="sanitize clamps to MAX_TABS including settings" classname="network.columba.app.navigation.NavTabTest" time="0.0"/>
+  <testcase name="voice tab id round-trips through sanitize" classname="network.columba.app.navigation.NavTabTest" time="0.0"/>
+  <testcase name="sanitize falls back to default for null, blank, and all-unknown input" classname="network.columba.app.navigation.NavTabTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

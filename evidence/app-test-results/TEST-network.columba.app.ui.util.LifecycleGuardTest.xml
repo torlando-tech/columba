@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.util.LifecycleGuardTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:38:31.281Z" hostname="hermes-agent" time="0.658">
+<testsuite name="network.columba.app.ui.util.LifecycleGuardTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:08:27.445Z" hostname="hermes-agent" time="0.491">
   <properties/>
-  <testcase name="isActiveForWindows with LifecycleOwner returns false when DESTROYED" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.586"/>
-  <testcase name="isActiveForWindows with LifecycleOwner returns true when RESUMED" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.001"/>
+  <testcase name="isActiveForWindows with LifecycleOwner returns false when DESTROYED" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.484"/>
+  <testcase name="isActiveForWindows with LifecycleOwner returns true when RESUMED" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.003"/>
   <testcase name="isActiveForWindows with Lifecycle returns true when RESUMED" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.0"/>
   <testcase name="isStateActiveForWindows returns false for CREATED state" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.0"/>
   <testcase name="isStateActiveForWindows returns true for RESUMED state" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.0"/>
-  <testcase name="all lifecycle states below STARTED are inactive for windows" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.064"/>
-  <testcase name="isActiveForWindows with LifecycleOwner returns true when STARTED" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.0"/>
+  <testcase name="all lifecycle states below STARTED are inactive for windows" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.0"/>
+  <testcase name="isActiveForWindows with LifecycleOwner returns true when STARTED" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.001"/>
   <testcase name="isStateActiveForWindows returns true for STARTED state" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.0"/>
   <testcase name="isActiveForWindows with Lifecycle returns true when STARTED" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.0"/>
   <testcase name="all lifecycle states at or above STARTED are active for windows" classname="network.columba.app.ui.util.LifecycleGuardTest" time="0.0"/>

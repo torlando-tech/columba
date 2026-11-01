@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.screens.QrScannerScreenTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:32:38.445Z" hostname="hermes-agent" time="0.027">
+<testsuite name="network.columba.app.ui.screens.QrScannerScreenTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:06:30.965Z" hostname="hermes-agent" time="0.009">
   <properties/>
-  <testcase name="interrupted init restores the thread interrupt flag and reports error" classname="network.columba.app.ui.screens.QrScannerScreenTest" time="0.017"/>
-  <testcase name="camera init failure is caught and reported instead of crashing" classname="network.columba.app.ui.screens.QrScannerScreenTest" time="0.0"/>
-  <testcase name="successful init binds the provider and reports no error" classname="network.columba.app.ui.screens.QrScannerScreenTest" time="0.002"/>
-  <testcase name="fixture reproduces the COLUMBA-BA failure (guards against a vacuous test)" classname="network.columba.app.ui.screens.QrScannerScreenTest" time="0.003"/>
+  <testcase name="interrupted init restores the thread interrupt flag and reports error" classname="network.columba.app.ui.screens.QrScannerScreenTest" time="0.007"/>
+  <testcase name="camera init failure is caught and reported instead of crashing" classname="network.columba.app.ui.screens.QrScannerScreenTest" time="0.001"/>
+  <testcase name="successful init binds the provider and reports no error" classname="network.columba.app.ui.screens.QrScannerScreenTest" time="0.001"/>
+  <testcase name="fixture reproduces the COLUMBA-BA failure (guards against a vacuous test)" classname="network.columba.app.ui.screens.QrScannerScreenTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

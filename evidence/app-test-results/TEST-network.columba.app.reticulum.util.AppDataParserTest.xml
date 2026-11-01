@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.reticulum.util.AppDataParserTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:20:45.428Z" hostname="hermes-agent" time="0.17">
+<testsuite name="network.columba.app.reticulum.util.AppDataParserTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:02:13.605Z" hostname="hermes-agent" time="0.042">
   <properties/>
-  <testcase name="extractPropagationNodeMetadata returns null name when metadata has no name key - issue 233" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.15"/>
-  <testcase name="extractPropagationNodeMetadata extracts name from metadata map with name key" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.001"/>
+  <testcase name="extractPropagationNodeMetadata returns null name when metadata has no name key - issue 233" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.034"/>
+  <testcase name="extractPropagationNodeMetadata extracts name from metadata map with name key" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.004"/>
   <testcase name="extractPropagationNodeMetadata returns null for non-array data" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
-  <testcase name="extractPeerName returns fallback when displayName is null" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.007"/>
-  <testcase name="extractPropagationNodeMetadata returns null for array too small" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.001"/>
+  <testcase name="extractPeerName returns fallback when displayName is null" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.001"/>
+  <testcase name="extractPropagationNodeMetadata returns null for array too small" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
   <testcase name="extractPropagationNodeMetadata extracts float transfer limit" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
   <testcase name="extractPropagationNodeMetadata handles malformed data gracefully" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
-  <testcase name="extractPeerName returns fallback when displayName is blank" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.001"/>
-  <testcase name="extractPropagationNodeMetadata extracts integer transfer limit" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
+  <testcase name="extractPeerName returns fallback when displayName is blank" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
+  <testcase name="extractPropagationNodeMetadata extracts integer transfer limit" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.001"/>
   <testcase name="extractPeerName returns Unknown Peer for short hash" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
   <testcase name="PropagationNodeMetadata data class works correctly" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
   <testcase name="extractPeerName returns displayName when provided" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
   <testcase name="extractPropagationNodeMetadata returns nulls for null appData" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
   <testcase name="extractPropagationNodeMetadata extracts name from metadata map with n key" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
-  <testcase name="extractPropagationNodeMetadata extracts large transfer limit" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
+  <testcase name="extractPropagationNodeMetadata extracts large transfer limit" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.001"/>
   <testcase name="extractPropagationNodeMetadata ignores blank name in metadata" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
   <testcase name="extractPropagationNodeMetadata handles real world propagation node data" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>
   <testcase name="extractPropagationNodeMetadata returns nulls for empty appData" classname="network.columba.app.reticulum.util.AppDataParserTest" time="0.0"/>

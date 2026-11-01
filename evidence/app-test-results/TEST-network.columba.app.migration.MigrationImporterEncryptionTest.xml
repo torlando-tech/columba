@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.migration.MigrationImporterEncryptionTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:19:12.681Z" hostname="hermes-agent" time="10.319">
+<testsuite name="network.columba.app.migration.MigrationImporterEncryptionTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:01:14.989Z" hostname="hermes-agent" time="10.892">
   <properties/>
-  <testcase name="isEncryptedExport returns failure for unrecognized format" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="5.833"/>
-  <testcase name="previewMigration reads encrypted file with correct password" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="1.529"/>
-  <testcase name="previewMigration reads plaintext ZIP without password" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="0.054"/>
-  <testcase name="previewMigration throws WrongPasswordException for encrypted file with wrong password" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="1.236"/>
-  <testcase name="isEncryptedExport returns true for encrypted file" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="0.632"/>
-  <testcase name="previewMigration throws PasswordRequiredException for encrypted file without password" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="0.67"/>
-  <testcase name="isEncryptedExport returns false for plaintext ZIP" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="0.038"/>
-  <testcase name="isEncryptedExport returns failure for empty file" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="0.036"/>
+  <testcase name="isEncryptedExport returns failure for unrecognized format" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="6.407"/>
+  <testcase name="previewMigration reads encrypted file with correct password" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="1.468"/>
+  <testcase name="previewMigration reads plaintext ZIP without password" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="0.059"/>
+  <testcase name="previewMigration throws WrongPasswordException for encrypted file with wrong password" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="1.301"/>
+  <testcase name="isEncryptedExport returns true for encrypted file" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="0.648"/>
+  <testcase name="previewMigration throws PasswordRequiredException for encrypted file without password" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="0.656"/>
+  <testcase name="isEncryptedExport returns false for plaintext ZIP" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="0.03"/>
+  <testcase name="isEncryptedExport returns failure for empty file" classname="network.columba.app.migration.MigrationImporterEncryptionTest" time="0.029"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation

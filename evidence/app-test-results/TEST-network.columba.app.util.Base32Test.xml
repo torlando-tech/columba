@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.util.Base32Test" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:38:52.466Z" hostname="hermes-agent" time="0.14">
+<testsuite name="network.columba.app.util.Base32Test" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:08:33.991Z" hostname="hermes-agent" time="0.013">
   <properties/>
-  <testcase name="encode RFC 4648 test vectors" classname="network.columba.app.util.Base32Test" time="0.003"/>
-  <testcase name="decode RFC 4648 test vectors" classname="network.columba.app.util.Base32Test" time="0.111"/>
-  <testcase name="encode then decode is identity for various lengths" classname="network.columba.app.util.Base32Test" time="0.007"/>
+  <testcase name="encode RFC 4648 test vectors" classname="network.columba.app.util.Base32Test" time="0.001"/>
+  <testcase name="decode RFC 4648 test vectors" classname="network.columba.app.util.Base32Test" time="0.002"/>
+  <testcase name="encode then decode is identity for various lengths" classname="network.columba.app.util.Base32Test" time="0.005"/>
   <testcase name="encode 64-byte key produces expected length" classname="network.columba.app.util.Base32Test" time="0.0"/>
-  <testcase name="isIdentityKey returns true for valid 64-byte key" classname="network.columba.app.util.Base32Test" time="0.002"/>
+  <testcase name="isIdentityKey returns true for valid 64-byte key" classname="network.columba.app.util.Base32Test" time="0.0"/>
   <testcase name="isIdentityKey handles lowercase Base32" classname="network.columba.app.util.Base32Test" time="0.0"/>
   <testcase name="isIdentityKey returns false for shorter key" classname="network.columba.app.util.Base32Test" time="0.0"/>
   <testcase name="encode then decode 64-byte identity key" classname="network.columba.app.util.Base32Test" time="0.0"/>
-  <testcase name="isIdentityKey returns false for regular text" classname="network.columba.app.util.Base32Test" time="0.001"/>
+  <testcase name="isIdentityKey returns false for regular text" classname="network.columba.app.util.Base32Test" time="0.0"/>
   <testcase name="isIdentityKey returns true with leading and trailing whitespace" classname="network.columba.app.util.Base32Test" time="0.001"/>
   <testcase name="encode empty byte array returns empty string" classname="network.columba.app.util.Base32Test" time="0.0"/>
   <testcase name="decode handles lowercase input" classname="network.columba.app.util.Base32Test" time="0.0"/>
   <testcase name="isIdentityKey returns false for longer key" classname="network.columba.app.util.Base32Test" time="0.0"/>
   <testcase name="decode empty string returns empty byte array" classname="network.columba.app.util.Base32Test" time="0.0"/>
-  <testcase name="decode throws on invalid characters" classname="network.columba.app.util.Base32Test" time="0.001"/>
+  <testcase name="decode throws on invalid characters" classname="network.columba.app.util.Base32Test" time="0.003"/>
   <testcase name="decode throws on digit 0" classname="network.columba.app.util.Base32Test" time="0.0"/>
   <testcase name="decode throws on digit 1" classname="network.columba.app.util.Base32Test" time="0.0"/>
   <testcase name="isIdentityKey returns false for invalid Base32" classname="network.columba.app.util.Base32Test" time="0.0"/>

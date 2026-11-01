@@ -1,58 +1,51 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.service.TelemetryCollectorManagerTest" tests="45" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:22:11.979Z" hostname="hermes-agent" time="5.721">
+<testsuite name="network.columba.app.service.TelemetryCollectorManagerTest" tests="45" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:03:10.457Z" hostname="hermes-agent" time="2.49">
   <properties/>
-  <testcase name="setHostModeEnabled handles Python sync failure gracefully" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="4.239"/>
-  <testcase name="setCollectorAddress saves null to clear" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.055"/>
-  <testcase name="start updates enabled state from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.072"/>
-  <testcase name="setHostModeEnabled syncs with Python layer" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.066"/>
-  <testcase name="sendTelemetryToCollector should use location capture time not system time" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.028"/>
-  <testcase name="start updates last send time from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.037"/>
-  <testcase name="sendTelemetryNow returns NetworkNotReady when network errored" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.037"/>
-  <testcase name="hexToByteArray extension converts correctly" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.024"/>
-  <testcase name="initial state is not sending" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.035"/>
-  <testcase name="setEnabled saves true value" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.032"/>
-  <testcase name="setHostModeEnabled saves to repository" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.031"/>
-  <testcase name="host mode setting change triggers Python sync" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.031"/>
-  <testcase name="setSendIntervalSeconds saves 5 minute interval" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.023"/>
-  <testcase name="TelemetrySendResult Success is a data object" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.02"/>
-  <testcase name="sendTelemetryNow sends via network when collector is remote" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.2"/>
-  <testcase name="setCollectorAddress normalizes uppercase to lowercase" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.024"/>
-  <testcase name="isHostModeEnabled flow emits updates from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.026"/>
-  <testcase name="TelemetrySendResult NoCollectorConfigured is a data object" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.017"/>
-  <testcase name="sendTelemetryNow returns NoCollectorConfigured when address is null" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.019"/>
+  <testcase name="setHostModeEnabled handles Python sync failure gracefully" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="1.101"/>
+  <testcase name="setCollectorAddress saves null to clear" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.017"/>
+  <testcase name="start updates enabled state from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.018"/>
+  <testcase name="setHostModeEnabled syncs with Python layer" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.024"/>
+  <testcase name="sendTelemetryToCollector should use location capture time not system time" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.013"/>
+  <testcase name="start updates last send time from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.018"/>
+  <testcase name="sendTelemetryNow returns NetworkNotReady when network errored" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.018"/>
+  <testcase name="hexToByteArray extension converts correctly" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.012"/>
+  <testcase name="initial state is not sending" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.014"/>
+  <testcase name="setEnabled saves true value" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.019"/>
+  <testcase name="setHostModeEnabled saves to repository" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.02"/>
+  <testcase name="host mode setting change triggers Python sync" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.02"/>
+  <testcase name="setSendIntervalSeconds saves 5 minute interval" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.015"/>
+  <testcase name="TelemetrySendResult Success is a data object" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.012"/>
+  <testcase name="sendTelemetryNow sends via network when collector is remote" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.184"/>
+  <testcase name="setCollectorAddress normalizes uppercase to lowercase" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.017"/>
+  <testcase name="isHostModeEnabled flow emits updates from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.037"/>
+  <testcase name="TelemetrySendResult NoCollectorConfigured is a data object" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.014"/>
+  <testcase name="sendTelemetryNow returns NoCollectorConfigured when address is null" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.02"/>
   <testcase name="collectorAddress flow emits updates from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.022"/>
-  <testcase name="start is idempotent - calling twice does not restart observers" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.027"/>
-  <testcase name="setCollectorAddress rejects address with non-hex characters" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.035"/>
-  <testcase name="initial state has default send interval" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.019"/>
-  <testcase name="TelemetrySendResult NetworkNotReady is a data object" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.017"/>
-  <testcase name="sendIntervalSeconds flow emits updates from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.028"/>
-  <testcase name="setSendIntervalSeconds saves 1 hour interval" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.021"/>
-  <testcase name="lastSendTime flow emits updates from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.028"/>
-  <testcase name="start observes settings repository flows" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.024"/>
-  <testcase name="setSendIntervalSeconds saves valid interval" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.021"/>
-  <testcase name="initial state has null collector address" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.018"/>
-  <testcase name="TelemetrySendResult Error contains message" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.018"/>
-  <testcase name="isEnabled flow emits updates from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.024"/>
-  <testcase name="sendTelemetryNow returns NetworkNotReady when network initializing" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.02"/>
-  <testcase name="initial host mode state is disabled" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.018"/>
-  <testcase name="setEnabled saves false value" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.023"/>
-  <testcase name="sendTelemetryNow stores telemetry locally when collector is self" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.153"/>
-  <testcase name="initial state has disabled collector" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.026"/>
-  <testcase name="setCollectorAddress saves valid 32-char hex address" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.018"/>
-  <testcase name="setCollectorAddress rejects address longer than 32 chars" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.018"/>
-  <testcase name="TelemetrySendResult NoLocationAvailable is a data object" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.015"/>
-  <testcase name="initial state has null last send time" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.019"/>
-  <testcase name="host mode can be enabled and disabled independently of collector mode" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.022"/>
-  <testcase name="start updates send interval from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.021"/>
-  <testcase name="stop cancels observer job" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.016"/>
-  <testcase name="setCollectorAddress rejects address shorter than 32 chars" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.015"/>
+  <testcase name="start is idempotent - calling twice does not restart observers" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.018"/>
+  <testcase name="setCollectorAddress rejects address with non-hex characters" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.018"/>
+  <testcase name="initial state has default send interval" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.016"/>
+  <testcase name="TelemetrySendResult NetworkNotReady is a data object" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.013"/>
+  <testcase name="sendIntervalSeconds flow emits updates from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.021"/>
+  <testcase name="setSendIntervalSeconds saves 1 hour interval" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.02"/>
+  <testcase name="lastSendTime flow emits updates from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.022"/>
+  <testcase name="start observes settings repository flows" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.019"/>
+  <testcase name="setSendIntervalSeconds saves valid interval" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.02"/>
+  <testcase name="initial state has null collector address" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.016"/>
+  <testcase name="TelemetrySendResult Error contains message" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.012"/>
+  <testcase name="isEnabled flow emits updates from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.016"/>
+  <testcase name="sendTelemetryNow returns NetworkNotReady when network initializing" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.016"/>
+  <testcase name="initial host mode state is disabled" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.015"/>
+  <testcase name="setEnabled saves false value" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.018"/>
+  <testcase name="sendTelemetryNow stores telemetry locally when collector is self" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.154"/>
+  <testcase name="initial state has disabled collector" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.014"/>
+  <testcase name="setCollectorAddress saves valid 32-char hex address" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.022"/>
+  <testcase name="setCollectorAddress rejects address longer than 32 chars" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.017"/>
+  <testcase name="TelemetrySendResult NoLocationAvailable is a data object" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.02"/>
+  <testcase name="initial state has null last send time" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.042"/>
+  <testcase name="host mode can be enabled and disabled independently of collector mode" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.123"/>
+  <testcase name="start updates send interval from settings" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.082"/>
+  <testcase name="stop cancels observer job" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.076"/>
+  <testcase name="setCollectorAddress rejects address shorter than 32 chars" classname="network.columba.app.service.TelemetryCollectorManagerTest" time="0.058"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

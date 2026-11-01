@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.migration.MigrationExporterOomTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:01:09.646Z" hostname="hermes-agent" time="4.235">
+  <properties/>
+  <testcase name="export zip manifest stays bounded under a 256MB heap (COLUMBA-DS)" classname="network.columba.app.migration.MigrationExporterOomTest" time="4.235"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

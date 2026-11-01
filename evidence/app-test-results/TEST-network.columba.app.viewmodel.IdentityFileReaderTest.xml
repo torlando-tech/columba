@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.IdentityFileReaderTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:41:03.363Z" hostname="hermes-agent" time="0.089">
+<testsuite name="network.columba.app.viewmodel.IdentityFileReaderTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:10:06.434Z" hostname="hermes-agent" time="0.003">
   <properties/>
-  <testcase name="rejects a large file after reading only 65 bytes" classname="network.columba.app.viewmodel.IdentityFileReaderTest" time="0.08"/>
-  <testcase name="reports exact size for a short identity file" classname="network.columba.app.viewmodel.IdentityFileReaderTest" time="0.002"/>
+  <testcase name="rejects a large file after reading only 65 bytes" classname="network.columba.app.viewmodel.IdentityFileReaderTest" time="0.002"/>
+  <testcase name="reports exact size for a short identity file" classname="network.columba.app.viewmodel.IdentityFileReaderTest" time="0.0"/>
   <testcase name="accepts exactly 64 raw identity bytes" classname="network.columba.app.viewmodel.IdentityFileReaderTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

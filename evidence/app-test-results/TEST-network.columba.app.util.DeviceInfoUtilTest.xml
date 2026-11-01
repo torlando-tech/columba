@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.util.DeviceInfoUtilTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:39:05.115Z" hostname="hermes-agent" time="3.592">
+<testsuite name="network.columba.app.util.DeviceInfoUtilTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:08:40.434Z" hostname="hermes-agent" time="7.055">
   <properties/>
-  <testcase name="buildDate format is readable" classname="network.columba.app.util.DeviceInfoUtilTest" time="2.893"/>
-  <testcase name="getSystemInfo returns valid SystemInfo with all fields" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.038"/>
-  <testcase name="formatForBugReport truncates long identity hash" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.071"/>
-  <testcase name="formatForClipboard handles null protocol versions" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.044"/>
-  <testcase name="formatForBugReport returns Markdown format" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.032"/>
-  <testcase name="formatForClipboard returns correct format with all fields" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.028"/>
-  <testcase name="formatForClipboard with partial data has correct line count" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.028"/>
-  <testcase name="getSystemInfo handles null protocol versions" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.026"/>
-  <testcase name="formatForBugReport handles null protocol versions" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.025"/>
-  <testcase name="formatForBugReport includes all system info fields" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.024"/>
-  <testcase name="formatForBugReport omits identity when null" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.025"/>
-  <testcase name="formatForClipboard has proper line breaks" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.024"/>
-  <testcase name="formatForBugReport preserves short identity hash" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.025"/>
+  <testcase name="buildDate format is readable" classname="network.columba.app.util.DeviceInfoUtilTest" time="5.403"/>
+  <testcase name="getSystemInfo returns valid SystemInfo with all fields" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.113"/>
+  <testcase name="formatForBugReport truncates long identity hash" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.145"/>
+  <testcase name="formatForClipboard handles null protocol versions" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.088"/>
+  <testcase name="formatForBugReport returns Markdown format" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.108"/>
+  <testcase name="formatForClipboard returns correct format with all fields" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.123"/>
+  <testcase name="formatForClipboard with partial data has correct line count" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.084"/>
+  <testcase name="getSystemInfo handles null protocol versions" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.122"/>
+  <testcase name="formatForBugReport handles null protocol versions" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.088"/>
+  <testcase name="formatForBugReport includes all system info fields" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.044"/>
+  <testcase name="formatForBugReport omits identity when null" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.092"/>
+  <testcase name="formatForClipboard has proper line breaks" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.054"/>
+  <testcase name="formatForBugReport preserves short identity hash" classname="network.columba.app.util.DeviceInfoUtilTest" time="0.063"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

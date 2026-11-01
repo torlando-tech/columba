@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.util.FileUtilsTest" tests="54" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:39:18.761Z" hostname="hermes-agent" time="0.178">
+<testsuite name="network.columba.app.util.FileUtilsTest" tests="54" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:08:54.515Z" hostname="hermes-agent" time="0.052">
   <properties/>
-  <testcase name="getFileIconForMimeType returns Description icon for text files" classname="network.columba.app.util.FileUtilsTest" time="0.155"/>
-  <testcase name="formatFileSize handles rounding at KB boundary" classname="network.columba.app.util.FileUtilsTest" time="0.003"/>
-  <testcase name="getMimeTypeFromFilename handles filenames with multiple dots" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
+  <testcase name="getFileIconForMimeType returns Description icon for text files" classname="network.columba.app.util.FileUtilsTest" time="0.034"/>
+  <testcase name="formatFileSize handles rounding at KB boundary" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
+  <testcase name="getMimeTypeFromFilename handles filenames with multiple dots" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getFileIconForMimeType handles null-like and edge case MIME types" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
-  <testcase name="getFileIconForMimeType handles various text MIME types" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
+  <testcase name="getFileIconForMimeType handles various text MIME types" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="formatFileSize handles fractional KB correctly" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getMimeTypeFromFilename handles filename with only extension" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="wouldExceedSizeLimit handles typical use cases" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getFileIconForMimeType handles PDF with additional parameters" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
-  <testcase name="getFileIconForMimeType returns VideoFile icon for video files" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
+  <testcase name="getFileIconForMimeType returns VideoFile icon for video files" classname="network.columba.app.util.FileUtilsTest" time="0.002"/>
   <testcase name="formatFileSize handles fractional MB correctly" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getMimeTypeFromFilename handles mixed case extensions" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getFileIconForMimeType handles all archive variants" classname="network.columba.app.util.FileUtilsTest" time="0.002"/>
   <testcase name="wouldExceedSizeLimit returns false for zero values" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
-  <testcase name="getMimeTypeFromFilename returns correct MIME for audio files" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
+  <testcase name="getMimeTypeFromFilename returns correct MIME for audio files" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
   <testcase name="wouldExceedSizeLimit returns false when within limit" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="wouldExceedSizeLimit returns false for large file sizes" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="MAX_SINGLE_FILE_SIZE is Int MAX_VALUE" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
@@ -26,7 +26,7 @@
   <testcase name="getMimeTypeFromFilename returns correct MIME for SVG files" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getMimeTypeFromFilename returns correct MIME for video files" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getFileIconForMimeType handles archive-like MIME types" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
-  <testcase name="formatFileSize returns bytes for sizes less than 1KB" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
+  <testcase name="formatFileSize returns bytes for sizes less than 1KB" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="FILE_TRANSFER_THRESHOLD is 500KB" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="formatFileSize handles exactly 1KB boundary" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="formatFileSize handles max KB value before MB" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
@@ -35,26 +35,26 @@
   <testcase name="getMimeTypeFromFilename handles filenames with spaces" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
   <testcase name="getMimeTypeFromFilename handles filename with no extension" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getMimeTypeFromFilename handles gzip extension" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
-  <testcase name="getMimeTypeFromFilename returns correct MIME for image files" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
+  <testcase name="getMimeTypeFromFilename returns correct MIME for image files" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
   <testcase name="getMimeTypeFromFilename returns correct MIME for XML files" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="formatFileSize handles exactly 1MB boundary" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getFileIconForMimeType returns generic icon for unknown types" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
-  <testcase name="getMimeTypeFromFilename handles empty filename" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
+  <testcase name="getMimeTypeFromFilename handles empty filename" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="formatFileSize uses US locale for decimal separator" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
-  <testcase name="formatFileSize handles large MB values" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
+  <testcase name="formatFileSize handles large MB values" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
   <testcase name="getFileIconForMimeType returns FolderZip icon for archives" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getMimeTypeFromFilename handles uppercase extensions" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
-  <testcase name="getFileIconForMimeType returns AudioFile icon for audio files" classname="network.columba.app.util.FileUtilsTest" time="0.002"/>
+  <testcase name="getFileIconForMimeType returns AudioFile icon for audio files" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
   <testcase name="getFileIconForMimeType handles audio subtypes" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="formatFileSize handles very small byte values" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getMimeTypeFromFilename handles filename ending with dot" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
-  <testcase name="getFileIconForMimeType handles video subtypes" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
+  <testcase name="getFileIconForMimeType handles video subtypes" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
   <testcase name="getMimeTypeFromFilename returns correct MIME for archives" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
-  <testcase name="formatFileSize returns KB for sizes between 1KB and 1MB" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
+  <testcase name="formatFileSize returns KB for sizes between 1KB and 1MB" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getMimeTypeFromFilename returns correct MIME for common document types" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getMimeTypeFromFilename returns octet-stream for unknown extensions" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
   <testcase name="getMimeTypeFromFilename returns correct MIME for PPT files" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
-  <testcase name="formatFileSize returns MB for sizes 1MB and above" classname="network.columba.app.util.FileUtilsTest" time="0.0"/>
+  <testcase name="formatFileSize returns MB for sizes 1MB and above" classname="network.columba.app.util.FileUtilsTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

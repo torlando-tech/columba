@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.SharedImageViewModelTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:44:24.698Z" hostname="hermes-agent" time="3.646">
+<testsuite name="network.columba.app.viewmodel.SharedImageViewModelTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:12:27.665Z" hostname="hermes-agent" time="3.516">
   <properties/>
-  <testcase name="setImages_singleUri_storesUri" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="2.854"/>
-  <testcase name="assignToDestination_withNoImages_doesNothing" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.057"/>
-  <testcase name="clearIfUnassigned_noImages_doesNothing" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.039"/>
-  <testcase name="assignToDestination_setsTargetHash" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.033"/>
-  <testcase name="consumeForDestination_unassigned_returnsNull" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.03"/>
-  <testcase name="assignToDestination_canReassign" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.029"/>
-  <testcase name="clearIfUnassigned_assigned_doesNotClear" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.026"/>
-  <testcase name="consumeForDestination_noImages_returnsNull" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.028"/>
-  <testcase name="clear_removesAllState" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.027"/>
-  <testcase name="setImages_replacesExistingImages" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.023"/>
-  <testcase name="setImages_multipleUris_storesAllUris" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.056"/>
-  <testcase name="initialState_isNull" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.025"/>
-  <testcase name="clear_whenEmpty_doesNothing" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.024"/>
-  <testcase name="consumeForDestination_matchingHash_returnsUrisAndClears" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.023"/>
-  <testcase name="consumeForDestination_calledTwice_secondCallReturnsNull" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.026"/>
-  <testcase name="clearIfUnassigned_unassigned_clearsState" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.022"/>
+  <testcase name="setImages_singleUri_storesUri" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="2.724"/>
+  <testcase name="assignToDestination_withNoImages_doesNothing" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.041"/>
+  <testcase name="clearIfUnassigned_noImages_doesNothing" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.046"/>
+  <testcase name="assignToDestination_setsTargetHash" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.038"/>
+  <testcase name="consumeForDestination_unassigned_returnsNull" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.04"/>
+  <testcase name="assignToDestination_canReassign" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.039"/>
+  <testcase name="clearIfUnassigned_assigned_doesNotClear" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.031"/>
+  <testcase name="consumeForDestination_noImages_returnsNull" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.029"/>
+  <testcase name="clear_removesAllState" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.026"/>
+  <testcase name="setImages_replacesExistingImages" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.026"/>
+  <testcase name="setImages_multipleUris_storesAllUris" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.027"/>
+  <testcase name="initialState_isNull" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.026"/>
+  <testcase name="clear_whenEmpty_doesNothing" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.025"/>
+  <testcase name="consumeForDestination_matchingHash_returnsUrisAndClears" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.026"/>
+  <testcase name="consumeForDestination_calledTwice_secondCallReturnsNull" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.03"/>
+  <testcase name="clearIfUnassigned_unassigned_clearsState" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.025"/>
   <testcase name="consumeForDestination_nonMatchingHash_returnsNull" classname="network.columba.app.viewmodel.SharedImageViewModelTest" time="0.022"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

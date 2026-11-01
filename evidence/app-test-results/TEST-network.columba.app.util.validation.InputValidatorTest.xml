@@ -1,79 +1,84 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.util.validation.InputValidatorTest" tests="90" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:40:04.956Z" hostname="hermes-agent" time="0.19">
+<testsuite name="network.columba.app.util.validation.InputValidatorTest" tests="96" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:09:20Z" hostname="hermes-agent" time="0.236">
   <properties/>
-  <testcase name="sanitizeText - trims whitespace" classname="network.columba.app.util.validation.InputValidatorTest" time="0.037"/>
-  <testcase name="validateBlePacketSize - max size passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
-  <testcase name="sanitizeText - handles unicode properly" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
-  <testcase name="validateMessageContent - too long message fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
-  <testcase name="validateHostname - invalid IPv4 fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.101"/>
-  <testcase name="validatePort - invalid ports fail" classname="network.columba.app.util.validation.InputValidatorTest" time="0.002"/>
-  <testcase name="hex conversion round trip" classname="network.columba.app.util.validation.InputValidatorTest" time="0.011"/>
-  <testcase name="validateMessageContent - whitespace only fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
-  <testcase name="validateInterfaceNameUniqueness - trims whitespace before comparison" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="sanitizeText - trims whitespace" classname="network.columba.app.util.validation.InputValidatorTest" time="0.027"/>
+  <testcase name="validateBlePacketSize - max size passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.003"/>
+  <testcase name="sanitizeText - handles unicode properly" classname="network.columba.app.util.validation.InputValidatorTest" time="0.003"/>
+  <testcase name="validateMessageContent - too long message fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.003"/>
+  <testcase name="validateHostname - invalid IPv4 fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.135"/>
+  <testcase name="validatePort - invalid ports fail" classname="network.columba.app.util.validation.InputValidatorTest" time="0.004"/>
+  <testcase name="hex conversion round trip" classname="network.columba.app.util.validation.InputValidatorTest" time="0.013"/>
+  <testcase name="validateMessageContent - whitespace only fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="validateInterfaceNameUniqueness - trims whitespace before comparison" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateDeviceName - too long fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="safeHexToBytes - invalid hex fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="parseIdentityInput - malformed lxma URL fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateConfigParameter - unknown params fail" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateNickname - empty fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validatePublicKey - invalid hex fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.002"/>
-  <testcase name="validateSearchQuery - empty query is valid" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
-  <testcase name="validateDestinationHash - valid 32-char hex passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="validateSearchQuery - empty query is valid" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="validateDestinationHash - valid 32-char hex passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateBlePacketSize - small packet passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateNickname - valid nickname passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="validateHostname - trims whitespace" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
-  <testcase name="sanitizeText - normalizes multiple spaces" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
+  <testcase name="validateHostname - trims whitespace" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="sanitizeText - normalizes multiple spaces" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="sanitizeSearchQuery - truncates to max length" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateInterfaceNameUniqueness - excludeName allows editing same interface" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="sanitizeSearchQuery - removes control characters" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateNickname - max length passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateHostname - does not corrupt compressed IPv6 addresses" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateDestinationHash - contains non-hex characters fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="validateDestinationHash - uppercase hex passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="validateDestinationHash - uppercase hex passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
+  <testcase name="sanitizeSearchQuery - preserves leading space" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateHostname - invalid DNS names fail" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateInterfaceNameUniqueness - empty existing names passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
-  <testcase name="validateDeviceName - empty fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="validateHostname - valid DNS names pass" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
+  <testcase name="sanitizeSearchQuery - preserves trailing space while typing" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="validateDeviceName - empty fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
+  <testcase name="validateHostname - valid DNS names pass" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateNickname - too long fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateNickname - trims whitespace" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="validatePort - valid ports pass" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
-  <testcase name="validateIdentityString - invalid hash fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="safeHexToBytes - odd length fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="validatePort - valid ports pass" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="validateIdentityString - invalid hash fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
+  <testcase name="safeHexToBytes - odd length fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateIdentityString - valid format passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validatePublicKey - wrong length fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateHostname - strips scheme and port from URL" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="validateHostname - does not strip segments from IPv6 address" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
+  <testcase name="validateHostname - does not strip segments from IPv6 address" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validatePublicKey - valid 128-char hex passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="sanitizeSearchQuery - normalizes internal whitespace runs" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateInterfaceNameUniqueness - duplicate name fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="sanitizeText - removes control characters" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="validateInterfaceNameUniqueness - unique name passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
+  <testcase name="validateInterfaceNameUniqueness - unique name passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateInterfaceNameUniqueness - excludeName still catches other duplicates" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="parseIdentityInput - whitespace only fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="parseIdentityInput - random text fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validatePort - boundary values" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
-  <testcase name="validateIdentityString - invalid pubkey fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="validateIdentityString - invalid pubkey fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateIdentityString - missing colon fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="parseIdentityInput - trims whitespace from lxma URL" classname="network.columba.app.util.validation.InputValidatorTest" time="0.002"/>
+  <testcase name="parseIdentityInput - trims whitespace from lxma URL" classname="network.columba.app.util.validation.InputValidatorTest" time="0.004"/>
   <testcase name="parseIdentityInput - short hash fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateDestinationHash - invalid hex fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateSearchQuery - always succeeds and sanitizes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="toHexString - converts correctly" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="validateDeviceName - valid name passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
+  <testcase name="toHexString - converts correctly" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
+  <testcase name="validateDeviceName - valid name passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateDestinationHash - mixed case hex passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="parseIdentityInput - empty string fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="safeHexToBytes - valid hex succeeds" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateBlePacketSize - too large fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateHostname - strips scheme and path" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="safeHexToBytes - empty string succeeds" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="parseIdentityInput - uppercase 32-char hex returns DestinationHashOnly" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="parseIdentityInput - uppercase 32-char hex returns DestinationHashOnly" classname="network.columba.app.util.validation.InputValidatorTest" time="0.002"/>
   <testcase name="validateDestinationHash - wrong length fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateInterfaceNameUniqueness - case insensitive duplicate fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="validateHostname - empty string fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="validateHostname - empty string fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateMessageContent - max length passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateHostname - strips port from bare hostname" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateDestinationHash - trims whitespace" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="parseIdentityInput - trims whitespace from hash" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="parseIdentityInput - valid lxma URL returns FullIdentity" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
+  <testcase name="parseIdentityInput - valid lxma URL returns FullIdentity" classname="network.columba.app.util.validation.InputValidatorTest" time="0.002"/>
   <testcase name="parseIdentityInput - lxma URL with invalid hash fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="validateInterfaceName - valid name passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="validateHostname - strips scheme from IP address" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
+  <testcase name="validateInterfaceName - valid name passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
+  <testcase name="validateHostname - strips scheme from IP address" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateHostname - valid IPv4 passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateInterfaceName - empty fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateHostname - strips scheme and trailing slash" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
@@ -83,12 +88,13 @@
   <testcase name="parseIdentityInput - lxma URL with invalid public key fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="parseIdentityInput - long hash fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateInterfaceName - too long fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="validateIdentityString - missing prefix fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="sanitizeText - still trims its generic contract" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="validateIdentityString - missing prefix fails" classname="network.columba.app.util.validation.InputValidatorTest" time="0.002"/>
   <testcase name="validateHostname - strips https scheme prefix" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateMessageContent - valid message passes" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="parseIdentityInput - invalid hex characters fail" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="validateMessageContent - trims whitespace" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
-  <testcase name="validateHostname - strips http scheme prefix" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
+  <testcase name="validateHostname - strips http scheme prefix" classname="network.columba.app.util.validation.InputValidatorTest" time="0.001"/>
   <testcase name="validateSearchQuery - truncates to max length" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <testcase name="parseIdentityInput - valid 32-char hex returns DestinationHashOnly" classname="network.columba.app.util.validation.InputValidatorTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>

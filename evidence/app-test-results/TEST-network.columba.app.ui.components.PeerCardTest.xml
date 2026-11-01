@@ -1,31 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.PeerCardTest" tests="25" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:25:23.288Z" hostname="hermes-agent" time="8.599">
+<testsuite name="network.columba.app.ui.components.PeerCardTest" tests="24" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:04:11.421Z" hostname="hermes-agent" time="2.581">
   <properties/>
-  <testcase name="peerCard_displaysWiFiIcon_forAutoInterfacePeer" classname="network.columba.app.ui.components.PeerCardTest" time="5.838"/>
-  <testcase name="peerCard_starButton_showsRemoveFromContacts_whenShowFavoriteToggleFalse" classname="network.columba.app.ui.components.PeerCardTest" time="0.131"/>
-  <testcase name="peerCard_displaysAdditionalInterfaceCount" classname="network.columba.app.ui.components.PeerCardTest" time="0.169"/>
-  <testcase name="peerCard_displaysBluetoothIcon_forAndroidBle" classname="network.columba.app.ui.components.PeerCardTest" time="0.14"/>
-  <testcase name="peerCard_displaysGlobeIcon_forTcpClient" classname="network.columba.app.ui.components.PeerCardTest" time="0.134"/>
-  <testcase name="peerCard_displaysAntennaIcon_forColumbaRNodeBle" classname="network.columba.app.ui.components.PeerCardTest" time="0.135"/>
-  <testcase name="peerCard_displaysTimeSinceLastSeen" classname="network.columba.app.ui.components.PeerCardTest" time="0.106"/>
-  <testcase name="peerCard_longPress_callsOnLongPress" classname="network.columba.app.ui.components.PeerCardTest" time="0.183"/>
-  <testcase name="peerCard_displaysExcellentSignal_forLowHops" classname="network.columba.app.ui.components.PeerCardTest" time="0.085"/>
-  <testcase name="peerCard_starButton_showsRemoveFromContacts_whenFavorite" classname="network.columba.app.ui.components.PeerCardTest" time="0.089"/>
-  <testcase name="peerCard_displaysDefaultNodeBadge_forUnknownNodeType" classname="network.columba.app.ui.components.PeerCardTest" time="0.135"/>
-  <testcase name="peerCard_starButton_showsSaveToContacts_whenNotFavorite" classname="network.columba.app.ui.components.PeerCardTest" time="0.097"/>
-  <testcase name="peerCard_starButton_clickWhenFavorite_callsOnFavoriteClick" classname="network.columba.app.ui.components.PeerCardTest" time="0.095"/>
-  <testcase name="peerCard_click_callsOnClick" classname="network.columba.app.ui.components.PeerCardTest" time="0.088"/>
-  <testcase name="peerCard_doesNotDisplayInterfaceIcon_forUnknownRawName" classname="network.columba.app.ui.components.PeerCardTest" time="0.078"/>
-  <testcase name="peerCard_doesNotDisplayInterfaceIcon_forNullRawName" classname="network.columba.app.ui.components.PeerCardTest" time="0.089"/>
-  <testcase name="peerCard_starButton_clickCallsOnFavoriteClick" classname="network.columba.app.ui.components.PeerCardTest" time="0.08"/>
-  <testcase name="peerCard_displaysIcon_evenWhenCachedTypeIsStaleUnknown" classname="network.columba.app.ui.components.PeerCardTest" time="0.08"/>
-  <testcase name="peerCard_displaysGoodSignal_forMediumHops" classname="network.columba.app.ui.components.PeerCardTest" time="0.074"/>
-  <testcase name="peerCard_displaysWeakSignal_forHighHops" classname="network.columba.app.ui.components.PeerCardTest" time="0.072"/>
-  <testcase name="peerCard_displaysPeerName" classname="network.columba.app.ui.components.PeerCardTest" time="0.081"/>
-  <testcase name="peerCard_multipleStarClicks_callsOnFavoriteClickEachTime" classname="network.columba.app.ui.components.PeerCardTest" time="0.082"/>
-  <testcase name="peerCard_displaysWiFiIcon_forAutoInterface" classname="network.columba.app.ui.components.PeerCardTest" time="0.069"/>
-  <testcase name="peerCard_displaysDestinationHash" classname="network.columba.app.ui.components.PeerCardTest" time="0.068"/>
-  <testcase name="peerCard_displaysAntennaIcon_forRnode" classname="network.columba.app.ui.components.PeerCardTest" time="0.075"/>
+  <testcase name="peerCard_displaysWiFiIcon_forAutoInterfacePeer" classname="network.columba.app.ui.components.PeerCardTest" time="0.228"/>
+  <testcase name="peerCard_displaysAdditionalInterfaceCount" classname="network.columba.app.ui.components.PeerCardTest" time="0.154"/>
+  <testcase name="peerCard_displaysBluetoothIcon_forAndroidBle" classname="network.columba.app.ui.components.PeerCardTest" time="0.172"/>
+  <testcase name="peerCard_displaysGlobeIcon_forTcpClient" classname="network.columba.app.ui.components.PeerCardTest" time="0.129"/>
+  <testcase name="peerCard_displaysAntennaIcon_forColumbaRNodeBle" classname="network.columba.app.ui.components.PeerCardTest" time="0.178"/>
+  <testcase name="peerCard_displaysTimeSinceLastSeen" classname="network.columba.app.ui.components.PeerCardTest" time="0.107"/>
+  <testcase name="peerCard_longPress_callsOnLongPress" classname="network.columba.app.ui.components.PeerCardTest" time="0.13"/>
+  <testcase name="peerCard_displaysExcellentSignal_forLowHops" classname="network.columba.app.ui.components.PeerCardTest" time="0.107"/>
+  <testcase name="peerCard_starButton_showsRemoveFromContacts_whenFavorite" classname="network.columba.app.ui.components.PeerCardTest" time="0.125"/>
+  <testcase name="peerCard_displaysDefaultNodeBadge_forUnknownNodeType" classname="network.columba.app.ui.components.PeerCardTest" time="0.082"/>
+  <testcase name="peerCard_starButton_showsSaveToContacts_whenNotFavorite" classname="network.columba.app.ui.components.PeerCardTest" time="0.082"/>
+  <testcase name="peerCard_starButton_clickWhenFavorite_callsOnFavoriteClick" classname="network.columba.app.ui.components.PeerCardTest" time="0.1"/>
+  <testcase name="peerCard_click_callsOnClick" classname="network.columba.app.ui.components.PeerCardTest" time="0.085"/>
+  <testcase name="peerCard_doesNotDisplayInterfaceIcon_forUnknownRawName" classname="network.columba.app.ui.components.PeerCardTest" time="0.09"/>
+  <testcase name="peerCard_doesNotDisplayInterfaceIcon_forNullRawName" classname="network.columba.app.ui.components.PeerCardTest" time="0.096"/>
+  <testcase name="peerCard_starButton_clickCallsOnFavoriteClick" classname="network.columba.app.ui.components.PeerCardTest" time="0.092"/>
+  <testcase name="peerCard_displaysIcon_evenWhenCachedTypeIsStaleUnknown" classname="network.columba.app.ui.components.PeerCardTest" time="0.073"/>
+  <testcase name="peerCard_displaysGoodSignal_forMediumHops" classname="network.columba.app.ui.components.PeerCardTest" time="0.072"/>
+  <testcase name="peerCard_displaysWeakSignal_forHighHops" classname="network.columba.app.ui.components.PeerCardTest" time="0.075"/>
+  <testcase name="peerCard_displaysPeerName" classname="network.columba.app.ui.components.PeerCardTest" time="0.068"/>
+  <testcase name="peerCard_multipleStarClicks_callsOnFavoriteClickEachTime" classname="network.columba.app.ui.components.PeerCardTest" time="0.084"/>
+  <testcase name="peerCard_displaysWiFiIcon_forAutoInterface" classname="network.columba.app.ui.components.PeerCardTest" time="0.076"/>
+  <testcase name="peerCard_displaysDestinationHash" classname="network.columba.app.ui.components.PeerCardTest" time="0.079"/>
+  <testcase name="peerCard_displaysAntennaIcon_forRnode" classname="network.columba.app.ui.components.PeerCardTest" time="0.081"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

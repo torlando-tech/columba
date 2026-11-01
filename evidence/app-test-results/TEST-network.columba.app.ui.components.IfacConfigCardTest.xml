@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.IfacConfigCardTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:24:22.393Z" hostname="hermes-agent" time="8.117">
+<testsuite name="network.columba.app.ui.components.IfacConfigCardTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:03:55.642Z" hostname="hermes-agent" time="0.897">
   <properties/>
-  <testcase name="ifacConfigCard_rendersWhenNoErrorsProvided" classname="network.columba.app.ui.components.IfacConfigCardTest" time="6.203"/>
-  <testcase name="ifacConfigCard_surfacesNetworkNameError" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.194"/>
-  <testcase name="ifacConfigCard_routesNetworkNameEditsToCallback" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.392"/>
-  <testcase name="ifacConfigCard_eyeIconReflectsVisibilityState" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.24"/>
-  <testcase name="ifacConfigCard_surfacesPassphraseError" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.149"/>
-  <testcase name="ifacConfigCard_togglesPassphraseVisibilityViaEyeIcon" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.166"/>
-  <testcase name="ifacConfigCard_rendersCustomDescriptionWhenProvided" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.128"/>
-  <testcase name="ifacConfigCard_routesPassphraseEditsToCallback" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.221"/>
-  <testcase name="ifacConfigCard_rendersHeaderAndDefaultDescription" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.118"/>
+  <testcase name="ifacConfigCard_rendersWhenNoErrorsProvided" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.098"/>
+  <testcase name="ifacConfigCard_surfacesNetworkNameError" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.087"/>
+  <testcase name="ifacConfigCard_routesNetworkNameEditsToCallback" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.172"/>
+  <testcase name="ifacConfigCard_eyeIconReflectsVisibilityState" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.113"/>
+  <testcase name="ifacConfigCard_surfacesPassphraseError" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.095"/>
+  <testcase name="ifacConfigCard_togglesPassphraseVisibilityViaEyeIcon" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.101"/>
+  <testcase name="ifacConfigCard_rendersCustomDescriptionWhenProvided" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.064"/>
+  <testcase name="ifacConfigCard_routesPassphraseEditsToCallback" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.104"/>
+  <testcase name="ifacConfigCard_rendersHeaderAndDefaultDescription" classname="network.columba.app.ui.components.IfacConfigCardTest" time="0.058"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

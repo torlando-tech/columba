@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.SharingStatusChipTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:26:33.455Z" hostname="hermes-agent" time="6.946">
+<testsuite name="network.columba.app.ui.components.SharingStatusChipTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:04:34.418Z" hostname="hermes-agent" time="0.409">
   <properties/>
-  <testcase name="sharingStatusChip displays plural text for zero people" classname="network.columba.app.ui.components.SharingStatusChipTest" time="5.93"/>
-  <testcase name="sharingStatusChip displays plural text for multiple people" classname="network.columba.app.ui.components.SharingStatusChipTest" time="0.136"/>
-  <testcase name="sharingStatusChip stop button invokes callback" classname="network.columba.app.ui.components.SharingStatusChipTest" time="0.211"/>
-  <testcase name="sharingStatusChip displays singular text for one person" classname="network.columba.app.ui.components.SharingStatusChipTest" time="0.114"/>
-  <testcase name="sharingStatusChip displays stop button" classname="network.columba.app.ui.components.SharingStatusChipTest" time="0.121"/>
-  <testcase name="sharingStatusChip displays with large count" classname="network.columba.app.ui.components.SharingStatusChipTest" time="0.101"/>
+  <testcase name="sharingStatusChip displays plural text for zero people" classname="network.columba.app.ui.components.SharingStatusChipTest" time="0.08"/>
+  <testcase name="sharingStatusChip displays plural text for multiple people" classname="network.columba.app.ui.components.SharingStatusChipTest" time="0.063"/>
+  <testcase name="sharingStatusChip stop button invokes callback" classname="network.columba.app.ui.components.SharingStatusChipTest" time="0.068"/>
+  <testcase name="sharingStatusChip displays singular text for one person" classname="network.columba.app.ui.components.SharingStatusChipTest" time="0.062"/>
+  <testcase name="sharingStatusChip displays stop button" classname="network.columba.app.ui.components.SharingStatusChipTest" time="0.073"/>
+  <testcase name="sharingStatusChip displays with large count" classname="network.columba.app.ui.components.SharingStatusChipTest" time="0.06"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

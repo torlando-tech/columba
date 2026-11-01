@@ -1,38 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.BleConnectionsViewModelTest" tests="25" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:40:20.256Z" hostname="hermes-agent" time="6.977">
+<testsuite name="network.columba.app.viewmodel.BleConnectionsViewModelTest" tests="25" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:09:31.339Z" hostname="hermes-agent" time="2.38">
   <properties/>
-  <testcase name="Error_state_handles_exception_with_null_message" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="5.304"/>
-  <testcase name="uiState_emits_multiple_times_as_flow_emits_new_data" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.095"/>
-  <testcase name="disconnectPeer_can_be_called_on_multiple_peers" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.166"/>
-  <testcase name="Success_state_handles_single_connection" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.048"/>
-  <testcase name="initial_state_is_Loading" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.055"/>
-  <testcase name="refresh_can_be_called_multiple_times" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.307"/>
-  <testcase name="Success_state_counts_BOTH_connections_in_both_central_and_peripheral" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.045"/>
-  <testcase name="disconnectPeer_calls_repository_with_correct_address" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.038"/>
+  <testcase name="Error_state_handles_exception_with_null_message" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.65"/>
+  <testcase name="uiState_emits_multiple_times_as_flow_emits_new_data" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.141"/>
+  <testcase name="disconnectPeer_can_be_called_on_multiple_peers" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.311"/>
+  <testcase name="Success_state_handles_single_connection" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.039"/>
+  <testcase name="initial_state_is_Loading" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.062"/>
+  <testcase name="refresh_can_be_called_multiple_times" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.292"/>
+  <testcase name="Success_state_counts_BOTH_connections_in_both_central_and_peripheral" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.035"/>
+  <testcase name="disconnectPeer_calls_repository_with_correct_address" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.057"/>
   <testcase name="uiState_transitions_to_Error_when_flow_throws_exception" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.034"/>
-  <testcase name="multiple_collectors_receive_same_state_updates" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.034"/>
-  <testcase name="Success_state_handles_large_number_of_connections" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.063"/>
-  <testcase name="Success_state_handles_mixed_connection_types" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.031"/>
-  <testcase name="Error_state_preserves_error_message_from_exception" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.03"/>
-  <testcase name="ViewModel_starts_observing_connections_on_init" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.029"/>
-  <testcase name="Success_state_handles_empty_connections_list" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.028"/>
-  <testcase name="Success_state_calculates_correct_peripheral_connections_count" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.026"/>
-  <testcase name="refresh_handles_exceptions_and_updates_to_Error_state" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.033"/>
+  <testcase name="multiple_collectors_receive_same_state_updates" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.036"/>
+  <testcase name="Success_state_handles_large_number_of_connections" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.039"/>
+  <testcase name="Success_state_handles_mixed_connection_types" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.032"/>
+  <testcase name="Error_state_preserves_error_message_from_exception" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.033"/>
+  <testcase name="ViewModel_starts_observing_connections_on_init" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.033"/>
+  <testcase name="Success_state_handles_empty_connections_list" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.032"/>
+  <testcase name="Success_state_calculates_correct_peripheral_connections_count" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.032"/>
+  <testcase name="refresh_handles_exceptions_and_updates_to_Error_state" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.04"/>
   <testcase name="Success_state_calculates_correct_central_connections_count" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.031"/>
-  <testcase name="refresh_calls_repository_and_updates_state" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.037"/>
-  <testcase name="uiState_is_exposed_as_immutable_StateFlow" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.03"/>
-  <testcase name="uiState_transitions_from_Loading_to_Success_when_connections_received" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.041"/>
-  <testcase name="sorting_handles_connections_with_equal_RSSI" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.045"/>
-  <testcase name="Success_state_calculates_correct_total_connections" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.051"/>
-  <testcase name="disconnectPeer_handles_exceptions_silently" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.042"/>
-  <testcase name="connections_are_sorted_by_RSSI_in_descending_order" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.033"/>
+  <testcase name="refresh_calls_repository_and_updates_state" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.041"/>
+  <testcase name="uiState_is_exposed_as_immutable_StateFlow" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.04"/>
+  <testcase name="uiState_transitions_from_Loading_to_Success_when_connections_received" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.069"/>
+  <testcase name="sorting_handles_connections_with_equal_RSSI" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.057"/>
+  <testcase name="Success_state_calculates_correct_total_connections" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.058"/>
+  <testcase name="disconnectPeer_handles_exceptions_silently" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.072"/>
+  <testcase name="connections_are_sorted_by_RSSI_in_descending_order" classname="network.columba.app.viewmodel.BleConnectionsViewModelTest" time="0.098"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[SLF4J: No SLF4J providers were found.
 SLF4J: Defaulting to no-operation (NOP) logger implementation
 SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
-WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
 ]]></system-err>
 </testsuite>

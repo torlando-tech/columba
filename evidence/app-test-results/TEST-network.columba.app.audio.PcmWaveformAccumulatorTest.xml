@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.audio.PcmWaveformAccumulatorTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:16:59.297Z" hostname="hermes-agent" time="0.223">
+<testsuite name="network.columba.app.audio.PcmWaveformAccumulatorTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:59:56.366Z" hostname="hermes-agent" time="0.002">
   <properties/>
-  <testcase name="waveform follows decoded pcm energy" classname="network.columba.app.audio.PcmWaveformAccumulatorTest" time="0.214"/>
-  <testcase name="silent pcm has no fabricated waveform" classname="network.columba.app.audio.PcmWaveformAccumulatorTest" time="0.001"/>
+  <testcase name="waveform follows decoded pcm energy" classname="network.columba.app.audio.PcmWaveformAccumulatorTest" time="0.002"/>
+  <testcase name="silent pcm has no fabricated waveform" classname="network.columba.app.audio.PcmWaveformAccumulatorTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

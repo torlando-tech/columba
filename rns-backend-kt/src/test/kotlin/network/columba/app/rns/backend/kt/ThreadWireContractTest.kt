@@ -1,6 +1,6 @@
 package network.columba.app.rns.backend.kt
 
-import kotlinx.coroutines.flow.MutableSharedFlow
+import network.columba.app.rns.api.model.DeliveryStatusEventStream
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.rns.api.util.toHex
 import org.junit.Assert.assertArrayEquals
@@ -28,7 +28,7 @@ class ThreadWireContractTest {
             routerProvider = { null },
             deliveryIdentityProvider = { null },
             deliveryDestinationProvider = { null },
-            deliveryStatusFlow = MutableSharedFlow(),
+            deliveryStatusEvents = DeliveryStatusEventStream(),
             scopeProvider = { error("not used by buildFields") },
         )
 

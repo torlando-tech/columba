@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.reticulum.util.SmartPollerAtomicityTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-31T21:20:46.311Z" hostname="hermes-agent" time="2.083">
+<testsuite name="network.columba.app.reticulum.util.SmartPollerAtomicityTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:02:13.649Z" hostname="hermes-agent" time="1.873">
   <properties/>
-  <testcase name="markActive guarantees next getNextInterval returns minInterval" classname="network.columba.app.reticulum.util.SmartPollerAtomicityTest" time="1.425"/>
-  <testcase name="rapid state toggling produces valid intervals" classname="network.columba.app.reticulum.util.SmartPollerAtomicityTest" time="0.018"/>
-  <testcase name="concurrent idle getNextInterval produces consistent backoff" classname="network.columba.app.reticulum.util.SmartPollerAtomicityTest" time="0.005"/>
-  <testcase name="reset during concurrent access leaves consistent state" classname="network.columba.app.reticulum.util.SmartPollerAtomicityTest" time="0.624"/>
-  <testcase name="active state implies minInterval" classname="network.columba.app.reticulum.util.SmartPollerAtomicityTest" time="0.004"/>
+  <testcase name="markActive guarantees next getNextInterval returns minInterval" classname="network.columba.app.reticulum.util.SmartPollerAtomicityTest" time="1.243"/>
+  <testcase name="rapid state toggling produces valid intervals" classname="network.columba.app.reticulum.util.SmartPollerAtomicityTest" time="0.022"/>
+  <testcase name="concurrent idle getNextInterval produces consistent backoff" classname="network.columba.app.reticulum.util.SmartPollerAtomicityTest" time="0.003"/>
+  <testcase name="reset during concurrent access leaves consistent state" classname="network.columba.app.reticulum.util.SmartPollerAtomicityTest" time="0.603"/>
+  <testcase name="active state implies minInterval" classname="network.columba.app.reticulum.util.SmartPollerAtomicityTest" time="0.002"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

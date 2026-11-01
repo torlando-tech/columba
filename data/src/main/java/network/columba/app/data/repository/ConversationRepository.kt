@@ -1535,15 +1535,20 @@ class ConversationRepository
                 messageDao.deleteMessagesForThread(peerHash, identityHash, threadId)
                 draftDao.deleteDraft(peerHash, identityHash, threadId)
                 threadDao.deleteThread(threadId, identityHash, peerHash)
+                // Rebuild the summary inside the same transaction: a message
+                // arriving between the deletes and this update must never be
+                // clobbered by a stale copy (unread count / preview).
+                val conversation = conversationDao.getConversation(peerHash, identityHash)
+                if (conversation != null) {
+                    val lastMessage = messageDao.getLastMessage(peerHash, identityHash)
+                    conversationDao.updateConversation(
+                        conversation.copy(
+                            lastMessage = lastMessage?.let { TextSanitizer.sanitizePreview(it.content) } ?: "",
+                            lastMessageTimestamp = lastMessage?.receivedAt ?: lastMessage?.timestamp ?: 0L,
+                        ),
+                    )
+                }
             }
-            val conversation = conversationDao.getConversation(peerHash, identityHash) ?: return
-            val lastMessage = messageDao.getLastMessage(peerHash, identityHash)
-            conversationDao.updateConversation(
-                conversation.copy(
-                    lastMessage = lastMessage?.let { TextSanitizer.sanitizePreview(it.content) } ?: "",
-                    lastMessageTimestamp = lastMessage?.timestamp ?: 0L,
-                ),
-            )
         }
 
         /**

@@ -4,20 +4,22 @@ import android.net.Uri
 import androidx.navigation.NavController
 
 /**
- * Switches the bottom navigation bar to [tab] while preserving the state of
- * every top-level destination, including the NomadNet browser.
+ * Switches the bottom navigation bar to [tab].
  *
- * The saveState/restoreState round-trip behaves as "one stack per tab" only
- * while every saved stack is rooted at a tab route: androidx keys the saved
- * stack by the bottom-most popped entry and restores it whole when the next
- * navigation targets exactly that entry. [openNomadNetPage] upholds that
- * invariant by keeping the browser on the NomadNet tab's own stack.
+ * Every tab but NomadNet uses the standard saveState/restoreState pattern:
+ * the stack being left is saved under its root and the destination tab's
+ * saved stack is restored.
  *
- * The NomadNet browser keeps its live site session (the entry-scoped
- * [network.columba.app.viewmodel.NomadNetBrowserViewModel] and its in-memory
- * page) when the user moves to another tab and comes back: the entry is saved
- * and restored rather than popped, so the page the user left is still on
- * screen with no re-fetch.
+ * The NomadNet tab deliberately opts out of save/restore. androidx keys a
+ * saved stack by the unique id of its bottom entry and `restoreState`
+ * restores the oldest saved stack matching the navigation target, so once
+ * the tab has been saved twice a restore resurrects the *earlier* session
+ * underneath the newer one - a stale site on the tab while a different
+ * site is the live session. Instead the NomadNet stack is dropped (never
+ * saved) when the tab is left, and returning shows a fresh tab home. The
+ * session itself survives that: every page load persists its node and
+ * path, and the home reopens the last page from the page cache, so the
+ * tab still shows the site the user left.
  *
  * Re-tapping the NomadNet tab while already browsing is a no-op; the site
  * session ends via Close Site or Back, not by re-tapping the tab.
@@ -29,13 +31,15 @@ fun NavController.navigateToTab(tab: NavTab) {
             // not by re-tapping the tab.
             return
         }
+        // Leaving the NomadNet stack: drop it without saving it, per the KDoc.
+        popBackStack(AppDestination.NOMADNET_HOME.routePattern, inclusive = true)
     }
     navigate(tab.tabRoute) {
         popUpTo(graph.startDestinationId) {
             saveState = true
         }
         launchSingleTop = true
-        restoreState = true
+        restoreState = tab != NavTab.NOMADNET
     }
 }
 
@@ -49,7 +53,9 @@ fun NavController.navigateToTab(tab: NavTab) {
  * on top — never pushed onto the calling tab's stack. Entering it is a tab
  * switch: the calling tab's stack (e.g. contacts -> node detail) is saved
  * under its own root, so tapping that tab later reveals exactly where the
- * user left off, while tapping the NomadNet tab restores this live session.
+ * user left off. The NomadNet stack itself is never saved (see
+ * [navigateToTab]); the session survives through the persisted last
+ * node/path, which the tab home reopens when the tab is tapped again.
  * Closing the site pops the browser to reveal the tab home beneath it.
  *
  * One site per tab, like upstream NomadNet: opening a page replaces the
@@ -103,9 +109,10 @@ const val KEY_NOMADNET_SESSION_ENDED = "nomadnet_session_ended"
  * The home normally reopens the last-browsed node (tab restore, cold start).
  * An explicitly ended session overrides that reopen: without the mark the
  * home would immediately reload the same site and Back would look like a
- * no-op. The mark travels with the home entry through save/restore and
- * process death, so the session stays ended until the user enters a new
- * address.
+ * no-op. The mark travels with the home entry through process death while
+ * the tab stays open. Leaving the tab drops the home entry (see
+ * [navigateToTab]), so on return the persisted last node/path decide what
+ * the home reopens; Close Site clears them, keeping the session ended.
  */
 fun NavController.endNomadNetSessionAndPop() {
     previousBackStackEntry?.savedStateHandle?.set(KEY_NOMADNET_SESSION_ENDED, true)

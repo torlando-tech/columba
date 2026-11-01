@@ -18,6 +18,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import network.columba.app.MainActivity
 import network.columba.app.R
 import network.columba.app.data.model.InterfaceType
+import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -35,6 +36,7 @@ class NotificationHelper
         @ApplicationContext private val context: Context,
         private val settingsRepository: SettingsRepository,
         private val activeConversationManager: network.columba.app.service.ActiveConversationManager,
+        private val conversationRepository: ConversationRepository,
     ) {
         companion object {
             // Notification channel IDs
@@ -59,9 +61,24 @@ class NotificationHelper
             const val EXTRA_DESTINATION_HASH = "destination_hash"
             const val EXTRA_PEER_NAME = "peer_name"
 
+            /** Threads P3 (spec §6.7): lowercase-hex FIELD_THREAD bytes carried by a thread notification. */
+            const val EXTRA_THREAD_ID = "thread_id"
+
             @VisibleForTesting
             internal fun messageNotificationTag(destinationHash: String): String =
                 NOTIFICATION_TAG_MESSAGE_PREFIX + destinationHash
+
+            /**
+             * PendingIntent request code for a message notification. Threads P3: the thread id
+             * participates so a thread notification and a Main notification from the same peer
+             * get distinct PendingIntents — with [PendingIntent.FLAG_UPDATE_CURRENT] a shared
+             * code would silently re-target the older notification's tap action.
+             */
+            @VisibleForTesting
+            internal fun messagePendingIntentRequestCode(
+                destinationHash: String,
+                threadId: ByteArray?,
+            ): Int = 31 * destinationHash.hashCode() + (threadId?.contentHashCode() ?: 0)
         }
 
         private val notificationManager = NotificationManagerCompat.from(context)
@@ -140,12 +157,17 @@ class NotificationHelper
          * @param peerName The display name of the sender
          * @param messagePreview Preview text of the message
          * @param isFavorite Whether the sender is a saved peer
+         * @param threadId FIELD_THREAD bytes of the message (null = Main). With
+         *   `threads_enabled` on, a threaded message shows the thread title as
+         *   the notification subtitle and taps deep-link into the thread view
+         *   (threads-spec §6.7); flag off ignores it entirely.
          */
         suspend fun notifyMessageReceived(
             destinationHash: String,
             peerName: String,
             messagePreview: String,
             isFavorite: Boolean,
+            threadId: ByteArray? = null,
         ) {
             // Check master notification toggle
             if (!settingsRepository.notificationsEnabledFlow.first()) return
@@ -172,6 +194,11 @@ class NotificationHelper
             // the conversation, so they should still receive the notification.
             if (isAppInForeground() && activeConversationManager.activeConversation.value == destinationHash) return
 
+            // Threads P3: every thread affordance below is gated by threads_enabled;
+            // flag off leaves the notification exactly as it was pre-P3.
+            val threadsOn = settingsRepository.getThreadsEnabled()
+            val activeThreadId = if (threadsOn) threadId else null
+
             // Create intent to open the conversation
             // Use SINGLE_TOP to reuse existing activity via onNewIntent (avoids splash screen flash)
             val openIntent =
@@ -187,27 +214,21 @@ class NotificationHelper
                             .build()
                     putExtra(EXTRA_DESTINATION_HASH, destinationHash)
                     putExtra(EXTRA_PEER_NAME, peerName)
+                    activeThreadId?.let {
+                        putExtra(EXTRA_THREAD_ID, it.joinToString("") { b -> "%02x".format(b) })
+                    }
                 }
 
             val openPendingIntent =
                 PendingIntent.getActivity(
                     context,
-                    destinationHash.hashCode(),
+                    messagePendingIntentRequestCode(destinationHash, activeThreadId),
                     openIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
-            // Create notification
             val notification =
-                NotificationCompat
-                    .Builder(context, CHANNEL_ID_MESSAGES)
-                    .setSmallIcon(R.drawable.ic_notification_stat)
-                    .setContentTitle(peerName)
-                    .setContentText(messagePreview)
-                    .setPriority(NotificationCompat.PRIORITY_HIGH)
-                    .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-                    .setAutoCancel(true)
-                    .setContentIntent(openPendingIntent)
+                buildMessageNotification(destinationHash, peerName, messagePreview, openPendingIntent, threadsOn, activeThreadId)
                     .build()
 
             try {
@@ -219,6 +240,49 @@ class NotificationHelper
             } catch (e: SecurityException) {
                 // Permission was revoked
             }
+        }
+
+        /**
+         * Assemble the message notification. Threads P3 (spec §6.7 + §8 Phase 3),
+         * all gated by [threadsOn]:
+         * - thread title as subtitle (untitled threads reuse the chip bar's
+         *   untitled placeholder);
+         * - `setNumber` with the conversation's rolled-up unread total so
+         *   count-capable launchers badge the app icon with the per-thread
+         *   unread sum (dot-only launchers derive the dot from this active
+         *   notification).
+         */
+        private suspend fun buildMessageNotification(
+            destinationHash: String,
+            peerName: String,
+            messagePreview: String,
+            openPendingIntent: PendingIntent,
+            threadsOn: Boolean,
+            activeThreadId: ByteArray?,
+        ): NotificationCompat.Builder {
+            val builder =
+                NotificationCompat
+                    .Builder(context, CHANNEL_ID_MESSAGES)
+                    .setSmallIcon(R.drawable.ic_notification_stat)
+                    .setContentTitle(peerName)
+                    .setContentText(messagePreview)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                    .setAutoCancel(true)
+                    .setContentIntent(openPendingIntent)
+
+            if (activeThreadId != null) {
+                builder.setSubText(
+                    conversationRepository.getThread(destinationHash, activeThreadId)?.title
+                        ?: context.getString(R.string.thread_untitled),
+                )
+            }
+            if (threadsOn) {
+                builder.setNumber(
+                    conversationRepository.getConversation(destinationHash)?.unreadCount ?: 1,
+                )
+            }
+            return builder
         }
 
         /**

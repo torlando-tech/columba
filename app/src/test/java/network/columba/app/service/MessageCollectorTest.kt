@@ -16,10 +16,12 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -63,7 +65,7 @@ class MessageCollectorTest {
         peerIconDao = mockk()
 
         // Explicit stubs for notificationHelper (suspend function)
-        coEvery { notificationHelper.notifyMessageReceived(any(), any(), any(), any()) } returns Unit
+        coEvery { notificationHelper.notifyMessageReceived(any(), any(), any(), any(), any()) } returns Unit
 
         // Explicit stubs for peerIconDao
         coEvery { peerIconDao.getIcon(any()) } returns null
@@ -138,6 +140,7 @@ class MessageCollectorTest {
             coEvery { conversationRepository.getMessageById("persisted_message") } returns
                 mockk {
                     every { isRead } returns false
+                    every { threadId } returns null
                 }
 
             // When: Start collecting and emit message
@@ -155,6 +158,7 @@ class MessageCollectorTest {
                     peerName = any(),
                     messagePreview = any(),
                     isFavorite = any(),
+                    threadId = any(),
                 )
             }
 
@@ -204,6 +208,7 @@ class MessageCollectorTest {
                     peerName = any(),
                     messagePreview = any(),
                     isFavorite = any(),
+                    threadId = any(),
                 )
             }
 
@@ -218,6 +223,7 @@ class MessageCollectorTest {
                     peerName = any(),
                     messagePreview = any(),
                     isFavorite = any(),
+                    threadId = any(),
                 )
             }
         }
@@ -325,6 +331,7 @@ class MessageCollectorTest {
                     peerName = any(),
                     messagePreview = any(),
                     isFavorite = any(),
+                    threadId = any(),
                 )
             }
         }
@@ -366,6 +373,7 @@ class MessageCollectorTest {
                     peerName = any(),
                     messagePreview = any(),
                     isFavorite = true,
+                    threadId = any(),
                 )
             }
         }
@@ -411,6 +419,7 @@ class MessageCollectorTest {
                     peerName = any(),
                     messagePreview = any(),
                     isFavorite = true,
+                    threadId = any(),
                 )
             }
         }
@@ -447,6 +456,7 @@ class MessageCollectorTest {
                     peerName = any(),
                     messagePreview = any(),
                     isFavorite = false,
+                    threadId = any(),
                 )
             }
         }
@@ -483,6 +493,7 @@ class MessageCollectorTest {
                     peerName = "Cached Peer Name",
                     messagePreview = any(),
                     isFavorite = any(),
+                    threadId = any(),
                 )
             }
         }
@@ -517,7 +528,91 @@ class MessageCollectorTest {
                     peerName = any(),
                     messagePreview = "A".repeat(100),
                     isFavorite = any(),
+                    threadId = any(),
                 )
             }
+        }
+
+    // ========== Threads P3: FIELD_THREAD passthrough to the notification (spec §6.7) ==========
+
+    @Test
+    fun `processMessage passes FIELD_THREAD bytes to the notification for new messages`() =
+        runBlocking {
+            val threadHex = "000102030405060708090a0b0c0d0e0f"
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "threaded_new_msg",
+                    content = "In-thread reply",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = """{"8":"$threadHex"}""",
+                    publicKey = null,
+                )
+
+            runCatching { messageCollector.startCollecting() }
+            kotlinx.coroutines.delay(50)
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            val threadSlot = slot<ByteArray>()
+            coVerify(timeout = 2000) {
+                notificationHelper.notifyMessageReceived(
+                    destinationHash = testSourceHashHex,
+                    peerName = any(),
+                    messagePreview = any(),
+                    isFavorite = any(),
+                    threadId = capture(threadSlot),
+                )
+            }
+            assertArrayEquals(
+                "Parsed 0x08 bytes must reach the notification for subtitle + deep link",
+                ByteArray(16) { it.toByte() },
+                threadSlot.captured,
+            )
+        }
+
+    @Test
+    fun `processMessage passes the persisted thread id for already-persisted messages`() =
+        runBlocking {
+            val threadBytes = ByteArray(16) { (it + 64).toByte() }
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "persisted_threaded_msg",
+                    content = "Threaded but persisted",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                )
+
+            // Already persisted by the service process; the DB row carries the thread id.
+            coEvery { conversationRepository.getMessageById("persisted_threaded_msg") } returns
+                mockk {
+                    every { isRead } returns false
+                    every { threadId } returns threadBytes
+                }
+
+            runCatching { messageCollector.startCollecting() }
+            kotlinx.coroutines.delay(50)
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            val threadSlot = slot<ByteArray>()
+            coVerify(timeout = 2000) {
+                notificationHelper.notifyMessageReceived(
+                    destinationHash = testSourceHashHex,
+                    peerName = any(),
+                    messagePreview = any(),
+                    isFavorite = any(),
+                    threadId = capture(threadSlot),
+                )
+            }
+            assertArrayEquals(
+                "Persisted row's threadId must reach the notification",
+                threadBytes,
+                threadSlot.captured,
+            )
         }
 }

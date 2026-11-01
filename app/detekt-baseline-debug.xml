@@ -70,7 +70,7 @@
     <ID>ReturnCount:InterfaceManagementUtils.kt$fun InterfaceEntity.getErrorMessage( bluetoothState: Int, permissionsGranted: Boolean, isOnline: Boolean? = null, ): String?</ID>
     <ID>ReturnCount:MessageMapper.kt$private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap?</ID>
     <ID>ReturnCount:NodeTypeDetector.kt$NodeTypeDetector$fun detectNodeType( appData: ByteArray?, aspect: String? = null, ): NodeType</ID>
-    <ID>ReturnCount:NotificationHelper.kt$NotificationHelper$suspend fun notifyMessageReceived( destinationHash: String, peerName: String, messagePreview: String, isFavorite: Boolean, )</ID>
+    <ID>ReturnCount:NotificationHelper.kt$NotificationHelper$suspend fun notifyMessageReceived( destinationHash: String, peerName: String, messagePreview: String, isFavorite: Boolean, threadId: ByteArray? = null, )</ID>
     <ID>ReturnCount:RNodeConfigValidator.kt$RNodeConfigValidator$fun validateConfigSilent( name: String, frequency: String, bandwidth: String, spreadingFactor: String, codingRate: String, txPower: String, stAlock: String, ltAlock: String, region: FrequencyRegion?, ): Boolean</ID>
     <ID>ReturnCount:RNodeRegionalPreset.kt$FrequencySlotCalculator$fun calculateSlotFromFrequency(region: FrequencyRegion, bandwidth: Int, frequency: Long): Int?</ID>
     <ID>ReturnCount:RNodeWizardViewModel.kt$RNodeWizardViewModel$fun getPopularPresetsForRegion(): List&lt;RNodeRegionalPreset&gt;</ID>

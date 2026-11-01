@@ -405,7 +405,7 @@ class NomadNetBrowserViewModelTest {
                         nodeHash,
                         varPath,
                         MicronParser.parse(simplePage),
-                        fieldTokens = listOf("cat", "thread"),
+                        fieldTokens = listOf("cat=general", "thread=a-gentle-look-at-prns"),
                     ),
                 ),
             )
@@ -497,6 +497,57 @@ class NomadNetBrowserViewModelTest {
             )
             // Initial load + the link navigation; restore and Back are free.
             coVerify(exactly = 2) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `restored history keeps var pages as bare paths with separate tokens`() =
+        runTest(testDispatcher) {
+            // Regression (Greptile P1): the snapshot must store history
+            // entries the way HistoryEntry holds them - bare path, request
+            // variables in the tokens. A backtick-bearing path here makes
+            // emitPageLoaded append the field block a second time when
+            // saving the address, and makes refresh send the full persisted
+            // path to the node.
+            every { pageCache.get(any(), any()) } returns null
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } answers {
+                Result.success(NomadnetPageResult(simplePage, secondArg()))
+            }
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            Thread.sleep(100)
+            viewModel.navigateToLink("/page/forum/thread.mu", listOf("cat=general"))
+            advanceUntilIdle()
+            Thread.sleep(100)
+            viewModel.navigateToLink("/page/other.mu", emptyList())
+            advanceUntilIdle()
+            Thread.sleep(100)
+            viewModel.saveSessionSnapshot()
+
+            val restoredVm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+            restoredVm.loadPage(nodeHash, path = "/page/other.mu", fromSessionRestore = true)
+            advanceUntilIdle()
+            Thread.sleep(100)
+            assertTrue(restoredVm.goBack())
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            val state = restoredVm.browserState.value
+            assertTrue(
+                "Back must land on the var page, was $state",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+            state as NomadNetBrowserViewModel.BrowserState.PageLoaded
+            assertTrue(
+                "history path must stay bare; the field block belongs to the tokens, got ${state.path}",
+                state.path == "/page/forum/thread.mu",
+            )
+            assertTrue(
+                "the request variables must survive as tokens, got ${state.fieldTokens}",
+                state.fieldTokens == listOf("cat=general"),
+            )
+            // Initial load + var submit + link navigation; restore and Back are free.
+            coVerify(exactly = 3) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
         }
 
     @Test

@@ -422,7 +422,19 @@ class MessagingViewModel
             viewModelScope.launch {
                 try {
                     conversationRepository.deleteThread(peerHash, threadIdHex.hexToBytes())
-                    if (_selectedThread.value == threadIdHex) selectThread(null)
+                    if (_selectedThread.value == threadIdHex) {
+                        // The deleted thread must not resurrect itself: the switch to
+                        // Main flushes the composer to the thread being left, and
+                        // saveDraft would recreate its draft AND thread row. Clear the
+                        // composer state first (under the switch mutex so an in-flight
+                        // flush cannot slip between the clear and the switch).
+                        threadSwitchMutex.withLock {
+                            draftSaveJob?.cancel()
+                            lastDraftText = ""
+                            _draftText.value = null
+                        }
+                        selectThread(null)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error deleting thread", e)
                 }

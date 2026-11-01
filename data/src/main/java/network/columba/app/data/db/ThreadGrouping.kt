@@ -53,15 +53,7 @@ object ThreadGrouping {
             // First sighting of T: implicit creation. Attach the root only
             // when the 0x30 target exists, sits in Main (threadId null), and
             // belongs to this same conversation.
-            val rootId =
-                replyToMessageId?.let { candidate ->
-                    val target = messageDao.getMessageById(candidate, identityHash)
-                    if (target != null && target.threadId == null && target.conversationHash == conversationHash) {
-                        candidate
-                    } else {
-                        null
-                    }
-                }
+            val rootId = resolveRoot(messageDao, identityHash, conversationHash, replyToMessageId)
             threadDao.insertThreadIgnore(
                 ThreadEntity(
                     threadId = threadId,
@@ -74,10 +66,37 @@ object ThreadGrouping {
                     archivedAt = null,
                 ),
             )
-        } else if (activityAt > existing.lastActivityAt) {
-            // Any new message revives a dormant thread; dormancy is derived,
-            // nothing else changes (archives are local-only, never wire-set).
-            threadDao.touchThread(threadId, identityHash, conversationHash, activityAt)
+        } else {
+            // A draft-created row (saveDraft sync) has no root yet; the first
+            // send must still attach it, or the thread loses its pinned root
+            // and Main its replies hook.
+            if (existing.rootMessageId == null) {
+                val rootId = resolveRoot(messageDao, identityHash, conversationHash, replyToMessageId)
+                if (rootId != null) {
+                    threadDao.setRootMessage(threadId, identityHash, conversationHash, rootId)
+                }
+            }
+            if (activityAt > existing.lastActivityAt) {
+                // Any new message revives a dormant thread; dormancy is derived,
+                // nothing else changes (archives are local-only, never wire-set).
+                threadDao.touchThread(threadId, identityHash, conversationHash, activityAt)
+            }
         }
     }
+
+    /** The 0x30 target when it exists, sits in Main, and belongs to this conversation. */
+    private suspend fun resolveRoot(
+        messageDao: MessageDao,
+        identityHash: String,
+        conversationHash: String,
+        replyToMessageId: String?,
+    ): String? =
+        replyToMessageId?.let { candidate ->
+            val target = messageDao.getMessageById(candidate, identityHash)
+            if (target != null && target.threadId == null && target.conversationHash == conversationHash) {
+                candidate
+            } else {
+                null
+            }
+        }
 }

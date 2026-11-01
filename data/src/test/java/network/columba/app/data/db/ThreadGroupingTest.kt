@@ -219,14 +219,22 @@ class ThreadGroupingTest {
         }
 
     @Test
-    fun `root is attached only on first sighting - later replies cannot retroactively set it`() =
+    fun `root attaches to any rootless row and is never overwritten once set`() =
         runTest {
             applyIncoming(threadT, content = "started off-screen") // no reply field at creation
             insertMessage("root-late")
 
+            // A row without a root (off-screen start OR draft-created) gains
+            // its root as soon as a reply resolves it.
             applyIncoming(threadT, replyToMessageId = "root-late", activityAt = 3000)
 
-            assertNull(threadDao.getThread(identityHash, peerA, threadT)!!.rootMessageId)
+            assertEquals("root-late", threadDao.getThread(identityHash, peerA, threadT)!!.rootMessageId)
+
+            // Once set, a later reply cannot move the root.
+            insertMessage("root-later")
+            applyIncoming(threadT, replyToMessageId = "root-later", activityAt = 4000)
+
+            assertEquals("root-late", threadDao.getThread(identityHash, peerA, threadT)!!.rootMessageId)
         }
 
     // ========== dormancy sweep ==========

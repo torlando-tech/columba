@@ -127,4 +127,27 @@ interface ThreadDao {
         identityHash: String,
         conversationHash: String,
     )
+
+    /**
+     * Delete the thread row ONLY when no messages reference it — one atomic
+     * statement, so a first send completing concurrently can never leave its
+     * reply orphaned outside Main with the thread row gone.
+     */
+    @Query(
+        """
+        DELETE FROM threads
+        WHERE identityHash = :identityHash AND conversationHash = :conversationHash AND threadId = :threadId
+        AND (
+            SELECT COUNT(*) FROM messages
+            WHERE messages.threadId = :threadId
+              AND messages.conversationHash = :conversationHash
+              AND messages.identityHash = :identityHash
+        ) = 0
+        """,
+    )
+    suspend fun deleteThreadIfEmpty(
+        threadId: ByteArray,
+        identityHash: String,
+        conversationHash: String,
+    ): Int
 }

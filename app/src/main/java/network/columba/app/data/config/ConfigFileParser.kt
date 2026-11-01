@@ -237,6 +237,7 @@ object ConfigFileParser {
             enabled = true,
             targetHost = targetHost,
             targetPort = targetPort,
+            kissFraming = params["kiss_framing"]?.lowercase() in KISS_TRUE_VALUES,
             mode = params["mode"] ?: InterfaceMode.FULL.value,
         )
     }
@@ -265,4 +266,10 @@ object ConfigFileParser {
     }
 
     private const val TAG = "ConfigFileParser"
+
+    /**
+     * Truthy spellings accepted for boolean params, mirroring the value set of
+     * RNS's configobj `as_bool` (case-insensitive true/yes/on/1).
+     */
+    private val KISS_TRUE_VALUES = setOf("true", "yes", "on", "1")
 }

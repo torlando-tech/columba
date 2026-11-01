@@ -55,6 +55,8 @@ data class TcpClientWizardState(
     val bootstrapOnly: Boolean = false,
     // Interface mode (RNS config "mode" key); one of InterfaceMode.value
     val interfaceMode: String = InterfaceMode.FULL.value,
+    // KISS-over-TCP framing (software TNC / soundmodem endpoints, not Reticulum servers)
+    val kissFraming: Boolean = false,
     // SOCKS5 proxy (Tor/Orbot) settings
     val socksProxyEnabled: Boolean = false,
     val socksProxyHost: String = "127.0.0.1",
@@ -125,6 +127,7 @@ class TcpClientWizardViewModel
                             // enum. The selector falls back to the first option label
                             // when the stored value is unrecognized.
                             interfaceMode = config.mode,
+                            kissFraming = config.kissFraming,
                             socksProxyEnabled = config.socksProxyEnabled,
                             socksProxyHost = config.socksProxyHost,
                             socksProxyPort = config.socksProxyPort.toString(),
@@ -218,6 +221,9 @@ class TcpClientWizardViewModel
                     targetHost = server.host,
                     targetPort = server.port.toString(),
                     bootstrapOnly = server.isBootstrap,
+                    // Community servers are Reticulum servers; KISS framing
+                    // only ever applies to custom modem/TNC endpoints
+                    kissFraming = false,
                     // Auto-enable SOCKS proxy for .onion servers
                     socksProxyEnabled = isOnion,
                 )
@@ -236,6 +242,7 @@ class TcpClientWizardViewModel
                     targetHost = "",
                     targetPort = "",
                     bootstrapOnly = false,
+                    kissFraming = false,
                     socksProxyEnabled = false,
                     socksProxyHost = "127.0.0.1",
                     socksProxyPort = "9050",
@@ -249,6 +256,15 @@ class TcpClientWizardViewModel
          */
         fun toggleBootstrapOnly(enabled: Boolean) {
             _state.update { it.copy(bootstrapOnly = enabled) }
+        }
+
+        /**
+         * Toggle KISS framing for this connection.
+         * Enable only when the remote end is a software TNC / soundmodem speaking
+         * KISS-over-TCP; must stay off for Reticulum TCPServerInterface/Backbone.
+         */
+        fun toggleKissFraming(enabled: Boolean) {
+            _state.update { it.copy(kissFraming = enabled) }
         }
 
         /**
@@ -409,7 +425,7 @@ class TcpClientWizardViewModel
                             enabled = true,
                             targetHost = currentState.targetHost.trim(),
                             targetPort = currentState.targetPort.toIntOrNull() ?: 4242,
-                            kissFraming = false,
+                            kissFraming = currentState.kissFraming,
                             mode = currentState.interfaceMode,
                             networkName = currentState.networkName.trim().ifEmpty { null },
                             passphrase = currentState.passphrase.trim().ifEmpty { null },

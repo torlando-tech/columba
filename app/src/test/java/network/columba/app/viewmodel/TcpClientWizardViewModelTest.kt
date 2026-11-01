@@ -215,6 +215,28 @@ class TcpClientWizardViewModelTest {
         }
 
     @Test
+    fun `selectServer clears kissFraming flag`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                // Enable KISS framing via the custom modem path
+                viewModel.enableCustomMode()
+                advanceUntilIdle()
+                awaitItem() // Custom mode state
+                viewModel.toggleKissFraming(true)
+                advanceUntilIdle()
+                assertTrue(awaitItem().kissFraming)
+
+                // Choosing a community (Reticulum) server must not keep it
+                viewModel.selectServer(testServer)
+                advanceUntilIdle()
+
+                assertFalse(awaitItem().kissFraming)
+            }
+        }
+
+    @Test
     fun `multiple selectServer calls update state correctly`() =
         runTest {
             viewModel.state.test {
@@ -1066,6 +1088,106 @@ class TcpClientWizardViewModelTest {
 
             val savedConfig = configSlot.captured as InterfaceConfig.TCPClient
             assertTrue(savedConfig.bootstrapOnly)
+        }
+
+    @Test
+    fun `toggleKissFraming enables kiss framing`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.toggleKissFraming(true)
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertTrue(state.kissFraming)
+            }
+        }
+
+    @Test
+    fun `toggleKissFraming disables kiss framing`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.toggleKissFraming(true)
+                advanceUntilIdle()
+                awaitItem() // Enabled state
+
+                viewModel.toggleKissFraming(false)
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertFalse(state.kissFraming)
+            }
+        }
+
+    @Test
+    fun `saveConfiguration includes kissFraming flag`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            viewModel.selectServer(testServer)
+            viewModel.toggleKissFraming(true)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.TCPClient
+            assertTrue(savedConfig.kissFraming)
+        }
+
+    @Test
+    fun `enableCustomMode resets kissFraming`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.toggleKissFraming(true)
+                advanceUntilIdle()
+                awaitItem() // Enabled state
+
+                viewModel.enableCustomMode()
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertFalse(state.kissFraming)
+            }
+        }
+
+    @Test
+    fun `loadExistingInterface populates kissFraming from existing config`() =
+        runTest {
+            val existingEntity =
+                InterfaceEntity(
+                    id = 42L,
+                    name = "KISS Server",
+                    type = "TCPClient",
+                    enabled = true,
+                    configJson = """{"targetHost":"tnc.local","targetPort":8001,"kissFraming":true}""",
+                )
+            coEvery { interfaceRepository.getInterfaceByIdOnce(42L) } returns existingEntity
+            every { interfaceRepository.entityToConfig(existingEntity) } returns
+                InterfaceConfig.TCPClient(
+                    name = "KISS Server",
+                    enabled = true,
+                    targetHost = "tnc.local",
+                    targetPort = 8001,
+                    kissFraming = true,
+                    mode = "full",
+                )
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.loadExistingInterface(42L)
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertTrue(state.kissFraming)
+            }
         }
 
     // ========== Load Existing Interface Tests (Edit Mode) ==========

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.data.config.ConfigFileParserTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-01T02:22:59.251Z" hostname="hermes-agent" time="3.544">
+  <properties/>
+  <testcase name="emitted KISS interface block round-trips through parser" classname="network.columba.app.data.config.ConfigFileParserTest" time="3.035"/>
+  <testcase name="kiss_framing True from upstream docs parses to kissFraming true" classname="network.columba.app.data.config.ConfigFileParserTest" time="0.048"/>
+  <testcase name="kiss_framing false parses to kissFraming false" classname="network.columba.app.data.config.ConfigFileParserTest" time="0.04"/>
+  <testcase name="absent kiss_framing defaults to false" classname="network.columba.app.data.config.ConfigFileParserTest" time="0.04"/>
+  <testcase name="kiss_framing yes parses to kissFraming true" classname="network.columba.app.data.config.ConfigFileParserTest" time="0.035"/>
+  <testcase name="kiss_framing true from app emitter parses to kissFraming true" classname="network.columba.app.data.config.ConfigFileParserTest" time="0.032"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

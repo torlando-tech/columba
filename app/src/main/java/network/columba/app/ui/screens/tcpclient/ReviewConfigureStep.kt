@@ -268,5 +268,44 @@ fun ReviewConfigureStep(viewModel: TcpClientWizardViewModel) {
                 }
             }
         }
+
+        Spacer(Modifier.height(16.dp))
+
+        // KISS-over-TCP framing toggle (software TNC / soundmodem endpoints)
+        Card(
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "KISS Framing (TNC / Modem)",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        "Use only when connecting to a software TNC or soundmodem that " +
+                            "exposes KISS-over-TCP. Do NOT enable for Reticulum " +
+                            "TCPServerInterface or Backbone connections — it disables " +
+                            "the internal reliability and recovery mechanisms.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
+                Switch(
+                    checked = state.kissFraming,
+                    onCheckedChange = { viewModel.toggleKissFraming(it) },
+                )
+            }
+        }
     }
 }

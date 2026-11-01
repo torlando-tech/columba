@@ -84,9 +84,11 @@ import network.columba.app.navigation.callDetailsDestination
 import network.columba.app.navigation.callDetailsRoute
 import network.columba.app.navigation.AppDestination
 import network.columba.app.navigation.ConversationNavigation
+import network.columba.app.navigation.KEY_NOMADNET_SESSION_ENDED
 import network.columba.app.navigation.appComposable
 import network.columba.app.navigation.completeCurrentFlow
 import network.columba.app.navigation.navigateToAnsweredCall
+import network.columba.app.navigation.endNomadNetSessionAndPop
 import network.columba.app.navigation.navigateToEntity
 import network.columba.app.navigation.navigateToIncomingCall
 import network.columba.app.navigation.navigateToTab
@@ -2404,13 +2406,20 @@ fun ColumbaNavigation(
                             ) { backStackEntry ->
                                 val destHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
                                 val path = backStackEntry.arguments?.getString("path") ?: "/page/index.mu"
+                                // System Back ends the site session exactly like the
+                                // toolbar Back: mark the home ended before popping so
+                                // it shows the address prompt instead of reloading the
+                                // site Back just left. The screen's own BackHandler
+                                // (URL editing, in-site page history) is composed
+                                // later and keeps priority while either is active.
+                                BackHandler { navController.endNomadNetSessionAndPop() }
                                 NomadNetBrowserScreen(
                                     destinationHash = destHash,
                                     initialPath = path,
-                                    onBackClick = { navController.popBackStack() },
-                                    // Standalone browser: after closing the site,
-                                    // pop back the way Back does.
-                                    onCloseSite = { navController.popBackStack() },
+                                    onBackClick = { navController.endNomadNetSessionAndPop() },
+                                    // Standalone browser: closing the site ends the
+                                    // session the same way Back does.
+                                    onCloseSite = { navController.endNomadNetSessionAndPop() },
                                     onOpenConversation = { conversationHash ->
                                         val encodedHash = Uri.encode(conversationHash)
                                         val encodedName = Uri.encode(conversationHash.take(12))
@@ -2420,10 +2429,18 @@ fun ColumbaNavigation(
                             }
 
                             // NomadNet tab home: reopens the last-browsed node,
-                            // or shows the address-entry prompt on a fresh install.
-                            appComposable(AppDestination.NOMADNET_HOME) {
+                            // or shows the address-entry prompt on a fresh install
+                            // or after the session was ended with Back/Close Site
+                            // (endNomadNetSessionAndPop marks this entry), so Back
+                            // truly ends the session instead of reloading the site
+                            // it just left.
+                            appComposable(AppDestination.NOMADNET_HOME) { backStackEntry ->
                                 DoubleBackToExitHandler(AppDestination.NOMADNET_HOME.routePattern)
                                 val lastNodeHash = settingsState.nomadNetLastNodeHash
+                                val sessionEnded by
+                                    backStackEntry.savedStateHandle
+                                        .getStateFlow(KEY_NOMADNET_SESSION_ENDED, false)
+                                        .collectAsState()
                                 // Reopen the exact page the user left on: the deep
                                 // path (a forum thread, etc.) restored from the
                                 // @Singleton page cache, falling back to the node's
@@ -2435,7 +2452,7 @@ fun ColumbaNavigation(
                                 NomadNetBrowserScreen(
                                     destinationHash = lastNodeHash.orEmpty(),
                                     initialPath = lastViewPath,
-                                    showHomeEntry = lastNodeHash.isNullOrEmpty(),
+                                    showHomeEntry = lastNodeHash.isNullOrEmpty() || sessionEnded,
                                     onBackClick = { navController.popBackStack() },
                                     // Close Site on the tab home: closeSite() drops the
                                     // persisted last-node hash, the state flow flips

@@ -5,7 +5,11 @@ import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.material3.Text
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -34,7 +38,10 @@ import org.robolectric.annotation.Config
  * Contacts tab. Tapping Contacts then reveals the node detail page the site
  * was opened from; tapping NomadNet returns to the live browser session; and
  * closing the site pops to the NomadNet tab home, not into another tab's
- * screens.
+ * screens. Ending the session (Back or Close Site) marks the home entry, so
+ * the revealed home shows the address-entry prompt instead of auto-reloading
+ * the site that was just ended - and the ended state survives a tab
+ * round-trip.
  *
  * A plain [ViewModel] with a mutable field stands in for the entry-scoped
  * [network.columba.app.viewmodel.NomadNetBrowserViewModel] (same
@@ -78,7 +85,16 @@ class NomadNetBrowserTabOwnershipTest {
                     AppDestination.ANNOUNCE_DETAIL,
                     arguments = listOf(navArgument("destinationHash") { type = NavType.StringType }),
                 ) { }
-                appComposable(AppDestination.NOMADNET_HOME) { }
+                appComposable(AppDestination.NOMADNET_HOME) { entry ->
+                    // Mirrors the production home: reopens the last-browsed
+                    // site unless the session was explicitly ended.
+                    val sessionEnded =
+                        entry.savedStateHandle
+                            .getStateFlow(KEY_NOMADNET_SESSION_ENDED, false)
+                            .collectAsState()
+                            .value
+                    Text(if (sessionEnded) ADDRESS_PROMPT else LAST_SITE)
+                }
                 appComposable(
                     AppDestination.NOMADNET_BROWSER,
                     arguments =
@@ -153,15 +169,35 @@ class NomadNetBrowserTabOwnershipTest {
     }
 
     @Test
-    fun `closing the site pops to the nomadnet home, not into the contacts flow`() {
+    fun `closing the site pops to the nomadnet home showing the address prompt`() {
         openSiteFromContacts(NODE_A)
 
-        // onCloseSite for the browser entry is popBackStack().
-        runOnMainThread { navController.popBackStack() }
+        // onCloseSite for the browser entry is endNomadNetSessionAndPop().
+        runOnMainThread { navController.endNomadNetSessionAndPop() }
         idleMainLooper()
         composeRule.waitForIdle()
 
         assertEquals(AppDestination.NOMADNET_HOME.routePattern, navController.currentDestination?.route)
+        composeRule.onNodeWithText(ADDRESS_PROMPT).assertIsDisplayed()
+        composeRule.onNodeWithText(LAST_SITE).assertDoesNotExist()
+    }
+
+    @Test
+    fun `an ended session stays ended across a tab round-trip`() {
+        openSiteFromContacts(NODE_A)
+        runOnMainThread { navController.endNomadNetSessionAndPop() }
+        idleMainLooper()
+
+        runOnMainThread { navController.navigateToTab(NavTab.CONTACTS) }
+        idleMainLooper()
+        runOnMainThread { navController.navigateToTab(NavTab.NOMADNET) }
+        idleMainLooper()
+        composeRule.waitForIdle()
+
+        assertEquals(AppDestination.NOMADNET_HOME.routePattern, navController.currentDestination?.route)
+        composeRule
+            .onNodeWithText(ADDRESS_PROMPT)
+            .assertIsDisplayed()
     }
 
     @Test
@@ -224,5 +260,7 @@ class NomadNetBrowserTabOwnershipTest {
         const val NODE_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         const val NODE_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         const val INDEX_PATH = "/page/index.mu"
+        const val ADDRESS_PROMPT = "address-entry-prompt"
+        const val LAST_SITE = "last-browsed-site"
     }
 }

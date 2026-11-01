@@ -36,12 +36,13 @@ import org.robolectric.annotation.Config
  * `nomadnetwork://` deep link) must switch into the NomadNet tab with the
  * page loaded, leaving the Contacts flow (node detail on top) saved under the
  * Contacts tab. Tapping Contacts then reveals the node detail page the site
- * was opened from; tapping NomadNet returns to the live browser session; and
+ * was opened from; tapping NomadNet returns to the tab home, which reopens
+ * the session's page from persisted state (the NomadNet stack is never
+ * saved, so a stale session can never resurface under a newer one); and
  * closing the site pops to the NomadNet tab home, not into another tab's
  * screens. Ending the session (Back or Close Site) marks the home entry, so
  * the revealed home shows the address-entry prompt instead of auto-reloading
- * the site that was just ended - and the ended state survives a tab
- * round-trip.
+ * the site that was just ended.
  *
  * A plain [ViewModel] with a mutable field stands in for the entry-scoped
  * [network.columba.app.viewmodel.NomadNetBrowserViewModel] (same
@@ -148,10 +149,8 @@ class NomadNetBrowserTabOwnershipTest {
     }
 
     @Test
-    fun `tapping NomadNet returns to the live browser session`() {
+    fun `tapping NomadNet shows the tab home which reopens the session`() {
         openSiteFromContacts(NODE_A)
-        val vmBefore = currentBrowserVm
-        vmBefore.page = "site-A-index"
 
         runOnMainThread { navController.navigateToTab(NavTab.CONTACTS) }
         idleMainLooper()
@@ -159,13 +158,17 @@ class NomadNetBrowserTabOwnershipTest {
         idleMainLooper()
         composeRule.waitForIdle()
 
-        assertEquals(AppDestination.NOMADNET_BROWSER.routePattern, navController.currentDestination?.route)
-        assertSame(
-            "the NomadNet tab must restore the live session, not build a fresh home",
-            vmBefore,
-            currentBrowserVm,
+        assertEquals(
+            "the tab must land on its home, which reopens the session's page from persisted state",
+            AppDestination.NOMADNET_HOME.routePattern,
+            navController.currentDestination?.route,
         )
-        assertEquals("site-A-index", currentBrowserVm.page)
+        assertEquals(
+            "no browser entry may be restored underneath the home",
+            0,
+            backStackRoutes().count { it == AppDestination.NOMADNET_BROWSER.routePattern },
+        )
+        composeRule.onNodeWithText(LAST_SITE).assertIsDisplayed()
     }
 
     @Test
@@ -183,21 +186,25 @@ class NomadNetBrowserTabOwnershipTest {
     }
 
     @Test
-    fun `an ended session stays ended across a tab round-trip`() {
+    fun `a stale session never resurfaces under a newer one`() {
         openSiteFromContacts(NODE_A)
-        runOnMainThread { navController.endNomadNetSessionAndPop() }
+        runOnMainThread { navController.navigateToTab(NavTab.CHATS) }
         idleMainLooper()
+        openSiteFromContacts(NODE_B)
+        assertEquals(NODE_B, navController.currentBackStackEntry?.arguments?.getString("destinationHash"))
 
-        runOnMainThread { navController.navigateToTab(NavTab.CONTACTS) }
+        runOnMainThread { navController.navigateToTab(NavTab.CHATS) }
         idleMainLooper()
         runOnMainThread { navController.navigateToTab(NavTab.NOMADNET) }
         idleMainLooper()
         composeRule.waitForIdle()
 
         assertEquals(AppDestination.NOMADNET_HOME.routePattern, navController.currentDestination?.route)
-        composeRule
-            .onNodeWithText(ADDRESS_PROMPT)
-            .assertIsDisplayed()
+        assertEquals(
+            "the tab must show the current session (node B), never the earlier node A session",
+            0,
+            backStackRoutes().count { it == AppDestination.NOMADNET_BROWSER.routePattern },
+        )
     }
 
     @Test

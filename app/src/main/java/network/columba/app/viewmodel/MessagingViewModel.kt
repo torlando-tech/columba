@@ -292,7 +292,9 @@ class MessagingViewModel
                     val thread =
                         rows.firstOrNull { it.threadId.toHex() == selected }
                             ?: conversationRepository.getThread(peerHash, bytes)
-                    val firstMessage = conversationRepository.messagesForThread(peerHash, bytes).first().firstOrNull()
+                    // LIMIT 1 read: the header shows only the oldest reply; a
+                    // full-history Flow would grow with the thread.
+                    val firstMessage = conversationRepository.firstMessageInThread(peerHash, bytes)
                     val rootMessage = thread?.rootMessageId?.let { conversationRepository.getMessageById(it) }
                     _threadView.value =
                         ThreadViewUi(
@@ -1793,6 +1795,16 @@ class MessagingViewModel
                     val voiceState = voiceMessageRecorder.state.value
                     val voiceRecording = voiceState.selectedRecording
                     val voiceMode = voiceState.selectedFormat?.wireMode
+                    // Threads P2: capture the send target NOW, before the first
+                    // suspension point (the voice-file read below). A chip tap
+                    // during that IO must not re-route this send to the newly
+                    // selected thread. The composer sends to the selected thread
+                    // (null = Main). The first message of a case-2 thread carries
+                    // the thread root as `0x30` structurally (threads-spec §4.2),
+                    // taking precedence over any pending reply chip.
+                    val threadIdBytes = _selectedThread.value.hexToBytesOrNull()
+                    val pendingThreadRoot = _pendingThreadRoot.value.takeIf { threadIdBytes != null }
+                    val replyToId = pendingThreadRoot ?: _pendingReplyTo.value?.messageId
                     val voiceBytes =
                         voiceRecording?.let {
                             withContext(Dispatchers.IO) { it.file.readBytes() }
@@ -1823,14 +1835,6 @@ class MessagingViewModel
                     }
 
                     val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes) ?: return@launch
-                    // Threads P2: the composer sends to the selected thread
-                    // (null = Main). The first message of a case-2 thread
-                    // carries the thread root as `0x30` structurally
-                    // (threads-spec §4.2), taking precedence over any
-                    // pending reply chip.
-                    val threadIdBytes = _selectedThread.value.hexToBytesOrNull()
-                    val pendingThreadRoot = _pendingThreadRoot.value.takeIf { threadIdBytes != null }
-                    val replyToId = pendingThreadRoot ?: _pendingReplyTo.value?.messageId
 
                     executeLxmfSend(
                         destinationHash = destinationHash,
@@ -2182,6 +2186,12 @@ class MessagingViewModel
                     errorMessage = friendlyOutboundError(error.message),
                     receivedAt = now,
                     threadId = threadId,
+                    // Persist the reply target too: a failed first message of a
+                    // case-2 thread must re-drive WITH its 0x30 root (reDrive
+                    // reads this field; the fieldsJson copy alone is not read
+                    // back on retry), or the thread loses its pinned root and
+                    // Main its replies hook.
+                    replyToMessageId = replyToMessageId,
                 )
             val persisted = saveMessageToDatabase(destinationHash, currentPeerName, message)
             val hasRetryableVoicePayload =

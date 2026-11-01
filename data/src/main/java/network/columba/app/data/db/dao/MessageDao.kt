@@ -518,20 +518,6 @@ interface MessageDao {
         identityHash: String,
     ): Flow<List<ThreadMessageCount>>
 
-    /** Total messages in one thread (draft-sync guard for message-less rows). */
-    @Query(
-        """
-        SELECT COUNT(*) FROM messages
-        WHERE conversationHash = :peerHash AND identityHash = :identityHash
-        AND threadId = :threadId
-        """,
-    )
-    suspend fun countMessagesInThread(
-        peerHash: String,
-        identityHash: String,
-        threadId: ByteArray,
-    ): Int
-
     /**
      * Newest message per thread (title preview row in the thread sheet /
      * expanding chat card). SQLite's bare-column-with-MAX special case makes

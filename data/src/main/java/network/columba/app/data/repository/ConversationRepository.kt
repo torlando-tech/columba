@@ -895,12 +895,11 @@ class ConversationRepository
                             archivedAt = null,
                         ),
                     )
-                } else if (
-                    content.isBlank() &&
-                    existing != null &&
-                    messageDao.countMessagesInThread(peerHash, activeIdentity.identityHash, threadId) == 0
-                ) {
-                    threadDao.deleteThread(threadId, activeIdentity.identityHash, peerHash)
+                } else if (content.isBlank() && existing != null) {
+                    // Atomic delete-if-empty: a first send completing right now
+                    // has already inserted its message, so the row survives and
+                    // the reply can never be orphaned outside Main.
+                    threadDao.deleteThreadIfEmpty(threadId, activeIdentity.identityHash, peerHash)
                 }
             }
         }

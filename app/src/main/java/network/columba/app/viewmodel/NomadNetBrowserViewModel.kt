@@ -1091,9 +1091,14 @@ class NomadNetBrowserViewModel
                         ),
                     history =
                         history.map { entry ->
+                            // Bare path + separate tokens, mirroring
+                            // HistoryEntry: goBack and refresh rebuild the
+                            // request data from the tokens. Persisting the
+                            // backtick block here would make emitPageLoaded
+                            // append the fields a second time.
                             NomadNetPageCache.SessionPage(
                                 nodeHash = entry.nodeHash,
-                                path = buildNomadNetPersistPath(entry.path, entry.fieldTokens),
+                                path = entry.path,
                                 document = entry.document,
                                 fieldTokens = entry.fieldTokens,
                                 formFields = entry.formFields,

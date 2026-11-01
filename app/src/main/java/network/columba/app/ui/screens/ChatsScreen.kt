@@ -840,7 +840,7 @@ fun ConversationCard(
                         onClick = { onThreadRowClick(row.threadIdHex) },
                     )
                 }
-                if (bundle.sheet.totalThreadCount > 2) {
+                if (bundle.sheet.totalThreadCount > bundle.nonArchived.take(2).size) {
                     TextButton(
                         onClick = onViewAllThreads,
                         modifier = Modifier.padding(horizontal = 8.dp),

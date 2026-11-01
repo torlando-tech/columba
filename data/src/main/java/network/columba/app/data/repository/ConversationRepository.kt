@@ -5,11 +5,13 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.map
 import androidx.room.Transaction
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.ThreadGrouping
 import network.columba.app.data.db.dao.ConversationDao
 import network.columba.app.data.db.dao.DraftDao
@@ -111,6 +113,7 @@ class ConversationRepository
         private val attachmentStorage: AttachmentStorageManager,
         private val draftDao: DraftDao,
         private val threadDao: ThreadDao,
+        private val database: ColumbaDatabase,
     ) {
         /**
          * Get all conversations for the active identity, sorted by most recent activity.
@@ -1515,17 +1518,32 @@ class ConversationRepository
          * Delete a thread locally (thread sheet long-press, with confirm):
          * thread row + its messages + its draft. Main rows and the wire
          * history are untouched — this emits no wire traffic (threads-spec
-         * §6.3 "local only").
+         * §6.3 "local only"). The deletes run in a real Room transaction
+         * (this class is not an @Dao, so a @Transaction annotation would be
+         * inert) so an incoming message cannot slip between the message
+         * delete and the thread-row delete and end up orphaned outside
+         * Main. The conversation preview is rebuilt from the remaining
+         * messages so a deleted thread's last message cannot linger in the
+         * chat list (same pattern as deleteMessage).
          */
-        @Transaction
         suspend fun deleteThread(
             peerHash: String,
             threadId: ByteArray,
         ) {
             val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
-            messageDao.deleteMessagesForThread(peerHash, identityHash, threadId)
-            draftDao.deleteDraft(peerHash, identityHash, threadId)
-            threadDao.deleteThread(threadId, identityHash, peerHash)
+            database.withTransaction {
+                messageDao.deleteMessagesForThread(peerHash, identityHash, threadId)
+                draftDao.deleteDraft(peerHash, identityHash, threadId)
+                threadDao.deleteThread(threadId, identityHash, peerHash)
+            }
+            val conversation = conversationDao.getConversation(peerHash, identityHash) ?: return
+            val lastMessage = messageDao.getLastMessage(peerHash, identityHash)
+            conversationDao.updateConversation(
+                conversation.copy(
+                    lastMessage = lastMessage?.let { TextSanitizer.sanitizePreview(it.content) } ?: "",
+                    lastMessageTimestamp = lastMessage?.timestamp ?: 0L,
+                ),
+            )
         }
 
         /**
@@ -1618,6 +1636,7 @@ fun MessageEntity.toDomainMessage(): Message =
         receivedSnr = receivedSnr,
         receivedAt = receivedAt,
         sentInterface = sentInterface,
+        signatureVerified = signatureVerified,
         reactionsJson = reactionsJson,
         threadId = threadId,
     )

@@ -68,6 +68,8 @@ class ConversationCreationFlowTest {
                 localIdentityDao = database.localIdentityDao(),
                 attachmentStorage = AttachmentStorageManager(context),
                 draftDao = database.draftDao(),
+                threadDao = database.threadDao(),
+                database = database,
             )
     }
 

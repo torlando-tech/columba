@@ -90,6 +90,7 @@ import network.columba.app.navigation.navigateToAnsweredCall
 import network.columba.app.navigation.navigateToEntity
 import network.columba.app.navigation.navigateToIncomingCall
 import network.columba.app.navigation.navigateToTab
+import network.columba.app.navigation.openNomadNetPage
 import network.columba.app.navigation.shouldPresentIncomingCall
 import network.columba.app.navigation.NavTab
 import network.columba.app.notifications.CallNotificationHelper
@@ -1014,16 +1015,7 @@ fun ColumbaNavigation(
                         Log.d("ColumbaNavigation", "Navigated to flasher (direct): ${navigation.usbDeviceId}")
                     }
                     is PendingNavigation.NomadNetBrowser -> {
-                        val encoded = Uri.encode(navigation.path)
-                        navController.navigateToEntity(
-                            destination = AppDestination.NOMADNET_BROWSER,
-                            route = "nomadnet_browser/${navigation.nodeHash}?path=$encoded",
-                            identityArguments =
-                                mapOf(
-                                    "destinationHash" to navigation.nodeHash,
-                                    "path" to navigation.path,
-                                ),
-                        )
+                        navController.openNomadNetPage(navigation.nodeHash, navigation.path)
                         Log.d("ColumbaNavigation", "Navigated to NomadNet browser: ${navigation.nodeHash}")
                     }
                 }
@@ -1113,6 +1105,14 @@ fun ColumbaNavigation(
     // Track current navigation state
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    // Tab highlight follows the owning tab of the topmost back-stack entry:
+    // tab-less detail screens (e.g. announce_detail) keep the tab they were
+    // opened from highlighted, and the browser entry - which always lives on
+    // the NomadNet tab's stack via openNomadNetPage - lights the NomadNet tab
+    // no matter which flow opened the site.
+    val backStackEntries by navController.currentBackStack.collectAsState()
+    val selectedTab = NavTab.selectedFor(backStackEntries?.map { entry -> entry.destination.route })
 
     // Observe call state for incoming calls and navigate to IncomingCallScreen.
     // Composable functions can't @Inject, so the RnsTelephony seam singleton is
@@ -1322,7 +1322,7 @@ fun ColumbaNavigation(
                                 NavigationBarItem(
                                     icon = { Icon(tab.icon, contentDescription = null) },
                                     label = { Text(tab.label) },
-                                    selected = tab.matchesRoute(currentRoute),
+                                    selected = selectedTab == tab,
                                     onClick = {
                                         navController.navigateToTab(tab)
                                     },
@@ -2382,15 +2382,10 @@ fun ColumbaNavigation(
                                         navController.navigate("messaging/$encodedHash/$encodedName")
                                     },
                                     onBrowseNode = { destHash ->
-                                        navController.navigateToEntity(
-                                            destination = AppDestination.NOMADNET_BROWSER,
-                                            route = "nomadnet_browser/$destHash",
-                                            identityArguments =
-                                                mapOf(
-                                                    "destinationHash" to destHash,
-                                                    "path" to "/page/index.mu",
-                                                ),
-                                        )
+                                        // Open as the NomadNet tab's session: the
+                                        // Contacts flow stays saved under its own
+                                        // tab, and Back/Close lands on the tab home.
+                                        navController.openNomadNetPage(destHash, "/page/index.mu")
                                     },
                                 )
                             }

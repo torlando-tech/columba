@@ -93,4 +93,33 @@ class NavTabTest {
             )
         }
     }
+
+    @Test
+    fun `selectedFor highlights the tab of the current route itself`() {
+        assertEquals(NavTab.CHATS, NavTab.selectedFor(listOf("chats")))
+        assertEquals(NavTab.NOMADNET, NavTab.selectedFor(listOf("chats", "nomadnet_home")))
+        assertEquals(
+            NavTab.NOMADNET,
+            NavTab.selectedFor(listOf("chats", "nomadnet_home", "nomadnet_browser/0123?path=%2F")),
+        )
+        assertEquals(NavTab.SETTINGS, NavTab.selectedFor(listOf("chats", "settings")))
+    }
+
+    @Test
+    fun `selectedFor walks down to the owning tab for tab-less detail routes`() {
+        // Node detail belongs to whichever tab's stack it was pushed onto.
+        assertEquals(NavTab.CONTACTS, NavTab.selectedFor(listOf("chats", "contacts", "announce_detail/0123")))
+        assertEquals(
+            NavTab.ANNOUNCES,
+            NavTab.selectedFor(listOf("chats", "announce_stream?filterType=all", "announce_detail/0123")),
+        )
+        assertEquals(NavTab.CHATS, NavTab.selectedFor(listOf("chats", "messaging/abc/Name")))
+    }
+
+    @Test
+    fun `selectedFor is null for an empty or tab-less stack`() {
+        assertEquals(null, NavTab.selectedFor(emptyList()))
+        assertEquals(null, NavTab.selectedFor(listOf(null)))
+        assertEquals(null, NavTab.selectedFor(listOf(null, "theme_editor")))
+    }
 }

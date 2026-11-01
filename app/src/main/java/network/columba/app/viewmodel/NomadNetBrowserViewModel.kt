@@ -505,27 +505,50 @@ class NomadNetBrowserViewModel
 
             // Restoring the NomadNet tab session shows the page the user was
             // looking at, immediately, from the in-memory session store -
-            // even a `#!c=0` page, which no file cache ever holds. Ordinary
-            // navigation (link taps, deep links, URL bar, pull-to-refresh)
-            // never sets [fromSessionRestore] and so still honours the
-            // site's freshness directive.
+            // even a `#!c=0` page, which no file cache ever holds - and
+            // re-attaches the session's in-page history and form-field
+            // drafts, so Back keeps returning to earlier pages and
+            // half-typed forms come back with the page. Ordinary navigation
+            // (link taps, deep links, URL bar, pull-to-refresh) never sets
+            // [fromSessionRestore] and so still honours the site's freshness
+            // directive.
             //
-            // Flagged nodes ("Always identify to this node") skip the store
-            // like they skip the file cache below: the stored page may be
-            // anonymous, and emitPageLoaded would badge it identified while
-            // the user still sees access-denied content. A flagged restore
-            // must fetch identified instead. (The same narrow first-launch
-            // sync window as the file-cache bypass applies: if the flag set
-            // has not reached _autoIdentifyNodes yet, the stored page is
-            // served and the backend's identifyIfFlagged refreshes on the
-            // next fetch.)
-            if (fromSessionRestore && destinationHash !in _autoIdentifyNodes.value) {
-                val session = pageCache.getSession(destinationHash, path)
-                if (session != null) {
+            // Restoring must never re-submit a var-bearing request: a site
+            // whose submission changes data would redo the action without a
+            // click. A flagged node ("Always identify") therefore also takes
+            // the stored page and defers to the existing identify refresh,
+            // which re-fetches identified when that is a safe plain GET and
+            // skips var-bearing pages rather than repeating their
+            // submission.
+            if (fromSessionRestore) {
+                val snapshot = pageCache.getSessionSnapshot(destinationHash, path)
+                if (snapshot != null) {
                     fetchEpoch++ // Invalidate any in-flight request
                     stopStatusCollection()
                     stopProgressCollection()
-                    emitPageLoaded(MicronParser.parse(session), requestPath, destinationHash, fieldNames)
+                    history.clear()
+                    snapshot.history.forEach { entry ->
+                        history.add(
+                            HistoryEntry(
+                                nodeHash = entry.nodeHash,
+                                path = entry.path,
+                                formFields = entry.formFields,
+                                document = entry.document,
+                                fieldTokens = entry.fieldTokens,
+                            ),
+                        )
+                    }
+                    _canGoBack.value = history.isNotEmpty()
+                    _formFields.value = snapshot.current.formFields
+                    if (destinationHash in _autoIdentifyNodes.value) {
+                        pendingIdentifyRefreshFor = destinationHash
+                    }
+                    emitPageLoaded(
+                        snapshot.current.document,
+                        requestPath,
+                        destinationHash,
+                        snapshot.current.fieldTokens,
+                    )
                     return
                 }
             }
@@ -567,7 +590,7 @@ class NomadNetBrowserViewModel
                 val document = MicronParser.parse(cached)
                 // Keep the session store warm so the next tab restore is
                 // instant even if this entry then expires from the file cache.
-                pageCache.putSession(destinationHash, path, cached)
+                pageCache.putSession(destinationHash, path, document)
                 // Pass the field tokens through so re-persisting keeps the
                 // backtick block: the next restore must hit this same key.
                 emitPageLoaded(document, requestPath, destinationHash, fieldNames)
@@ -697,7 +720,7 @@ class NomadNetBrowserViewModel
                             // And hold it in the session store: a `#!c=0` page
                             // never reaches the file cache, yet a tab restore
                             // must still show it without re-submitting.
-                            pageCache.putSession(nodeHash, persistPath, pageResult.content)
+                            pageCache.putSession(nodeHash, persistPath, document, lastFetchFieldTokens)
                             emitPageLoaded(document, pageResult.path, nodeHash, lastFetchFieldTokens)
                         },
                         onFailure = { error ->
@@ -845,6 +868,9 @@ class NomadNetBrowserViewModel
             _canGoBack.value = false
             _formFields.value = emptyMap()
             _browserState.value = BrowserState.Initial
+            // The session is over: the store must not resurrect the closed
+            // site's page, drafts, or history on the next tab visit.
+            pageCache.clearSession()
             viewModelScope.launch { settingsRepository.clearNomadNetLastNodeHash() }
         }
 
@@ -1028,6 +1054,7 @@ class NomadNetBrowserViewModel
 
         override fun onCleared() {
             super.onCleared()
+            saveSessionSnapshot()
             stopStatusCollection()
             stopProgressCollection()
             pageImageLoader.cancelAll()
@@ -1041,6 +1068,39 @@ class NomadNetBrowserViewModel
                     // Best-effort cancellation — service may already be unbound
                 }
             }
+        }
+
+        /**
+         * Hand the live session - page, form-field drafts, and in-page
+         * history - to the singleton store so returning to the NomadNet tab
+         * restores everything the entry-scoped ViewModel would otherwise
+         * lose when the tab's entries are dropped. Internal for tests,
+         * which cannot invoke the protected lifecycle callback.
+         */
+        internal fun saveSessionSnapshot() {
+            val state = _browserState.value as? BrowserState.PageLoaded ?: return
+            pageCache.putSessionSnapshot(
+                NomadNetPageCache.SessionSnapshot(
+                    current =
+                        NomadNetPageCache.SessionPage(
+                            nodeHash = state.nodeHash,
+                            path = buildNomadNetPersistPath(state.path, state.fieldTokens),
+                            document = state.document,
+                            fieldTokens = state.fieldTokens,
+                            formFields = _formFields.value.toMap(),
+                        ),
+                    history =
+                        history.map { entry ->
+                            NomadNetPageCache.SessionPage(
+                                nodeHash = entry.nodeHash,
+                                path = buildNomadNetPersistPath(entry.path, entry.fieldTokens),
+                                document = entry.document,
+                                fieldTokens = entry.fieldTokens,
+                                formFields = entry.formFields,
+                            )
+                        },
+                ),
+            )
         }
 
         /** Push the current page onto the history stack for back-navigation. */
@@ -1307,7 +1367,7 @@ class NomadNetBrowserViewModel
                                 // The session store tracks the displayed page even when
                                 // the site opts out of the file cache (`#!c=0`), so a
                                 // NomadNet tab restore shows it without a re-fetch.
-                                pageCache.putSession(nodeHash, pageResult.path, pageResult.content)
+                                pageCache.putSession(nodeHash, pageResult.path, document)
                                 emitPageLoaded(document, pageResult.path, nodeHash)
                             }
                         },

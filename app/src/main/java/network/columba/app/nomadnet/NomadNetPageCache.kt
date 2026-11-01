@@ -120,6 +120,12 @@ class NomadNetPageCache
          * directive. Memory-only by design: a process restart is a genuine
          * cold start and fetches fresh, and no `#!c=0` content is ever
          * written to disk.
+         *
+         * In a [SessionPage], [path] is the FULL persisted path (backtick
+         * field block included) for the [SessionSnapshot.current] page - the
+         * store's lookup key - and the BARE path for history entries, whose
+         * request variables ride in fieldTokens so Back and refresh can
+         * rebuild the request data without double-appending the block.
          */
         data class SessionPage(
             val nodeHash: String,

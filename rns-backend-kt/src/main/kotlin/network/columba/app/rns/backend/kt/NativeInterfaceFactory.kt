@@ -33,11 +33,14 @@ internal object NativeInterfaceFactory {
      * [syncInterfaces] compares the desired mode against this to detect a saved
      * mode edit on an already-running interface and restart it so the change
      * takes effect. The diff-based sync otherwise only starts names that are not
-     * already running, so a persisted mode edit would never reach the running
-     * object (issue #1169, PR #1188 review P1). Tracking just the mode (not the
-     * full config) avoids spurious restarts from non-deterministic config fields.
+     * already running, so a persisted mode/framing edit would never reach the
+     * running object (issue #1169, PR #1188 review P1; framing: PR #1226 review
+     * P1 — a TCP client's KISS framing is baked into the running interface, so
+     * flipping the switch must restart it too). Tracking just the mode + framing
+     * (not the full config) avoids spurious restarts from non-deterministic
+     * config fields.
      */
-    private val runningModes = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val runningSignatures = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /**
      * Per-name start generation, used to invalidate a superseded async start
@@ -128,17 +131,18 @@ internal object NativeInterfaceFactory {
             if (name !in desiredNames) nextGeneration(name)
         }
 
-        // Restart interfaces whose saved mode changed while they were running.
-        // The diff-based sync below only *starts* names not already running, so a
-        // persisted mode edit on a running interface would otherwise be dropped
-        // (the running object keeps the mode it was started with). Issue #1169,
-        // PR #1188 review P1.
+        // Restart interfaces whose saved signature (mode, plus KISS framing for
+        // TCP clients) changed while they were running. The diff-based sync
+        // below only *starts* names not already running, so a persisted edit on
+        // a running interface would otherwise be dropped (the running object
+        // keeps the settings it was started with). Issue #1169, PR #1188 review
+        // P1; PR #1226 review P1 (framing).
         for (name in runningNames intersect desiredNames) {
             val config = configs.first { it.name == name }
-            val previousMode = runningModes[name]
-            val desiredMode = configModeOf(config)
-            if (previousMode != null && previousMode != desiredMode) {
-                Log.i(TAG, "Mode changed for running interface $name: $previousMode -> $desiredMode; restarting")
+            val previousSignature = runningSignatures[name]
+            val desiredSignature = configSignatureOf(config)
+            if (previousSignature != null && previousSignature != desiredSignature) {
+                Log.i(TAG, "Config changed for running interface $name: $previousSignature -> $desiredSignature; restarting")
                 restartInterface(config)
             }
         }
@@ -179,11 +183,15 @@ internal object NativeInterfaceFactory {
         }
     }
 
-    /** Extracts the Columba mode string from an [InterfaceConfig]. */
-    private fun configModeOf(config: InterfaceConfig): String =
+    /**
+     * The subset of an [InterfaceConfig] baked into the running object that a
+     * later edit must restart the interface to apply: the mode, plus KISS
+     * framing for TCP clients (it selects the packet codec at construction).
+     */
+    private fun configSignatureOf(config: InterfaceConfig): String =
         when (config) {
             is InterfaceConfig.AutoInterface -> config.mode
-            is InterfaceConfig.TCPClient -> config.mode
+            is InterfaceConfig.TCPClient -> config.mode + if (config.kissFraming) "|kiss" else "|raw"
             is InterfaceConfig.TCPServer -> config.mode
             is InterfaceConfig.UDP -> config.mode
             is InterfaceConfig.RNode -> config.mode
@@ -230,7 +238,7 @@ internal object NativeInterfaceFactory {
                 .getOrCreate(iface)
         Transport.registerInterface(ref)
         runningInterfaces[name] = iface
-        runningModes[name] = configModeOf(config)
+        runningSignatures[name] = configSignatureOf(config)
 
         // Acquire multicast lock when AutoInterface starts (needed for multicast receive)
         if (iface is network.reticulum.interfaces.auto.AutoInterface) {
@@ -402,7 +410,7 @@ internal object NativeInterfaceFactory {
         // block sees the interface as unmanaged and bails out instead of
         // leaving an orphaned collector behind.
         val iface = runningInterfaces.remove(name)
-        runningModes.remove(name)
+        runningSignatures.remove(name)
         onlineObservers.remove(name)?.cancel()
         if (iface == null) return
         try {

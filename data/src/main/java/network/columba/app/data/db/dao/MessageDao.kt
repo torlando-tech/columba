@@ -383,6 +383,21 @@ interface MessageDao {
         threadId: ByteArray,
     ): PagingSource<Int, MessageEntity>
 
+    /** Paged thread messages by sender timestamp (the "sort by sent time" preference). */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId = :threadId
+        ORDER BY timestamp DESC
+        """,
+    )
+    fun getMessagesForThreadPagedBySentTime(
+        peerHash: String,
+        identityHash: String,
+        threadId: ByteArray,
+    ): PagingSource<Int, MessageEntity>
+
     /**
      * Main-conversation messages only (threadId IS NULL) — the Main chip /
      * message list once threads are enabled.
@@ -473,6 +488,20 @@ interface MessageDao {
         identityHash: String,
     ): PagingSource<Int, MessageEntity>
 
+    /** Paged Main-conversation messages by sender timestamp (the "sort by sent time" preference). */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NULL
+        ORDER BY timestamp DESC
+        """,
+    )
+    fun getMainMessagesPagedBySentTime(
+        peerHash: String,
+        identityHash: String,
+    ): PagingSource<Int, MessageEntity>
+
     /**
      * Total message counts grouped by thread ID (the "N replies" hook count).
      * The row with `threadId == null` is Main's count.
@@ -488,6 +517,20 @@ interface MessageDao {
         peerHash: String,
         identityHash: String,
     ): Flow<List<ThreadMessageCount>>
+
+    /** Total messages in one thread (draft-sync guard for message-less rows). */
+    @Query(
+        """
+        SELECT COUNT(*) FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId = :threadId
+        """,
+    )
+    suspend fun countMessagesInThread(
+        peerHash: String,
+        identityHash: String,
+        threadId: ByteArray,
+    ): Int
 
     /**
      * Newest message per thread (title preview row in the thread sheet /

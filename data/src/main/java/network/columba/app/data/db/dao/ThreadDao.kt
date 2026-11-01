@@ -23,6 +23,10 @@ interface ThreadDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertThreadIgnore(thread: ThreadEntity): Long
 
+    /** All threads owned by one identity (backup export). */
+    @Query("SELECT * FROM threads WHERE identityHash = :identityHash")
+    suspend fun getAllThreadsList(identityHash: String): List<ThreadEntity>
+
     @Query(
         "SELECT * FROM threads WHERE identityHash = :identityHash AND conversationHash = :conversationHash AND threadId = :threadId LIMIT 1",
     )

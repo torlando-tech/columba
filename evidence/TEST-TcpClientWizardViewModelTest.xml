@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="network.columba.app.viewmodel.TcpClientWizardViewModelTest" tests="82" skipped="0" failures="0" errors="0" timestamp="2026-11-01T02:23:32.261Z" hostname="hermes-agent" time="4.168">
+  <properties/>
+  <testcase name="initial state has isCustomMode false" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="2.534"/>
+  <testcase name="canProceed returns false at SERVER_SELECTION with no selection and not custom mode" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.024"/>
+  <testcase name="saveConfiguration includes kissFraming flag" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.102"/>
+  <testcase name="setInitialValues sets interface name" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.024"/>
+  <testcase name="toggleBootstrapOnly disables bootstrap mode" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.02"/>
+  <testcase name="selectServer populates targetHost from server host" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.017"/>
+  <testcase name="multiple selectServer calls update state correctly" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.02"/>
+  <testcase name="initial state has empty configuration fields" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.019"/>
+  <testcase name="loadExistingInterface sets editingInterfaceId" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.214"/>
+  <testcase name="updateTargetHost updates targetHost field" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.031"/>
+  <testcase name="getCommunityServers returns non-empty list" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.017"/>
+  <testcase name="setInitialValues leaves IFAC fields empty when omitted" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.016"/>
+  <testcase name="enableCustomMode clears all form fields" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.022"/>
+  <testcase name="selectServer populates targetPort from server port as string" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.017"/>
+  <testcase name="clearSaveError resets saveError to null" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.027"/>
+  <testcase name="saveConfiguration in edit mode calls updateInterface instead of insertInterface" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.039"/>
+  <testcase name="setInitialValues enables custom mode when no community server matches" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.014"/>
+  <testcase name="valid interface name is trimmed" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.015"/>
+  <testcase name="loadExistingInterface populates kissFraming from existing config" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.021"/>
+  <testcase name="toggleBootstrapOnly enables bootstrap mode" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.011"/>
+  <testcase name="getCommunityServers returns list with expected server entries" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.011"/>
+  <testcase name="selectServer updates selectedServer field" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.014"/>
+  <testcase name="initial state has no save errors" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.012"/>
+  <testcase name="loadExistingInterface sets custom mode when no community server matches" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.022"/>
+  <testcase name="saveConfiguration succeeds with unique interface name" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.021"/>
+  <testcase name="canProceed returns true at REVIEW_CONFIGURE step" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.012"/>
+  <testcase name="saveConfiguration sets isSaving false after completion" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.018"/>
+  <testcase name="selectServer with bootstrap server sets bootstrapOnly true" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.017"/>
+  <testcase name="goToPreviousStep at SERVER_SELECTION has no effect" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.019"/>
+  <testcase name="saveConfiguration fails with duplicate interface name" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.019"/>
+  <testcase name="repository exception does not set saveSuccess" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.02"/>
+  <testcase name="goToPreviousStep from REVIEW_CONFIGURE goes to SERVER_SELECTION" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.015"/>
+  <testcase name="saveConfiguration sets isSaving true during operation" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.022"/>
+  <testcase name="selecting server after custom mode clears isCustomMode" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.014"/>
+  <testcase name="updateTargetPort updates targetPort field" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.016"/>
+  <testcase name="initial state has bootstrapOnly false" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.017"/>
+  <testcase name="canProceed returns true at SERVER_SELECTION with custom mode enabled" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.011"/>
+  <testcase name="enableCustomMode sets isCustomMode true" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.013"/>
+  <testcase name="setInitialValues populates host and port" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.013"/>
+  <testcase name="valid port is parsed correctly" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.015"/>
+  <testcase name="loadExistingInterface preserves unknown imported mode instead of replacing with full" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.023"/>
+  <testcase name="invalid port non-numeric defaults to 4242" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.019"/>
+  <testcase name="saveConfiguration in edit mode excludes current interface from duplicate name check" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.027"/>
+  <testcase name="loadExistingInterface populates fields from existing config" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.03"/>
+  <testcase name="field updates do not affect other fields" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.015"/>
+  <testcase name="setInitialValues skips to REVIEW_CONFIGURE step" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.014"/>
+  <testcase name="saveConfiguration calls configManager setPendingChanges true" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.029"/>
+  <testcase name="saveConfiguration calls repository insertInterface with correct config" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.02"/>
+  <testcase name="enableCustomMode resets kissFraming" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.031"/>
+  <testcase name="repository exception sets isSaving false" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.021"/>
+  <testcase name="selectServer clears isCustomMode flag" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.012"/>
+  <testcase name="empty interface name defaults to TCP Connection" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.012"/>
+  <testcase name="setNetworkName and setPassphrase update state" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.01"/>
+  <testcase name="saveConfiguration fails with case-insensitive duplicate name" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.013"/>
+  <testcase name="selectServer populates interfaceName from server name" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.014"/>
+  <testcase name="saveConfiguration in edit mode detects duplicate name from other interfaces" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.015"/>
+  <testcase name="toggleKissFraming disables kiss framing" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.011"/>
+  <testcase name="togglePassphraseVisibility flips flag" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.013"/>
+  <testcase name="target host is trimmed" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.016"/>
+  <testcase name="saveConfiguration does not call repository when duplicate name detected" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.019"/>
+  <testcase name="canProceed returns true at SERVER_SELECTION with selected server" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.013"/>
+  <testcase name="updateInterfaceName updates interfaceName field" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.01"/>
+  <testcase name="loadExistingInterface does nothing when entity not found" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.014"/>
+  <testcase name="initial state is SERVER_SELECTION step" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.01"/>
+  <testcase name="goToNextStep at REVIEW_CONFIGURE has no effect" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.012"/>
+  <testcase name="saveConfiguration sets saveSuccess true on completion" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.014"/>
+  <testcase name="repository exception sets saveError with message" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.013"/>
+  <testcase name="setInitialValues sets bootstrapOnly from matched community server" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.01"/>
+  <testcase name="updateInterfaceMode with unknown value is ignored" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.01"/>
+  <testcase name="empty port defaults to 4242" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.01"/>
+  <testcase name="saveConfiguration includes bootstrapOnly flag" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.01"/>
+  <testcase name="enableCustomMode clears selectedServer" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.01"/>
+  <testcase name="saveConfiguration in edit mode sets saveSuccess on completion" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.021"/>
+  <testcase name="saveConfiguration in edit mode passes correct config to updateInterface" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.013"/>
+  <testcase name="goToNextStep from SERVER_SELECTION goes to REVIEW_CONFIGURE" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.009"/>
+  <testcase name="whitespace-only interface name defaults to TCP Connection" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.01"/>
+  <testcase name="updateInterfaceMode with valid mode persists through save" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.011"/>
+  <testcase name="toggleKissFraming enables kiss framing" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.01"/>
+  <testcase name="initial state has no selected server" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.009"/>
+  <testcase name="exception without message uses fallback error message" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.014"/>
+  <testcase name="loadExistingInterface matches community server when host and port match" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.015"/>
+  <testcase name="setInitialValues populates networkName and passphrase when IFAC provided" classname="network.columba.app.viewmodel.TcpClientWizardViewModelTest" time="0.016"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: No SLF4J providers were found.
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See https://www.slf4j.org/codes.html#noProviders for further details.
+WARNING: A Java agent has been loaded dynamically (/home/tyler/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.18.2/62f38a6faf7f069d661b79a07d566f504b0b20c4/byte-buddy-agent-1.18.2.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

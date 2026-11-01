@@ -215,6 +215,28 @@ class TcpClientWizardViewModelTest {
         }
 
     @Test
+    fun `selectServer clears kissFraming flag`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                // Enable KISS framing via the custom modem path
+                viewModel.enableCustomMode()
+                advanceUntilIdle()
+                awaitItem() // Custom mode state
+                viewModel.toggleKissFraming(true)
+                advanceUntilIdle()
+                assertTrue(awaitItem().kissFraming)
+
+                // Choosing a community (Reticulum) server must not keep it
+                viewModel.selectServer(testServer)
+                advanceUntilIdle()
+
+                assertFalse(awaitItem().kissFraming)
+            }
+        }
+
+    @Test
     fun `multiple selectServer calls update state correctly`() =
         runTest {
             viewModel.state.test {

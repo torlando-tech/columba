@@ -221,6 +221,9 @@ class TcpClientWizardViewModel
                     targetHost = server.host,
                     targetPort = server.port.toString(),
                     bootstrapOnly = server.isBootstrap,
+                    // Community servers are Reticulum servers; KISS framing
+                    // only ever applies to custom modem/TNC endpoints
+                    kissFraming = false,
                     // Auto-enable SOCKS proxy for .onion servers
                     socksProxyEnabled = isOnion,
                 )

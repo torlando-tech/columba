@@ -65,6 +65,18 @@ enum class NavTab(
         fun fromId(id: String): NavTab? = entries.firstOrNull { it.id == id }
 
         /**
+         * The tab to highlight for a back stack: the owner of the topmost
+         * entry, walking from the top of the stack downward. Routes with no
+         * tab prefix of their own (e.g. `announce_detail/...`) belong to the tab of the entry
+         * beneath them, so the walk continues down to the nearest tab-rooted
+         * entry. Null when no entry belongs to any tab.
+         */
+        fun selectedFor(routes: List<String?>?): NavTab? =
+            routes
+                ?.asReversed()
+                ?.firstNotNullOfOrNull { route -> entries.firstOrNull { it.matchesRoute(route) } }
+
+        /**
          * Parse and normalize a persisted CSV of tab ids into the exact list of
          * tabs the bottom bar should render. Malformed, unknown, or duplicate
          * entries are dropped; Settings is appended if missing; the result is

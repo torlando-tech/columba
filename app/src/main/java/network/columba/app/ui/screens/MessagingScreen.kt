@@ -121,6 +121,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
@@ -823,13 +824,18 @@ fun MessagingScreen(
 
     var showVoiceControls by remember { mutableStateOf(false) }
     var audioPermissionPermanentlyDenied by remember { mutableStateOf(false) }
+    // The collect coroutine outlives recompositions; read the live thread so a
+    // send completing after a thread switch cannot clear the NEW target's
+    // composer when both happen to hold the same text.
+    val currentActiveThread by rememberUpdatedState(activeThread)
     LaunchedEffect(destinationHash, viewModel) {
         viewModel.composerSendResult.collect { result ->
-            if (
+            val clearsComposer =
                 result.destinationHash == destinationHash &&
-                result.clearComposer &&
-                messageText == result.submittedText
-            ) {
+                    result.clearComposer &&
+                    messageText == result.submittedText &&
+                    result.threadId == currentActiveThread
+            if (clearsComposer) {
                 messageText = ""
                 showVoiceControls = false
             }

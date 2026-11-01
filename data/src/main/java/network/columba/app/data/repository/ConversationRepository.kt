@@ -874,6 +874,35 @@ class ConversationRepository
                     ),
                 )
             }
+            // Keep the thread row in sync with thread drafts so an UNSSENT
+            // thread stays reachable: a non-empty draft gives the thread a
+            // saved entry (chip / sheet / chat card can reopen it); an
+            // emptied draft on a message-less thread removes the row again
+            // (abandoned thread, nothing left to show).
+            if (threadId != null && threadId.isNotEmpty()) {
+                val existing = threadDao.getThread(activeIdentity.identityHash, peerHash, threadId)
+                if (content.isNotBlank() && existing == null) {
+                    val now = System.currentTimeMillis()
+                    threadDao.insertThreadIgnore(
+                        ThreadEntity(
+                            threadId = threadId,
+                            conversationHash = peerHash,
+                            identityHash = activeIdentity.identityHash,
+                            rootMessageId = null,
+                            title = ThreadPolicy.threadTitleExcerpt(content),
+                            createdAt = now,
+                            lastActivityAt = now,
+                            archivedAt = null,
+                        ),
+                    )
+                } else if (
+                    content.isBlank() &&
+                    existing != null &&
+                    messageDao.countMessagesInThread(peerHash, activeIdentity.identityHash, threadId) == 0
+                ) {
+                    threadDao.deleteThread(threadId, activeIdentity.identityHash, peerHash)
+                }
+            }
         }
 
         /**
@@ -1430,6 +1459,7 @@ class ConversationRepository
         suspend fun getThreadMessagesPaged(
             peerHash: String,
             threadId: ByteArray,
+            sortBySent: Boolean = false,
         ): Flow<PagingData<MessageEntity>> {
             val identityHash =
                 localIdentityDao.getActiveIdentitySync()?.identityHash
@@ -1443,7 +1473,11 @@ class ConversationRepository
                         enablePlaceholders = false,
                     ),
                 pagingSourceFactory = {
-                    messageDao.getMessagesForThreadPaged(peerHash, identityHash, threadId)
+                    if (sortBySent) {
+                        messageDao.getMessagesForThreadPagedBySentTime(peerHash, identityHash, threadId)
+                    } else {
+                        messageDao.getMessagesForThreadPaged(peerHash, identityHash, threadId)
+                    }
                 },
             ).flow
         }
@@ -1586,7 +1620,10 @@ class ConversationRepository
 
         /** Paged Main-only messages (threads-enabled Main chip list), newest first. */
         @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
-        suspend fun getMainMessagesPaged(peerHash: String): Flow<PagingData<Message>> {
+        suspend fun getMainMessagesPaged(
+            peerHash: String,
+            sortBySent: Boolean = false,
+        ): Flow<PagingData<Message>> {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyFlow()
             val identityHash = activeIdentity.identityHash
             return Pager(
@@ -1598,7 +1635,11 @@ class ConversationRepository
                         enablePlaceholders = false,
                     ),
                 pagingSourceFactory = {
-                    messageDao.getMainMessagesPaged(peerHash, identityHash)
+                    if (sortBySent) {
+                        messageDao.getMainMessagesPagedBySentTime(peerHash, identityHash)
+                    } else {
+                        messageDao.getMainMessagesPaged(peerHash, identityHash)
+                    }
                 },
             ).flow.map { pagingData ->
                 pagingData.map { entity -> entity.toMessage() }

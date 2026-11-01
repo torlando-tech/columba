@@ -330,6 +330,49 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
+    fun `a flagged node's session restore fetches identified instead of serving the stored page`() =
+        runTest(testDispatcher) {
+            // Regression (Greptile P1): the user enabled "Always identify"
+            // while away from the tab. The stored page may be anonymous, and
+            // serving it would badge the node identified over access-denied
+            // content. A flagged restore must skip the session store and
+            // fetch, exactly like the file-cache bypass does for navigation.
+            val nodesFlow = MutableStateFlow<Set<String>>(setOf(nodeHash))
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            val session = java.util.concurrent.atomic.AtomicReference<Triple<String, String, String>?>(null)
+            every { pageCache.putSession(any(), any(), any()) } answers {
+                session.set(Triple(firstArg(), secondArg(), thirdArg()))
+            }
+            every { pageCache.getSession(any(), any()) } answers {
+                val node = firstArg<String>()
+                val path = secondArg<String>()
+                session.get()?.takeIf { it.first == node && it.second == path }?.third
+            }
+            // The page the user was looking at when they left the tab,
+            // captured while the node was still unflagged (so anonymous).
+            pageCache.putSession(nodeHash, "/page/index.mu", simplePage)
+
+            // Returning to the tab builds a fresh entry-scoped ViewModel
+            // with the flag already set - no transition for its collector to
+            // react to, so loadPage itself must not serve the stored page.
+            val restoredVm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+
+            restoredVm.loadPage(nodeHash, fromSessionRestore = true)
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            assertTrue(
+                "restore must land on the fetched page, was ${restoredVm.browserState.value}",
+                restoredVm.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+            // The store held a hit for this node+path; the flagged restore
+            // still fetched identified content over it.
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
+        }
+
+    @Test
     fun `refresh on a var-bearing page re-submits the request data, not a bare fetch`() =
         runTest(testDispatcher) {
             // Pull-to-refresh (and any re-fetch) of a page that was loaded with

@@ -509,7 +509,17 @@ class NomadNetBrowserViewModel
             // navigation (link taps, deep links, URL bar, pull-to-refresh)
             // never sets [fromSessionRestore] and so still honours the
             // site's freshness directive.
-            if (fromSessionRestore) {
+            //
+            // Flagged nodes ("Always identify to this node") skip the store
+            // like they skip the file cache below: the stored page may be
+            // anonymous, and emitPageLoaded would badge it identified while
+            // the user still sees access-denied content. A flagged restore
+            // must fetch identified instead. (The same narrow first-launch
+            // sync window as the file-cache bypass applies: if the flag set
+            // has not reached _autoIdentifyNodes yet, the stored page is
+            // served and the backend's identifyIfFlagged refreshes on the
+            // next fetch.)
+            if (fromSessionRestore && destinationHash !in _autoIdentifyNodes.value) {
                 val session = pageCache.getSession(destinationHash, path)
                 if (session != null) {
                     fetchEpoch++ // Invalidate any in-flight request

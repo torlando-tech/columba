@@ -1,0 +1,51 @@
+TOR-20 verification summary — PR head 53075983c (GitHub PR #1226, closes GH #1178)
+Branch paperclip/TOR-20-expose-kiss_framing-toggle-in-tcp-client-wizard-final-page-gh-1178
+Base: GitHub main 3df1a907f. Rebase of the original 7a4feaef7; the conflict with the new
+InterfaceMode selector was resolved keeping both features (4 of the 5 changed files differ
+from 7a4feaef7 by +121/-4; ConfigFileParserTest.kt is byte-identical). All checks below were
+re-run on 53075983c on 2026-11-01.
+
+Unit tests (:app:testNoSentryPythonBackendDebugUnitTest, --offline):
+  TcpClientWizardViewModelTest  tests=82 failures=0 errors=0 skipped=0
+    (79 KISS-era wizard tests + 3 wizard tests added on main — all green with the KISS changes)
+  ConfigFileParserTest          tests=6  failures=0 errors=0 skipped=0
+Detekt (:app:detekt, --offline): exit 0, no FAILURE lines.
+ktlint (:app:ktlintCheck, --offline, same task CI runs): exit 0.
+  Note (unchanged): with ktlint-gradle 12.1.1 on this AGP/KGP combo, :app registers only
+  ktlintKotlinScriptCheck — no source-set check tasks — and the repo pins ktlint advisory
+  (ignoreFailures=true, build.gradle.kts:55). Direct-engine analysis (ktlint 1.5.0,
+  android_studio style, repo .editorconfig) was run on the pre-rebase commit 7a4feaef7:
+  +30 violations vs base, all in rule classes already present in the same files (indent,
+  trailing-comma-on-call-site, argument-list-wrapping, function-signature); ConfigFileParser.kt
+  delta 0; no new violation classes. The rebase hunks follow the same file-local style.
+
+APK: app/build/outputs/apk/noSentryPythonBackend/debug/app-noSentry-pythonBackend-arm64-v8a-debug.apk
+  (flavor noSentry+pythonBackend, debug; built 2026-11-01 02:24 UTC on 53075983c, --offline
+  -x :rns-backend-py:installDebugPythonRequirements). Host network was down (github.com and
+  pypi.org connect-timeout), so the chaquopy python payload tree was copied from
+  /home/tyler/repos/columba-main (main @ 9222e3800, an ancestor of this base); its
+  rns-backend-py/build.gradle.kts differs from this head ONLY in the org.json TEST dependency —
+  the Reticulum/LXMF/ble payload pins are identical, so the bundled python is the pinned build.
+  A fresh-network rebuild reproduces identical python packages.
+
+Device: emulator-5554 (API 34 x86_64), package network.columba.app.debug, PR-head x86_64 split installed.
+Wizard (edit mode shows the same final page): Settings > Network > Manage Interfaces >
+  (Add Interface > TCP Client > Custom | tap interface > Edit Configuration) > Review Settings, scrolled to bottom:
+  prhead_review_kiss_card.png — card order Active On Network > Interface Mode (Full) > Bootstrap
+    Interface > Connect via Tor (Orbot) > KISS Framing (TNC / Modem), same card style, switch off,
+    upstream warning text verbatim.
+  prhead_review_kiss_on.png — switch toggled on before Save.
+  prhead_edit_roundtrip_on.png — after saving with KISS on, reopening Edit Configuration renders
+    the switch ON (edit-mode load round-trips the flag).
+Config (files/reticulum/reticulum/config pulled via run-as):
+  config_prhead_kiss_on.txt  — [[TOR20_KISS_PR]] contains "kiss_framing = true" (alongside mode = full).
+    Produced via the NORMAL flow: toggle on > Save > ~10 s — the running RNS service hot-reloaded
+    and rewrote the config file with no app restart.
+  config_prhead_kiss_off.txt — [[TOR20_KISS_PR]] present, kiss_framing line ABSENT (toggle off).
+RNS accepted the value (configobj as_bool): interface instantiated, no parse errors —
+  11-01 02:28:36 python.stdout: Establishing TCP connection for TCPInterface[TOR20_KISS_PR/127.0.0.1:8001]...
+  (Connection refused is expected: no listener on 127.0.0.1:8001 on the emulator.)
+Known pre-existing race (NOT a TOR-20 regression, unrelated to this change): force-stopping the
+app within ~3 s of Save can let the service write its config from the previous snapshot before
+the UI rewrites the snapshot (stop>initialize>snapshot ordering, tracked separately). The normal
+save > hot-reload flow is unaffected; one more app start resolves the file to the saved state.

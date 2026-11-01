@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import network.columba.app.nomadnet.NomadNetPageCache
+import network.columba.app.micron.MicronParser
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsNomadnet
@@ -60,6 +61,10 @@ class NomadNetBrowserViewModelTest {
     private val nodeHash = "abcdef01234567890abcdef012345678"
     private val simplePage = ">Hello World"
 
+    /** Fake of the singleton session store, shared across VM instances. */
+    private val sessionSnapshot =
+        java.util.concurrent.atomic.AtomicReference<NomadNetPageCache.SessionSnapshot?>(null)
+
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
@@ -72,8 +77,40 @@ class NomadNetBrowserViewModelTest {
         // no transition and does nothing, so a static flow is enough.
         every { rnsCore.networkStatus } returns MutableStateFlow(NetworkStatus.READY)
         every { pageCache.put(any(), any(), any(), any()) } just Runs
-        every { pageCache.putSession(any(), any(), any()) } just Runs
-        every { pageCache.getSession(any(), any()) } returns null
+        sessionSnapshot.set(null)
+        val nodeSlot = slot<String>()
+        val pathSlot = slot<String>()
+        val docSlot = slot<network.columba.app.micron.MicronDocument>()
+        val tokensSlot = slot<List<String>>()
+        val fieldsSlot = slot<Map<String, String>>()
+        every {
+            pageCache.putSession(
+                capture(nodeSlot),
+                capture(pathSlot),
+                capture(docSlot),
+                capture(tokensSlot),
+                capture(fieldsSlot),
+            )
+        } answers {
+            sessionSnapshot.set(
+                NomadNetPageCache.SessionSnapshot(
+                    NomadNetPageCache.SessionPage(
+                        nodeSlot.captured,
+                        pathSlot.captured,
+                        docSlot.captured,
+                        tokensSlot.captured,
+                        fieldsSlot.captured,
+                    ),
+                ),
+            )
+        }
+        every { pageCache.putSessionSnapshot(any()) } answers { sessionSnapshot.set(firstArg()) }
+        every { pageCache.getSessionSnapshot(any(), any()) } answers {
+            val node = firstArg<String>()
+            val path = secondArg<String>()
+            sessionSnapshot.get()?.takeIf { it.current.nodeHash == node && it.current.path == path }
+        }
+        every { pageCache.clearSession() } answers { sessionSnapshot.set(null) }
         // Page-image cache: only the explicit clear (clearImageCache) and the
         // loader's miss-path get() are reachable from these tests; stub both
         // explicitly rather than using a relaxed mock.
@@ -270,15 +307,6 @@ class NomadNetBrowserViewModelTest {
             // restore so returning to the NomadNet tab never re-fetches the
             // page the user is already looking at.
             every { pageCache.get(any(), any()) } returns null
-            val session = java.util.concurrent.atomic.AtomicReference<Triple<String, String, String>?>(null)
-            every { pageCache.putSession(any(), any(), any()) } answers {
-                session.set(Triple(firstArg(), secondArg(), thirdArg()))
-            }
-            every { pageCache.getSession(any(), any()) } answers {
-                val node = firstArg<String>()
-                val path = secondArg<String>()
-                session.get()?.takeIf { it.first == node && it.second == path }?.third
-            }
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -306,15 +334,6 @@ class NomadNetBrowserViewModelTest {
             // loadPage (deep link, URL bar, address entry) must still honour
             // the site's `#!c=0` directive and fetch again.
             every { pageCache.get(any(), any()) } returns null
-            val session = java.util.concurrent.atomic.AtomicReference<Triple<String, String, String>?>(null)
-            every { pageCache.putSession(any(), any(), any()) } answers {
-                session.set(Triple(firstArg(), secondArg(), thirdArg()))
-            }
-            every { pageCache.getSession(any(), any()) } answers {
-                val node = firstArg<String>()
-                val path = secondArg<String>()
-                session.get()?.takeIf { it.first == node && it.second == path }?.third
-            }
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -330,32 +349,28 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
-    fun `a flagged node's session restore fetches identified instead of serving the stored page`() =
+    fun `a flagged node's session restore serves the page and refreshes identified without re-submitting`() =
         runTest(testDispatcher) {
-            // Regression (Greptile P1): the user enabled "Always identify"
-            // while away from the tab. The stored page may be anonymous, and
-            // serving it would badge the node identified over access-denied
-            // content. A flagged restore must skip the session store and
-            // fetch, exactly like the file-cache bypass does for navigation.
+            // Regression (Greptile P1 x2): a flagged restore must neither
+            // strand the user on anonymous content behind an identified
+            // badge nor re-submit a var-bearing request. A plain page is
+            // served from the store instantly, then the existing identify
+            // refresh re-fetches it identified - a safe GET, exactly one
+            // request. Var-bearing pages are covered by the sibling test.
             val nodesFlow = MutableStateFlow<Set<String>>(setOf(nodeHash))
             every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
             every { pageCache.get(any(), any()) } returns null
-            val session = java.util.concurrent.atomic.AtomicReference<Triple<String, String, String>?>(null)
-            every { pageCache.putSession(any(), any(), any()) } answers {
-                session.set(Triple(firstArg(), secondArg(), thirdArg()))
-            }
-            every { pageCache.getSession(any(), any()) } answers {
-                val node = firstArg<String>()
-                val path = secondArg<String>()
-                session.get()?.takeIf { it.first == node && it.second == path }?.third
-            }
             // The page the user was looking at when they left the tab,
             // captured while the node was still unflagged (so anonymous).
-            pageCache.putSession(nodeHash, "/page/index.mu", simplePage)
+            sessionSnapshot.set(
+                NomadNetPageCache.SessionSnapshot(
+                    NomadNetPageCache.SessionPage(nodeHash, "/page/index.mu", MicronParser.parse(simplePage)),
+                ),
+            )
 
             // Returning to the tab builds a fresh entry-scoped ViewModel
             // with the flag already set - no transition for its collector to
-            // react to, so loadPage itself must not serve the stored page.
+            // react to, so the restore path itself must handle the flag.
             val restoredVm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
             advanceUntilIdle()
 
@@ -364,12 +379,124 @@ class NomadNetBrowserViewModelTest {
             Thread.sleep(100)
 
             assertTrue(
-                "restore must land on the fetched page, was ${restoredVm.browserState.value}",
+                "restore must show the stored page, was ${restoredVm.browserState.value}",
                 restoredVm.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded,
             )
-            // The store held a hit for this node+path; the flagged restore
-            // still fetched identified content over it.
+            // Exactly one request: the background identify refresh (plain
+            // GET). Not a restore-blocking fetch, and never a re-submit.
             coVerify(exactly = 1) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `a flagged node's var-page restore serves the store without re-submitting`() =
+        runTest(testDispatcher) {
+            // The submission behind a var-bearing page may have changed data
+            // on the node; restoring the tab must never redo it without a
+            // click. Even with "Always identify" set, the stored response is
+            // served and the identify refresh skips the page rather than
+            // repeating the submission.
+            val varPath = "/page/forum/thread.mu`cat=general|thread=a-gentle-look-at-prns"
+            val nodesFlow = MutableStateFlow<Set<String>>(setOf(nodeHash))
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            sessionSnapshot.set(
+                NomadNetPageCache.SessionSnapshot(
+                    NomadNetPageCache.SessionPage(
+                        nodeHash,
+                        varPath,
+                        MicronParser.parse(simplePage),
+                        fieldTokens = listOf("cat", "thread"),
+                    ),
+                ),
+            )
+
+            val restoredVm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+
+            restoredVm.loadPage(nodeHash, path = varPath, fromSessionRestore = true)
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            assertTrue(
+                "restore must serve the stored response, was ${restoredVm.browserState.value}",
+                restoredVm.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+            coVerify(exactly = 0) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `leaving the tab preserves the page and form drafts for the restore`() =
+        runTest(testDispatcher) {
+            // Regression (Greptile P1): the entry-scoped ViewModel dies when
+            // the tab is left. Its page and half-typed form must survive in
+            // the singleton store and come back with the restore - without
+            // re-issuing any request.
+            every { pageCache.get(any(), any()) } returns null
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            Thread.sleep(100)
+            viewModel.updateField("name", "draft-value")
+            // The tab is left: the entry's ViewModel is cleared.
+            viewModel.saveSessionSnapshot()
+
+            val restoredVm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+            restoredVm.loadPage(nodeHash, fromSessionRestore = true)
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            assertTrue(
+                "restore must show the page, was ${restoredVm.browserState.value}",
+                restoredVm.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+            assertTrue(
+                "the form draft must survive the tab switch, got ${restoredVm.formFields.value}",
+                restoredVm.formFields.value["name"] == "draft-value",
+            )
+            // Only the initial load requested anything; the restore was free.
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `leaving the tab preserves the in-page back history`() =
+        runTest(testDispatcher) {
+            // Back must keep returning to earlier pages after a tab switch:
+            // the history stack rides along in the session snapshot and is
+            // replayed from memory, so going back issues no request.
+            every { pageCache.get(any(), any()) } returns null
+            // The session store keys on the displayed page's own path, so
+            // this test's stub must echo the requested path back rather
+            // than return the shared fixed one.
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } answers {
+                Result.success(NomadnetPageResult(simplePage, secondArg()))
+            }
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            Thread.sleep(100)
+            viewModel.navigateToLink("/page/forum/thread.mu", emptyList())
+            advanceUntilIdle()
+            Thread.sleep(100)
+            assertTrue(viewModel.canGoBack.value)
+            viewModel.saveSessionSnapshot()
+
+            val restoredVm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+            restoredVm.loadPage(nodeHash, path = "/page/forum/thread.mu", fromSessionRestore = true)
+            advanceUntilIdle()
+            Thread.sleep(100)
+            assertTrue(
+                "the restored session must still offer Back",
+                restoredVm.canGoBack.value,
+            )
+            assertTrue(restoredVm.goBack())
+            advanceUntilIdle()
+            Thread.sleep(100)
+            assertTrue(
+                "Back must serve the earlier page from memory, was ${restoredVm.browserState.value}",
+                restoredVm.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+            // Initial load + the link navigation; restore and Back are free.
+            coVerify(exactly = 2) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
         }
 
     @Test

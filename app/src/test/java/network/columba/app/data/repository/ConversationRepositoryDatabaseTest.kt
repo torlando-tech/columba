@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.storage.AttachmentStorageManager
+import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.test.DatabaseTest
 import io.mockk.every
 import io.mockk.mockk
@@ -73,6 +74,62 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
     @After
     fun teardownDispatcher() {
         Dispatchers.resetMain()
+    }
+
+    // ========== Case-2 root persistence (threads-spec §4.2) ==========
+
+    @Test
+    fun `savePendingThreadRoot stores the root on a thread that has no message yet`() =
+        runTest {
+            insertConversationFor(TEST_PEER_HASH)
+            val threadId = "02000000000000000000000000000002".hexToBytes()
+
+            repository.savePendingThreadRoot(
+                peerHash = TEST_PEER_HASH,
+                threadId = threadId,
+                rootMessageId = "root-message-1",
+            )
+
+            val row = threadDao.getThread(TEST_IDENTITY_HASH, TEST_PEER_HASH, threadId)
+            assertEquals(
+                "Reopening the unsent thread must still know which Main message it came from",
+                "root-message-1",
+                row?.rootMessageId,
+            )
+        }
+
+    @Test
+    fun `savePendingThreadRoot does not replace a root that was already attached`() =
+        runTest {
+            insertConversationFor(TEST_PEER_HASH)
+            val threadId = "03000000000000000000000000000003".hexToBytes()
+            repository.savePendingThreadRoot(
+                peerHash = TEST_PEER_HASH,
+                threadId = threadId,
+                rootMessageId = "root-message-1",
+            )
+
+            repository.savePendingThreadRoot(
+                peerHash = TEST_PEER_HASH,
+                threadId = threadId,
+                rootMessageId = "root-message-2",
+            )
+
+            val row = threadDao.getThread(TEST_IDENTITY_HASH, TEST_PEER_HASH, threadId)
+            assertEquals("The first root already went on the wire", "root-message-1", row?.rootMessageId)
+        }
+
+    private suspend fun insertConversationFor(peerHash: String) {
+        conversationDao.insertConversation(
+            ConversationEntity(
+                peerHash = peerHash,
+                identityHash = TEST_IDENTITY_HASH,
+                peerName = "Peer",
+                lastMessage = "",
+                lastMessageTimestamp = 0L,
+                unreadCount = 0,
+            ),
+        )
     }
 
     // ========== Message Deduplication Tests ==========

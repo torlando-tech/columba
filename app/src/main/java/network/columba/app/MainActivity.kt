@@ -595,6 +595,8 @@ sealed class PendingNavigation {
         val peerName: String,
         val fromNotification: Boolean = false,
         val notificationEventId: Long = 0L,
+        /** Thread the notification's message belongs to; null = Main. */
+        val threadIdHex: String? = null,
     ) : PendingNavigation()
 
     data class AddContact(
@@ -849,6 +851,7 @@ fun ColumbaNavigation(
                             encodedPeerName = encodedName,
                             fromNotification = navigation.fromNotification,
                             notificationEventId = navigation.notificationEventId,
+                            threadId = navigation.threadIdHex,
                         )
 
                         if (navigationAction == ConversationNavigation.Action.REUSE_CURRENT) {

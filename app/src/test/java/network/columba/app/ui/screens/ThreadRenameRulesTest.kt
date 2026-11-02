@@ -33,6 +33,28 @@ class ThreadRenameRulesTest {
     }
 
     @Test
+    fun `over-cap automatic title can be shortened one character at a time`() {
+        val automatic = "x".repeat(ThreadPolicy.MAX_THREAD_TITLE_LENGTH + 5)
+
+        assertTrue(
+            "Deleting from an over-cap field must be accepted",
+            renameInputAllowed(current = automatic, proposed = automatic.dropLast(1)),
+        )
+        assertFalse(
+            "Typing into an over-cap field must stay blocked until it is under the cap",
+            renameInputAllowed(current = automatic, proposed = automatic + "y"),
+        )
+    }
+
+    @Test
+    fun `typing is blocked at the cap but accepted below it`() {
+        val atCap = "x".repeat(ThreadPolicy.MAX_THREAD_TITLE_LENGTH)
+
+        assertFalse(renameInputAllowed(current = atCap, proposed = atCap + "y"))
+        assertTrue(renameInputAllowed(current = atCap, proposed = atCap.dropLast(1) + "y"))
+    }
+
+    @Test
     fun `typed name is sanitized before saving`() {
         val rules = threadRenameRules(initialTitle = "", input = "  Mesh\nbuild  ")
 

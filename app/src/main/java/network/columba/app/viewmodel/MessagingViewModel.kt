@@ -387,8 +387,16 @@ class MessagingViewModel
                     _draftText.value = draft
                     _selectedThread.value = threadIdHex
                     // Thread-aware read path: opening a target clears only its unread.
-                    if (threadIdHex != null) {
-                        conversationRepository.markThreadAsRead(peerHash, threadIdHex.hexToBytes())
+                    val threadBytes = threadIdHex.hexToBytesOrNull()
+                    if (threadBytes != null) {
+                        conversationRepository.markThreadAsRead(peerHash, threadBytes)
+                        // Reopening a case-2 thread whose first message was never
+                        // sent restores the root it was created with; the 0x30
+                        // rides on that first send only.
+                        _pendingThreadRoot.value =
+                            conversationRepository.getThread(peerHash, threadBytes)
+                                ?.rootMessageId
+                                ?.takeIf { conversationRepository.firstMessageInThread(peerHash, threadBytes) == null }
                     } else {
                         conversationRepository.markMainAsRead(peerHash)
                     }
@@ -413,12 +421,21 @@ class MessagingViewModel
             rootContent: String,
         ) {
             viewModelScope.launch {
-                switchThread(ThreadPolicy.newThreadId().toHex())
+                val newThreadHex = ThreadPolicy.newThreadId().toHex()
+                switchThread(newThreadHex)
+                // Persist the root with the (still message-less) thread before
+                // announcing it: switching away and back must keep the first
+                // send's 0x30, or Main loses the replies hook (spec §4.2).
+                val peerHash = _currentConversation.value
+                val threadBytes = newThreadHex.hexToBytesOrNull()
+                if (peerHash != null && threadBytes != null) {
+                    conversationRepository.savePendingThreadRoot(peerHash, threadBytes, rootMessageId)
+                }
+                _pendingThreadRoot.value = rootMessageId
                 // Emit the quote only after the switch completed: the
                 // switch swaps the composer draft, so a prefill emitted
                 // before it can be replaced by the new target's (empty)
                 // draft.
-                _pendingThreadRoot.value = rootMessageId
                 _threadComposerPrefill.tryEmit("> ${ThreadPolicy.quoteExcerpt(rootContent)}\n")
             }
         }
@@ -2312,11 +2329,14 @@ class MessagingViewModel
             replyToMessageId: String?,
             threadId: ByteArray? = null,
         ) {
-            val onSubmittedTarget =
-                _currentConversation.value == destinationHash &&
-                    _selectedThread.value == threadId?.toHex() &&
-                    lastDraftText == submittedText
             threadSwitchMutex.withLock {
+                // Read the target inside the lock: a switch waiting on this
+                // mutex may restore another thread's draft first, and a stale
+                // comparison here would then clear that thread's draft.
+                val onSubmittedTarget =
+                    _currentConversation.value == destinationHash &&
+                        _selectedThread.value == threadId?.toHex() &&
+                        lastDraftText == submittedText
                 if (onSubmittedTarget) {
                     draftSaveJob?.cancel()
                     lastDraftText = ""

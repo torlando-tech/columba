@@ -90,6 +90,7 @@ internal fun ThreadSheetRow(
     isCurrent: Boolean,
     selectionMode: Boolean,
     checked: Boolean,
+    archived: Boolean,
     archiveLabel: String,
     archiveIcon: ImageVector,
     menuActions: List<ThreadRowMenuAction>,
@@ -100,10 +101,12 @@ internal fun ThreadSheetRow(
     val haptics = LocalHapticFeedback.current
     // confirmValueChange is consulted for every target change of the settle
     // animation, so a single gesture can report EndToStart more than once.
-    // Fire the callback once per row instance and snap the row back: the host
+    // Fire the callback once per gesture and snap the row back: the host
     // removes archived rows, and an ignored callback must not leave the row
-    // stuck in the dismissed state. Undo re-adds the row with a fresh guard.
-    var archiveFired by remember { mutableStateOf(false) }
+    // stuck in the dismissed state. The guard is also keyed to the row's
+    // archive state so a row that survives the action (a search result, or the
+    // Archived section) can be swiped again after the state flips.
+    var archiveFired by remember(archived) { mutableStateOf(false) }
     val swipeState =
         rememberSwipeToDismissBoxState(
             confirmValueChange = { value ->

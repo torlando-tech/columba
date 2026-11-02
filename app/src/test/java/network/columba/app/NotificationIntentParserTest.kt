@@ -49,6 +49,35 @@ class NotificationIntentParserTest {
     }
 
     @Test
+    fun `parseOpenConversation carries the thread of the notified message`() {
+        val intent = Intent().apply {
+            action = NotificationHelper.ACTION_OPEN_CONVERSATION
+            putExtra(NotificationHelper.EXTRA_DESTINATION_HASH, "testHash123")
+            putExtra(NotificationHelper.EXTRA_PEER_NAME, "Alice")
+            putExtra(NotificationHelper.EXTRA_THREAD_ID, "02000000000000000000000000000002")
+        }
+
+        val result = NotificationIntentParser.parseOpenConversation(intent)
+
+        assertNotNull(result)
+        assertEquals("02000000000000000000000000000002", result!!.threadIdHex)
+    }
+
+    @Test
+    fun `parseOpenConversation defaults to no thread for a Main message`() {
+        val intent = Intent().apply {
+            action = NotificationHelper.ACTION_OPEN_CONVERSATION
+            putExtra(NotificationHelper.EXTRA_DESTINATION_HASH, "testHash123")
+            putExtra(NotificationHelper.EXTRA_PEER_NAME, "Alice")
+        }
+
+        val result = NotificationIntentParser.parseOpenConversation(intent)
+
+        assertNotNull(result)
+        assertNull("A Main message must not carry a thread", result!!.threadIdHex)
+    }
+
+    @Test
     fun `parseOpenConversation with wrong action returns null`() {
         val intent = Intent().apply {
             action = "com.other.ACTION"

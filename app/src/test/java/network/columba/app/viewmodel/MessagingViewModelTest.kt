@@ -334,6 +334,11 @@ class MessagingViewModelTest {
 
         // Default: no reply preview
         coEvery { conversationRepository.getReplyPreview(any(), any()) } returns null
+
+        // Defaults for thread lookups made while switching targets
+        coEvery { conversationRepository.getThread(any(), any()) } returns null
+        coEvery { conversationRepository.firstMessageInThread(any(), any()) } returns null
+        coEvery { conversationRepository.savePendingThreadRoot(any(), any(), any()) } just Runs
     }
 
     @After
@@ -628,6 +633,33 @@ class MessagingViewModelTest {
             assertEquals(openThread, viewModel.selectedThread.value)
             flagCollection.cancel()
         }
+
+    /** Threads-on stubs shared by the case-2 root tests. */
+    private fun stubThreadSurface() {
+        every { settingsRepository.threadsEnabledFlow } returns flowOf(true)
+        coEvery { conversationRepository.threadsForConversation(any(), includeArchived = true) } returns flowOf(emptyList())
+        coEvery { conversationRepository.observeUnreadCountsPerThread(any()) } returns flowOf(emptyList())
+        coEvery { conversationRepository.observeLastMessagesPerThread(any()) } returns flowOf(emptyList())
+        coEvery { conversationRepository.observeMessageCountsPerThread(any()) } returns flowOf(emptyList())
+        coEvery { conversationRepository.observeFirstMessagesPerThread(any()) } returns flowOf(emptyList())
+        coEvery { conversationRepository.saveDraft(any(), any(), any()) } returns Unit
+        coEvery { conversationRepository.getDraft(any(), any()) } returns null
+        coEvery { conversationRepository.markThreadAsRead(any(), any()) } returns Unit
+        coEvery { conversationRepository.markMainAsRead(any()) } returns Unit
+        coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+        coEvery {
+            rnsLxmf.sendLxmfMessageWithMethod(
+                any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(),
+            )
+        } returns Result.success(
+            MessageReceipt(
+                messageHash = ByteArray(32) { it.toByte() },
+                timestamp = 3_000L,
+                destinationHash = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+            ),
+        )
+    }
 
     private fun threadEntity(
         threadIdHex: String,
@@ -4699,6 +4731,75 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Assert: Initial state is empty map
             assertTrue(viewModel.replyPreviewCache.value.isEmpty())
+        }
+
+    @Test
+    fun `reopening an unsent case-2 thread still attaches its root on the first send`() =
+        runTest {
+            val rootMessageId = "root-message-id"
+            stubThreadSurface()
+            val viewModel =
+                createTestViewModel().also {
+                    it.attachmentIoDispatcher = StandardTestDispatcher(testScheduler)
+                }
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Thread from here: the root is remembered with the still-unsent thread.
+            viewModel.startThreadFromMessage(rootMessageId, "quoted Main message")
+            advanceUntilIdle()
+            val threadHex = requireNotNull(viewModel.selectedThread.value)
+            coVerify {
+                conversationRepository.savePendingThreadRoot(
+                    peerHash = testPeerHash,
+                    threadId = match { it.contentEquals(threadHex.hexToBytes()) },
+                    rootMessageId = rootMessageId,
+                )
+            }
+
+            // Switch away (Main) and back: the row now carries the root, and the
+            // thread has no message yet because nothing was sent.
+            viewModel.selectThread(null)
+            advanceUntilIdle()
+            coEvery { conversationRepository.getThread(testPeerHash, threadHex.hexToBytes()) } returns
+                threadEntity(threadHex, lastActivityAt = 1_000L).copy(rootMessageId = rootMessageId)
+            viewModel.selectThread(threadHex)
+            advanceUntilIdle()
+            assertEquals(threadHex, viewModel.selectedThread.value)
+
+            // The first send of the reopened thread must still carry the root.
+            viewModel.sendMessage(testPeerHash, "first message")
+            advanceUntilIdle()
+
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = "first message",
+                    sourceIdentity = any(),
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                    fileAttachments = null,
+                    replyToMessageId = rootMessageId,
+                    replyQuotedContent = any(),
+                    iconAppearance = null,
+                    extraFields = null,
+                    threadId = match { it?.contentEquals(threadHex.hexToBytes()) == true },
+                )
+            }
+            coVerify {
+                conversationRepository.saveMessage(
+                    peerHash = testPeerHash,
+                    peerName = testPeerName,
+                    message = match { it.replyToMessageId == rootMessageId && it.threadId != null },
+                    peerPublicKey = null,
+                )
+            }
+            flagCollection.cancel()
         }
 
     @Test

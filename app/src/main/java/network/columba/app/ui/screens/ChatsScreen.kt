@@ -837,14 +837,16 @@ fun ConversationCard(
                 // Main first — always the anchor conversation of the card.
                 ChatCardThreadRow(
                     title = stringResource(R.string.thread_row_main),
-                    preview = bundle.mainPreview.ifEmpty { conversation.lastMessage },
-                    timestamp = if (bundle.mainTimestamp > 0L) bundle.mainTimestamp else conversation.lastMessageTimestamp,
-                    unreadCount = conversation.unreadCount,
+                    // Main's own preview/unread: the conversation row may carry a
+                    // thread message, which opening Main cannot show.
+                    preview = bundle.sheet.main.preview,
+                    timestamp = bundle.sheet.main.timestamp,
+                    unreadCount = bundle.sheet.main.unreadCount,
                     onClick = onClick,
                 )
                 bundle.nonArchived.take(2).forEach { row ->
                     ChatCardThreadRow(
-                        title = row.title ?: stringResource(R.string.thread_untitled),
+                        title = row.displayTitle ?: stringResource(R.string.thread_untitled),
                         preview = row.preview,
                         timestamp = row.timestamp,
                         unreadCount = row.unreadCount,

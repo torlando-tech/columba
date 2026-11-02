@@ -450,6 +450,7 @@ private fun ThreadSheetRowItem(
         isCurrent = isCurrent,
         selectionMode = selectionMode,
         checked = checked,
+        archived = archivedSection,
         archiveLabel = if (archivedSection) unarchiveLabel else archiveLabel,
         archiveIcon = if (archivedSection) ThreadUnarchiveIcon else ThreadArchiveIcon,
         menuActions = actions,
@@ -622,8 +623,8 @@ internal fun ThreadRenameDialog(
             Column {
                 OutlinedTextField(
                     value = text,
-                    onValueChange = {
-                        if (it.length <= ThreadPolicy.MAX_THREAD_TITLE_LENGTH) text = it
+                    onValueChange = { new ->
+                        if (renameInputAllowed(current = text, proposed = new)) text = new
                     },
                     singleLine = true,
                     label = { Text(stringResource(R.string.thread_rename_hint)) },
@@ -665,6 +666,17 @@ internal data class ThreadRenameRules(
     val canSave: Boolean,
     val canReset: Boolean,
 )
+
+/**
+ * Whether the rename field accepts an edit of [current] into [proposed].
+ *
+ * The stored title is capped, but the field is seeded with the thread's
+ * automatic title — an excerpt that can be longer than the cap. A field the
+ * user cannot shrink would make Rename a dead end, so deletions are always
+ * accepted; growth stops at the cap.
+ */
+internal fun renameInputAllowed(current: String, proposed: String): Boolean =
+    proposed.length <= ThreadPolicy.MAX_THREAD_TITLE_LENGTH || proposed.length < current.length
 
 internal fun threadRenameRules(
     initialTitle: String,

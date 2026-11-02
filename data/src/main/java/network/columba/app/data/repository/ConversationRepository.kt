@@ -1512,6 +1512,38 @@ class ConversationRepository
             messageDao.markThreadMessagesAsRead(peerHash, identityHash, threadId)
         }
 
+        /**
+         * Remember the Main-message root of a "thread from here" that has no
+         * message yet. The row (created by the draft sync) keeps the root, so
+         * switching away and back still attaches `0x30` to the first send
+         * (threads-spec §4.2).
+         */
+        suspend fun savePendingThreadRoot(
+            peerHash: String,
+            threadId: ByteArray,
+            rootMessageId: String,
+        ) {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
+            val existing = threadDao.getThread(identityHash, peerHash, threadId)
+            if (existing == null) {
+                val now = System.currentTimeMillis()
+                threadDao.insertThreadIgnore(
+                    ThreadEntity(
+                        threadId = threadId,
+                        conversationHash = peerHash,
+                        identityHash = identityHash,
+                        rootMessageId = rootMessageId,
+                        title = null,
+                        createdAt = now,
+                        lastActivityAt = now,
+                        archivedAt = null,
+                    ),
+                )
+            } else if (existing.rootMessageId == null) {
+                threadDao.setRootMessage(threadId, identityHash, peerHash, rootMessageId)
+            }
+        }
+
         /** Thread row for one (conversation, thread) pair, or null. */
         suspend fun getThread(
             peerHash: String,

@@ -1,9 +1,11 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -11,6 +13,9 @@ import androidx.compose.ui.test.performTouchInput
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.test.TestFactories
 import network.columba.app.ui.model.ChatCardThreadsUi
+import network.columba.app.ui.model.ThreadMainRowUi
+import network.columba.app.ui.model.ThreadRowUi
+import network.columba.app.ui.model.ThreadSheetUiState
 import network.columba.app.viewmodel.ChatsViewModel
 import io.mockk.every
 import io.mockk.mockk
@@ -390,6 +395,81 @@ class ChatsScreenTest {
 
         // Then
         composeTestRule.onNodeWithText("Test User").assertIsDisplayed()
+    }
+
+    @Test
+    fun conversationCard_expandedMainRow_showsMainPreviewAndUnread() {
+        // The conversation row carries a THREAD message: opening Main cannot
+        // show it, so the card's Main row must use Main's own preview/unread.
+        val conversation =
+            TestFactories.createConversation(
+                lastMessage = "thread reply from Alice",
+                unreadCount = 0,
+            )
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet =
+                    ThreadSheetUiState(
+                        active =
+                            listOf(
+                                ThreadRowUi(
+                                    threadIdHex = "01000000000000000000000000000001",
+                                    title = "Trip",
+                                    autoTitle = null,
+                                    preview = "latest in thread",
+                                    timestamp = 3_000L,
+                                    unreadCount = 0,
+                                ),
+                            ),
+                        main = ThreadMainRowUi(preview = "main thread text", timestamp = 4_000L, unreadCount = 1),
+                    ),
+            )
+
+        composeTestRule.setContent {
+            ConversationCard(
+                conversation = conversation,
+                threadsUi = threadsUi,
+                isExpanded = true,
+            )
+        }
+
+        composeTestRule.onNodeWithText("main thread text").assertIsDisplayed()
+
+        // The thread message appears once — the card's own preview — never twice
+        // as the Main row's preview, which opening Main could not show.
+        composeTestRule.onAllNodesWithText("thread reply from Alice").assertCountEquals(1)
+    }
+
+    @Test
+    fun conversationCard_expandedThreadRow_showsAutomaticTitle() {
+        val conversation = TestFactories.createConversation()
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet =
+                    ThreadSheetUiState(
+                        active =
+                            listOf(
+                                ThreadRowUi(
+                                    threadIdHex = "02000000000000000000000000000002",
+                                    title = null,
+                                    autoTitle = "automatic excerpt",
+                                    preview = "latest in thread",
+                                    timestamp = 1_000L,
+                                    unreadCount = 0,
+                                ),
+                            ),
+                    ),
+            )
+
+        composeTestRule.setContent {
+            ConversationCard(
+                conversation = conversation,
+                threadsUi = threadsUi,
+                isExpanded = true,
+            )
+        }
+
+        composeTestRule.onNodeWithText("automatic excerpt").assertIsDisplayed()
     }
 
     @Test

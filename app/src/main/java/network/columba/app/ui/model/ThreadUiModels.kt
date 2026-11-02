@@ -116,9 +116,6 @@ data class ThreadViewUi(
  */
 data class ChatCardThreadsUi(
     val sheet: ThreadSheetUiState = ThreadSheetUiState(),
-    /** Main row preview: last Main message (the conversation row's lastMessage may be a thread message). */
-    val mainPreview: String = "",
-    val mainTimestamp: Long = 0L,
 ) {
     /** Non-archived threads, most recent activity first (active all outrank dormant by the time-based cutoff). */
     val nonArchived: List<ThreadRowUi> get() = sheet.active + sheet.dormant

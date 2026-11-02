@@ -282,8 +282,6 @@ class ChatsViewModel
                                                         unreadCount = ThreadUiDerivation.mainUnreadCount(unreadRows),
                                                     ),
                                             ),
-                                        mainPreview = mainRow?.content.orEmpty(),
-                                        mainTimestamp = mainRow?.timestamp ?: 0L,
                                     )
                                 },
                         )

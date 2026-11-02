@@ -19,6 +19,7 @@ import network.columba.app.notifications.NotificationHelper
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.util.ThreadFieldCodec
+import network.columba.app.rns.api.util.toHex
 import network.columba.app.rns.host.util.PeerNameResolver
 import network.columba.app.telemetry.MemoryDiagnosticCounter
 import network.columba.app.telemetry.MemoryDiagnostics
@@ -164,6 +165,9 @@ class MessageCollector
                                         peerName = peerName,
                                         messagePreview = receivedMessage.content.take(100),
                                         isFavorite = isFavorite,
+                                        threadIdHex = ThreadFieldCodec
+                                            .threadIdFromFieldsJson(receivedMessage.fieldsJson)
+                                            ?.toHex(),
                                     )
                                     Log.d(TAG, "Posted notification for already-persisted unread message")
                                 } catch (e: Exception) {
@@ -302,6 +306,9 @@ class MessageCollector
                                     // Truncate preview
                                     messagePreview = receivedMessage.content.take(100),
                                     isFavorite = isFavorite,
+                                    threadIdHex = ThreadFieldCodec
+                                        .threadIdFromFieldsJson(receivedMessage.fieldsJson)
+                                        ?.toHex(),
                                 )
                                 Log.d(TAG, "Posted notification for message (favorite: $isFavorite)")
                             } catch (e: Exception) {

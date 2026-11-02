@@ -1,6 +1,7 @@
 package network.columba.app.ui.screens
 
 import android.Manifest
+import android.content.Context
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,12 +57,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import network.columba.app.R
 import network.columba.app.data.model.NotificationPrivacyLevel
+import network.columba.app.ui.components.NotificationPermissionWarningCard
 import network.columba.app.ui.components.NotificationPrivacyChooser
+import network.columba.app.ui.components.findActivity
+import network.columba.app.ui.components.openAppSettings
 import network.columba.app.viewmodel.NotificationSettingsViewModel
 
 /**
@@ -75,19 +84,24 @@ fun NotificationSettingsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Track permission state
-    var hasNotificationPermission by remember {
-        mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.POST_NOTIFICATIONS,
-                ) == PermissionChecker.PERMISSION_GRANTED
-            } else {
-                true // No permission needed for Android 12 and below
-            },
-        )
+    // Track permission state. Re-read on every ON_RESUME so grants or revocations
+    // made through the system Settings UI - which never fires the launcher
+    // callback - are reflected, and a saved enabled=true can never silently
+    // outrun the runtime permission (TOR-31).
+    var hasNotificationPermission by remember { mutableStateOf(hasPostNotificationsPermission(context)) }
+    var permissionRequestedInSession by remember { mutableStateOf(false) }
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    hasNotificationPermission = hasPostNotificationsPermission(context)
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Permission launcher for Android 13+
@@ -96,14 +110,33 @@ fun NotificationSettingsScreen(
             contract = ActivityResultContracts.RequestPermission(),
         ) { isGranted ->
             hasNotificationPermission = isGranted
+            permissionRequestedInSession = true
             if (isGranted) {
                 // Permission granted, enable notifications
                 viewModel.toggleNotificationsEnabled(true)
             } else {
-                // Permission denied, keep notifications disabled
+                // Permission denied: never leave enabled=true persisted without
+                // the permission, and record the refusal so a later tap on the
+                // warning card routes to system settings instead of a dialog
+                // Android will no longer show.
+                viewModel.markNotificationPermissionRequested()
                 viewModel.toggleNotificationsEnabled(false)
             }
         }
+
+    // Saved state outruns the runtime permission: notifications are enabled but
+    // Android will not deliver them. Surface a persistent, actionable warning.
+    val notificationsBlockedByPermission =
+        state.notificationsEnabled &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !hasNotificationPermission
+    val permissionPermanentlyDenied =
+        notificationsBlockedByPermission &&
+            (permissionRequestedInSession || state.hasRequestedNotificationPermission) &&
+            !ActivityCompat.shouldShowRequestPermissionRationale(
+                context.findActivity(),
+                Manifest.permission.POST_NOTIFICATIONS,
+            )
 
     Scaffold(
         topBar = {
@@ -156,6 +189,19 @@ fun NotificationSettingsScreen(
                         }
                     },
                 )
+
+                if (notificationsBlockedByPermission) {
+                    NotificationPermissionWarningCard(
+                        permanentlyDenied = permissionPermanentlyDenied,
+                        onAction = {
+                            if (permissionPermanentlyDenied) {
+                                openAppSettings(context)
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        },
+                    )
+                }
 
                 // Message privacy card
                 MessagePrivacyCard(
@@ -495,3 +541,17 @@ fun NotificationTypeItem(
         )
     }
 }
+
+/**
+ * Whether POST_NOTIFICATIONS is effectively granted. Android 12 and below need no
+ * runtime permission, so this is always true there.
+ */
+private fun hasPostNotificationsPermission(context: Context): Boolean =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PermissionChecker.PERMISSION_GRANTED
+    } else {
+        true
+    }

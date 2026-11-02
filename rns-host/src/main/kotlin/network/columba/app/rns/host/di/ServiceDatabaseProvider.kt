@@ -29,18 +29,7 @@ object ServiceDatabaseProvider {
                 context.applicationContext,
                 ColumbaDatabase::class.java,
                 DatabaseModule.DATABASE_NAME,
-            ).addMigrations(
-                ColumbaDatabase.MIGRATION_1_2,
-                ColumbaDatabase.MIGRATION_2_3,
-                ColumbaDatabase.MIGRATION_3_4,
-                ColumbaDatabase.MIGRATION_4_5,
-                ColumbaDatabase.MIGRATION_5_6,
-                ColumbaDatabase.MIGRATION_6_7,
-                ColumbaDatabase.MIGRATION_7_8,
-                ColumbaDatabase.MIGRATION_8_9,
-                ColumbaDatabase.MIGRATION_9_10,
-                ColumbaDatabase.MIGRATION_10_11,
-            )
+            ).addMigrations(*ColumbaDatabase.MIGRATIONS)
             .enableMultiInstanceInvalidation()
             .addCallback(DatabaseModule.DURABILITY_CALLBACK)
             .build()

@@ -1,33 +1,42 @@
 package network.columba.app.ui.screens
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -35,33 +44,43 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import kotlinx.coroutines.launch
 import network.columba.app.R
+import network.columba.app.data.util.ThreadPolicy
 import network.columba.app.ui.model.ThreadRowUi
 import network.columba.app.ui.model.ThreadSheetUiState
 
+/** Expandable pinned sections of the sheet (spec §5.2 item 4). */
+private enum class ThreadSection { DORMANT, ARCHIVED }
+
 /**
- * Thread sheet (threads-spec §6.3): Active / Dormant / Archived sections,
- * each row = title + last-message preview + unread count + timestamp.
- * Row tap opens the thread; long-press offers rename / archive /
- * un-archive / delete — all local-only (confirm dialog on delete; wire
- * history is never touched). "+ New" starts a thread from scratch (case 1).
+ * Threads sheet (threads-spec §5.2-§5.4): the single thread control surface,
+ * opened from the header pill as a full-height sheet. The partial anchor is
+ * skipped: it would clip the list, the pinned sections and the undo snackbar
+ * below the screen, and every one of them must stay reachable.
  *
- * Stateless: the hosting screen supplies [ThreadSheetUiState] from its
- * ViewModel and handles the callbacks (both ChatsScreen and MessagingScreen
- * host this sheet).
+ * Contents: search (title filter), pinned Main row, the active list, a pinned
+ * `Dormant · N` / `Archived · N` footer expanded in place, swipe-to-archive
+ * with an in-sheet undo snackbar, and long-press selection mode with batch
+ * archive. All of it is local-only: titles and archive state never touch the
+ * wire.
+ *
+ * The sheet is stateless with respect to thread data — the hosting screen
+ * supplies [ThreadSheetUiState] from #1224's `ThreadUiModels` projection and
+ * owns the callbacks; only presentation state (query, selection, expanded
+ * section, open dialog) lives here.
  */
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,296 +88,562 @@ fun ThreadSheet(
     state: ThreadSheetUiState,
     onDismiss: () -> Unit,
     onThreadClick: (threadIdHex: String) -> Unit,
+    onMainClick: () -> Unit,
     onCreateThread: () -> Unit,
-    onRename: (threadIdHex: String, newTitle: String) -> Unit,
-    onArchive: (threadIdHex: String) -> Unit,
-    onUnarchive: (threadIdHex: String) -> Unit,
+    onRename: (threadIdHex: String, newTitle: String?) -> Unit,
+    onMarkRead: (threadIdHex: String) -> Unit,
+    onArchive: (threadIdHexes: List<String>) -> Unit,
+    onUnarchive: (threadIdHexes: List<String>) -> Unit,
+    onReopenThread: (threadIdHex: String) -> Unit,
     onDelete: (threadIdHex: String) -> Unit,
 ) {
-    var menuRow by remember { mutableStateOf<ThreadRowUi?>(null) }
-    var renamingRow by remember { mutableStateOf<ThreadRowUi?>(null) }
-    var deletingRow by remember { mutableStateOf<ThreadRowUi?>(null) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.thread_sheet_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = onCreateThread) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.thread_sheet_new_thread))
-                }
-            }
+    var query by rememberSaveable { mutableStateOf("") }
+    var selection by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var expandedSection by remember { mutableStateOf<ThreadSection?>(null) }
+    var renameTargetId by remember { mutableStateOf<String?>(null) }
+    var deleteTargetId by remember { mutableStateOf<String?>(null) }
 
-            if (state.isEmpty) {
-                Text(
-                    text = stringResource(R.string.thread_sheet_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
-                )
+    val rowsById = remember(state.active, state.dormant, state.archived) {
+        state.allRows.associateBy { it.threadIdHex }
+    }
+    val archivedIds = remember(state.archived) { state.archived.map { it.threadIdHex }.toSet() }
+    val trimmedQuery = query.trim()
+    val matchesQuery: (ThreadRowUi) -> Boolean = { row ->
+        trimmedQuery.isEmpty() ||
+            (row.displayTitle ?: context.getString(R.string.thread_untitled))
+                .contains(trimmedQuery, ignoreCase = true)
+    }
+
+    // Back leaves selection mode without dismissing the sheet; otherwise the
+    // sheet's own dismiss handles Back.
+    BackHandler(enabled = selection.isNotEmpty()) {
+        selection = emptySet()
+    }
+
+    /**
+     * Archive/un-archive commit shared by the swipe, the row menu and the
+     * selection bar: one repository call per batch, one snackbar, one undo.
+     * The host switches the message target away from an archived open thread
+     * before the archive lands, so the list never flashes Main (spec §5.3).
+     */
+    fun commit(rows: List<ThreadRowUi>, archive: Boolean) {
+        if (rows.isEmpty()) return
+        val ids = rows.map { it.threadIdHex }
+        val wasCurrent = state.openTargetKnown && rows.any { it.threadIdHex == state.currentThreadIdHex }
+        if (archive) onArchive(ids) else onUnarchive(ids)
+        if (selection.isNotEmpty()) selection = selection - ids.toSet()
+        val message =
+            if (rows.size == 1) {
+                val title = rows.first().displayTitle ?: context.getString(R.string.thread_untitled)
+                val template =
+                    if (archive) {
+                        R.string.thread_archive_snackbar_single
+                    } else {
+                        R.string.thread_unarchive_snackbar_single
+                    }
+                context.getString(template, title)
             } else {
-                LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
-                    if (state.active.isNotEmpty()) {
-                        item(key = "section-active") {
-                            ThreadSheetSectionHeader(stringResource(R.string.thread_sheet_section_active))
-                        }
-                        items(state.active, key = { it.threadIdHex }) { row ->
-                            ThreadSheetRow(
-                                row = row,
-                                onClick = { onThreadClick(row.threadIdHex) },
-                                onLongPress = { menuRow = row },
-                            )
-                        }
+                val template =
+                    if (archive) {
+                        R.plurals.thread_archive_snackbar_batch
+                    } else {
+                        R.plurals.thread_unarchive_snackbar_batch
                     }
-                    if (state.dormant.isNotEmpty()) {
-                        item(key = "section-dormant") {
-                            ThreadSheetSectionHeader(stringResource(R.string.thread_sheet_section_dormant))
-                        }
-                        items(state.dormant, key = { it.threadIdHex }) { row ->
-                            ThreadSheetRow(
-                                row = row,
-                                onClick = { onThreadClick(row.threadIdHex) },
-                                onLongPress = { menuRow = row },
-                            )
-                        }
-                    }
-                    if (state.archived.isNotEmpty()) {
-                        item(key = "section-archived") {
-                            ThreadSheetSectionHeader(stringResource(R.string.thread_sheet_section_archived))
-                        }
-                        items(state.archived, key = { it.threadIdHex }) { row ->
-                            ThreadSheetRow(
-                                row = row,
-                                onClick = { onThreadClick(row.threadIdHex) },
-                                onLongPress = { menuRow = row },
-                            )
-                        }
-                    }
-                    item { Spacer(modifier = Modifier.height(24.dp)) }
+                context.resources.getQuantityString(template, rows.size, rows.size)
+            }
+        val reopenId = rows.singleOrNull()?.threadIdHex?.takeIf { wasCurrent }
+        scope.launch {
+            val result =
+                snackbarHostState.showSnackbar(
+                    message = message,
+                    actionLabel = context.getString(R.string.thread_action_undo),
+                    withDismissAction = true,
+                    duration = SnackbarDuration.Short,
+                )
+            if (result == SnackbarResult.ActionPerformed) {
+                if (archive) {
+                    onUnarchive(ids)
+                    if (reopenId != null) onReopenThread(reopenId)
+                } else {
+                    onArchive(ids)
                 }
             }
         }
     }
 
-    // Long-press management menu (rename / archive / un-archive / delete).
-    val menuTarget = menuRow
-    if (menuTarget != null) {
-        val isArchived = state.archived.any { it.threadIdHex == menuTarget.threadIdHex }
-        AlertDialog(
-            onDismissRequest = { menuRow = null },
-            title = {
-                Text(
-                    text = menuTarget.title ?: stringResource(R.string.thread_untitled),
-                    style = MaterialTheme.typography.titleMedium,
-                )
+    val archiveLabel = stringResource(R.string.thread_action_archive)
+    val unarchiveLabel = stringResource(R.string.thread_action_unarchive)
+    val markReadLabel = stringResource(R.string.thread_action_mark_read)
+    val renameLabel = stringResource(R.string.thread_action_rename)
+    val deleteLabel = stringResource(R.string.thread_action_delete)
+
+    val renameTarget = renameTargetId?.let(rowsById::get)
+    val deleteTarget = deleteTargetId?.let(rowsById::get)
+
+    val rowComposable: @Composable (ThreadRowUi, Boolean) -> Unit = { row, archivedSection ->
+        ThreadSheetRowItem(
+            row = row,
+            selectionMode = selection.isNotEmpty(),
+            checked = row.threadIdHex in selection,
+            isCurrent = state.openTargetKnown && state.currentThreadIdHex == row.threadIdHex,
+            archivedSection = archivedSection,
+            onOpen = {
+                onThreadClick(row.threadIdHex)
+                onDismiss()
             },
-            text = {
-                Column {
-                    ThreadActionItem(
-                        icon = Icons.Default.Edit,
-                        label = stringResource(R.string.thread_action_rename),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        onClick = {
-                            renamingRow = menuTarget
-                            menuRow = null
-                        },
-                    )
-                    if (isArchived) {
-                        ThreadActionItem(
-                            icon = Icons.Default.Unarchive,
-                            label = stringResource(R.string.thread_action_unarchive),
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            onClick = {
-                                onUnarchive(menuTarget.threadIdHex)
-                                menuRow = null
-                            },
-                        )
-                    } else {
-                        ThreadActionItem(
-                            icon = Icons.Default.Archive,
-                            label = stringResource(R.string.thread_action_archive),
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            onClick = {
-                                onArchive(menuTarget.threadIdHex)
-                                menuRow = null
-                            },
-                        )
-                    }
-                    ThreadActionItem(
-                        icon = Icons.Default.Delete,
-                        label = stringResource(R.string.thread_action_delete),
-                        tint = MaterialTheme.colorScheme.error,
-                        onClick = {
-                            deletingRow = menuTarget
-                            menuRow = null
-                        },
-                    )
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { menuRow = null }) {
-                    Text(stringResource(R.string.thread_action_cancel))
-                }
-            },
+            onToggleSelection = { selection = selection.toggle(row.threadIdHex) },
+            onArchiveAction = { commit(listOf(row), archive = true) },
+            onUnarchiveAction = { commit(listOf(row), archive = false) },
+            onMarkRead = { onMarkRead(row.threadIdHex) },
+            onRename = { renameTargetId = row.threadIdHex },
+            onDelete = { deleteTargetId = row.threadIdHex },
+            archiveLabel = archiveLabel,
+            unarchiveLabel = unarchiveLabel,
+            markReadLabel = markReadLabel,
+            renameLabel = renameLabel,
+            deleteLabel = deleteLabel,
         )
     }
 
-    // Rename dialog (local label only — titles never touch the wire).
-    val renameTarget = renamingRow
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        // The header replaces the drag handle; the sheet opens full height.
+        dragHandle = null,
+    ) {
+        // Taps on the sheet's blank area (between the list and the pinned
+        // sections) must not reach the scrim behind it: an unhandled tap would
+        // dismiss the sheet. Child gestures consume first, so rows, swipe and
+        // scrolling are unaffected.
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .pointerInput(Unit) { detectTapGestures { } },
+        ) {
+            when {
+                selection.isNotEmpty() ->
+                    ThreadSelectionBar(
+                        count = selection.size,
+                        singleSelectedRow = selection.singleOrNull()?.let(rowsById::get),
+                        onExit = { selection = emptySet() },
+                        onArchive = {
+                            commit(state.allRows.filter { it.threadIdHex in selection }, archive = true)
+                        },
+                        onRename = { row ->
+                            selection = emptySet()
+                            renameTargetId = row.threadIdHex
+                        },
+                        onMarkRead = { row ->
+                            selection = emptySet()
+                            onMarkRead(row.threadIdHex)
+                        },
+                        renameLabel = renameLabel,
+                        markReadLabel = markReadLabel,
+                    )
+
+                else ->
+                    ThreadSheetHeader(
+                        onClose = onDismiss,
+                        onCreateThread = onCreateThread,
+                    )
+            }
+
+            if (selection.isEmpty()) {
+                ThreadSearchField(query = query, onQueryChange = { query = it })
+            }
+
+            Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                if (trimmedQuery.isNotEmpty()) {
+                    val results = state.active.filter(matchesQuery) + state.dormant.filter(matchesQuery) +
+                        state.archived.filter(matchesQuery)
+                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                        if (results.isEmpty()) {
+                            item(key = "no-results") {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SearchOff,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.thread_search_no_results, trimmedQuery),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        } else {
+                            items(results, key = { it.threadIdHex }) { row ->
+                                rowComposable(row, row.threadIdHex in archivedIds)
+                            }
+                        }
+                    }
+                } else {
+                    LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        item(key = "main-row") {
+                            ThreadSheetMainRow(
+                                main = state.main,
+                                isCurrent = state.openTargetKnown && state.currentThreadIdHex == null,
+                                onOpen = {
+                                    onMainClick()
+                                    onDismiss()
+                                },
+                            )
+                        }
+                        if (state.active.isEmpty()) {
+                            item(key = "active-empty") {
+                                Text(
+                                    text =
+                                        if (state.isEmpty) {
+                                            stringResource(R.string.thread_sheet_empty)
+                                        } else {
+                                            stringResource(R.string.thread_sheet_active_empty)
+                                        },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                                )
+                            }
+                        } else {
+                            item(key = "active-header") {
+                                ThreadSheetSectionHeader(stringResource(R.string.thread_sheet_section_active))
+                            }
+                            items(state.active, key = { it.threadIdHex }) { row ->
+                                rowComposable(row, false)
+                            }
+                        }
+                    }
+
+                    val sectionRows =
+                        when (expandedSection) {
+                            ThreadSection.DORMANT -> state.dormant
+                            ThreadSection.ARCHIVED -> state.archived
+                            null -> null
+                        }
+                    if (!sectionRows.isNullOrEmpty()) {
+                        HorizontalDivider()
+                        LazyColumn(modifier = Modifier.heightIn(max = 240.dp).fillMaxWidth()) {
+                            items(sectionRows, key = { it.threadIdHex }) { row ->
+                                rowComposable(row, expandedSection == ThreadSection.ARCHIVED)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // The snackbar lives in the sheet scaffold so a modal sheet can
+            // never hide an undo (spec §5.5).
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+
+            HorizontalDivider()
+            if (state.dormant.isNotEmpty()) {
+                ThreadSectionFooterRow(
+                    title = stringResource(R.string.thread_sheet_section_dormant),
+                    count = state.dormant.size,
+                    expanded = expandedSection == ThreadSection.DORMANT,
+                    onClick = {
+                        expandedSection =
+                            if (expandedSection == ThreadSection.DORMANT) null else ThreadSection.DORMANT
+                    },
+                )
+            }
+            if (state.archived.isNotEmpty()) {
+                ThreadSectionFooterRow(
+                    title = stringResource(R.string.thread_sheet_section_archived),
+                    count = state.archived.size,
+                    expanded = expandedSection == ThreadSection.ARCHIVED,
+                    onClick = {
+                        expandedSection =
+                            if (expandedSection == ThreadSection.ARCHIVED) null else ThreadSection.ARCHIVED
+                    },
+                )
+            }
+        }
+    }
+
     if (renameTarget != null) {
         ThreadRenameDialog(
             initialTitle = renameTarget.title.orEmpty(),
             onConfirm = { newTitle ->
-                if (newTitle.isNotBlank()) onRename(renameTarget.threadIdHex, newTitle.trim())
-                renamingRow = null
+                onRename(renameTarget.threadIdHex, newTitle)
+                renameTargetId = null
             },
-            onDismiss = { renamingRow = null },
+            onResetToAutomatic = {
+                onRename(renameTarget.threadIdHex, null)
+                renameTargetId = null
+            },
+            onDismiss = { renameTargetId = null },
         )
     }
 
-    // Delete confirmation (local-only delete; spec §6.3).
-    val deleteTarget = deletingRow
     if (deleteTarget != null) {
-        AlertDialog(
-            onDismissRequest = { deletingRow = null },
-            title = { Text(stringResource(R.string.thread_delete_title)) },
-            text = { Text(stringResource(R.string.thread_delete_message)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDelete(deleteTarget.threadIdHex)
-                        deletingRow = null
-                    },
-                ) {
-                    Text(
-                        stringResource(R.string.thread_action_delete),
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
+        ThreadDeleteConfirmDialog(
+            onConfirm = {
+                onDelete(deleteTarget.threadIdHex)
+                deleteTargetId = null
             },
-            dismissButton = {
-                TextButton(onClick = { deletingRow = null }) {
-                    Text(stringResource(R.string.thread_action_cancel))
-                }
-            },
+            onDismiss = { deleteTargetId = null },
         )
     }
 }
 
+/** Actions a thread row's trailing `⋮` menu offers (built by the sheet). */
+internal data class ThreadRowMenuAction(
+    val label: String,
+    val icon: ImageVector,
+    val destructive: Boolean = false,
+    val onClick: () -> Unit,
+)
+
+/** One row wired to the sheet callbacks (active list, search results, pinned sections). */
 @Composable
-private fun ThreadSheetSectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+private fun ThreadSheetRowItem(
+    row: ThreadRowUi,
+    selectionMode: Boolean,
+    checked: Boolean,
+    isCurrent: Boolean,
+    archivedSection: Boolean,
+    onOpen: () -> Unit,
+    onToggleSelection: () -> Unit,
+    onArchiveAction: () -> Unit,
+    onUnarchiveAction: () -> Unit,
+    onMarkRead: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    archiveLabel: String,
+    unarchiveLabel: String,
+    markReadLabel: String,
+    renameLabel: String,
+    deleteLabel: String,
+) {
+    val actions =
+        buildList {
+            add(ThreadRowMenuAction(renameLabel, ThreadRenameIcon, onClick = onRename))
+            if (row.unreadCount > 0) {
+                add(ThreadRowMenuAction(markReadLabel, ThreadMarkReadIcon, onClick = onMarkRead))
+            }
+            if (archivedSection) {
+                add(ThreadRowMenuAction(unarchiveLabel, ThreadUnarchiveIcon, onClick = onUnarchiveAction))
+            } else {
+                add(ThreadRowMenuAction(archiveLabel, ThreadArchiveIcon, onClick = onArchiveAction))
+            }
+            add(ThreadRowMenuAction(deleteLabel, ThreadDeleteIcon, destructive = true, onClick = onDelete))
+        }
+
+    ThreadSheetRow(
+        row = row,
+        isCurrent = isCurrent,
+        selectionMode = selectionMode,
+        checked = checked,
+        archiveLabel = if (archivedSection) unarchiveLabel else archiveLabel,
+        archiveIcon = if (archivedSection) ThreadUnarchiveIcon else ThreadArchiveIcon,
+        menuActions = actions,
+        onOpen = onOpen,
+        onToggleSelection = onToggleSelection,
+        onArchiveSwipe = if (archivedSection) onUnarchiveAction else onArchiveAction,
     )
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+/**
+ * Sheet header (spec §5.2 item 1): `Threads`, close and `+ New`. The sheet is
+ * a full-height management surface — the partial anchor would push the list,
+ * the pinned sections and the undo snackbar below the screen.
+ */
 @Composable
-private fun ThreadSheetRow(
-    row: ThreadRowUi,
-    onClick: () -> Unit,
-    onLongPress: () -> Unit,
+private fun ThreadSheetHeader(
+    onClose: () -> Unit,
+    onCreateThread: () -> Unit,
 ) {
-    val hapticFeedback = LocalHapticFeedback.current
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onLongPress()
-                    },
-                )
-                .padding(horizontal = 20.dp, vertical = 10.dp),
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = row.title ?: stringResource(R.string.thread_untitled),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = if (row.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            if (row.unreadCount > 0) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Box(
-                    modifier =
-                        Modifier
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                            .padding(horizontal = 7.dp, vertical = 1.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = if (row.unreadCount > 99) "99+" else row.unreadCount.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = formatTimestamp(row.timestamp),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        IconButton(onClick = onClose) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = stringResource(R.string.thread_sheet_close),
             )
         }
-        Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = row.preview,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            text = stringResource(R.string.thread_sheet_title),
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 4.dp),
         )
+        IconButton(onClick = onCreateThread) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = stringResource(R.string.thread_sheet_new_thread),
+            )
+        }
     }
 }
 
+/** Search field; filters thread titles (case-insensitive, leading/trailing blanks ignored). */
 @Composable
-private fun ThreadRenameDialog(
+private fun ThreadSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        singleLine = true,
+        leadingIcon = {
+            Icon(imageVector = Icons.Default.Search, contentDescription = null)
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = stringResource(R.string.thread_search_clear),
+                    )
+                }
+            }
+        },
+        placeholder = { Text(stringResource(R.string.thread_search_hint)) },
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+    )
+}
+
+/**
+ * Selection-mode contextual bar (spec §5.3 / issue 05): exit, count,
+ * `Archive` for the batch, and a `⋮` overflow for the single-selection
+ * rename / mark-read actions.
+ */
+@Composable
+private fun ThreadSelectionBar(
+    count: Int,
+    singleSelectedRow: ThreadRowUi?,
+    onExit: () -> Unit,
+    onArchive: () -> Unit,
+    onRename: (ThreadRowUi) -> Unit,
+    onMarkRead: (ThreadRowUi) -> Unit,
+    renameLabel: String,
+    markReadLabel: String,
+) {
+    var overflowOpen by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onExit) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = stringResource(R.string.thread_selection_exit),
+            )
+        }
+        Text(
+            text = pluralStringResource(R.plurals.thread_selected_count, count, count),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f).padding(start = 4.dp),
+        )
+        IconButton(onClick = onArchive, enabled = count > 0) {
+            Icon(
+                imageVector = ThreadArchiveIcon,
+                contentDescription = stringResource(R.string.thread_action_archive),
+            )
+        }
+        val single = singleSelectedRow
+        if (single != null) {
+            Box(modifier = Modifier) {
+                IconButton(onClick = { overflowOpen = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = stringResource(R.string.thread_more_actions),
+                    )
+                }
+                DropdownMenu(expanded = overflowOpen, onDismissRequest = { overflowOpen = false }) {
+                    DropdownMenuItem(
+                        leadingIcon = { Icon(ThreadRenameIcon, contentDescription = null) },
+                        text = { Text(renameLabel) },
+                        onClick = {
+                            overflowOpen = false
+                            onRename(single)
+                        },
+                    )
+                    if (single.unreadCount > 0) {
+                        DropdownMenuItem(
+                            leadingIcon = { Icon(ThreadMarkReadIcon, contentDescription = null) },
+                            text = { Text(markReadLabel) },
+                            onClick = {
+                                overflowOpen = false
+                                onMarkRead(single)
+                            },
+                        )
+                    }
+                }
+            }
+        } else {
+            Spacer(modifier = Modifier.width(48.dp))
+        }
+    }
+}
+
+/**
+ * Rename dialog (threads-spec §6.2): single-line, `Done` action, Save only
+ * when the sanitized value changed, `Reset to automatic` only when a local
+ * title exists (writes NULL — the automatic-excerpt state).
+ */
+@Composable
+internal fun ThreadRenameDialog(
     initialTitle: String,
     onConfirm: (String) -> Unit,
+    onResetToAutomatic: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var text by remember { mutableStateOf(initialTitle) }
+    var text by remember(initialTitle) { mutableStateOf(initialTitle) }
+    val rules = threadRenameRules(initialTitle, text)
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.thread_rename_title)) },
         text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                singleLine = true,
-                label = { Text(stringResource(R.string.thread_rename_hint)) },
-            )
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = {
+                        if (it.length <= ThreadPolicy.MAX_THREAD_TITLE_LENGTH) text = it
+                    },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.thread_rename_hint)) },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(
+                        onDone = { if (rules.canSave) rules.saveValue?.let(onConfirm) },
+                    ),
+                )
+                if (rules.canReset) {
+                    TextButton(onClick = onResetToAutomatic) {
+                        Text(stringResource(R.string.thread_rename_reset))
+                    }
+                }
+            }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(text) }) {
+            TextButton(
+                onClick = { rules.saveValue?.let(onConfirm) },
+                enabled = rules.canSave,
+            ) {
                 Text(stringResource(R.string.thread_rename_save))
             }
         },
@@ -370,49 +655,30 @@ private fun ThreadRenameDialog(
     )
 }
 
-@Composable
-private fun ThreadActionItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    tint: androidx.compose.ui.graphics.Color,
-    onClick: () -> Unit,
-) {
-    TextButton(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(text = label, color = tint)
-        }
-    }
+/**
+ * Save/reset decision for the rename dialog (threads-spec §6.2): a blank or
+ * unchanged value cannot be saved; reset is offered only when a local title
+ * is stored (the automatic-excerpt state has nothing to reset).
+ */
+internal data class ThreadRenameRules(
+    val saveValue: String?,
+    val canSave: Boolean,
+    val canReset: Boolean,
+)
+
+internal fun threadRenameRules(
+    initialTitle: String,
+    input: String,
+): ThreadRenameRules {
+    val sanitized = ThreadPolicy.sanitizeThreadTitle(input)
+    val stored = initialTitle.ifBlank { null }
+    return ThreadRenameRules(
+        saveValue = sanitized,
+        canSave = sanitized != null && sanitized != stored,
+        canReset = stored != null,
+    )
 }
 
-/** Same relative-date rules as the chat list rows. */
-private fun formatTimestamp(timestamp: Long): String {
-    val now = System.currentTimeMillis()
-    val diff = now - timestamp
-
-    return when {
-        diff < 60_000 -> "Now"
-        diff < 3600_000 -> {
-            val minutes = (diff / 60_000).toInt()
-            "${minutes}m"
-        }
-        diff < 86400_000 -> {
-            SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
-        }
-        diff < 604800_000 -> { // Less than a week
-            SimpleDateFormat("EEE", Locale.getDefault()).format(Date(timestamp))
-        }
-        else -> {
-            SimpleDateFormat("MMM dd", Locale.getDefault()).format(Date(timestamp))
-        }
-    }
-}
+/** Adds/removes one id from the selection set. */
+private fun Set<String>.toggle(id: String): Set<String> =
+    if (id in this) this - id else this + id

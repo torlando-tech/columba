@@ -92,7 +92,11 @@ interface ThreadDao {
         cutoffAt: Long,
     ): List<ThreadEntity>
 
-    /** Rename a thread (local label only — titles never touch the wire, spec §2 non-goals). */
+    /**
+     * Rename a thread (local label only — titles never touch the wire, spec §2
+     * non-goals). `title = NULL` resets the thread to its automatic excerpt
+     * (threads-spec D8), so the parameter is nullable.
+     */
     @Query(
         "UPDATE threads SET title = :title WHERE identityHash = :identityHash AND conversationHash = :conversationHash AND threadId = :threadId",
     )
@@ -100,7 +104,7 @@ interface ThreadDao {
         threadId: ByteArray,
         identityHash: String,
         conversationHash: String,
-        title: String,
+        title: String?,
     )
 
     /** Archive ([archivedAt] = now) or un-archive ([archivedAt] = null). Local presentation only (spec §5). */
@@ -109,6 +113,25 @@ interface ThreadDao {
     )
     suspend fun setArchived(
         threadId: ByteArray,
+        identityHash: String,
+        conversationHash: String,
+        archivedAt: Long?,
+    )
+
+    /**
+     * Archive / un-archive several threads in one statement (selection-mode
+     * batch). One UPDATE is atomic, so a batch can never leave a partially
+     * archived set behind (threads-spec §5.3). Empty ids is a no-op.
+     */
+    @Query(
+        """
+        UPDATE threads SET archivedAt = :archivedAt
+        WHERE identityHash = :identityHash AND conversationHash = :conversationHash
+        AND threadId IN (:threadIds)
+        """,
+    )
+    suspend fun setArchivedBatch(
+        threadIds: List<ByteArray>,
         identityHash: String,
         conversationHash: String,
         archivedAt: Long?,

@@ -1,0 +1,60 @@
+# 07-selection-mode.yaml
+#
+# Spec §5.3 + issue 05: long-press a thread row enters selection mode (the
+# sheet header becomes `X · N selected · Archive · ⋮`); the selection bar's
+# Archive batches every selected thread, with one snackbar and one Undo.
+# Back leaves selection without dismissing the sheet.
+#
+# Params: APP_ID, PEER_HASH, PEER_NAME, THREAD_TOKEN.
+appId: ${APP_ID}
+---
+- runFlow:
+    file: lib/open-self-chat.yaml
+    env:
+      APP_ID: ${APP_ID}
+      PEER_HASH: ${PEER_HASH}
+      PEER_NAME: ${PEER_NAME}
+
+# Seed a thread with one message.
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- tapOn: "+ New"
+- tapOn: "Reply in thread…"
+- inputText: ${THREAD_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${THREAD_TOKEN}
+    timeout: 30000
+
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+
+# Long-press enters selection; the contextual bar replaces the sheet header.
+- longPressOn:
+    text: ".*${THREAD_TOKEN}.*"
+- assertVisible: "1 selected"
+- assertNotVisible: "Search threads"
+
+# Leaving selection restores the header (Back, not a sheet dismiss).
+- pressBack
+- assertVisible: "Search threads"
+- assertNotVisible: "1 selected"
+
+# Batch archive from the contextual bar, then Undo the batch.
+- longPressOn:
+    text: ".*${THREAD_TOKEN}.*"
+- tapOn: "Archive"
+- extendedWaitUntil:
+    visible: ".*moved to Archived.*"
+    timeout: 10000
+- takeScreenshot: threads-selection-archived
+- tapOn: "Undo"
+- extendedWaitUntil:
+    notVisible: "Archived"
+    timeout: 10000
+- takeScreenshot: threads-selection-undo

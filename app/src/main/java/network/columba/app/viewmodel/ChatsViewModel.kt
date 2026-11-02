@@ -20,6 +20,8 @@ import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.ui.model.ChatCardThreadsUi
+import network.columba.app.ui.model.ThreadMainRowUi
+import network.columba.app.ui.model.ThreadRowSource
 import network.columba.app.ui.model.ThreadUiDerivation
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.SyncProgress
@@ -252,19 +254,33 @@ class ChatsViewModel
                         val threads = conversationRepository.threadsForConversation(peerHash, includeArchived = true)
                         val unread = conversationRepository.observeUnreadCountsPerThread(peerHash)
                         val last = conversationRepository.observeLastMessagesPerThread(peerHash)
+                        val first = conversationRepository.observeFirstMessagesPerThread(peerHash)
                         val mainLast = conversationRepository.observeMainLastMessage(peerHash)
                         emitAll(
                             kotlinx.coroutines.flow
-                                .combine(threads, unread, last, mainLast) { threadRows, unreadRows, lastRows, mainRow ->
+                                .combine(threads, unread, last, first, mainLast) { threadRows, unreadRows, lastRows, firstRows, mainRow ->
                                     val unreadByHex = ThreadUiDerivation.unreadByThread(unreadRows)
                                     val lastByHex = ThreadUiDerivation.lastMessageByThread(lastRows)
                                     ChatCardThreadsUi(
                                         sheet =
                                             ThreadUiDerivation.buildSheetState(
-                                                threadRows,
-                                                unreadByHex,
-                                                lastByHex,
-                                                System.currentTimeMillis(),
+                                                threads = threadRows,
+                                                source =
+                                                    ThreadRowSource(
+                                                        unreadByHex = unreadByHex,
+                                                        lastByHex = lastByHex,
+                                                        firstByHex = ThreadUiDerivation.firstMessageByThread(firstRows),
+                                                    ),
+                                                now = System.currentTimeMillis(),
+                                                // The chat list has no open thread: nothing is
+                                                // marked current and undo never re-opens one.
+                                                openTargetKnown = false,
+                                                main =
+                                                    ThreadMainRowUi(
+                                                        preview = mainRow?.content.orEmpty(),
+                                                        timestamp = mainRow?.timestamp ?: 0L,
+                                                        unreadCount = ThreadUiDerivation.mainUnreadCount(unreadRows),
+                                                    ),
                                             ),
                                         mainPreview = mainRow?.content.orEmpty(),
                                         mainTimestamp = mainRow?.timestamp ?: 0L,
@@ -280,10 +296,11 @@ class ChatsViewModel
 
         // Thread sheet management (spec §6.3) — local-only, never wire traffic.
 
+        /** Rename / reset (null = automatic) one thread of [peerHash]. */
         fun renameThread(
             peerHash: String,
             threadIdHex: String,
-            title: String,
+            title: String?,
         ) {
             viewModelScope.launch {
                 try {
@@ -294,28 +311,48 @@ class ChatsViewModel
             }
         }
 
-        fun archiveThread(
+        /** Archive a batch (swipe or selection bar) — one atomic UPDATE. */
+        fun archiveThreads(
             peerHash: String,
-            threadIdHex: String,
+            threadIdHexes: List<String>,
         ) {
+            if (threadIdHexes.isEmpty()) return
             viewModelScope.launch {
                 try {
-                    conversationRepository.setThreadArchived(peerHash, threadIdHex.hexToBytes(), archived = true)
+                    val ids = threadIdHexes.map { it.hexToBytes() }
+                    conversationRepository.setThreadsArchived(peerHash, ids, archived = true)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error archiving thread", e)
+                    Log.e(TAG, "Error archiving threads", e)
                 }
             }
         }
 
-        fun unarchiveThread(
+        /** Un-archive a batch (undo / Archived-section swipe). */
+        fun unarchiveThreads(
+            peerHash: String,
+            threadIdHexes: List<String>,
+        ) {
+            if (threadIdHexes.isEmpty()) return
+            viewModelScope.launch {
+                try {
+                    val ids = threadIdHexes.map { it.hexToBytes() }
+                    conversationRepository.setThreadsArchived(peerHash, ids, archived = false)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error un-archiving threads", e)
+                }
+            }
+        }
+
+        /** Clear one thread's unread from the chat-list sheet. */
+        fun markThreadRead(
             peerHash: String,
             threadIdHex: String,
         ) {
             viewModelScope.launch {
                 try {
-                    conversationRepository.setThreadArchived(peerHash, threadIdHex.hexToBytes(), archived = false)
+                    conversationRepository.markThreadAsRead(peerHash, threadIdHex.hexToBytes())
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error un-archiving thread", e)
+                    Log.e(TAG, "Error marking thread read", e)
                 }
             }
         }

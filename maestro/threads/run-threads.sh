@@ -2,7 +2,7 @@
 #
 # run-threads.sh — Threads P2 Maestro suite (threads-spec §6 UI).
 #
-# Runs the five acceptance flows against ONE device. Sends go to the device's
+# Runs the acceptance flows (00-08) against ONE device. Sends go to the device's
 # own LXMF destination (resolved via the debug TestReceiver), so the whole
 # thread lifecycle exercises locally without a second peer — same single-device
 # trick as e2e/single-device/run-large-attachment.sh.
@@ -66,11 +66,15 @@ run_flow 00-enable-threads || FAILED=1
 run_flow 01-create-from-scratch -e MSG_TOKEN="scratch-$STAMP" || FAILED=1
 run_flow 02-thread-from-here-and-hook \
   -e MAIN_TOKEN="root-$STAMP" -e REPLY_TOKEN="offroot-$STAMP" || FAILED=1
-run_flow 03-chip-switch \
+run_flow 03-sheet-switch \
   -e MAIN_TOKEN="chipmain-$STAMP" -e THREAD_TOKEN="chipthr-$STAMP" \
   -e THREAD_MSG2="chipmsg2-$STAMP" -e DRAFT_TOKEN="chipdraft-$STAMP" || FAILED=1
 run_flow 04-archive-unarchive -e THREAD_TOKEN="arch-$STAMP" || FAILED=1
 run_flow 05-chat-card-expand -e CARD_TOKEN="card-$STAMP" || FAILED=1
+run_flow 06-swipe-archive-undo -e THREAD_TOKEN="swipe-$STAMP" || FAILED=1
+run_flow 07-selection-mode -e THREAD_TOKEN="select-$STAMP" || FAILED=1
+run_flow 08-rename-title \
+  -e THREAD_TOKEN="rename-$STAMP" -e RENAMED_TITLE="Renamed $STAMP" || FAILED=1
 
 if [ "$FAILED" -ne 0 ]; then
   echo "SUITE FAILED (see $OUT_DIR)" >&2

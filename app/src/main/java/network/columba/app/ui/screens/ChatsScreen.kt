@@ -593,6 +593,11 @@ fun ChatsScreen(
                     threadSheetConversation = null
                     onThreadClick(sheetConversation.peerHash, sheetConversation.displayName, threadIdHex)
                 },
+                onMainClick = {
+                    threadSheetConversation = null
+                    // Empty thread id = conversation Main (no `threadId` route argument).
+                    onThreadClick(sheetConversation.peerHash, sheetConversation.displayName, "")
+                },
                 onCreateThread = {
                     threadSheetConversation = null
                     onThreadClick(sheetConversation.peerHash, sheetConversation.displayName, NEW_THREAD_ARG)
@@ -600,12 +605,18 @@ fun ChatsScreen(
                 onRename = { threadIdHex, newTitle ->
                     viewModel.renameThread(sheetConversation.peerHash, threadIdHex, newTitle)
                 },
-                onArchive = { threadIdHex ->
-                    viewModel.archiveThread(sheetConversation.peerHash, threadIdHex)
+                onMarkRead = { threadIdHex ->
+                    viewModel.markThreadRead(sheetConversation.peerHash, threadIdHex)
                 },
-                onUnarchive = { threadIdHex ->
-                    viewModel.unarchiveThread(sheetConversation.peerHash, threadIdHex)
+                onArchive = { threadIdHexes ->
+                    viewModel.archiveThreads(sheetConversation.peerHash, threadIdHexes)
                 },
+                onUnarchive = { threadIdHexes ->
+                    viewModel.unarchiveThreads(sheetConversation.peerHash, threadIdHexes)
+                },
+                // No message screen is open here: undo restores the archive
+                // state only (there is nothing to re-open).
+                onReopenThread = {},
                 onDelete = { threadIdHex ->
                     viewModel.deleteThread(sheetConversation.peerHash, threadIdHex)
                 },

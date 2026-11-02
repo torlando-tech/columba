@@ -559,6 +559,28 @@ interface MessageDao {
     ): Flow<List<ThreadLastMessage>>
 
     /**
+     * Oldest message per thread — the automatic-title source when
+     * `threads.title` is NULL ("Reset to automatic", threads-spec D8).
+     * SQLite's bare-column-with-MIN special case makes `content` come from
+     * the min-timestamp row of each group; ties yield one row per tied
+     * message, so callers de-duplicate by thread id (earliest wins).
+     * Main (`threadId IS NULL`) is excluded — its title is a resource.
+     */
+    @Query(
+        """
+        SELECT threadId, content, MIN(COALESCE(receivedAt, timestamp)) AS timestamp
+        FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NOT NULL
+        GROUP BY threadId
+        """,
+    )
+    fun observeFirstMessagesPerThread(
+        peerHash: String,
+        identityHash: String,
+    ): Flow<List<ThreadFirstMessage>>
+
+    /**
      * Newest Main message of one conversation (the expanding chat card's
      * Main-row preview — the conversation row's `lastMessage` may be a
      * thread message, so Main needs its own lookup). Empty blob threadId:
@@ -644,6 +666,29 @@ data class ThreadLastMessage(
         this === other ||
             (
                 other is ThreadLastMessage &&
+                    content == other.content &&
+                    timestamp == other.timestamp &&
+                    threadId.contentEquals(other.threadId)
+            )
+
+    override fun hashCode(): Int {
+        var result = content.hashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + threadId.contentHashCode()
+        return result
+    }
+}
+
+/** One row of [MessageDao.observeFirstMessagesPerThread] (oldest message per thread). */
+data class ThreadFirstMessage(
+    val threadId: ByteArray,
+    val content: String,
+    val timestamp: Long,
+) {
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            (
+                other is ThreadFirstMessage &&
                     content == other.content &&
                     timestamp == other.timestamp &&
                     threadId.contentEquals(other.threadId)

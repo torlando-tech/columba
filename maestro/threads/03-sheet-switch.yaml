@@ -1,14 +1,15 @@
-# 03-chip-switch.yaml
+# 03-sheet-switch.yaml
 #
-# Spec §6.2 + §6.7: chip tap swaps the message list in place (Main shows only
-# Main rows, the thread chip only thread rows) and the composer retargets —
-# per-thread drafts mean text typed in one target is gone in the other and
-# restored on the way back.
+# Spec §5.2 + §6.2: the header pill names the open target and opens the sheet;
+# picking a row swaps the message list in place (Main shows only Main rows, a
+# thread shows only its rows) and the composer retargets — per-thread drafts
+# mean text typed in one target is gone in the other and restored on the way
+# back.
 #
-# The thread gets TWO messages: THREAD_TOKEN titles the chip (so it stays
-# visible in the chip bar on both targets and cannot prove list membership),
-# THREAD_MSG2 is a plain reply that is only ever visible inside the thread —
-# its presence/absence is what proves the list swap.
+# The thread gets TWO messages: THREAD_TOKEN titles the row (so it stays
+# visible on both targets and cannot prove list membership), THREAD_MSG2 is a
+# plain reply that is only ever visible inside the thread — its
+# presence/absence is what proves the list swap.
 #
 # Params: APP_ID, PEER_HASH, PEER_NAME, MAIN_TOKEN, THREAD_TOKEN, THREAD_MSG2,
 #         DRAFT_TOKEN.
@@ -22,21 +23,21 @@ appId: ${APP_ID}
       PEER_NAME: ${PEER_NAME}
 
 - extendedWaitUntil:
-    visible: "Main"
+    visible:
+      text: "Switch thread: Main"
     timeout: 10000
 
 # Seed: one Main message + one thread with two messages.
-- tapOn: "Main"
 - tapOn: "Type a message..."
 - inputText: ${MAIN_TOKEN}
 - hideKeyboard
 - tapOn: "Send message"
 - extendedWaitUntil:
     visible: ${MAIN_TOKEN}
-- tapOn: "More threads"
-- extendedWaitUntil:
-    visible: "Threads"
-    timeout: 10000
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
 - tapOn: "+ New"
 - tapOn: "Reply in thread…"
 - inputText: ${THREAD_TOKEN}
@@ -56,24 +57,43 @@ appId: ${APP_ID}
 # In the thread: thread rows only — the Main message is not in this list.
 - assertNotVisible: ${MAIN_TOKEN}
 
-# Switch to Main: Main rows only (THREAD_MSG2 is nowhere on Main; the chip
-# label carries THREAD_TOKEN by design, so it is not used for membership).
+# Switch to Main through the sheet: Main rows only (THREAD_MSG2 is nowhere on
+# Main; the pill label carries THREAD_TOKEN by design, so it is not used for
+# membership).
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
 - tapOn: "Main"
 - assertVisible: ${MAIN_TOKEN}
 - assertNotVisible: ${THREAD_MSG2}
+- assertVisible:
+    text: "Switch thread: Main"
 
 # Composer retarget: an unsent draft typed in the thread does not follow the
-# composer to Main, and is restored when the thread chip is tapped again.
+# composer to Main, and is restored when the thread is opened again.
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
 - tapOn:
     text: ".*${THREAD_TOKEN}.*"
 - tapOn: "Reply in thread…"
 - inputText: ${DRAFT_TOKEN}
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
 - tapOn: "Main"
 - assertNotVisible: ${DRAFT_TOKEN}
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
 - tapOn:
     text: ".*${THREAD_TOKEN}.*"
 - extendedWaitUntil:
     visible: ${DRAFT_TOKEN}
     timeout: 10000
 - assertVisible: ${THREAD_MSG2}
-- takeScreenshot: threads-chip-switch
+- takeScreenshot: threads-sheet-switch

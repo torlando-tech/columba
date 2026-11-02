@@ -19,6 +19,20 @@ class ThreadPolicyTest {
         assertTrue(ids.any { id -> id.any { it != 0.toByte() } })
     }
 
+
+    @Test
+    fun `sanitize thread title flattens caps and rejects blank`() {
+        assertEquals("Trip planning", ThreadPolicy.sanitizeThreadTitle("  Trip   planning  "))
+        assertEquals("Build notes from the mesh", ThreadPolicy.sanitizeThreadTitle("Build\nnotes\tfrom\u0007 the mesh"))
+        assertEquals(null, ThreadPolicy.sanitizeThreadTitle(null))
+        assertEquals(null, ThreadPolicy.sanitizeThreadTitle("   "))
+        assertEquals(null, ThreadPolicy.sanitizeThreadTitle("\n\u0000"))
+        assertEquals(ThreadPolicy.MAX_THREAD_TITLE_LENGTH, 64)
+        assertEquals(64, ThreadPolicy.sanitizeThreadTitle("y".repeat(500))?.length)
+        // No ellipsis: a user-typed title is hard-capped, not abbreviated.
+        assertEquals("y".repeat(64), ThreadPolicy.sanitizeThreadTitle("y".repeat(500)))
+    }
+
     @Test
     fun `dormancy boundary is exactly 14 days`() {
         val now = 1_730_000_000_000L

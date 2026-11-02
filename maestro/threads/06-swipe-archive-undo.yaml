@@ -1,0 +1,54 @@
+# 06-swipe-archive-undo.yaml
+#
+# Spec §5.3: swiping a thread row toward the trailing edge reveals the
+# Archive panel; committing archives the row and shows the in-sheet snackbar
+# `"<title>" · moved to Archived` with `Undo`; Undo restores the thread to
+# Active. The pinned Main row has no swipe action at all.
+#
+# Params: APP_ID, PEER_HASH, PEER_NAME, THREAD_TOKEN.
+appId: ${APP_ID}
+---
+- runFlow:
+    file: lib/open-self-chat.yaml
+    env:
+      APP_ID: ${APP_ID}
+      PEER_HASH: ${PEER_HASH}
+      PEER_NAME: ${PEER_NAME}
+
+# Seed a thread with one message.
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- tapOn: "+ New"
+- tapOn: "Reply in thread…"
+- inputText: ${THREAD_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${THREAD_TOKEN}
+    timeout: 30000
+
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+
+# Swipe the row toward the trailing edge -> Archive.
+- swipe:
+    from:
+      text: ".*${THREAD_TOKEN}.*"
+    direction: LEFT
+- extendedWaitUntil:
+    visible: ".*moved to Archived.*"
+    timeout: 10000
+- takeScreenshot: threads-swipe-archived
+
+# Undo restores the thread to Active and closes the snackbar window.
+- tapOn: "Undo"
+- extendedWaitUntil:
+    notVisible: "Archived"
+    timeout: 10000
+- assertVisible:
+    text: ".*${THREAD_TOKEN}.*"
+- takeScreenshot: threads-swipe-undo

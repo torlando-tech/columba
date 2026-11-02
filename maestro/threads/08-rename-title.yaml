@@ -1,0 +1,62 @@
+# 08-rename-title.yaml
+#
+# Spec §6.2: the row menu's Rename edits the local title; Save is enabled only
+# for a changed, sanitized value; the pill and the row pick the new title up
+# immediately; "Reset to automatic" writes NULL and the automatic excerpt
+# (the first message) comes back. Local-only — no wire traffic.
+#
+# Params: APP_ID, PEER_HASH, PEER_NAME, THREAD_TOKEN, RENAMED_TITLE.
+appId: ${APP_ID}
+---
+- runFlow:
+    file: lib/open-self-chat.yaml
+    env:
+      APP_ID: ${APP_ID}
+      PEER_HASH: ${PEER_HASH}
+      PEER_NAME: ${PEER_NAME}
+
+# Seed a thread whose automatic title is its first message.
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- tapOn: "+ New"
+- tapOn: "Reply in thread…"
+- inputText: ${THREAD_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${THREAD_TOKEN}
+    timeout: 30000
+
+# Rename it.
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- tapOn: "Thread actions"
+- tapOn: "Rename"
+- tapOn: "Thread name"
+- eraseText: 200
+- inputText: ${RENAMED_TITLE}
+- tapOn: "Save"
+- assertVisible: ${RENAMED_TITLE}
+
+# The pill follows the rename once the sheet is dismissed.
+- tapOn: "Close threads"
+- assertVisible:
+    text: "Switch thread: ${RENAMED_TITLE}.*"
+- takeScreenshot: threads-renamed
+
+# Reset to automatic: the excerpt comes back.
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- tapOn: "Thread actions"
+- tapOn: "Rename"
+- tapOn: "Reset to automatic"
+- assertNotVisible: ${RENAMED_TITLE}
+- assertVisible:
+    text: ".*${THREAD_TOKEN}.*"
+- takeScreenshot: threads-title-reset

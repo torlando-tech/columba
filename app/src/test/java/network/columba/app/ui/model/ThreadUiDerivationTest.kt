@@ -1,11 +1,13 @@
 package network.columba.app.ui.model
 
+import network.columba.app.data.db.dao.ThreadFirstMessage
 import network.columba.app.data.db.dao.ThreadLastMessage
 import network.columba.app.data.db.dao.ThreadMessageCount
 import network.columba.app.data.db.dao.ThreadUnreadCount
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.db.entity.ThreadEntity
 import network.columba.app.data.util.ThreadPolicy
+import network.columba.app.ui.model.ThreadRowSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -62,9 +64,13 @@ class ThreadUiDerivationTest {
         // DAO contract: lastActivityAt DESC — deliberately interleaved states.
         val state =
             ThreadUiDerivation.buildSheetState(
-                listOf(fresh, archivedStale, stale),
-                unreadByHex = emptyMap(),
-                lastByHex = emptyMap(),
+                threads = listOf(fresh, archivedStale, stale),
+                source =
+                    ThreadRowSource(
+                        unreadByHex = emptyMap(),
+                        lastByHex = emptyMap(),
+                        firstByHex = emptyMap(),
+                    ),
                 now = now,
             )
         assertEquals(listOf("fresh"), state.active.map { it.title })
@@ -84,38 +90,118 @@ class ThreadUiDerivationTest {
                 t,
                 unreadByHex = mapOf(hex to 2),
                 lastByHex = mapOf(hex to ThreadLastMessage(byteArrayOf(1), "last text", now - 10)),
+                firstByHex = emptyMap(),
             )
         assertEquals(hex, row.threadIdHex)
         assertEquals("last text", row.preview)
         assertEquals(now - 10, row.timestamp)
         assertEquals(2, row.unreadCount)
 
-        val empty = ThreadUiDerivation.toRow(t, emptyMap(), emptyMap())
+        val empty = ThreadUiDerivation.toRow(t, emptyMap(), emptyMap(), emptyMap())
         assertEquals("", empty.preview)
         assertEquals(now - 5000, empty.timestamp)
         assertEquals(0, empty.unreadCount)
     }
 
     @Test
-    fun `chips exclude archived and dormant but always include the selection`() {
-        val fresh = thread(1, lastActivityAt = now - 1000, title = "a")
-        val stale = thread(2, lastActivityAt = now - window - 1)
-        val archived = thread(3, archivedAt = now)
-        val selected = thread(4, lastActivityAt = now - 2000)
-        val chips =
-            ThreadUiDerivation.buildChips(
-                listOf(fresh, stale, archived, selected),
-                unreadByHex = mapOf("01" to 3),
-                selectedThreadIdHex = "04",
+    fun `pill names the open target and carries only its unread`() {
+        val state =
+            ThreadUiDerivation.buildSheetState(
+                threads =
+                    listOf(
+                        thread(1, lastActivityAt = now - 1000, title = "Trip planning"),
+                        thread(2, lastActivityAt = now - 2000, title = "Build notes"),
+                    ),
+                source =
+                    ThreadRowSource(
+                        unreadByHex = mapOf("01" to 3, "02" to 1),
+                        lastByHex = emptyMap(),
+                        firstByHex = emptyMap(),
+                    ),
+                now = now,
+                currentThreadIdHex = "01",
+                main = ThreadMainRowUi(unreadCount = 7),
+            )
+
+        assertEquals(
+            ThreadPillUi(isMain = false, title = "Trip planning", unreadCount = 3),
+            ThreadUiDerivation.buildPill(state, "01"),
+        )
+        assertEquals(ThreadPillUi(isMain = true, unreadCount = 7), ThreadUiDerivation.buildPill(state, null))
+
+        // A brand-new thread with no row yet: the pill keeps the resource default.
+        val ghost = ThreadUiDerivation.buildPill(state, "ff")
+        assertEquals(false, ghost.isMain)
+        assertNull(ghost.title)
+        assertEquals(0, ghost.unreadCount)
+    }
+
+    @Test
+    fun `title precedence is local title then automatic excerpt`() {
+        val renamed = thread(1, title = "Trip planning")
+        val automatic = thread(2, title = null)
+        val firstByHex =
+            mapOf(
+                "01" to ThreadFirstMessage(byteArrayOf(1), "first of renamed", now - 5000),
+                "02" to ThreadFirstMessage(byteArrayOf(2), "  Build   notes\nfrom the mesh  ", now - 5000),
+            )
+
+        val renamedRow = ThreadUiDerivation.toRow(renamed, emptyMap(), emptyMap(), firstByHex)
+        assertEquals("Trip planning", renamedRow.displayTitle)
+
+        val automaticRow = ThreadUiDerivation.toRow(automatic, emptyMap(), emptyMap(), firstByHex)
+        assertNull(automaticRow.title)
+        assertEquals("Build notes from the mesh", automaticRow.displayTitle)
+
+        // No messages at all -> no display title, the composable shows the default.
+        val emptyRow = ThreadUiDerivation.toRow(automatic, emptyMap(), emptyMap(), emptyMap())
+        assertNull(emptyRow.displayTitle)
+    }
+
+    @Test
+    fun `first message map keeps the earliest row per thread`() {
+        val ties =
+            listOf(
+                ThreadFirstMessage(byteArrayOf(1), "later", now - 100),
+                ThreadFirstMessage(byteArrayOf(1), "earlier", now - 900),
+                ThreadFirstMessage(byteArrayOf(2), "only", now - 500),
+            )
+        val byHex = ThreadUiDerivation.firstMessageByThread(ties)
+        assertEquals("earlier", byHex["01"]?.content)
+        assertEquals("only", byHex["02"]?.content)
+    }
+
+    @Test
+    fun `footer counts come from the partition and main unread is its own bucket`() {
+        val state =
+            ThreadUiDerivation.buildSheetState(
+                threads =
+                    listOf(
+                        thread(1, lastActivityAt = now - 1000),
+                        thread(2, lastActivityAt = now - window - 1),
+                        thread(3, lastActivityAt = now - window - 2),
+                        thread(4, archivedAt = now),
+                    ),
+                source =
+                    ThreadRowSource(
+                        unreadByHex = mapOf("04" to 2),
+                        lastByHex = emptyMap(),
+                        firstByHex = emptyMap(),
+                    ),
                 now = now,
             )
-        assertEquals(listOf("01", "04"), chips.map { it.threadIdHex })
-        assertEquals(3, chips.first().unreadCount)
 
-        // A brand-new thread (no DB row yet) still gets a chip while selected.
-        val ghost = ThreadUiDerivation.buildChips(emptyList(), emptyMap(), "ff", now)
-        assertEquals(listOf("ff"), ghost.map { it.threadIdHex })
-        assertNull(ghost.single().title)
+        assertEquals(2, state.dormant.size)
+        assertEquals(1, state.archived.size)
+        // An archived thread keeps its own badge inside the Archived section.
+        assertEquals(2, state.archived.single().unreadCount)
+        assertEquals(
+            9,
+            ThreadUiDerivation.mainUnreadCount(
+                listOf(ThreadUnreadCount(byteArrayOf(4), 2), ThreadUnreadCount(null, 9)),
+            ),
+        )
+        assertEquals(0, ThreadUiDerivation.mainUnreadCount(listOf(ThreadUnreadCount(byteArrayOf(4), 2))))
     }
 
     @Test

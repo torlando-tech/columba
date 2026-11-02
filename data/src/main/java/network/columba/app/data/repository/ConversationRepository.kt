@@ -19,6 +19,7 @@ import network.columba.app.data.db.dao.LocalIdentityDao
 import network.columba.app.data.db.dao.MessageDao
 import network.columba.app.data.db.dao.PeerIdentityDao
 import network.columba.app.data.db.dao.ThreadDao
+import network.columba.app.data.db.dao.ThreadFirstMessage
 import network.columba.app.data.db.dao.ThreadUnreadCount
 import network.columba.app.data.db.dao.ThreadLastMessage
 import network.columba.app.data.db.dao.ThreadMessageCount
@@ -1520,14 +1521,17 @@ class ConversationRepository
             return threadDao.getThread(identityHash, peerHash, threadId)
         }
 
-        /** Rename a thread (local label; never touches the wire). */
+        /**
+         * Rename a thread (local label; never touches the wire). A null title
+         * resets the thread to its automatic excerpt (threads-spec D8).
+         */
         suspend fun renameThread(
             peerHash: String,
             threadId: ByteArray,
-            title: String,
+            title: String?,
         ) {
             val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
-            threadDao.renameThread(threadId, identityHash, peerHash, title)
+            threadDao.renameThread(threadId, identityHash, peerHash, ThreadPolicy.sanitizeThreadTitle(title))
         }
 
         /** Archive (true) / un-archive (false) a thread. Local presentation only; no wire traffic. */
@@ -1543,6 +1547,38 @@ class ConversationRepository
                 peerHash,
                 archivedAt = if (archived) System.currentTimeMillis() else null,
             )
+        }
+
+        /**
+         * Archive / un-archive several threads at once (selection-mode batch
+         * and the single-row swipe path). One UPDATE statement — atomic, so a
+         * failure cannot leave a partially archived batch behind
+         * (threads-spec §5.3). Local presentation only; no wire traffic.
+         */
+        suspend fun setThreadsArchived(
+            peerHash: String,
+            threadIds: List<ByteArray>,
+            archived: Boolean,
+        ) {
+            if (threadIds.isEmpty()) return
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
+            threadDao.setArchivedBatch(
+                threadIds = threadIds,
+                identityHash = identityHash,
+                conversationHash = peerHash,
+                archivedAt = if (archived) System.currentTimeMillis() else null,
+            )
+        }
+
+        /**
+         * Oldest message per thread for a conversation — the automatic-title
+         * source for threads whose local title was reset to NULL.
+         */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
+        suspend fun observeFirstMessagesPerThread(peerHash: String): Flow<List<ThreadFirstMessage>> {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
+                ?: return flowOf(emptyList())
+            return messageDao.observeFirstMessagesPerThread(peerHash, identityHash)
         }
 
         /**

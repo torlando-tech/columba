@@ -15,6 +15,7 @@ import network.columba.app.audio.VoiceMessageRecorder
 import network.columba.app.audio.VoiceMessageRecordingState
 import tech.torlando.lxst.recording.RecordedAudio
 import network.columba.app.data.db.entity.MessageEntity
+import network.columba.app.data.db.entity.ThreadEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ConversationRepository
@@ -22,6 +23,7 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.data.repository.ReplyPreview
 import network.columba.app.repository.SettingsRepository
+import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.model.DeliveryMethod
 import network.columba.app.rns.api.model.DeliveryStatus
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
@@ -575,6 +577,68 @@ class MessagingViewModelTest {
             // Verify: Fast polling enabled
             verify { rnsLxmf.setConversationActive(true) }
         }
+
+    @Test
+    fun `undo of archiving the open thread returns to that thread`() =
+        runTest {
+            val openThread = "02000000000000000000000000000002"
+            val otherThread = "01000000000000000000000000000001"
+            val threads =
+                listOf(
+                    threadEntity(openThread, lastActivityAt = 2_000L),
+                    threadEntity(otherThread, lastActivityAt = 1_000L),
+                )
+            every { settingsRepository.threadsEnabledFlow } returns flowOf(true)
+            coEvery {
+                conversationRepository.threadsForConversation(testPeerHash, includeArchived = true)
+            } returns flowOf(threads)
+            coEvery { conversationRepository.observeUnreadCountsPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.observeLastMessagesPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.observeMessageCountsPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.observeFirstMessagesPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.saveDraft(any(), any(), any()) } returns Unit
+            coEvery { conversationRepository.getDraft(any(), any()) } returns null
+            coEvery { conversationRepository.markThreadAsRead(any(), any()) } returns Unit
+            coEvery { conversationRepository.markMainAsRead(any()) } returns Unit
+            coEvery { conversationRepository.setThreadsArchived(any(), any(), any()) } returns Unit
+            coEvery { conversationRepository.firstMessageInThread(any(), any()) } returns null
+            // Stubbed before construction: `threadsEnabled` captures the flow at init.
+            val viewModel = createTestViewModel()
+
+            // The flag is a WhileSubscribed StateFlow: start it like the UI does.
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            advanceUntilIdle()
+            assertTrue("threads flag must be on", viewModel.threadsEnabled.value)
+            viewModel.selectThread(openThread)
+            advanceUntilIdle()
+            assertEquals(openThread, viewModel.selectedThread.value)
+
+            // Archiving the open thread moves the list to the newest remaining one.
+            viewModel.archiveThreads(listOf(openThread))
+            advanceUntilIdle()
+            assertEquals(otherThread, viewModel.selectedThread.value)
+
+            // Undo puts the user back into the thread they were reading.
+            viewModel.unarchiveThreads(listOf(openThread))
+            advanceUntilIdle()
+            assertEquals(openThread, viewModel.selectedThread.value)
+            flagCollection.cancel()
+        }
+
+    private fun threadEntity(
+        threadIdHex: String,
+        lastActivityAt: Long,
+    ) = ThreadEntity(
+        threadId = threadIdHex.hexToBytes(),
+        conversationHash = testPeerHash,
+        identityHash = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        createdAt = 0L,
+        lastActivityAt = lastActivityAt,
+    )
 
     @Test
     fun `conversation visibility dismisses its notification and marks it read`() =

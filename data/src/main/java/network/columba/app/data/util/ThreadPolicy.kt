@@ -19,6 +19,11 @@ object ThreadPolicy {
     /** Max chars of quoted/root content carried on the wire (0x31) or used as a local thread title. */
     const val QUOTE_EXCERPT_MAX_CHARS = 120
 
+    /** Max chars of a user-entered thread title (automatic excerpts keep the 120-char cap). */
+    const val MAX_THREAD_TITLE_LENGTH = 64
+
+    private val WHITESPACE_RUN = Regex("\\s+")
+
     private val secureRandom = SecureRandom()
 
     /**
@@ -46,6 +51,26 @@ object ThreadPolicy {
     /** Wire quote excerpt for `fields[0x31]` (cases 2/4), capped per the locked decision. */
     fun quoteExcerpt(content: String): String =
         if (content.length <= QUOTE_EXCERPT_MAX_CHARS) content else content.take(QUOTE_EXCERPT_MAX_CHARS)
+
+    /**
+     * Normalize a user-entered thread title before it is stored:
+     * whitespace runs collapse to one space, control characters (newlines,
+     * tabs, format marks) are dropped, the result is trimmed and capped at
+     * [MAX_THREAD_TITLE_LENGTH].
+     *
+     * Null stays null and a blank/control-only input also becomes null —
+     * NULL is the "automatic title" state (threads-spec D8), so an empty
+     * custom title is the same thing as resetting it.
+     */
+    fun sanitizeThreadTitle(raw: String?): String? {
+        if (raw == null) return null
+        // Control characters become spaces before collapsing: dropping them
+        // would glue the words they separated ("Build\nnotes" -> "Buildnotes").
+        val normalized = raw.map { if (it.isISOControl()) ' ' else it }.joinToString("")
+        val flattened = normalized.replace(WHITESPACE_RUN, " ").trim()
+        val capped = flattened.take(MAX_THREAD_TITLE_LENGTH).trim()
+        return capped.ifBlank { null }
+    }
 
     /** True when a thread's [lastActivityAt] puts it outside the dormancy window at [now]. */
     fun isDormant(

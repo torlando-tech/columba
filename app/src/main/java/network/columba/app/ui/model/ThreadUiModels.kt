@@ -1,5 +1,6 @@
 package network.columba.app.ui.model
 
+import network.columba.app.data.db.dao.ThreadFirstMessage
 import network.columba.app.data.db.dao.ThreadLastMessage
 import network.columba.app.data.db.dao.ThreadMessageCount
 import network.columba.app.data.db.dao.ThreadUnreadCount
@@ -9,24 +10,47 @@ import network.columba.app.data.util.ThreadPolicy
 import network.columba.app.rns.api.util.toHex
 
 /**
- * UI models + pure derivation for the threads P2 surfaces (threads-spec §6):
- * expanding chat card, chip bar, thread sheet, replies hook, thread view.
- *
- * Everything here is a pure function of DB rows so it can be unit-tested
- * without Compose or Room — the ViewModels only wire flows into these
- * builders. Thread IDs cross flow/Compose boundaries as lowercase hex strings
- * (stable `equals`/`hashCode` for Compose keys; the raw bytes stay in the DB).
+ * Threads P2 presentation models (threads-spec §6). One projection feeds the
+ * header pill, the thread sheet (partial and full-screen presentations) and
+ * the expanding chat cards; composables never re-derive thread state.
  */
 
 /** One thread row in the thread sheet / expanding chat card. */
 data class ThreadRowUi(
     val threadIdHex: String,
-    /** Local label; null until the first message titles it (UI shows the untitled placeholder). */
+    /** Local title; null means "automatic" (threads-spec D8). */
     val title: String?,
+    /** Automatic fallback: excerpt of the thread's first message, null when it has none. */
+    val autoTitle: String?,
     /** Last-message preview (empty when the thread has no messages yet). */
     val preview: String,
     val timestamp: Long,
     val unreadCount: Int,
+) {
+    /**
+     * Text to display: the user's title, else the automatic excerpt. Null
+     * when neither exists — the composable then falls back to the resource
+     * default (`New thread`), so the projection stays resource-free.
+     */
+    val displayTitle: String? get() = title ?: autoTitle
+}
+
+/**
+ * Per-thread lookups for one conversation: unread counts, last message and
+ * first message keyed by thread id hex. Grouped so row derivations do not
+ * thread three parallel maps through every call.
+ */
+data class ThreadRowSource(
+    val unreadByHex: Map<String, Int> = emptyMap(),
+    val lastByHex: Map<String, ThreadLastMessage> = emptyMap(),
+    val firstByHex: Map<String, ThreadFirstMessage> = emptyMap(),
+)
+
+/** The conversation's Main target as a sheet row (pinned, not a `threads` row). */
+data class ThreadMainRowUi(
+    val preview: String = "",
+    val timestamp: Long = 0L,
+    val unreadCount: Int = 0,
 )
 
 /** Thread sheet contents, partitioned per spec §6.3 (Active / Dormant / Archived). */
@@ -34,16 +58,28 @@ data class ThreadSheetUiState(
     val active: List<ThreadRowUi> = emptyList(),
     val dormant: List<ThreadRowUi> = emptyList(),
     val archived: List<ThreadRowUi> = emptyList(),
+    val main: ThreadMainRowUi = ThreadMainRowUi(),
+    /** Open target (null = Main) — the sheet marks that row. */
+    val currentThreadIdHex: String? = null,
+    /**
+     * False when the host has no open target (the chat list's "View all"
+     * sheet): nothing is marked current and undo never re-opens a thread.
+     */
+    val openTargetKnown: Boolean = true,
 ) {
     val totalThreadCount: Int get() = active.size + dormant.size + archived.size
     val isEmpty: Boolean get() = totalThreadCount == 0
+
+    /** All thread rows, in sheet order (Main excluded). */
+    val allRows: List<ThreadRowUi> get() = active + dormant + archived
 }
 
-/** One chip in the messaging chip bar (Main is rendered separately, always first). */
-data class ThreadChipUi(
-    val threadIdHex: String,
-    val title: String?,
-    val unreadCount: Int,
+/** Header pill (spec §5.1): the open target's title + unread, tap opens the sheet. */
+data class ThreadPillUi(
+    val isMain: Boolean = true,
+    /** Null for Main or a freshly started thread; the pill shows the resource default. */
+    val title: String? = null,
+    val unreadCount: Int = 0,
 )
 
 /** "N replies" pill under a Main root bubble (spec §6.6). */
@@ -102,8 +138,26 @@ object ThreadUiDerivation {
     fun unreadByThread(unread: List<ThreadUnreadCount>): Map<String, Int> =
         unread.mapNotNull { row -> row.threadId?.let { it.toHex() to row.unreadCount } }.toMap()
 
+    /** Main's unread count (the null-threadId row of the grouped query). */
+    fun mainUnreadCount(unread: List<ThreadUnreadCount>): Int =
+        unread.firstOrNull { it.threadId == null }?.unreadCount ?: 0
+
     fun lastMessageByThread(last: List<ThreadLastMessage>): Map<String, ThreadLastMessage> =
         last.associateBy { it.threadId.toHex() }
+
+    /**
+     * Oldest message per thread keyed by thread id. Ties on the min timestamp
+     * can yield several rows for one thread; the earliest content wins, so
+     * the derivation is deterministic.
+     */
+    fun firstMessageByThread(first: List<ThreadFirstMessage>): Map<String, ThreadFirstMessage> {
+        val byHex = LinkedHashMap<String, ThreadFirstMessage>()
+        first.sortedBy { it.timestamp }.forEach { row ->
+            val hex = row.threadId.toHex()
+            if (hex !in byHex) byHex[hex] = row
+        }
+        return byHex
+    }
 
     fun countsByThread(counts: List<ThreadMessageCount>): Map<String, Int> =
         counts.mapNotNull { row -> row.threadId?.let { it.toHex() to row.messageCount } }.toMap()
@@ -112,12 +166,15 @@ object ThreadUiDerivation {
         thread: ThreadEntity,
         unreadByHex: Map<String, Int>,
         lastByHex: Map<String, ThreadLastMessage>,
+        firstByHex: Map<String, ThreadFirstMessage>,
     ): ThreadRowUi {
         val hex = thread.threadId.toHex()
         val last = lastByHex[hex]
+        val first = firstByHex[hex]
         return ThreadRowUi(
             threadIdHex = hex,
             title = thread.title,
+            autoTitle = first?.content?.let { ThreadPolicy.threadTitleExcerpt(it) }?.ifBlank { null },
             preview = last?.content.orEmpty(),
             timestamp = last?.timestamp ?: thread.lastActivityAt,
             unreadCount = unreadByHex[hex] ?: 0,
@@ -127,51 +184,51 @@ object ThreadUiDerivation {
     /** Sheet partition (spec §6.3): archived wins over dormancy; each section keeps DAO order. */
     fun buildSheetState(
         threads: List<ThreadEntity>,
-        unreadByHex: Map<String, Int>,
-        lastByHex: Map<String, ThreadLastMessage>,
+        source: ThreadRowSource,
         now: Long,
+        currentThreadIdHex: String? = null,
+        main: ThreadMainRowUi = ThreadMainRowUi(),
+        openTargetKnown: Boolean = true,
     ): ThreadSheetUiState {
         val active = mutableListOf<ThreadRowUi>()
         val dormant = mutableListOf<ThreadRowUi>()
         val archived = mutableListOf<ThreadRowUi>()
         threads.forEach { thread ->
-            val row = toRow(thread, unreadByHex, lastByHex)
+            val row = toRow(thread, source.unreadByHex, source.lastByHex, source.firstByHex)
             when {
                 thread.archivedAt != null -> archived += row
                 isDormant(thread.lastActivityAt, now) -> dormant += row
                 else -> active += row
             }
         }
-        return ThreadSheetUiState(active = active, dormant = dormant, archived = archived)
+        return ThreadSheetUiState(
+            active = active,
+            dormant = dormant,
+            archived = archived,
+            main = main,
+            currentThreadIdHex = currentThreadIdHex,
+            openTargetKnown = openTargetKnown,
+        )
     }
 
     /**
-     * Chip list (spec §6.2): ACTIVE non-archived threads, `lastActivityAt`
-     * desc. Main is not included — it is the pinned first chip by
-     * construction. A freshly started thread with no row yet (nothing sent)
-     * is appended so its chip exists while selected.
+     * Header pill contents: the open target's title + unread. A freshly
+     * started thread that has no row yet keeps a null title so the pill shows
+     * the resource default until its first message titles it.
      */
-    fun buildChips(
-        threads: List<ThreadEntity>,
-        unreadByHex: Map<String, Int>,
+    fun buildPill(
+        sheet: ThreadSheetUiState,
         selectedThreadIdHex: String?,
-        now: Long,
-    ): List<ThreadChipUi> {
-        val chips =
-            threads
-                .filter { it.archivedAt == null && !isDormant(it.lastActivityAt, now) }
-                .map { thread ->
-                    val hex = thread.threadId.toHex()
-                    ThreadChipUi(
-                        threadIdHex = hex,
-                        title = thread.title,
-                        unreadCount = unreadByHex[hex] ?: 0,
-                    )
-                }.toMutableList()
-        if (selectedThreadIdHex != null && chips.none { it.threadIdHex == selectedThreadIdHex }) {
-            chips += ThreadChipUi(threadIdHex = selectedThreadIdHex, title = null, unreadCount = 0)
+    ): ThreadPillUi {
+        if (selectedThreadIdHex == null) {
+            return ThreadPillUi(isMain = true, unreadCount = sheet.main.unreadCount)
         }
-        return chips
+        val row = sheet.allRows.firstOrNull { it.threadIdHex == selectedThreadIdHex }
+        return ThreadPillUi(
+            isMain = false,
+            title = row?.displayTitle,
+            unreadCount = row?.unreadCount ?: 0,
+        )
     }
 
     /**

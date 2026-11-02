@@ -47,6 +47,7 @@ import network.columba.app.ui.model.loadImageBytes
 import network.columba.app.ui.model.loadImageData
 import network.columba.app.ui.model.parseAudioAttachment
 import network.columba.app.ui.model.toMessageUi
+import network.columba.app.data.db.dao.ThreadFirstMessage
 import network.columba.app.data.db.dao.ThreadLastMessage
 import network.columba.app.data.db.dao.ThreadMessageCount
 import network.columba.app.data.db.dao.ThreadUnreadCount
@@ -55,9 +56,11 @@ import network.columba.app.data.repository.toDomainMessage
 import network.columba.app.data.util.ThreadPolicy
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.toHex
-import network.columba.app.ui.model.ThreadChipUi
 import network.columba.app.ui.model.ThreadHeaderUi
 import network.columba.app.ui.model.ThreadHookUi
+import network.columba.app.ui.model.ThreadMainRowUi
+import network.columba.app.ui.model.ThreadRowSource
+import network.columba.app.ui.model.ThreadPillUi
 import network.columba.app.ui.model.ThreadSheetUiState
 import network.columba.app.ui.model.ThreadUiDerivation
 import network.columba.app.ui.model.ThreadViewUi
@@ -172,6 +175,11 @@ class MessagingViewModel
         private val _selectedThread = MutableStateFlow<String?>(null)
         val selectedThread: StateFlow<String?> = _selectedThread.asStateFlow()
 
+        // Archive moved the list away from the thread the user was reading:
+        // (displaced thread, the target it switched to). Cleared by the undo.
+        private var threadDisplacedByArchive: String? = null
+        private var threadDisplacementTarget: String? = null
+
         /** `threads_enabled` feature flag (default off; gates all P2 surfaces). */
         val threadsEnabled: StateFlow<Boolean> =
             settingsRepository
@@ -214,44 +222,79 @@ class MessagingViewModel
         private val threadCountsFlow: Flow<List<ThreadMessageCount>> =
             gatedThreadQuery { conversationRepository.observeMessageCountsPerThread(it) }
 
-        /** Chip bar contents (Main is rendered separately, always first). */
-        val threadChips: StateFlow<List<ThreadChipUi>> =
-            combine(
-                threadRowsFlow,
-                threadUnreadFlow,
-                _selectedThread,
-                threadsEnabled,
-            ) { rows, unread, selected, enabled ->
-                if (!enabled) {
-                    emptyList()
-                } else {
-                    ThreadUiDerivation.buildChips(
-                        rows,
-                        ThreadUiDerivation.unreadByThread(unread),
-                        selected,
-                        System.currentTimeMillis(),
-                    )
-                }
-            }.stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000L),
-                initialValue = emptyList(),
-            )
+        private val threadFirstFlow: Flow<List<ThreadFirstMessage>> =
+            gatedThreadQuery { conversationRepository.observeFirstMessagesPerThread(it) }
 
-        /** Thread sheet contents (Active / Dormant / Archived). */
+        /** Main's own last message and unread count — the sheet's pinned Main row. */
+        private val threadMainFlow: Flow<ThreadLastMessage?> =
+            combine(_currentConversation, threadsEnabled) { peerHash, enabled -> peerHash to enabled }
+                .flatMapLatest { (peerHash, enabled) ->
+                    if (peerHash == null || !enabled) {
+                        flowOf(null)
+                    } else {
+                        flow { emitAll(conversationRepository.observeMainLastMessage(peerHash)) }
+                    }
+                }
+
+        /**
+         * Thread sheet contents (Active / Dormant / Archived + pinned Main and
+         * the open target). One projection drives both sheet presentations and
+         * the pill (threads-spec D10).
+         */
         val threadSheetState: StateFlow<ThreadSheetUiState> =
-            combine(threadRowsFlow, threadUnreadFlow, threadLastFlow) { rows, unread, last ->
+            combine(
+                combine(threadRowsFlow, threadUnreadFlow, threadLastFlow, threadFirstFlow) { rows, unread, last, first ->
+                    ThreadSheetInputs(
+                        rows = rows,
+                        unreadByHex = ThreadUiDerivation.unreadByThread(unread),
+                        lastByHex = ThreadUiDerivation.lastMessageByThread(last),
+                        firstByHex = ThreadUiDerivation.firstMessageByThread(first),
+                        mainUnreadCount = ThreadUiDerivation.mainUnreadCount(unread),
+                    )
+                },
+                threadMainFlow,
+                _selectedThread,
+            ) { inputs, main, selected ->
                 ThreadUiDerivation.buildSheetState(
-                    rows,
-                    ThreadUiDerivation.unreadByThread(unread),
-                    ThreadUiDerivation.lastMessageByThread(last),
-                    System.currentTimeMillis(),
+                    threads = inputs.rows,
+                    source =
+                        ThreadRowSource(
+                            unreadByHex = inputs.unreadByHex,
+                            lastByHex = inputs.lastByHex,
+                            firstByHex = inputs.firstByHex,
+                        ),
+                    now = System.currentTimeMillis(),
+                    currentThreadIdHex = selected,
+                    main = ThreadMainRowUi(
+                        preview = main?.content.orEmpty(),
+                        timestamp = main?.timestamp ?: 0L,
+                        unreadCount = inputs.mainUnreadCount,
+                    ),
                 )
             }.stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000L),
                 initialValue = ThreadSheetUiState(),
             )
+
+        /** Header pill: the open target's title + unread (spec §5.1). */
+        val threadPill: StateFlow<ThreadPillUi> =
+            combine(threadSheetState, _selectedThread) { sheet, selected ->
+                ThreadUiDerivation.buildPill(sheet, selected)
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000L),
+                initialValue = ThreadPillUi(),
+            )
+
+        /** Intermediate projection for [threadSheetState] (kept typed instead of indexing a flow array). */
+        private data class ThreadSheetInputs(
+            val rows: List<ThreadEntity>,
+            val unreadByHex: Map<String, Int>,
+            val lastByHex: Map<String, ThreadLastMessage>,
+            val firstByHex: Map<String, ThreadFirstMessage>,
+            val mainUnreadCount: Int,
+        )
 
         /** "N replies" hooks for Main root bubbles, keyed by root message id. */
         val threadHooks: StateFlow<Map<String, ThreadHookUi>> =
@@ -382,39 +425,97 @@ class MessagingViewModel
 
         // Thread sheet management (spec §6.3) — local-only, never wire traffic.
 
+        /**
+         * Rename / reset the open or a listed thread. A null [title] writes
+         * SQL NULL, which is the "automatic excerpt" state (threads-spec D8);
+         * sanitizing happens in the repository so every caller gets the same
+         * cap/flatten rules.
+         */
         fun renameThread(
             threadIdHex: String,
-            title: String,
+            title: String?,
         ) {
             val peerHash = _currentConversation.value ?: return
+            val bytes = threadIdHex.hexToBytesOrNull() ?: return
             viewModelScope.launch {
                 try {
-                    conversationRepository.renameThread(peerHash, threadIdHex.hexToBytes(), title)
+                    conversationRepository.renameThread(peerHash, bytes, title)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error renaming thread", e)
                 }
             }
         }
 
-        fun archiveThread(threadIdHex: String) {
+        /**
+         * Archive a batch (swipe on one row, or the selection bar's `Archive`).
+         *
+         * The open thread is switched away *before* the archive is written:
+         * the message list then moves to the most recent unarchived thread (or
+         * Main) while the thread is still present, so it never renders an
+         * archived target or flashes Main (threads-spec §5.3). One repository
+         * call = one atomic UPDATE, so a batch cannot half-archive.
+         */
+        fun archiveThreads(threadIdHexes: List<String>) {
+            if (threadIdHexes.isEmpty()) return
             val peerHash = _currentConversation.value ?: return
             viewModelScope.launch {
                 try {
-                    conversationRepository.setThreadArchived(peerHash, threadIdHex.hexToBytes(), archived = true)
-                    if (_selectedThread.value == threadIdHex) selectThread(null)
+                    val archivedIds = threadIdHexes.mapNotNull { it.hexToBytesOrNull() }.toSet()
+                    val open = _selectedThread.value
+                    if (open != null && threadIdHexes.contains(open)) {
+                        val next =
+                            threadRowsFlow.first()
+                                .firstOrNull {
+                                    it.archivedAt == null && it.threadId.toHex() !in threadIdHexes
+                                }
+                        val nextHex = next?.threadId?.toHex()
+                        // Remember where the archive moved the user from, so the
+                        // immediate Undo can put them back (spec §5.3).
+                        threadDisplacedByArchive = open
+                        threadDisplacementTarget = nextHex
+                        switchThread(nextHex)
+                    }
+                    conversationRepository.setThreadsArchived(peerHash, archivedIds.toList(), archived = true)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error archiving thread", e)
+                    Log.e(TAG, "Error archiving threads", e)
                 }
             }
         }
 
-        fun unarchiveThread(threadIdHex: String) {
+        /** Un-archive a batch — the sheet's `Undo` and the Archived section's swipe. */
+        fun unarchiveThreads(threadIdHexes: List<String>) {
+            if (threadIdHexes.isEmpty()) return
             val peerHash = _currentConversation.value ?: return
             viewModelScope.launch {
                 try {
-                    conversationRepository.setThreadArchived(peerHash, threadIdHex.hexToBytes(), archived = false)
+                    val ids = threadIdHexes.mapNotNull { it.hexToBytesOrNull() }
+                    conversationRepository.setThreadsArchived(peerHash, ids, archived = false)
+                    // Undo of the archive that moved the list away returns to the
+                    // thread the user was reading, unless they moved on since.
+                    val displaced = threadDisplacedByArchive
+                    if (displaced != null &&
+                        threadIdHexes.contains(displaced) &&
+                        _selectedThread.value == threadDisplacementTarget
+                    ) {
+                        switchThread(displaced)
+                    }
+                    threadDisplacedByArchive = null
+                    threadDisplacementTarget = null
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error un-archiving thread", e)
+                    Log.e(TAG, "Error un-archiving threads", e)
+                }
+            }
+        }
+
+        /** Clear one thread's unread (sheet `⋮ → Mark read`); received rows only. */
+        fun markThreadRead(threadIdHex: String) {
+            val peerHash = _currentConversation.value ?: return
+            val bytes = threadIdHex.hexToBytesOrNull() ?: return
+            viewModelScope.launch {
+                try {
+                    conversationRepository.markThreadAsRead(peerHash, bytes)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error marking thread read", e)
                 }
             }
         }

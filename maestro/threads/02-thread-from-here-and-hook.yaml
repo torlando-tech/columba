@@ -17,9 +17,9 @@ appId: ${APP_ID}
       PEER_NAME: ${PEER_NAME}
 
 - extendedWaitUntil:
-    visible: "Main"
+    visible:
+      text: "Switch thread: Main"
     timeout: 10000
-- tapOn: "Main"
 
 # A root message in Main.
 - tapOn: "Type a message..."
@@ -53,7 +53,8 @@ appId: ${APP_ID}
 # Back from the thread lands on Main (not out of the chat).
 - pressBack
 - extendedWaitUntil:
-    visible: "Main"
+    visible:
+      text: "Switch thread: Main"
     timeout: 10000
 
 # Hook pill under the root bubble; the root stays in Main.

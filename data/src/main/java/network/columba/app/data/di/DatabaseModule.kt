@@ -106,16 +106,20 @@ object DatabaseModule {
     @Singleton
     fun provideColumbaDatabase(
         @ApplicationContext context: Context,
-    ): ColumbaDatabase =
-        Room
-            .databaseBuilder(
-                context,
-                ColumbaDatabase::class.java,
-                DATABASE_NAME,
-            ).addMigrations(*ColumbaDatabase.MIGRATIONS)
-            .enableMultiInstanceInvalidation()
-            .addCallback(DURABILITY_CALLBACK)
-            .build()
+    ): ColumbaDatabase {
+        val builder =
+            Room
+                .databaseBuilder(
+                    context,
+                    ColumbaDatabase::class.java,
+                    DATABASE_NAME,
+                ).enableMultiInstanceInvalidation()
+                .addCallback(DURABILITY_CALLBACK)
+        // Registered one by one: a spread would copy the whole migration array
+        // on every call.
+        ColumbaDatabase.MIGRATIONS.forEach { builder.addMigrations(it) }
+        return builder.build()
+    }
 
     @Provides
     fun provideConversationDao(database: ColumbaDatabase): ConversationDao = database.conversationDao()

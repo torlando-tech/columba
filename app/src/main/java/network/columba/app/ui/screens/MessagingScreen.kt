@@ -56,8 +56,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -103,8 +101,6 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -197,6 +193,7 @@ import network.columba.app.rns.api.BackendCapabilities.Support
 import network.columba.app.rns.api.model.Direction
 import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.ui.components.AttachmentPanel
+import network.columba.app.ui.components.ThreadPill
 import network.columba.app.ui.components.OVERLAY_MAX_CAPTURE_HEIGHT_PX
 import network.columba.app.ui.components.VoiceMessageBubble
 import network.columba.app.ui.components.VoiceDraftPreview
@@ -238,7 +235,6 @@ import network.columba.app.audio.VoiceMessagePlayerState
 import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.ui.model.AudioAttachmentUi
 import network.columba.app.navigation.ConversationNavigation
-import network.columba.app.ui.model.ThreadChipUi
 import network.columba.app.ui.model.ThreadHeaderUi
 import network.columba.app.ui.model.ThreadHookUi
 import network.columba.app.ui.theme.MeshConnected
@@ -402,7 +398,7 @@ fun MessagingScreen(
     // Threads P2 state (every surface is gated by threads_enabled).
     val threadsEnabled by viewModel.threadsEnabled.collectAsStateWithLifecycle()
     val selectedThread by viewModel.selectedThread.collectAsStateWithLifecycle()
-    val threadChips by viewModel.threadChips.collectAsStateWithLifecycle()
+    val threadPill by viewModel.threadPill.collectAsStateWithLifecycle()
     val threadSheetState by viewModel.threadSheetState.collectAsStateWithLifecycle()
     val threadHooks by viewModel.threadHooks.collectAsStateWithLifecycle()
     val threadView by viewModel.threadView.collectAsStateWithLifecycle()
@@ -1364,16 +1360,14 @@ fun MessagingScreen(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
 
-            // Threads P2: chip bar (spec §6.2) — Main pinned first, active
-            // threads by lastActivityAt desc, overflow sheet, "+ New" (case 1).
+            // Threads P2: the header pill (threads-spec §5.1) is the single
+            // thread control on this screen — it names the open target and
+            // opens the sheets switcher. Replaces the old chip bar.
             if (threadsEnabled) {
-                ThreadChipBar(
-                    chips = threadChips,
-                    selectedThread = activeThread,
-                    onSelectMain = { viewModel.selectThread(null) },
-                    onSelectThread = { viewModel.selectThread(it) },
-                    onOverflow = { showThreadSheet = true },
-                    onNewThread = { viewModel.startNewThread() },
+                ThreadPill(
+                    pill = threadPill,
+                    onClick = { showThreadSheet = true },
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
                 )
             }
 
@@ -1995,7 +1989,8 @@ fun MessagingScreen(
         )
     }
 
-    // Threads P2: thread sheet (chip-bar overflow / chat-card "View all").
+    // Threads P2: threads sheet (header pill entry point; chat-card "View all"
+    // opens the same sheet from the chat list).
     if (showThreadSheet) {
         ThreadSheet(
             state = threadSheetState,
@@ -2004,13 +1999,16 @@ fun MessagingScreen(
                 showThreadSheet = false
                 viewModel.selectThread(threadIdHex)
             },
+            onMainClick = { viewModel.selectThread(null) },
             onCreateThread = {
                 showThreadSheet = false
                 viewModel.startNewThread()
             },
             onRename = viewModel::renameThread,
-            onArchive = viewModel::archiveThread,
-            onUnarchive = viewModel::unarchiveThread,
+            onMarkRead = viewModel::markThreadRead,
+            onArchive = viewModel::archiveThreads,
+            onUnarchive = viewModel::unarchiveThreads,
+            onReopenThread = viewModel::selectThread,
             onDelete = viewModel::deleteThread,
         )
     }
@@ -3574,82 +3572,6 @@ private fun TextSizeDialog(
             }
         },
     )
-}
-
-/**
- * Threads P2 chip bar (spec §6.2): Main pinned first, then active threads by
- * lastActivityAt desc, "+ New" (case 1) and an overflow chevron opening the
- * full thread sheet. Tapping a chip swaps the message list in place.
- */
-@Composable
-private fun ThreadChipBar(
-    chips: List<ThreadChipUi>,
-    selectedThread: String?,
-    onSelectMain: () -> Unit,
-    onSelectThread: (String) -> Unit,
-    onOverflow: () -> Unit,
-    onNewThread: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        FilterChip(
-            selected = selectedThread == null,
-            onClick = onSelectMain,
-            label = { Text(stringResource(R.string.thread_chip_main)) },
-        )
-        chips.forEach { chip ->
-            FilterChip(
-                selected = selectedThread == chip.threadIdHex,
-                onClick = { onSelectThread(chip.threadIdHex) },
-                label = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = chip.title ?: stringResource(R.string.thread_untitled),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (chip.unreadCount > 0) {
-                            Icon(
-                                imageVector = Icons.Default.Circle,
-                                contentDescription = stringResource(R.string.thread_unread_indicator),
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(8.dp),
-                            )
-                            Text(
-                                text = chip.unreadCount.toString(),
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        }
-                    }
-                },
-            )
-        }
-        AssistChip(
-            onClick = onNewThread,
-            label = { Text(stringResource(R.string.thread_chip_new)) },
-        )
-        AssistChip(
-            onClick = onOverflow,
-            label = { Text(stringResource(R.string.thread_chip_more_threads)) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                )
-            },
-        )
-    }
 }
 
 /**

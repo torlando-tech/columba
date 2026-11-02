@@ -338,8 +338,6 @@
 
     <!-- Threads P2 (threads-spec §6) -->
     <string name="thread_chip_main">Main</string>
-    <string name="thread_chip_new">+ New</string>
-    <string name="thread_chip_more_threads">More threads</string>
     <string name="thread_untitled">New thread</string>
     <string name="thread_sheet_title">Threads</string>
     <string name="thread_sheet_section_active">Active</string>
@@ -374,6 +372,42 @@
     <string name="thread_row_main">Main conversation</string>
     <string name="thread_unread_indicator">Unread messages in thread</string>
     <string name="settings_threads_title">Threads</string>
-    <string name="settings_threads_description">Group conversations with a contact into topic threads: chip bar in chats, expanding cards in the chat list, and a thread sheet. Experimental — off by default.</string>
+    <string name="settings_threads_description">Group conversations with a contact into topic threads: a thread switcher in the message header, expanding cards in the chat list, and a searchable thread sheet. Experimental \u2014 off by default.</string>
     <string name="thread_open_thread">Open thread</string>
+
+    <!-- Threads UX delta: header pill, searchable sheet, archive/selection, titles -->
+    <string name="thread_pill_switch">Switch thread: %1$s</string>
+    <string name="thread_pill_switch_unread">Switch thread: %1$s, %2$d unread</string>
+    <string name="thread_time_now">now</string>
+    <string name="thread_time_minutes">%1$dm</string>
+    <string name="thread_time_hours">%1$dh</string>
+    <plurals name="thread_unread_count">
+        <item quantity="one">%1$d unread</item>
+        <item quantity="other">%1$d unread</item>
+    </plurals>
+    <string name="thread_search_hint">Search threads</string>
+    <string name="thread_search_clear">Clear search</string>
+    <string name="thread_search_no_results">No threads match &#8220;%1$s&#8221;</string>
+    <string name="thread_sheet_close">Close threads</string>
+    <string name="thread_sheet_active_empty">No active threads \u2014 dormant and archived threads are below.</string>
+    <string name="thread_selection_exit">Exit selection</string>
+    <plurals name="thread_selected_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <string name="thread_action_mark_read">Mark read</string>
+    <string name="thread_action_undo">Undo</string>
+    <string name="thread_more_actions">Thread actions</string>
+    <string name="thread_current_indicator">Current thread</string>
+    <string name="thread_archive_snackbar_single">%1$s \u00b7 moved to Archived</string>
+    <string name="thread_unarchive_snackbar_single">%1$s \u00b7 restored</string>
+    <plurals name="thread_archive_snackbar_batch">
+        <item quantity="one">%1$d thread moved to Archived</item>
+        <item quantity="other">%1$d threads moved to Archived</item>
+    </plurals>
+    <plurals name="thread_unarchive_snackbar_batch">
+        <item quantity="one">%1$d thread restored</item>
+        <item quantity="other">%1$d threads restored</item>
+    </plurals>
+    <string name="thread_rename_reset">Reset to automatic</string>
 </resources>

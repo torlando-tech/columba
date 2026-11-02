@@ -287,6 +287,50 @@ class NotificationSettingsScreenPermissionTest {
         assertEquals("package:${composeRule.activity.packageName}", started.dataString)
     }
 
+    @Test
+    fun `master toggle with permanently denied permission opens app settings instead of dead-end dialog`() {
+        notificationsEnabledFlow.value = false
+        hasRequestedNotificationPermissionFlow.value = true
+        setNotificationPermission(granted = false)
+
+        showScreen()
+
+        composeRule.onAllNodes(isToggleable())[0].performClick()
+        composeRule.waitForIdle()
+
+        val started = shadowOf(composeRule.activity).nextStartedActivity
+        assertNotNull("Permanent denial must route toggle-on to app settings", started)
+        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, started.action)
+        coVerify(exactly = 0) { settingsRepository.saveNotificationsEnabled(true) }
+        composeRule.onAllNodes(isToggleable())[0].assertIsOff()
+    }
+
+    @Test
+    fun `after denying from the card the master toggle still offers a way to grant`() {
+        notificationsEnabledFlow.value = true
+        setNotificationPermission(granted = false)
+
+        showScreen()
+
+        composeRule.onNodeWithText("Grant permission").performClick()
+        composeRule.waitForIdle()
+        val started = shadowOf(composeRule.activity).nextStartedActivityForResult
+        assertNotNull(started)
+        shadowOf(composeRule.activity).callOnActivityResult(started.requestCode, Activity.RESULT_CANCELED, null)
+        composeRule.waitForIdle()
+
+        // Denial disables notifications, which hides the card...
+        composeRule.onNodeWithText("Grant permission").assertDoesNotExist()
+
+        // ...but re-enabling must not dead-end in a dialog Android no longer shows.
+        composeRule.onAllNodes(isToggleable())[0].performClick()
+        composeRule.waitForIdle()
+
+        val settings = shadowOf(composeRule.activity).nextStartedActivity
+        assertNotNull("Toggle-on after permanent denial must open app settings", settings)
+        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, settings.action)
+    }
+
     // ========== Resume refresh ==========
 
     @Test

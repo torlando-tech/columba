@@ -119,19 +119,25 @@ fun NotificationSettingsScreen(
             }
         }
 
+    // Android will no longer show the dialog: a refusal was recorded and there is
+    // no rationale left to display. Every enable path routes to system app
+    // settings so a user who denied the card request is never left facing a
+    // dialog that auto-denies (PR #1232 review).
+    val permissionDeniedForever =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !hasNotificationPermission &&
+            (permissionRequestedInSession || state.hasRequestedNotificationPermission) &&
+            !ActivityCompat.shouldShowRequestPermissionRationale(
+                context.findActivity(),
+                Manifest.permission.POST_NOTIFICATIONS,
+            )
+
     // Saved state outruns the runtime permission: notifications are enabled but
     // Android will not deliver them. Surface a persistent, actionable warning.
     val notificationsBlockedByPermission =
         state.notificationsEnabled &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             !hasNotificationPermission
-    val permissionPermanentlyDenied =
-        notificationsBlockedByPermission &&
-            (permissionRequestedInSession || state.hasRequestedNotificationPermission) &&
-            !ActivityCompat.shouldShowRequestPermissionRationale(
-                context.findActivity(),
-                Manifest.permission.POST_NOTIFICATIONS,
-            )
 
     Scaffold(
         topBar = {
@@ -176,8 +182,14 @@ fun NotificationSettingsScreen(
                     enabled = state.notificationsEnabled,
                     onToggle = { enabled ->
                         if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
-                            // Request permission before enabling
-                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            // Request permission before enabling; once the dialog
+                            // is suppressed, open settings instead of a dead-end
+                            // dialog that auto-denies.
+                            if (permissionDeniedForever) {
+                                openAppSettings(context)
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
                         } else {
                             // Permission already granted or not needed, just toggle
                             viewModel.toggleNotificationsEnabled(enabled)
@@ -187,9 +199,9 @@ fun NotificationSettingsScreen(
 
                 if (notificationsBlockedByPermission) {
                     NotificationPermissionWarningCard(
-                        permanentlyDenied = permissionPermanentlyDenied,
+                        permanentlyDenied = permissionDeniedForever,
                         onAction = {
-                            if (permissionPermanentlyDenied) {
+                            if (permissionDeniedForever) {
                                 openAppSettings(context)
                             } else {
                                 permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)

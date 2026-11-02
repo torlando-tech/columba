@@ -51,7 +51,7 @@ navigation = { module = "androidx.navigation:navigation-compose", version.ref = 
 # Hilt
 hilt = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
-hilt-navigation = { module = "androidx.hilt:hilt-navigation-compose", version = "1.2.0" }
+hilt-navigation = { module = "androidx.hilt:hilt-navigation-compose", version = "1.4.0" }
 hilt-testing = { module = "com.google.dagger:hilt-android-testing", version.ref = "hilt" }
 
 # Room

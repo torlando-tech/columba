@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -60,6 +61,8 @@ import network.columba.app.R
 import network.columba.app.ui.components.BackgroundLocationPermissionBottomSheet
 import network.columba.app.ui.components.LocationPermissionBottomSheet
 import network.columba.app.ui.components.ServiceRestartBanner
+import network.columba.app.ui.components.findActivity
+import network.columba.app.ui.components.openAppSettings
 import network.columba.app.ui.screens.settings.cards.AboutCard
 import network.columba.app.util.GITHUB_NEW_ISSUE_URL
 import network.columba.app.util.safeOpenUrl
@@ -151,16 +154,26 @@ fun SettingsScreen(
                 ) == PermissionChecker.PERMISSION_GRANTED,
         )
     }
+    var notificationPermissionRequested by remember { mutableStateOf(false) }
     val notificationPermissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission(),
         ) { granted ->
             hasNotificationPermission = granted
+            notificationPermissionRequested = true
             // Persist enabled=true only once the permission is actually held.
             if (granted) {
                 viewModel.setNotificationsEnabled(true)
             }
         }
+    val notificationPermissionDeniedForever =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !hasNotificationPermission &&
+            notificationPermissionRequested &&
+            !ActivityCompat.shouldShowRequestPermissionRationale(
+                context.findActivity(),
+                Manifest.permission.POST_NOTIFICATIONS,
+            )
 
     // Location permission state for telemetry collector
     var showTelemetryPermissionSheet by remember { mutableStateOf(false) }
@@ -384,7 +397,13 @@ fun SettingsScreen(
                         // nothing, so route the toggle through the permission request
                         // (TOR-31). On denial nothing is persisted; the setting stays off.
                         if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
-                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            if (notificationPermissionDeniedForever) {
+                                // Android no longer shows the dialog; settings is
+                                // the only remaining way to grant it.
+                                openAppSettings(context)
+                            } else {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
                         } else {
                             viewModel.setNotificationsEnabled(enabled)
                         }

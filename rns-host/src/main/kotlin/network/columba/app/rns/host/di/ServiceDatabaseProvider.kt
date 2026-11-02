@@ -23,6 +23,9 @@ object ServiceDatabaseProvider {
             INSTANCE ?: createDatabase(context).also { INSTANCE = it }
         }
 
+    // Spread is required: Room's addMigrations(vararg migrations) is variadic
+    // and the single source of truth is the array shared with the app process.
+    @Suppress("SpreadOperator")
     private fun createDatabase(context: Context): ColumbaDatabase =
         Room
             .databaseBuilder(

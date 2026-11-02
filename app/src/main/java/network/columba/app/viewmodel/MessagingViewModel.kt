@@ -56,6 +56,7 @@ import network.columba.app.data.repository.toDomainMessage
 import network.columba.app.data.util.ThreadPolicy
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.toHex
+import network.columba.app.ui.model.ThreadComposerPrefill
 import network.columba.app.ui.model.ThreadHeaderUi
 import network.columba.app.ui.model.ThreadHookUi
 import network.columba.app.ui.model.ThreadMainRowUi
@@ -191,8 +192,8 @@ class MessagingViewModel
                 )
 
         /** One-shot composer prefill for "Thread from here" (editable quote of the root). */
-        private val _threadComposerPrefill = MutableSharedFlow<String>(extraBufferCapacity = 1)
-        val threadComposerPrefill: SharedFlow<String> = _threadComposerPrefill.asSharedFlow()
+        private val _threadComposerPrefill = MutableSharedFlow<ThreadComposerPrefill>(extraBufferCapacity = 1)
+        val threadComposerPrefill: SharedFlow<ThreadComposerPrefill> = _threadComposerPrefill.asSharedFlow()
 
         /** Case-2 root for a not-yet-sent thread: attached as `0x30` on the first send only. */
         private val _pendingThreadRoot = MutableStateFlow<String?>(null)
@@ -406,9 +407,16 @@ class MessagingViewModel
             }
         }
 
-        /** Case 1: "+ New" — unnamed thread from scratch, selected immediately. */
-        fun startNewThread() {
-            selectThread(ThreadPolicy.newThreadId().toHex())
+        /**
+         * Case 1: "+ New" — unnamed thread from scratch, selected immediately.
+         *
+         * @return the new thread's id, so a caller can re-select it after an
+         *   activity/process restore instead of creating a second thread.
+         */
+        fun startNewThread(): String {
+            val newThreadHex = ThreadPolicy.newThreadId().toHex()
+            selectThread(newThreadHex)
+            return newThreadHex
         }
 
         /**
@@ -431,12 +439,23 @@ class MessagingViewModel
                 if (peerHash != null && threadBytes != null) {
                     conversationRepository.savePendingThreadRoot(peerHash, threadBytes, rootMessageId)
                 }
-                _pendingThreadRoot.value = rootMessageId
-                // Emit the quote only after the switch completed: the
-                // switch swaps the composer draft, so a prefill emitted
-                // before it can be replaced by the new target's (empty)
-                // draft.
-                _threadComposerPrefill.tryEmit("> ${ThreadPolicy.quoteExcerpt(rootContent)}\n")
+                // A switch may have landed while the root was persisting: the
+                // root then belongs to the row (restored on re-entry), and the
+                // quote must not enter another target's draft.
+                val stillTargeted = threadSwitchMutex.withLock { _selectedThread.value == newThreadHex }
+                if (stillTargeted) {
+                    _pendingThreadRoot.value = rootMessageId
+                    // Emit the quote only after the switch completed: the
+                    // switch swaps the composer draft, so a prefill emitted
+                    // before it can be replaced by the new target's (empty)
+                    // draft.
+                    _threadComposerPrefill.tryEmit(
+                        ThreadComposerPrefill(
+                            threadIdHex = newThreadHex,
+                            text = "> ${ThreadPolicy.quoteExcerpt(rootContent)}\n",
+                        ),
+                    )
+                }
             }
         }
 

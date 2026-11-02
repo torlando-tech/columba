@@ -452,11 +452,14 @@ fun MessagingScreen(
     // Threads P2: "Thread from here" prefills the composer with an editable quote.
     LaunchedEffect(Unit) {
         viewModel.threadComposerPrefill.collect { prefill ->
+            // Bound to the target it was created for: a switch while the root
+            // was persisting must not put the quote in another thread's draft.
+            if (viewModel.selectedThread.value != prefill.threadIdHex) return@collect
             val merged =
                 if (messageText.isBlank()) {
-                    prefill
+                    prefill.text
                 } else {
-                    messageText.trimEnd() + "\n" + prefill
+                    messageText.trimEnd() + "\n" + prefill.text
                 }
             messageText = merged
             // Same path as typing: an untouched quoted draft must still be
@@ -1017,18 +1020,22 @@ fun MessagingScreen(
     // the message a notification was tapped for). Keyed on [initialThreadId]
     // too: a notification can reuse the entry that is already showing this
     // conversation, and only its argument changes.
-    // Apply each distinct argument once per saved entry: activity recreation
-    // re-runs the effect, and re-applying "+ New" would create a second thread.
-    var appliedThreadArg by rememberSaveable(destinationHash, initialThreadId) {
-        mutableStateOf(false)
+    // "+ New" must create exactly one thread per saved entry: activity
+    // recreation re-runs the effect, and the reload resets the selection to
+    // Main, so the created id is saved and re-selected instead of re-created.
+    var startedThreadHex by rememberSaveable(destinationHash, initialThreadId) {
+        mutableStateOf<String?>(null)
     }
     LaunchedEffect(destinationHash, initialThreadId, currentConversationHash) {
-        if (appliedThreadArg) return@LaunchedEffect
         if (currentConversationHash != destinationHash) return@LaunchedEffect
-        appliedThreadArg = true
         when (initialThreadId) {
-            ConversationNavigation.NEW_THREAD_ARG -> viewModel.startNewThread()
             null -> Unit
+            ConversationNavigation.NEW_THREAD_ARG -> {
+                val existing = startedThreadHex
+                // selectThread is idempotent, so re-applying after a reload is
+                // what restores the thread the user was reading.
+                if (existing != null) viewModel.selectThread(existing) else startedThreadHex = viewModel.startNewThread()
+            }
             else -> viewModel.selectThread(initialThreadId)
         }
     }

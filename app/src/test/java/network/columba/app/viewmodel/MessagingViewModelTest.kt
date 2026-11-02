@@ -4734,6 +4734,51 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `thread from here drops its quote when the user switches away mid-write`() =
+        runTest {
+            stubThreadSurface()
+            val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+            coEvery { conversationRepository.savePendingThreadRoot(any(), any(), any()) } coAnswers { gate.await() }
+            val viewModel =
+                createTestViewModel().also {
+                    it.attachmentIoDispatcher = StandardTestDispatcher(testScheduler)
+                }
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            val prefills = mutableListOf<network.columba.app.ui.model.ThreadComposerPrefill>()
+            val prefillCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadComposerPrefill.collect { prefills += it }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Switch away while the root is still being persisted.
+            viewModel.startThreadFromMessage("root-message-id", "quoted Main message")
+            advanceUntilIdle()
+            val abandonedThread = requireNotNull(viewModel.selectedThread.value)
+            viewModel.selectThread(null)
+            advanceUntilIdle()
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            // The quote must not land in Main's draft.
+            assertTrue("no prefill may be emitted for an abandoned target", prefills.isEmpty())
+            assertEquals(null, viewModel.selectedThread.value)
+
+            // Sanity: staying on the created thread still prefills it.
+            viewModel.startThreadFromMessage("root-message-id", "quoted Main message")
+            advanceUntilIdle()
+            val keptThread = requireNotNull(viewModel.selectedThread.value)
+            assertEquals(1, prefills.size)
+            assertEquals(keptThread, prefills.single().threadIdHex)
+            assertTrue(keptThread != abandonedThread)
+
+            prefillCollection.cancel()
+            flagCollection.cancel()
+        }
+
+    @Test
     fun `reopening an unsent case-2 thread still attaches its root on the first send`() =
         runTest {
             val rootMessageId = "root-message-id"

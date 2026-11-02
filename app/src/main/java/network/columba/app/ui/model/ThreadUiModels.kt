@@ -82,6 +82,16 @@ data class ThreadPillUi(
     val unreadCount: Int = 0,
 )
 
+/**
+ * One-shot composer prefill for "Thread from here", bound to the thread it was
+ * created for: applying it to whatever target happens to be selected would put
+ * the quote in another thread's draft.
+ */
+data class ThreadComposerPrefill(
+    val threadIdHex: String,
+    val text: String,
+)
+
 /** "N replies" pill under a Main root bubble (spec §6.6). */
 data class ThreadHookUi(
     val threadIdHex: String,

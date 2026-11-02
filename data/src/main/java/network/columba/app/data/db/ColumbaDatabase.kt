@@ -522,6 +522,33 @@ abstract class ColumbaDatabase : RoomDatabase() {
             }
 
         /**
+         * Every migration this database version requires, in ascending order.
+         *
+         * **Both** processes install this whole array: [DatabaseModule]
+         * (app process, Hilt) and `ServiceDatabaseProvider` (the `:reticulum`
+         * service process, which cannot use Hilt). Hand-maintained per-process
+         * lists drifted and left the service unable to open a database the app
+         * process had already upgraded (missing `MIGRATION_11_12` — the
+         * Greptile P1 on PR #1224). One list, no drift.
+         *
+         * Contiguity and completeness are pinned by `MigrationChainTest`.
+         */
+        val MIGRATIONS: Array<Migration> =
+            arrayOf(
+                MIGRATION_1_2,
+                MIGRATION_2_3,
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6,
+                MIGRATION_6_7,
+                MIGRATION_7_8,
+                MIGRATION_8_9,
+                MIGRATION_9_10,
+                MIGRATION_10_11,
+                MIGRATION_11_12,
+            )
+
+        /**
          * Extract the `fields[16].reactions` blob out of a legacy
          * `fieldsJson`, returning `(newFieldsJson, reactionsJson)`.
          * Returns null if there is no reactions blob to extract or if

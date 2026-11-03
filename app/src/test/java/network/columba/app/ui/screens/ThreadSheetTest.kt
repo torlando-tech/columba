@@ -194,9 +194,10 @@ class ThreadSheetTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("Undo").assertIsDisplayed()
 
-        // Past the snackbar's Short duration: it goes away without undoing, so
-        // the archive stands (spec §10 "expiry leaves archived").
-        composeTestRule.mainClock.advanceTimeBy(6000)
+        // Past the snackbar's Long duration and its exit animation: it goes
+        // away without undoing, so the archive stands (spec §10 "expiry leaves
+        // archived").
+        composeTestRule.mainClock.advanceTimeBy(12000)
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("Undo").assertDoesNotExist()

@@ -873,11 +873,15 @@ fun ConversationCard(
             val nonArchivedCount = bundle.nonArchived.size
             val archivedCount = bundle.sheet.archived.size
             val onlyArchived = nonArchivedCount == 0 && archivedCount > 0
+            // An archive-only card has nothing to expand into, so the row opens
+            // the sheet instead — unless it is already open, where collapse
+            // must stay reachable (the rows on it can still be dismissed).
+            val opensSheet = onlyArchived && !isExpanded
             Row(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .clickable { if (onlyArchived) onViewAllThreads() else onToggleExpand() }
+                        .clickable { if (opensSheet) onViewAllThreads() else onToggleExpand() }
                         .padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -912,7 +916,7 @@ fun ConversationCard(
                             when {
                                 // Nothing to expand: the row opens the sheet,
                                 // where the Archived section lives.
-                                onlyArchived -> R.string.thread_open_archived
+                                opensSheet -> R.string.thread_open_archived
                                 isExpanded -> R.string.thread_collapse_threads
                                 else -> R.string.thread_expand_threads
                             },

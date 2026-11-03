@@ -519,6 +519,32 @@ class ChatsScreenTest {
         assertEquals("the archived rows live in the sheet", 1, viewedAll)
     }
 
+    @Test
+    fun conversationCard_allArchived_expandedStillCollapses() {
+        val conversation = TestFactories.createConversation()
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet = ThreadSheetUiState(archived = List(2) { threadRow("a$it") }),
+            )
+        var toggled = 0
+        var viewedAll = 0
+
+        composeTestRule.setContent {
+            ConversationCard(
+                conversation = conversation,
+                threadsUi = threadsUi,
+                isExpanded = true,
+                onToggleExpand = { toggled++ },
+                onViewAllThreads = { viewedAll++ },
+            )
+        }
+
+        composeTestRule.onNodeWithText("2 archived").performClick()
+
+        assertEquals("an open archive-only card must still close", 1, toggled)
+        assertEquals("collapsing is not a jump to the sheet", 0, viewedAll)
+    }
+
     private fun threadRow(suffix: String) =
         ThreadRowUi(
             threadIdHex = suffix.padStart(32, '0'),

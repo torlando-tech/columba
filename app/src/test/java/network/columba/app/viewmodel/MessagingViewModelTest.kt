@@ -7,6 +7,7 @@ package network.columba.app.viewmodel
 
 import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import network.columba.app.R
 import network.columba.app.audio.VoiceMessageFormat
@@ -396,6 +397,7 @@ class MessagingViewModelTest {
      */
     private fun createTestViewModel(
         microphoneArbiter: MicrophoneAdmissionArbiter = MicrophoneAdmissionArbiter(),
+        savedState: SavedStateHandle = SavedStateHandle(),
     ): MessagingViewModel =
         MessagingViewModel(
             applicationContext,
@@ -417,6 +419,7 @@ class MessagingViewModelTest {
             notificationHelper,
             rnsTelephony,
             microphoneArbiter,
+            savedState,
         )
 
     private fun outgoingDeliveryMessage(
@@ -4817,6 +4820,82 @@ class MessagingViewModelTest {
             assertEquals(null, viewModel.selectedThread.value)
             assertEquals(null, viewModel.draftText.value)
 
+            flagCollection.cancel()
+        }
+
+    @Test
+    fun `recreating mid-compose restores the target and its draft`() =
+        runTest {
+            stubThreadSurface()
+            val threadHex = "0a0b0c0d0e0f1112131415161718191a"
+            val saved =
+                SavedStateHandle(
+                    mapOf(
+                        "messaging.target.conversation" to testPeerHash,
+                        "messaging.target.thread" to threadHex,
+                        "messaging.target.root" to "root-message-id",
+                    ),
+                )
+            coEvery { conversationRepository.getDraft(any(), any()) } returns "> quoted root"
+            val viewModel = createTestViewModel(savedState = saved)
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // A recreation is not a cancel: the target the user was composing
+            // in (and its draft) comes back instead of opening on Main.
+            assertEquals(threadHex, viewModel.selectedThread.value)
+            assertEquals("> quoted root", viewModel.draftText.value)
+
+            // Leaving the chat ends its composing target: a later open of the
+            // same chat starts on Main.
+            viewModel.loadMessages("other-peer-hash", "Other Peer")
+            advanceUntilIdle()
+            val reopened = createTestViewModel(savedState = saved)
+            val reopenedFlags = launch(UnconfinedTestDispatcher(testScheduler)) {
+                reopened.threadsEnabled.collect { }
+            }
+            reopened.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            assertEquals(null, reopened.selectedThread.value)
+
+            reopenedFlags.cancel()
+            flagCollection.cancel()
+        }
+
+    @Test
+    fun `canceling clears the recreation snapshot`() =
+        runTest {
+            stubThreadSurface()
+            val saved = SavedStateHandle()
+            val viewModel = createTestViewModel(savedState = saved)
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            viewModel.startThreadFromMessage("root-message-id", "quoted Main message")
+            advanceUntilIdle()
+            val abandonedThread = requireNotNull(viewModel.selectedThread.value)
+            viewModel.selectThread(null)
+            advanceUntilIdle()
+
+            // Recreate on the same saved state: the canceled target must not
+            // come back.
+            val recreated = createTestViewModel(savedState = saved)
+            val recreatedFlags = launch(UnconfinedTestDispatcher(testScheduler)) {
+                recreated.threadsEnabled.collect { }
+            }
+            recreated.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            assertEquals(null, recreated.selectedThread.value)
+            assertTrue(abandonedThread.isNotBlank())
+
+            recreatedFlags.cancel()
             flagCollection.cancel()
         }
 

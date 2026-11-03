@@ -6,6 +6,7 @@ import android.util.Log
 import org.json.JSONObject
 import androidx.annotation.VisibleForTesting
 import androidx.core.content.FileProvider
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
@@ -144,10 +145,20 @@ class MessagingViewModel
         private val notificationHelper: network.columba.app.notifications.NotificationHelper,
         private val rnsTelephony: RnsTelephony,
         private val microphoneArbiter: MicrophoneAdmissionArbiter = MicrophoneAdmissionArbiter(),
+        private val savedState: SavedStateHandle = SavedStateHandle(),
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
             private const val DRAFT_SAVE_DEBOUNCE_MS = 500L
+
+            /**
+             * Composer target across process death (D11): a target with no
+             * thread row exists only while it is selected, so a recreation
+             * must restore the selection instead of dropping its draft.
+             */
+            private const val SAVED_CONVERSATION = "messaging.target.conversation"
+            private const val SAVED_THREAD = "messaging.target.thread"
+            private const val SAVED_ROOT = "messaging.target.root"
 
             /**
              * Sanitize a filename to prevent path traversal attacks.
@@ -349,6 +360,17 @@ class MessagingViewModel
             }
         }
 
+        /**
+         * Snapshot the composer target for process death. `SavedStateHandle`
+         * survives recreation of the ViewModel; an explicit switch away is a
+         * cancel and clears the snapshot via the same call.
+         */
+        private fun rememberTarget() {
+            savedState[SAVED_CONVERSATION] = _currentConversation.value
+            savedState[SAVED_THREAD] = _selectedThread.value
+            savedState[SAVED_ROOT] = _pendingThreadRoot.value
+        }
+
         /** Switch the message list + composer to a thread (null = Main), in place. */
         fun selectThread(threadIdHex: String?) {
             if (_selectedThread.value == threadIdHex) return
@@ -399,6 +421,7 @@ class MessagingViewModel
                     } else {
                         conversationRepository.markMainAsRead(peerHash)
                     }
+                    rememberTarget()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error switching thread", e)
                 }
@@ -436,6 +459,7 @@ class MessagingViewModel
                 val stillTargeted = threadSwitchMutex.withLock { _selectedThread.value == newThreadHex }
                 if (stillTargeted) {
                     _pendingThreadRoot.value = rootMessageId
+                    rememberTarget()
                     // Emit the quote only after the switch completed: the
                     // switch swaps the composer draft, so a prefill emitted
                     // before it can be replaced by the new target's (empty)
@@ -1789,16 +1813,31 @@ class MessagingViewModel
                     // lastDraftText holds the most recent text from onDraftTextChanged
                     saveDraftNow(previousHash, lastDraftText, previousThreadHex.hexToBytesOrNull())
                 }
+                // Leaving the chat ends its composing target: the snapshot is
+                // for recreation, not for a later open, which starts on Main.
+                savedState[SAVED_THREAD] = null
+                savedState[SAVED_ROOT] = null
+                savedState[SAVED_CONVERSATION] = null
             }
 
             // Set current conversation - this triggers the reactive Flow to load messages
             currentPeerName = peerName
             _currentConversation.value = destinationHash
             lastDraftText = ""
-            // Threads P2: every conversation opens on Main (spec §6.2).
-            _selectedThread.value = null
-            _pendingThreadRoot.value = null
+            // Threads P2: a conversation opens on Main (spec §6.2), except when
+            // the process restored a target the user was composing in: a
+            // recreation is not a cancel, so that target (and its draft) comes
+            // back. The snapshot stays valid for this chat (a second death
+            // restores again) and is dropped when the chat is left, so a later
+            // open still starts on Main.
+            val restoredThreadHex =
+                savedState.get<String>(SAVED_THREAD)
+                    ?.takeIf { savedState.get<String>(SAVED_CONVERSATION) == destinationHash }
+            val restoredRoot = restoredThreadHex?.let { savedState.get<String>(SAVED_ROOT) }
+            _selectedThread.value = restoredThreadHex
+            _pendingThreadRoot.value = restoredRoot
             _threadView.value = null
+            rememberTarget()
 
             // Enable fast polling (1s) for active conversation
             rnsLxmf.setConversationActive(true)
@@ -1811,7 +1850,11 @@ class MessagingViewModel
             // Restore draft for this conversation
             draftRestoreJob = viewModelScope.launch {
                 try {
-                    val draft = conversationRepository.getDraft(destinationHash)
+                    val draft =
+                        conversationRepository.getDraft(
+                            destinationHash,
+                            restoredThreadHex.hexToBytesOrNull(),
+                        )
                     _draftText.value = draft
                     lastDraftText = draft.orEmpty()
                     Log.d(TAG, "Restored draft for $destinationHash: ${draft?.take(30) ?: "none"}")
@@ -2134,7 +2177,10 @@ class MessagingViewModel
                         )
                     if (persisted) {
                         clearSubmittedDraft(destinationHash, submittedText, replyToId, threadId)
-                        if (threadRootSend) _pendingThreadRoot.value = null
+                        if (threadRootSend) {
+                            _pendingThreadRoot.value = null
+                            rememberTarget()
+                        }
                     }
                     composerSendResults.send(
                         ComposerSendResult(destinationHash, submittedText, persisted, threadId?.toHex()),

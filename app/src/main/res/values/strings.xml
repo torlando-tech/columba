@@ -350,6 +350,11 @@
         <item quantity="one">%1$d thread</item>
         <item quantity="other">%1$d threads</item>
     </plurals>
+    <plurals name="thread_card_archived_count">
+        <item quantity="one">%1$d archived</item>
+        <item quantity="other">%1$d archived</item>
+    </plurals>
+    <string name="thread_open_archived">Open archived threads</string>
     <plurals name="thread_replies_count">
         <item quantity="one">%1$d reply</item>
         <item quantity="other">%1$d replies</item>

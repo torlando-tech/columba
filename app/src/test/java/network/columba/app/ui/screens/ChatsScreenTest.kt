@@ -473,6 +473,63 @@ class ChatsScreenTest {
     }
 
     @Test
+    fun conversationCard_countsOnlyUnarchivedThreads() {
+        val conversation = TestFactories.createConversation()
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet =
+                    ThreadSheetUiState(
+                        active = listOf(threadRow("01")),
+                        archived = List(3) { threadRow("a$it") },
+                    ),
+            )
+
+        composeTestRule.setContent {
+            ConversationCard(conversation = conversation, threadsUi = threadsUi)
+        }
+
+        composeTestRule.onNodeWithText("1 thread").assertIsDisplayed()
+        composeTestRule.onNodeWithText("4 threads").assertDoesNotExist()
+    }
+
+    @Test
+    fun conversationCard_allArchived_labelNamesTheArchiveAndOpensTheSheet() {
+        val conversation = TestFactories.createConversation()
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet = ThreadSheetUiState(archived = List(2) { threadRow("a$it") }),
+            )
+        var toggled = 0
+        var viewedAll = 0
+
+        composeTestRule.setContent {
+            ConversationCard(
+                conversation = conversation,
+                threadsUi = threadsUi,
+                onToggleExpand = { toggled++ },
+                onViewAllThreads = { viewedAll++ },
+            )
+        }
+
+        composeTestRule.onNodeWithText("2 archived").assertIsDisplayed()
+        composeTestRule.onNodeWithText("0 threads").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Open archived threads").performClick()
+
+        assertEquals("archived-only cards have nothing to expand", 0, toggled)
+        assertEquals("the archived rows live in the sheet", 1, viewedAll)
+    }
+
+    private fun threadRow(suffix: String) =
+        ThreadRowUi(
+            threadIdHex = suffix.padStart(32, '0'),
+            title = "Thread $suffix",
+            autoTitle = null,
+            preview = "preview $suffix",
+            timestamp = 1_000L,
+            unreadCount = 0,
+        )
+
+    @Test
     fun conversationCard_displaysLastMessage() {
         // Given
         val conversation = TestFactories.createConversation(lastMessage = "Hello, how are you?")

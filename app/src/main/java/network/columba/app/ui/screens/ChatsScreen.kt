@@ -865,21 +865,37 @@ fun ConversationCard(
                     }
                 }
             }
+            // The card reveals active + dormant threads only, so its count
+            // says the same. Counting archived rows here promised content the
+            // control never shows (5 threads, 4 of them behind the sheet's
+            // Archived footer); when nothing is unarchived the label names the
+            // archive instead of reading "0 threads".
+            val nonArchivedCount = bundle.nonArchived.size
+            val archivedCount = bundle.sheet.archived.size
+            val onlyArchived = nonArchivedCount == 0 && archivedCount > 0
             Row(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .clickable { onToggleExpand() }
+                        .clickable { if (onlyArchived) onViewAllThreads() else onToggleExpand() }
                         .padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text =
-                        pluralStringResource(
-                            R.plurals.thread_card_thread_count,
-                            bundle.sheet.totalThreadCount,
-                            bundle.sheet.totalThreadCount,
-                        ),
+                        if (onlyArchived) {
+                            pluralStringResource(
+                                R.plurals.thread_card_archived_count,
+                                archivedCount,
+                                archivedCount,
+                            )
+                        } else {
+                            pluralStringResource(
+                                R.plurals.thread_card_thread_count,
+                                nonArchivedCount,
+                                nonArchivedCount,
+                            )
+                        },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -893,10 +909,12 @@ fun ConversationCard(
                         },
                     contentDescription =
                         stringResource(
-                            if (isExpanded) {
-                                R.string.thread_collapse_threads
-                            } else {
-                                R.string.thread_expand_threads
+                            when {
+                                // Nothing to expand: the row opens the sheet,
+                                // where the Archived section lives.
+                                onlyArchived -> R.string.thread_open_archived
+                                isExpanded -> R.string.thread_collapse_threads
+                                else -> R.string.thread_expand_threads
                             },
                         ),
                     tint = MaterialTheme.colorScheme.primary,

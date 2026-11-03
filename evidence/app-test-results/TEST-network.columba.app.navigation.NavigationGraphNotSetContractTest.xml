@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.navigation.NavigationGraphNotSetContractTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:01:33.709Z" hostname="hermes-agent" time="0.022">
-  <properties/>
-  <testcase name="navigateToIncomingCall without a navigation graph is a no-op instead of throwing" classname="network.columba.app.navigation.NavigationGraphNotSetContractTest" time="0.02"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

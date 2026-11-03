@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.repository.ConversationRepositoryImageExtractionTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:30.508Z" hostname="hermes-agent" time="0.601">
-  <properties/>
-  <testcase name="small array-format image stays inline untouched" classname="network.columba.app.data.repository.ConversationRepositoryImageExtractionTest" time="0.461"/>
-  <testcase name="large hex-string image stores pure hex under a file ref" classname="network.columba.app.data.repository.ConversationRepositoryImageExtractionTest" time="0.078"/>
-  <testcase name="large array-format image stores only the hex payload and keeps array shape" classname="network.columba.app.data.repository.ConversationRepositoryImageExtractionTest" time="0.054"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.audio.CallMicrophoneAdmissionCoordinatorTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:59:55.960Z" hostname="hermes-agent" time="0.164">
-  <properties/>
-  <testcase name="call lease survives screen owner and releases on terminal state" classname="network.columba.app.audio.CallMicrophoneAdmissionCoordinatorTest" time="0.163"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

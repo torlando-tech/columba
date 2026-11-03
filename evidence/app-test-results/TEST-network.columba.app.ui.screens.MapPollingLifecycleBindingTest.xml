@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.screens.MapPollingLifecycleBindingTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:05:47.111Z" hostname="hermes-agent" time="0.286">
-  <properties/>
-  <testcase name="overlapping bindings retain independent owner tokens" classname="network.columba.app.ui.screens.MapPollingLifecycleBindingTest" time="0.125"/>
-  <testcase name="binding follows lifecycle until composition is disposed" classname="network.columba.app.ui.screens.MapPollingLifecycleBindingTest" time="0.156"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

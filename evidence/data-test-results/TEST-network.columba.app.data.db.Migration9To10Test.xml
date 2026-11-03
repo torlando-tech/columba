@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.db.Migration9To10Test" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:17.416Z" hostname="hermes-agent" time="0.031">
-  <properties/>
-  <testcase name="adds nullable signatureVerified column and backfills existing rows to null" classname="network.columba.app.data.db.Migration9To10Test" time="0.029"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

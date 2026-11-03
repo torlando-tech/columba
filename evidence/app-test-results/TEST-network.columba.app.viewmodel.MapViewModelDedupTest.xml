@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.MapViewModelDedupTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:10:16.106Z" hostname="hermes-agent" time="0.009">
-  <properties/>
-  <testcase name="deduplicateContactMarkersByDestination keeps latest marker per destination hash" classname="network.columba.app.viewmodel.MapViewModelDedupTest" time="0.003"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

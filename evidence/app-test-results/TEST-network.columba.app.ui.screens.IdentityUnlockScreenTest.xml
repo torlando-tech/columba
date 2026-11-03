@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.screens.IdentityUnlockScreenTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:05:34.529Z" hostname="hermes-agent" time="0.238">
-  <properties/>
-  <testcase name="hashMismatchIsFailClosedAndDoesNotOfferReplacement" classname="network.columba.app.ui.screens.IdentityUnlockScreenTest" time="0.225"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

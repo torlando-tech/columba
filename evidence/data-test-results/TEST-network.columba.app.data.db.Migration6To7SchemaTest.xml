@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.db.Migration6To7SchemaTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:15.814Z" hostname="hermes-agent" time="1.357">
-  <properties/>
-  <testcase name="migration output matches exported Room version 7 schema" classname="network.columba.app.data.db.Migration6To7SchemaTest" time="1.299"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.db.Migration10To11Test" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:14.887Z" hostname="hermes-agent" time="0.121">
-  <properties/>
-  <testcase name="migration preserves rows and leaves all pre-thread data in Main" classname="network.columba.app.data.db.Migration10To11Test" time="0.116"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

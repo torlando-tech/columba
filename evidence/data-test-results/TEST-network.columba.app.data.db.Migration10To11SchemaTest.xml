@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.data.db.Migration10To11SchemaTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-31T23:13:13.213Z" hostname="hermes-agent" time="1.668">
-  <properties/>
-  <testcase name="real v2 fixture upgrades through the full chain to a valid v11 schema" classname="network.columba.app.data.db.Migration10To11SchemaTest" time="1.551"/>
-  <testcase name="v10 fixture upgrades to a valid v11 schema" classname="network.columba.app.data.db.Migration10To11SchemaTest" time="0.115"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

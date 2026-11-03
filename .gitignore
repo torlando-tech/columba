@@ -116,7 +116,3 @@ sentry-wizard
 .planning/
 .swarm/
 .mcp.json
-
-# Maestro run artifacts
-maestro/threads/results/
-maestro/threads/screenshots/

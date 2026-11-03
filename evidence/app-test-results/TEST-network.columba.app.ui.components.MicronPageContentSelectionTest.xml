@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.ui.components.MicronPageContentSelectionTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:04:02.278Z" hostname="hermes-agent" time="9.117">
-  <properties/>
-  <testcase name="micronPageContent_clickableLinesStillReceiveClicksInsideSelectionContainer" classname="network.columba.app.ui.components.MicronPageContentSelectionTest" time="7.411"/>
-  <testcase name="micronPageContent_wrapsBodyInSelectionContainer" classname="network.columba.app.ui.components.MicronPageContentSelectionTest" time="0.387"/>
-  <testcase name="micronPageContent_formFieldEnterKeyInsertsNewline" classname="network.columba.app.ui.components.MicronPageContentSelectionTest" time="1.03"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

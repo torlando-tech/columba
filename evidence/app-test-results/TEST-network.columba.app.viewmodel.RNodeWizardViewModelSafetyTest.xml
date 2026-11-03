@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="network.columba.app.viewmodel.RNodeWizardViewModelSafetyTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-01T00:11:55.879Z" hostname="hermes-agent" time="0.131">
-  <properties/>
-  <testcase name="startDeviceScan sets error when bluetooth adapter is null" classname="network.columba.app.viewmodel.RNodeWizardViewModelSafetyTest" time="0.106"/>
-  <testcase name="rssiPollingJob is cancelled when navigating away from DEVICE_DISCOVERY" classname="network.columba.app.viewmodel.RNodeWizardViewModelSafetyTest" time="0.015"/>
-  <testcase name="rssiPollingJob is cancelled when onCleared is called" classname="network.columba.app.viewmodel.RNodeWizardViewModelSafetyTest" time="0.01"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

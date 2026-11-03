@@ -866,27 +866,15 @@ class ConversationRepository
             val isThread = threadId != null && threadId.isNotEmpty()
 
             if (content.isBlank()) {
-                // The draft that created the thread row is what names it; read
-                // it before deleting, so delete-if-empty can tell an abandoned
-                // automatic row from a thread the user renamed (Greptile P1).
-                val clearedDraft =
-                    if (isThread) {
-                        draftDao.getDraft(peerHash, identityHash, threadId.orMainThreadId())
-                    } else {
-                        null
-                    }
                 draftDao.deleteDraft(peerHash, identityHash, threadId.orMainThreadId())
                 if (isThread && threadDao.getThread(identityHash, peerHash, threadId) != null) {
                     // Atomic delete-if-empty: a first send completing right now
                     // has already inserted its message, so the row survives and
-                    // the reply can never be orphaned outside Main. A row the
-                    // user renamed does not carry the draft excerpt and stays.
-                    threadDao.deleteThreadIfEmpty(
-                        threadId,
-                        identityHash,
-                        peerHash,
-                        autoTitle = clearedDraft?.content?.let { ThreadPolicy.threadTitleExcerpt(it) },
-                    )
+                    // the reply can never be orphaned outside Main. Any title is
+                    // kept: a draft-created row carries its excerpt, and a
+                    // thread the user renamed must never be deleted even when
+                    // the name matches the draft text (Greptile P1).
+                    threadDao.deleteThreadIfEmpty(threadId, identityHash, peerHash)
                 }
                 return
             }

@@ -152,23 +152,22 @@ interface ThreadDao {
     )
 
     /**
-     * Delete the thread row ONLY when no messages reference it and the user has
-     * never named it — one atomic statement, so a first send completing
-     * concurrently can never leave its reply orphaned outside Main with the
-     * thread row gone.
+     * Delete the thread row ONLY when it is message-less and carries no name —
+     * one atomic statement, so a first send completing concurrently can never
+     * leave its reply orphaned outside Main with the thread row gone.
      *
-     * `title IS NULL OR title = :autoTitle` is what keeps a named thread alive:
-     * a row created by `saveDraft` is titled with the draft excerpt, and a row
-     * created by `+ New → Rename` carries the user's label. When the draft that
-     * created the row is cleared, [autoTitle] is the excerpt of that draft, so
-     * only the abandoned automatic row matches — the renamed one does not
-     * (threads-spec §6.2 "title optional at creation").
+     * `title IS NULL` is the whole guard: any title is treated as the user's
+     * label and is never deleted on the draft-clear path. A row created by
+     * `saveDraft` is titled with the draft excerpt and simply stays (visible
+     * and archivable) when that draft is discarded; deleting on a title match
+     * would remove a thread the user renamed to the same text (threads-spec
+     * §6.2 "title optional at creation").
      */
     @Query(
         """
         DELETE FROM threads
         WHERE identityHash = :identityHash AND conversationHash = :conversationHash AND threadId = :threadId
-        AND (title IS NULL OR (:autoTitle IS NOT NULL AND title = :autoTitle))
+        AND title IS NULL
         AND (
             SELECT COUNT(*) FROM messages
             WHERE messages.threadId = :threadId
@@ -181,6 +180,5 @@ interface ThreadDao {
         threadId: ByteArray,
         identityHash: String,
         conversationHash: String,
-        autoTitle: String?,
     ): Int
 }

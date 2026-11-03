@@ -118,7 +118,7 @@ class ThreadTitleRepositoryTest {
     }
 
     @Test
-    fun `an emptied draft deletes an unnamed thread row`() = kotlinx.coroutines.runBlocking {
+    fun `an emptied draft keeps a draft-created thread`() = kotlinx.coroutines.runBlocking {
         repository.saveDraft(peerHash, "unsent text", freshThread)
 
         val created = repository.getThread(peerHash, freshThread)
@@ -127,8 +127,37 @@ class ThreadTitleRepositoryTest {
 
         repository.saveDraft(peerHash, "", freshThread)
 
-        assertNull("an abandoned draft leaves no row behind", repository.getThread(peerHash, freshThread))
+        val row = repository.getThread(peerHash, freshThread)
+        assertNotNull("a titled row is never deleted on the draft-clear path", row)
+        assertEquals("unsent text", row?.title)
     }
+
+    @Test
+    fun `a name identical to the draft text still survives`() = kotlinx.coroutines.runBlocking {
+        repository.saveDraft(peerHash, "Build notes", freshThread)
+        repository.renameThread(peerHash, freshThread, "Build notes")
+
+        repository.saveDraft(peerHash, "", freshThread)
+
+        assertNotNull(
+            "matching the draft text must not make a user's name deletable",
+            repository.getThread(peerHash, freshThread),
+        )
+    }
+
+    @Test
+    fun `an emptied draft deletes a thread whose name was reset to automatic`() =
+        kotlinx.coroutines.runBlocking {
+            repository.saveDraft(peerHash, "unsent text", freshThread)
+            repository.renameThread(peerHash, freshThread, null)
+
+            repository.saveDraft(peerHash, "", freshThread)
+
+            assertNull(
+                "a message-less row with no name has nothing to preserve",
+                repository.getThread(peerHash, freshThread),
+            )
+        }
 
     @Test
     fun `clearing the draft of a renamed thread keeps it`() = kotlinx.coroutines.runBlocking {

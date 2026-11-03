@@ -76,47 +76,48 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
         Dispatchers.resetMain()
     }
 
-    // ========== Case-2 root persistence (threads-spec §4.2) ==========
+    // ========== An unsent target is not a thread (threads-spec §5) ==========
 
     @Test
-    fun `savePendingThreadRoot stores the root on a thread that has no message yet`() =
+    fun `a draft on a fresh thread stores text without creating a thread`() =
         runTest {
             insertConversationFor(TEST_PEER_HASH)
             val threadId = "02000000000000000000000000000002".hexToBytes()
 
-            repository.savePendingThreadRoot(
-                peerHash = TEST_PEER_HASH,
-                threadId = threadId,
-                rootMessageId = "root-message-1",
-            )
+            repository.saveDraft(TEST_PEER_HASH, "> quoted root", threadId)
 
-            val row = threadDao.getThread(TEST_IDENTITY_HASH, TEST_PEER_HASH, threadId)
-            assertEquals(
-                "Reopening the unsent thread must still know which Main message it came from",
-                "root-message-1",
-                row?.rootMessageId,
+            assertNull(
+                "a draft is not a thread: the row appears only on the first send",
+                threadDao.getThread(TEST_IDENTITY_HASH, TEST_PEER_HASH, threadId),
             )
+            assertEquals("> quoted root", repository.getDraft(TEST_PEER_HASH, threadId))
         }
 
     @Test
-    fun `savePendingThreadRoot does not replace a root that was already attached`() =
+    fun `discarding an unsent draft removes the text and leaves no thread`() =
         runTest {
             insertConversationFor(TEST_PEER_HASH)
             val threadId = "03000000000000000000000000000003".hexToBytes()
-            repository.savePendingThreadRoot(
-                peerHash = TEST_PEER_HASH,
-                threadId = threadId,
-                rootMessageId = "root-message-1",
-            )
+            repository.saveDraft(TEST_PEER_HASH, "> quoted root", threadId)
 
-            repository.savePendingThreadRoot(
-                peerHash = TEST_PEER_HASH,
-                threadId = threadId,
-                rootMessageId = "root-message-2",
-            )
+            repository.discardDraftIfUnsent(TEST_PEER_HASH, threadId)
 
-            val row = threadDao.getThread(TEST_IDENTITY_HASH, TEST_PEER_HASH, threadId)
-            assertEquals("The first root already went on the wire", "root-message-1", row?.rootMessageId)
+            assertNull("the abandoned target keeps no text", repository.getDraft(TEST_PEER_HASH, threadId))
+            assertNull(threadDao.getThread(TEST_IDENTITY_HASH, TEST_PEER_HASH, threadId))
+        }
+
+    @Test
+    fun `a named thread keeps its draft when the target is left`() =
+        runTest {
+            insertConversationFor(TEST_PEER_HASH)
+            val threadId = "04000000000000000000000000000004".hexToBytes()
+            repository.saveDraft(TEST_PEER_HASH, "> quoted root", threadId)
+            repository.renameThread(TEST_PEER_HASH, threadId, "Build notes")
+
+            repository.discardDraftIfUnsent(TEST_PEER_HASH, threadId)
+
+            assertNotNull("the name is a thread the user created", threadDao.getThread(TEST_IDENTITY_HASH, TEST_PEER_HASH, threadId))
+            assertEquals("a named target keeps its text for the next open", "> quoted root", repository.getDraft(TEST_PEER_HASH, threadId))
         }
 
     private suspend fun insertConversationFor(peerHash: String) {

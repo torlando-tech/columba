@@ -241,7 +241,9 @@ object ThreadUiDerivation {
     /**
      * Replies-hook map (spec §6.6): rootMessageId -> hook. Archived threads
      * keep their hook (the pill is a property of the root message; the thread
-     * stays reachable from Main).
+     * stays reachable from Main). A thread with no messages yet has no
+     * replies, so it gets no hook: "0 replies" on Main would advertise a
+     * thread the user started (and then canceled) without ever sending.
      */
     fun buildHookMap(
         threads: List<ThreadEntity>,
@@ -252,9 +254,11 @@ object ThreadUiDerivation {
             .mapNotNull { thread ->
                 val rootId = thread.rootMessageId ?: return@mapNotNull null
                 val hex = thread.threadId.toHex()
+                val messages = countsByHex[hex] ?: 0
+                if (messages == 0) return@mapNotNull null
                 rootId to ThreadHookUi(
                     threadIdHex = hex,
-                    replyCount = countsByHex[hex] ?: 0,
+                    replyCount = messages,
                     unreadCount = unreadByHex[hex] ?: 0,
                 )
             }.toMap()

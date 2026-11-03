@@ -871,15 +871,15 @@ class ConversationRepository
                     // Atomic delete-if-empty: a first send completing right now
                     // has already inserted its message, so the row survives and
                     // the reply can never be orphaned outside Main. Any title is
-                    // kept: a draft-created row carries its excerpt, and a
-                    // thread the user renamed must never be deleted even when
-                    // the name matches the draft text (Greptile P1).
+                    // kept: an unnamed message-less row has nothing to preserve,
+                    // while a named one is a thread the user created (Greptile
+                    // P1).
                     threadDao.deleteThreadIfEmpty(threadId, identityHash, peerHash)
                 }
                 return
             }
 
-            // Drafts (and the thread row synced below) have a composite FK onto
+            // Drafts have a composite FK onto
             // `conversations`: a peer opened through `Start Chat` has no row
             // until the first message, and writing a draft for it would fail
             // the check and drop the typed text. This stays below the blank
@@ -895,25 +895,11 @@ class ConversationRepository
                     threadId = threadId.orMainThreadId(),
                 ),
             )
-            // Keep the thread row in sync with thread drafts so an UNSENT
-            // thread stays reachable: a non-empty draft gives the thread a
-            // saved entry (pill / sheet / chat card can reopen it) titled with
-            // its excerpt until the user renames it.
-            if (isThread && threadDao.getThread(identityHash, peerHash, threadId) == null) {
-                val now = System.currentTimeMillis()
-                threadDao.insertThreadIgnore(
-                    ThreadEntity(
-                        threadId = threadId,
-                        conversationHash = peerHash,
-                        identityHash = identityHash,
-                        rootMessageId = null,
-                        title = ThreadPolicy.threadTitleExcerpt(content),
-                        createdAt = now,
-                        lastActivityAt = now,
-                        archivedAt = null,
-                    ),
-                )
-            }
+            // A draft never creates a thread: no thread row exists until a
+            // message is sent in it (or the user names it), so a target the
+            // user cancels leaves no hook, no sheet row and no chat-card
+            // entry behind. The draft itself still lives in `drafts`, keyed by
+            // thread id, so the open target keeps its text across a retarget.
         }
 
         /**
@@ -1524,34 +1510,21 @@ class ConversationRepository
         }
 
         /**
-         * Remember the Main-message root of a "thread from here" that has no
-         * message yet. The row (created by the draft sync) keeps the root, so
-         * switching away and back still attaches `0x30` to the first send
-         * (threads-spec §4.2).
+         * Drop the stored draft of a target that never became a thread.
+         *
+         * A thread row exists only after its first message (or an explicit
+         * name), so leaving an unnamed, message-less target is a cancel: its
+         * draft goes with it instead of lingering unreachable. A named target
+         * has a row and keeps its draft for a later reopen.
          */
-        suspend fun savePendingThreadRoot(
+        suspend fun discardDraftIfUnsent(
             peerHash: String,
-            threadId: ByteArray,
-            rootMessageId: String,
+            threadId: ByteArray?,
         ) {
+            if (threadId == null || threadId.isEmpty()) return
             val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
-            val existing = threadDao.getThread(identityHash, peerHash, threadId)
-            if (existing == null) {
-                val now = System.currentTimeMillis()
-                threadDao.insertThreadIgnore(
-                    ThreadEntity(
-                        threadId = threadId,
-                        conversationHash = peerHash,
-                        identityHash = identityHash,
-                        rootMessageId = rootMessageId,
-                        title = null,
-                        createdAt = now,
-                        lastActivityAt = now,
-                        archivedAt = null,
-                    ),
-                )
-            } else if (existing.rootMessageId == null) {
-                threadDao.setRootMessage(threadId, identityHash, peerHash, rootMessageId)
+            if (threadDao.getThread(identityHash, peerHash, threadId) == null) {
+                draftDao.deleteDraft(peerHash, identityHash, threadId)
             }
         }
 

@@ -339,7 +339,7 @@ class MessagingViewModelTest {
         // Defaults for thread lookups made while switching targets
         coEvery { conversationRepository.getThread(any(), any()) } returns null
         coEvery { conversationRepository.firstMessageInThread(any(), any()) } returns null
-        coEvery { conversationRepository.savePendingThreadRoot(any(), any(), any()) } just Runs
+        coEvery { conversationRepository.discardDraftIfUnsent(any(), any()) } just Runs
     }
 
     @After
@@ -4785,11 +4785,9 @@ class MessagingViewModelTest {
         }
 
     @Test
-    fun `thread from here drops its quote when the user switches away mid-write`() =
+    fun `canceling a thread from here leaves no thread and no quote draft`() =
         runTest {
             stubThreadSurface()
-            val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
-            coEvery { conversationRepository.savePendingThreadRoot(any(), any(), any()) } coAnswers { gate.await() }
             val viewModel =
                 createTestViewModel().also {
                     it.attachmentIoDispatcher = StandardTestDispatcher(testScheduler)
@@ -4797,40 +4795,33 @@ class MessagingViewModelTest {
             val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
                 viewModel.threadsEnabled.collect { }
             }
-            val prefills = mutableListOf<network.columba.app.ui.model.ThreadComposerPrefill>()
-            val prefillCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
-                viewModel.threadComposerPrefill.collect { prefills += it }
-            }
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Switch away while the root is still being persisted.
             viewModel.startThreadFromMessage("root-message-id", "quoted Main message")
             advanceUntilIdle()
             val abandonedThread = requireNotNull(viewModel.selectedThread.value)
+
             viewModel.selectThread(null)
             advanceUntilIdle()
-            gate.complete(Unit)
-            advanceUntilIdle()
 
-            // The quote must not land in Main's draft.
-            assertTrue("no prefill may be emitted for an abandoned target", prefills.isEmpty())
+            // A thread exists only after a message is sent in it: canceling
+            // stores no row, so Main grows no "0 replies" hook, and the
+            // abandoned target's draft (the auto quote included) goes with it.
+            coVerify {
+                conversationRepository.discardDraftIfUnsent(
+                    peerHash = testPeerHash,
+                    threadId = match { it.contentEquals(abandonedThread.hexToBytes()) },
+                )
+            }
             assertEquals(null, viewModel.selectedThread.value)
+            assertEquals(null, viewModel.draftText.value)
 
-            // Sanity: staying on the created thread still prefills it.
-            viewModel.startThreadFromMessage("root-message-id", "quoted Main message")
-            advanceUntilIdle()
-            val keptThread = requireNotNull(viewModel.selectedThread.value)
-            assertEquals(1, prefills.size)
-            assertEquals(keptThread, prefills.single().threadIdHex)
-            assertTrue(keptThread != abandonedThread)
-
-            prefillCollection.cancel()
             flagCollection.cancel()
         }
 
     @Test
-    fun `reopening an unsent case-2 thread still attaches its root on the first send`() =
+    fun `the first send in a thread from here carries its root`() =
         runTest {
             val rootMessageId = "root-message-id"
             stubThreadSurface()
@@ -4844,29 +4835,12 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Thread from here: the root is remembered with the still-unsent thread.
             viewModel.startThreadFromMessage(rootMessageId, "quoted Main message")
             advanceUntilIdle()
             val threadHex = requireNotNull(viewModel.selectedThread.value)
-            coVerify {
-                conversationRepository.savePendingThreadRoot(
-                    peerHash = testPeerHash,
-                    threadId = match { it.contentEquals(threadHex.hexToBytes()) },
-                    rootMessageId = rootMessageId,
-                )
-            }
 
-            // Switch away (Main) and back: the row now carries the root, and the
-            // thread has no message yet because nothing was sent.
-            viewModel.selectThread(null)
-            advanceUntilIdle()
-            coEvery { conversationRepository.getThread(testPeerHash, threadHex.hexToBytes()) } returns
-                threadEntity(threadHex, lastActivityAt = 1_000L).copy(rootMessageId = rootMessageId)
-            viewModel.selectThread(threadHex)
-            advanceUntilIdle()
-            assertEquals(threadHex, viewModel.selectedThread.value)
-
-            // The first send of the reopened thread must still carry the root.
+            // The root never needed a row before the send: the first message
+            // carries it and ThreadGrouping creates the thread from it.
             viewModel.sendMessage(testPeerHash, "first message")
             advanceUntilIdle()
 
@@ -4895,6 +4869,7 @@ class MessagingViewModelTest {
                     peerPublicKey = null,
                 )
             }
+            assertEquals("the send stays in the thread target", threadHex, viewModel.selectedThread.value)
             flagCollection.cancel()
         }
 

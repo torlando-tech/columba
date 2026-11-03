@@ -377,7 +377,12 @@ class MessagingViewModel
                     // Flush the composer draft to the thread being left
                     // (empty text deletes the draft row).
                     draftSaveJob?.cancel()
-                    conversationRepository.saveDraft(peerHash, lastDraftText, fromThreadHex.hexToBytesOrNull())
+                    val fromThreadBytes = fromThreadHex.hexToBytesOrNull()
+                    conversationRepository.saveDraft(peerHash, lastDraftText, fromThreadBytes)
+                    // Leaving a target that never became a thread is a
+                    // cancel: it has no row, so its draft goes with it rather
+                    // than lingering unreachable (spec §5).
+                    conversationRepository.discardDraftIfUnsent(peerHash, fromThreadBytes)
                     lastDraftText = ""
                     // Swap the draft BEFORE announcing the new selection: the
                     // screen retargets its composer when `selectedThread`
@@ -391,13 +396,6 @@ class MessagingViewModel
                     val threadBytes = threadIdHex.hexToBytesOrNull()
                     if (threadBytes != null) {
                         conversationRepository.markThreadAsRead(peerHash, threadBytes)
-                        // Reopening a case-2 thread whose first message was never
-                        // sent restores the root it was created with; the 0x30
-                        // rides on that first send only.
-                        _pendingThreadRoot.value =
-                            conversationRepository.getThread(peerHash, threadBytes)
-                                ?.rootMessageId
-                                ?.takeIf { conversationRepository.firstMessageInThread(peerHash, threadBytes) == null }
                     } else {
                         conversationRepository.markMainAsRead(peerHash)
                     }
@@ -431,17 +429,10 @@ class MessagingViewModel
             viewModelScope.launch {
                 val newThreadHex = ThreadPolicy.newThreadId().toHex()
                 switchThread(newThreadHex)
-                // Persist the root with the (still message-less) thread before
-                // announcing it: switching away and back must keep the first
-                // send's 0x30, or Main loses the replies hook (spec §4.2).
-                val peerHash = _currentConversation.value
-                val threadBytes = newThreadHex.hexToBytesOrNull()
-                if (peerHash != null && threadBytes != null) {
-                    conversationRepository.savePendingThreadRoot(peerHash, threadBytes, rootMessageId)
-                }
-                // A switch may have landed while the root was persisting: the
-                // root then belongs to the row (restored on re-entry), and the
-                // quote must not enter another target's draft.
+                // No row yet: a "thread from here" becomes a thread on its
+                // first send (ThreadGrouping then creates the row and attaches
+                // the root), so canceling it leaves no hook behind. Until that
+                // send the root lives only while this target stays selected.
                 val stillTargeted = threadSwitchMutex.withLock { _selectedThread.value == newThreadHex }
                 if (stillTargeted) {
                     _pendingThreadRoot.value = rootMessageId

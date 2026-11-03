@@ -224,8 +224,8 @@ class ThreadGroupingTest {
             applyIncoming(threadT, content = "started off-screen") // no reply field at creation
             insertMessage("root-late")
 
-            // A row without a root (off-screen start OR draft-created) gains
-            // its root as soon as a reply resolves it.
+            // A row without a root (off-screen start OR one created by a
+            // rename) gains its root as soon as a reply resolves it.
             applyIncoming(threadT, replyToMessageId = "root-late", activityAt = 3000)
 
             assertEquals("root-late", threadDao.getThread(identityHash, peerA, threadT)!!.rootMessageId)

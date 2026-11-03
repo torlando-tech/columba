@@ -35,6 +35,15 @@ appId: ${APP_ID}
 - back
 - back
 
+# The expansion is a per-card preference, so a previous run can leave the
+# card open: normalize to collapsed before proving the toggle expands it.
+- runFlow:
+    when:
+      visible: "Main conversation"
+    commands:
+      - tapOn:
+          text: "[0-9]+ threads?"
+
 # Toggle row on the contact's card, then expand.
 - extendedWaitUntil:
     visible:

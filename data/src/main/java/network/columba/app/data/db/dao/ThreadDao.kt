@@ -157,11 +157,11 @@ interface ThreadDao {
      * leave its reply orphaned outside Main with the thread row gone.
      *
      * `title IS NULL` is the whole guard: any title is treated as the user's
-     * label and is never deleted on the draft-clear path. A row created by
-     * `saveDraft` is titled with the draft excerpt and simply stays (visible
-     * and archivable) when that draft is discarded; deleting on a title match
-     * would remove a thread the user renamed to the same text (threads-spec
-     * §6.2 "title optional at creation").
+     * label and is never deleted on the draft-clear path. Drafts never create
+     * rows, so the only message-less rows are renamed ones — the user's name
+     * is what this keeps; deleting on a title match would remove a thread the
+     * user renamed to the same text as a draft (threads-spec §6.2 "title
+     * optional at creation").
      */
     @Query(
         """

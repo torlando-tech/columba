@@ -2,7 +2,7 @@
 #
 # run-threads.sh — Threads P2 Maestro suite (threads-spec §6 UI).
 #
-# Runs the acceptance flows (01-09) against ONE device. The flows drive thread
+# Runs the acceptance flows (01-10) against ONE device. The flows drive thread
 # UI only (never delivery), so they open an existing conversation by name from
 # the Chats tab. The runner enables the threads feature flag through the debug
 # TestReceiver: the Settings switch is a Compose node with no text of its own,
@@ -97,6 +97,9 @@ run_flow 07-selection-mode -e THREAD_TOKEN="select-$STAMP" || FAILED=1
 run_flow 08-rename-title \
   -e THREAD_TOKEN="rename-$STAMP" -e RENAMED_TITLE="Renamed $STAMP" || FAILED=1
 run_flow 09-named-thread-survives -e RENAMED_TITLE="Named $STAMP" || FAILED=1
+run_flow 10-cancel-leaves-no-thread \
+  -e MAIN_TOKEN="cancelroot-$STAMP" -e TAIL_TOKEN="cancelroot-tail-$STAMP" \
+  -e REPLY_TOKEN="cancelecho-$STAMP" || FAILED=1
 
 if [ "$FAILED" -ne 0 ]; then
   echo "SUITE FAILED (see $OUT_DIR)" >&2

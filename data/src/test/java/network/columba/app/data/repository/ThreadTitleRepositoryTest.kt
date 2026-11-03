@@ -18,9 +18,9 @@ import org.robolectric.annotation.Config
 
 /**
  * Thread titles are local labels (threads-spec §6): NULL means "automatic",
- * and a thread minted by `+ New` has no row until its first draft/message, so
- * naming it at creation must insert the row (issue 06 "title optional at
- * creation", entry point in the chat app bar).
+ * and a thread exists only after its first message (D11: drafts never create
+ * rows), so naming a message-less target must insert the row (issue 06 "title
+ * optional at creation", entry point in the chat app bar).
  *
  * No conversation is seeded: `threads` has a composite FK onto
  * `conversations`, and a peer reached through `Start Chat` has no row yet, so
@@ -118,18 +118,16 @@ class ThreadTitleRepositoryTest {
     }
 
     @Test
-    fun `an emptied draft keeps a draft-created thread`() = kotlinx.coroutines.runBlocking {
+    fun `a draft never creates a thread row`() = kotlinx.coroutines.runBlocking {
         repository.saveDraft(peerHash, "unsent text", freshThread)
 
-        val created = repository.getThread(peerHash, freshThread)
-        assertNotNull("a non-empty draft keeps an unsent thread reachable", created)
-        assertEquals("a draft-created row is titled with its excerpt", "unsent text", created?.title)
+        assertNull("a thread exists only after a message is sent in it", repository.getThread(peerHash, freshThread))
+        assertEquals("unsent text", repository.getDraft(peerHash, freshThread))
 
         repository.saveDraft(peerHash, "", freshThread)
 
-        val row = repository.getThread(peerHash, freshThread)
-        assertNotNull("a titled row is never deleted on the draft-clear path", row)
-        assertEquals("unsent text", row?.title)
+        assertNull(repository.getThread(peerHash, freshThread))
+        assertNull("clearing the draft clears the text too", repository.getDraft(peerHash, freshThread))
     }
 
     @Test
@@ -143,12 +141,17 @@ class ThreadTitleRepositoryTest {
             "matching the draft text must not make a user's name deletable",
             repository.getThread(peerHash, freshThread),
         )
+        assertEquals(
+            "the name, not the draft excerpt, is the row's title",
+            "Build notes",
+            repository.getThread(peerHash, freshThread)?.title,
+        )
     }
 
     @Test
     fun `an emptied draft deletes a thread whose name was reset to automatic`() =
         kotlinx.coroutines.runBlocking {
-            repository.saveDraft(peerHash, "unsent text", freshThread)
+            repository.renameThread(peerHash, freshThread, "Build notes")
             repository.renameThread(peerHash, freshThread, null)
 
             repository.saveDraft(peerHash, "", freshThread)
@@ -169,6 +172,7 @@ class ThreadTitleRepositoryTest {
         val row = repository.getThread(peerHash, freshThread)
         assertNotNull("the rename outranks the draft excerpt it replaced", row)
         assertEquals("Build notes", row?.title)
+        assertNull("the draft itself is gone", repository.getDraft(peerHash, freshThread))
     }
 
     @Test

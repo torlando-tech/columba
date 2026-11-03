@@ -67,7 +67,7 @@ object ThreadGrouping {
                 ),
             )
         } else {
-            // A draft-created row (saveDraft sync) has no root yet; the first
+            // A row created by naming the thread has no root yet; the first
             // send must still attach it, or the thread loses its pinned root
             // and Main its replies hook.
             if (existing.rootMessageId == null) {

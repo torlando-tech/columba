@@ -228,6 +228,28 @@ class ThreadUiDerivationTest {
     }
 
     @Test
+    fun `a rooted thread with no messages yet has no replies hook`() {
+        // Tapping "Thread from here" then canceling leaves a target with a
+        // root but no reply; "0 replies" on Main would advertise a thread the
+        // user never sent into.
+        val sentInto = thread(1, rootMessageId = "root-1")
+        val cancelled = thread(2, rootMessageId = "root-2")
+
+        val hooks =
+            ThreadUiDerivation.buildHookMap(
+                listOf(sentInto, cancelled),
+                countsByHex = mapOf("01" to 2),
+                unreadByHex = emptyMap(),
+            )
+
+        assertEquals(
+            ThreadHookUi(threadIdHex = "01", replyCount = 2, unreadCount = 0),
+            hooks["root-1"],
+        )
+        assertNull("a message-less thread has nothing to count", hooks["root-2"])
+    }
+
+    @Test
     fun `header resolves root degrades to offscreen and case-1 has none`() {
         val root = message("root-1", content = "root text", isFromMe = true, receivedAt = now - 42)
 

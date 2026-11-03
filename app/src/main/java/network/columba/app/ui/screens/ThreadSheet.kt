@@ -1,6 +1,11 @@
 package network.columba.app.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,6 +42,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -178,9 +184,10 @@ fun ThreadSheet(
     val renameTarget = renameTargetId?.let(rowsById::get)
     val deleteTarget = deleteTargetId?.let(rowsById::get)
 
-    val rowComposable: @Composable (ThreadRowUi, Boolean) -> Unit = { row, archivedSection ->
+    val rowComposable: @Composable (ThreadRowUi, Boolean, Modifier) -> Unit = { row, archivedSection, modifier ->
         ThreadSheetRowItem(
             row = row,
+            modifier = modifier,
             selectionMode = selection.isNotEmpty(),
             checked = row.threadIdHex in selection,
             isCurrent = state.openTargetKnown && state.currentThreadIdHex == row.threadIdHex,
@@ -288,7 +295,7 @@ fun ThreadSheet(
                             }
                         } else {
                             items(results, key = { it.threadIdHex }) { row ->
-                                rowComposable(row, row.threadIdHex in archivedIds)
+                                rowComposable(row, row.threadIdHex in archivedIds, Modifier.animateItem())
                             }
                         }
                     }
@@ -323,7 +330,7 @@ fun ThreadSheet(
                                 ThreadSheetSectionHeader(stringResource(R.string.thread_sheet_section_active))
                             }
                             items(state.active, key = { it.threadIdHex }) { row ->
-                                rowComposable(row, false)
+                                rowComposable(row, false, Modifier.animateItem())
                             }
                         }
                     }
@@ -334,11 +341,27 @@ fun ThreadSheet(
                             ThreadSection.ARCHIVED -> state.archived
                             null -> null
                         }
-                    if (!sectionRows.isNullOrEmpty()) {
-                        HorizontalDivider()
-                        LazyColumn(modifier = Modifier.heightIn(max = 240.dp).fillMaxWidth()) {
-                            items(sectionRows, key = { it.threadIdHex }) { row ->
-                                rowComposable(row, expandedSection == ThreadSection.ARCHIVED)
+                    // Keep the last non-empty rows while the section shrinks, so
+                    // the collapse animates instead of the content vanishing on
+                    // the same frame the section is collapsed (spec §5.5).
+                    var lastSectionRows by remember { mutableStateOf<List<ThreadRowUi>>(emptyList()) }
+                    LaunchedEffect(sectionRows) {
+                        if (!sectionRows.isNullOrEmpty()) lastSectionRows = sectionRows
+                    }
+                    AnimatedVisibility(
+                        visible = !sectionRows.isNullOrEmpty(),
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        val rows = sectionRows ?: lastSectionRows
+                        if (rows.isNotEmpty()) {
+                            Column {
+                                HorizontalDivider()
+                                LazyColumn(modifier = Modifier.heightIn(max = 240.dp).fillMaxWidth()) {
+                                    items(rows, key = { it.threadIdHex }) { row ->
+                                        rowComposable(row, expandedSection == ThreadSection.ARCHIVED, Modifier.animateItem())
+                                    }
+                                }
                             }
                         }
                     }
@@ -420,6 +443,7 @@ internal data class ThreadRowMenuAction(
 @Composable
 private fun ThreadSheetRowItem(
     row: ThreadRowUi,
+    modifier: Modifier = Modifier,
     selectionMode: Boolean,
     checked: Boolean,
     isCurrent: Boolean,
@@ -453,6 +477,7 @@ private fun ThreadSheetRowItem(
 
     ThreadSheetRow(
         row = row,
+        modifier = modifier,
         isCurrent = isCurrent,
         selectionMode = selectionMode,
         checked = checked,

@@ -24,6 +24,7 @@ import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.data.repository.ReplyPreview
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.util.hexToBytes
+import network.columba.app.rns.api.util.toHex
 import network.columba.app.rns.api.model.DeliveryMethod
 import network.columba.app.rns.api.model.DeliveryStatus
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
@@ -631,6 +632,56 @@ class MessagingViewModelTest {
             viewModel.unarchiveThreads(listOf(openThread))
             advanceUntilIdle()
             assertEquals(openThread, viewModel.selectedThread.value)
+            flagCollection.cancel()
+        }
+
+    @Test
+    fun `batch archive lands once and falls back to Main when nothing is left`() =
+        runTest {
+            val openThread = "02000000000000000000000000000002"
+            val otherThread = "01000000000000000000000000000001"
+            val threads =
+                listOf(
+                    threadEntity(openThread, lastActivityAt = 2_000L),
+                    threadEntity(otherThread, lastActivityAt = 1_000L),
+                )
+            every { settingsRepository.threadsEnabledFlow } returns flowOf(true)
+            coEvery {
+                conversationRepository.threadsForConversation(testPeerHash, includeArchived = true)
+            } returns flowOf(threads)
+            coEvery { conversationRepository.observeUnreadCountsPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.observeLastMessagesPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.observeMessageCountsPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.observeFirstMessagesPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.saveDraft(any(), any(), any()) } returns Unit
+            coEvery { conversationRepository.getDraft(any(), any()) } returns null
+            coEvery { conversationRepository.markThreadAsRead(any(), any()) } returns Unit
+            coEvery { conversationRepository.markMainAsRead(any()) } returns Unit
+            coEvery { conversationRepository.setThreadsArchived(any(), any(), any()) } returns Unit
+            coEvery { conversationRepository.firstMessageInThread(any(), any()) } returns null
+            val viewModel = createTestViewModel()
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            viewModel.selectThread(openThread)
+            advanceUntilIdle()
+            assertEquals(openThread, viewModel.selectedThread.value)
+
+            // One batch: every selected thread goes in a single repository call.
+            viewModel.archiveThreads(listOf(openThread, otherThread))
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.selectedThread.value)
+            coVerify(exactly = 1) {
+                conversationRepository.setThreadsArchived(
+                    testPeerHash,
+                    // ByteArray identity is not equality: compare the ids as hex.
+                    match { ids -> ids.map { it.toHex() }.toSet() == setOf(openThread, otherThread) },
+                    archived = true,
+                )
+            }
             flagCollection.cancel()
         }
 

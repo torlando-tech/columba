@@ -173,6 +173,37 @@ class ThreadSheetTest {
     }
 
     @Test
+    fun `selection count tracks each toggled row`() {
+        setSheet()
+
+        composeTestRule.onNodeWithText("Trip planning").performTouchInput { longClick() }
+        composeTestRule.onNodeWithText("1 selected").assertIsDisplayed()
+
+        composeTestRule.onNodeWithText("Build notes").performClick()
+        composeTestRule.onNodeWithText("2 selected").assertIsDisplayed()
+
+        composeTestRule.onNodeWithText("Trip planning").performClick()
+        composeTestRule.onNodeWithText("1 selected").assertIsDisplayed()
+    }
+
+    @Test
+    fun `letting the undo snackbar expire keeps the thread archived`() {
+        setSheet()
+
+        composeTestRule.onNodeWithText("Trip planning").performTouchInput { swipeLeft() }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Undo").assertIsDisplayed()
+
+        // Past the snackbar's Short duration: it goes away without undoing, so
+        // the archive stands (spec §10 "expiry leaves archived").
+        composeTestRule.mainClock.advanceTimeBy(6000)
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("Undo").assertDoesNotExist()
+        assertTrue(unarchivedCalls.isEmpty())
+    }
+
+    @Test
     fun `swiping a row archives it and offers undo`() {
         setSheet()
 

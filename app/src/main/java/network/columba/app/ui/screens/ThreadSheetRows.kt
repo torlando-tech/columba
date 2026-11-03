@@ -87,6 +87,7 @@ import java.util.Locale
 @Composable
 internal fun ThreadSheetRow(
     row: ThreadRowUi,
+    modifier: Modifier = Modifier,
     isCurrent: Boolean,
     selectionMode: Boolean,
     checked: Boolean,
@@ -120,6 +121,9 @@ internal fun ThreadSheetRow(
         )
 
     SwipeToDismissBox(
+        // The caller passes `Modifier.animateItem()` inside a lazy list so a
+        // removed (archived) row fades out instead of vanishing (spec §5.5).
+        modifier = modifier,
         state = swipeState,
         enableDismissFromStartToEnd = false,
         enableDismissFromEndToStart = true,

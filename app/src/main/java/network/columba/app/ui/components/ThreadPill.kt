@@ -1,21 +1,16 @@
 package network.columba.app.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -26,11 +21,15 @@ import network.columba.app.R
 import network.columba.app.ui.model.ThreadPillUi
 
 /**
- * Header pill (threads-spec §5.1): the single thread control on the message
- * screen. Shows the open target's title — `Main` or the thread's title — with
- * an unread dot and a chevron; tapping it opens the threads sheet.
+ * Header thread control (threads-spec §5.1): the single thread control on the
+ * message screen. Shows the open target's title — `Main` or the thread's title
+ * — with an unread dot and a chevron; tapping it opens the threads sheet.
  *
- * The pill is the fixed, always-visible answer to "which thread am I in?",
+ * Rendered as an [AssistChip]: M3's compact auxiliary-action primitive. Its
+ * outline (no container fill) reads as a control in the app bar instead of
+ * borrowing the message-bubble container colour the surface pill used.
+ *
+ * The control is the fixed, always-visible answer to "which thread am I in?",
  * replacing the scroll-position-dependent chip bar. Long-press is deliberately
  * unbound (reserved for a future action; see spec §5.1).
  *
@@ -56,47 +55,45 @@ fun ThreadPill(
             stringResource(R.string.thread_pill_switch, label)
         }
 
-    Surface(
+    // Chip content is 32dp tall; minimumInteractiveComponentSize pads the
+    // layout out to M3's 48dp touch floor without inflating the chip itself
+    // (issue 07).
+    AssistChip(
         onClick = onClick,
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier =
-            modifier
-                .widthIn(max = 240.dp)
-                .semantics { contentDescription = description },
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp)
-                    // 48dp minimum touch target (issue 07): the text row alone
-                    // is ~36dp, below the M3 accessibility floor.
-                    .heightIn(min = 48.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            if (pill.unreadCount > 0) {
-                Icon(
-                    imageVector = Icons.Default.Circle,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(8.dp),
-                )
-            }
+        label = {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.widthIn(max = 200.dp),
             )
+        },
+        leadingIcon =
+            if (pill.unreadCount > 0) {
+                {
+                    Icon(
+                        imageVector = Icons.Default.Circle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(8.dp),
+                    )
+                }
+            } else {
+                null
+            },
+        trailingIcon = {
             Icon(
                 imageVector = Icons.Default.ExpandMore,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
             )
-        }
-    }
+        },
+        modifier =
+            modifier
+                .widthIn(max = 240.dp)
+                .minimumInteractiveComponentSize()
+                .semantics { contentDescription = description },
+    )
 }

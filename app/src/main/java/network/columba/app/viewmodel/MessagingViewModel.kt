@@ -475,7 +475,7 @@ class MessagingViewModel
             val bytes = threadIdHex.hexToBytesOrNull() ?: return
             viewModelScope.launch {
                 try {
-                    conversationRepository.renameThread(peerHash, bytes, title)
+                    conversationRepository.renameThread(peerHash, bytes, title, peerName = currentPeerName)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error renaming thread", e)
                 }

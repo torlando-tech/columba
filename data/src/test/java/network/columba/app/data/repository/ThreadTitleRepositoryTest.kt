@@ -21,6 +21,11 @@ import org.robolectric.annotation.Config
  * and a thread minted by `+ New` has no row until its first draft/message, so
  * naming it at creation must insert the row (issue 06 "title optional at
  * creation", entry point in the chat app bar).
+ *
+ * No conversation is seeded: `threads` has a composite FK onto
+ * `conversations`, and a peer reached through `Start Chat` has no row yet, so
+ * the repository has to create the parent itself (Greptile P2 on the naming
+ * path).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -63,19 +68,6 @@ class ThreadTitleRepositoryTest {
                     isActive = true,
                 ),
             )
-            // threads has a composite FK onto conversations: naming a fresh
-            // thread inserts a row only for a conversation that exists.
-            db.conversationDao().insertConversation(
-                network.columba.app.data.db.entity.ConversationEntity(
-                    peerHash = peerHash,
-                    identityHash = identityHash,
-                    peerName = "Peer",
-                    lastMessage = "",
-                    lastMessageTimestamp = 0,
-                    unreadCount = 0,
-                    lastSeenTimestamp = 0,
-                ),
-            )
         }
     }
 
@@ -84,11 +76,15 @@ class ThreadTitleRepositoryTest {
         db.close()
     }
 
-    @Test
-    fun `naming a fresh thread inserts its row with sanitized title`() =
-        kotlinx.coroutines.runBlocking {
-            repository.renameThread(peerHash, freshThread, "  Trip\nbudget  ")
+    private suspend fun conversations() = db.conversationDao().getAllConversationsList(identityHash)
 
+    @Test
+    fun `naming a fresh thread creates its parent conversation and the row`() =
+        kotlinx.coroutines.runBlocking {
+            repository.renameThread(peerHash, freshThread, "  Trip\nbudget  ", peerName = " Peer name ")
+
+            assertEquals("naming must not fail the conversation FK", 1, conversations().size)
+            assertEquals("Peer name", conversations().single().peerName)
             val row = repository.getThread(peerHash, freshThread)
             assertNotNull("naming a message-less thread must create its row", row)
             assertEquals("Trip budget", row?.title)
@@ -110,6 +106,7 @@ class ThreadTitleRepositoryTest {
 
         assertNull(repository.getThread(peerHash, freshThread))
         assertEquals(0, db.threadDao().getAllThreadsList(identityHash).size)
+        assertEquals("a rejected name must not touch conversations", 0, conversations().size)
     }
 
     @Test
@@ -117,5 +114,42 @@ class ThreadTitleRepositoryTest {
         repository.renameThread(peerHash, ByteArray(0), "Main label")
 
         assertEquals(0, db.threadDao().getAllThreadsList(identityHash).size)
+        assertEquals(0, conversations().size)
+    }
+
+    @Test
+    fun `an emptied draft deletes an unnamed thread row`() = kotlinx.coroutines.runBlocking {
+        repository.saveDraft(peerHash, "unsent text", freshThread)
+
+        val created = repository.getThread(peerHash, freshThread)
+        assertNotNull("a non-empty draft keeps an unsent thread reachable", created)
+        assertEquals("a draft-created row is titled with its excerpt", "unsent text", created?.title)
+
+        repository.saveDraft(peerHash, "", freshThread)
+
+        assertNull("an abandoned draft leaves no row behind", repository.getThread(peerHash, freshThread))
+    }
+
+    @Test
+    fun `clearing the draft of a renamed thread keeps it`() = kotlinx.coroutines.runBlocking {
+        repository.saveDraft(peerHash, "unsent text", freshThread)
+        repository.renameThread(peerHash, freshThread, "Build notes")
+
+        repository.saveDraft(peerHash, "", freshThread)
+
+        val row = repository.getThread(peerHash, freshThread)
+        assertNotNull("the rename outranks the draft excerpt it replaced", row)
+        assertEquals("Build notes", row?.title)
+    }
+
+    @Test
+    fun `an emptied draft keeps a thread the user named`() = kotlinx.coroutines.runBlocking {
+        repository.renameThread(peerHash, freshThread, "Build notes")
+
+        repository.saveDraft(peerHash, "", freshThread)
+
+        val row = repository.getThread(peerHash, freshThread)
+        assertNotNull("a named thread survives an empty draft", row)
+        assertEquals("Build notes", row?.title)
     }
 }

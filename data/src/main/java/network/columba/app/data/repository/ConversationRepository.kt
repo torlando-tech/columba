@@ -862,46 +862,67 @@ class ConversationRepository
             threadId: ByteArray? = null,
         ) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            val identityHash = activeIdentity.identityHash
+            // Drafts (and the thread row synced below) have a composite FK onto
+            // `conversations`: a peer opened through `Start Chat` has no row
+            // until the first message, and writing a draft for it would fail
+            // the check and drop the typed text.
+            ensureConversationRow(peerHash, identityHash, null)
+            val isThread = threadId != null && threadId.isNotEmpty()
+
             if (content.isBlank()) {
-                draftDao.deleteDraft(peerHash, activeIdentity.identityHash, threadId.orMainThreadId())
-            } else {
-                draftDao.insertOrReplaceDraft(
-                    DraftEntity(
-                        conversationHash = peerHash,
-                        identityHash = activeIdentity.identityHash,
-                        content = content,
-                        updatedTimestamp = System.currentTimeMillis(),
-                        threadId = threadId.orMainThreadId(),
-                    ),
-                )
-            }
-            // Keep the thread row in sync with thread drafts so an UNSSENT
-            // thread stays reachable: a non-empty draft gives the thread a
-            // saved entry (chip / sheet / chat card can reopen it); an
-            // emptied draft on a message-less thread removes the row again
-            // (abandoned thread, nothing left to show).
-            if (threadId != null && threadId.isNotEmpty()) {
-                val existing = threadDao.getThread(activeIdentity.identityHash, peerHash, threadId)
-                if (content.isNotBlank() && existing == null) {
-                    val now = System.currentTimeMillis()
-                    threadDao.insertThreadIgnore(
-                        ThreadEntity(
-                            threadId = threadId,
-                            conversationHash = peerHash,
-                            identityHash = activeIdentity.identityHash,
-                            rootMessageId = null,
-                            title = ThreadPolicy.threadTitleExcerpt(content),
-                            createdAt = now,
-                            lastActivityAt = now,
-                            archivedAt = null,
-                        ),
-                    )
-                } else if (content.isBlank() && existing != null) {
+                // The draft that created the thread row is what names it; read
+                // it before deleting, so delete-if-empty can tell an abandoned
+                // automatic row from a thread the user renamed (Greptile P1).
+                val clearedDraft =
+                    if (isThread) {
+                        draftDao.getDraft(peerHash, identityHash, threadId.orMainThreadId())
+                    } else {
+                        null
+                    }
+                draftDao.deleteDraft(peerHash, identityHash, threadId.orMainThreadId())
+                if (isThread && threadDao.getThread(identityHash, peerHash, threadId) != null) {
                     // Atomic delete-if-empty: a first send completing right now
                     // has already inserted its message, so the row survives and
-                    // the reply can never be orphaned outside Main.
-                    threadDao.deleteThreadIfEmpty(threadId, activeIdentity.identityHash, peerHash)
+                    // the reply can never be orphaned outside Main. A row the
+                    // user renamed does not carry the draft excerpt and stays.
+                    threadDao.deleteThreadIfEmpty(
+                        threadId,
+                        identityHash,
+                        peerHash,
+                        autoTitle = clearedDraft?.content?.let { ThreadPolicy.threadTitleExcerpt(it) },
+                    )
                 }
+                return
+            }
+
+            draftDao.insertOrReplaceDraft(
+                DraftEntity(
+                    conversationHash = peerHash,
+                    identityHash = identityHash,
+                    content = content,
+                    updatedTimestamp = System.currentTimeMillis(),
+                    threadId = threadId.orMainThreadId(),
+                ),
+            )
+            // Keep the thread row in sync with thread drafts so an UNSENT
+            // thread stays reachable: a non-empty draft gives the thread a
+            // saved entry (pill / sheet / chat card can reopen it) titled with
+            // its excerpt until the user renames it.
+            if (isThread && threadDao.getThread(identityHash, peerHash, threadId) == null) {
+                val now = System.currentTimeMillis()
+                threadDao.insertThreadIgnore(
+                    ThreadEntity(
+                        threadId = threadId,
+                        conversationHash = peerHash,
+                        identityHash = identityHash,
+                        rootMessageId = null,
+                        title = ThreadPolicy.threadTitleExcerpt(content),
+                        createdAt = now,
+                        lastActivityAt = now,
+                        archivedAt = null,
+                    ),
+                )
             }
         }
 
@@ -1554,6 +1575,35 @@ class ConversationRepository
         }
 
         /**
+         * Insert the parent `conversations` row when it does not exist yet.
+         *
+         * `threads` has a composite FK onto `conversations`, and a peer reached
+         * through `Start Chat` has no row until the first message. Naming a
+         * thread (or saving its first draft) would otherwise fail the check and
+         * lose the user's input with only a logged error. IGNORE keeps a
+         * concurrently inserted real conversation intact.
+         */
+        private suspend fun ensureConversationRow(
+            peerHash: String,
+            identityHash: String,
+            peerName: String?,
+        ) {
+            if (conversationDao.getConversation(peerHash, identityHash) != null) return
+            conversationDao.insertConversationIgnore(
+                ConversationEntity(
+                    peerHash = peerHash,
+                    identityHash = identityHash,
+                    peerName = TextSanitizer.sanitizePeerName(peerName ?: "Unknown"),
+                    peerPublicKey = null,
+                    lastMessage = "",
+                    lastMessageTimestamp = 0,
+                    unreadCount = 0,
+                    lastSeenTimestamp = 0,
+                ),
+            )
+        }
+
+        /**
          * Rename a thread (local label; never touches the wire). A null title
          * resets the thread to its automatic excerpt (threads-spec D8).
          *
@@ -1568,6 +1618,7 @@ class ConversationRepository
             peerHash: String,
             threadId: ByteArray,
             title: String?,
+            peerName: String? = null,
         ) {
             if (threadId.isEmpty()) return
             val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
@@ -1575,6 +1626,7 @@ class ConversationRepository
             val existing = threadDao.getThread(identityHash, peerHash, threadId)
             if (existing == null) {
                 if (sanitized == null) return
+                ensureConversationRow(peerHash, identityHash, peerName)
                 val now = System.currentTimeMillis()
                 threadDao.insertThreadIgnore(
                     ThreadEntity(

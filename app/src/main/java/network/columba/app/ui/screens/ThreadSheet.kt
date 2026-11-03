@@ -15,15 +15,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,7 +35,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -54,11 +50,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import network.columba.app.R
-import network.columba.app.data.util.ThreadPolicy
+import network.columba.app.ui.components.ThreadRenameDialog
 import network.columba.app.ui.model.ThreadRowUi
 import network.columba.app.ui.model.ThreadSheetUiState
 
@@ -97,13 +95,14 @@ fun ThreadSheet(
     onReopenThread: (threadIdHex: String) -> Unit,
     onDelete: (threadIdHex: String) -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
     var query by rememberSaveable { mutableStateOf("") }
     var selection by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var expandedSection by remember { mutableStateOf<ThreadSection?>(null) }
     var renameTargetId by remember { mutableStateOf<String?>(null) }
     var deleteTargetId by remember { mutableStateOf<String?>(null) }
@@ -117,12 +116,6 @@ fun ThreadSheet(
         trimmedQuery.isEmpty() ||
             (row.displayTitle ?: context.getString(R.string.thread_untitled))
                 .contains(trimmedQuery, ignoreCase = true)
-    }
-
-    // Back leaves selection mode without dismissing the sheet; otherwise the
-    // sheet's own dismiss handles Back.
-    BackHandler(enabled = selection.isNotEmpty()) {
-        selection = emptySet()
     }
 
     /**
@@ -216,6 +209,15 @@ fun ThreadSheet(
         // The header replaces the drag handle; the sheet opens full height.
         dragHandle = null,
     ) {
+        // Back leaves selection mode without dismissing the sheet (spec
+        // §5.4), so it must not reach the sheet's own dismiss handler. The
+        // handler lives in the sheet's content because the last registered
+        // enabled callback wins: ModalBottomSheet's dismiss handler is
+        // registered with the dialog, while a handler in ThreadSheet's body
+        // (composed before the dialog) is registered earlier and loses.
+        BackHandler(enabled = selection.isNotEmpty()) {
+            selection = emptySet()
+        }
         // Taps on the sheet's blank area (between the list and the pinned
         // sections) must not reach the scrim behind it: an unhandled tap would
         // dismiss the sheet. Child gestures consume first, so rows, swipe and
@@ -344,10 +346,14 @@ fun ThreadSheet(
             }
 
             // The snackbar lives in the sheet scaffold so a modal sheet can
-            // never hide an undo (spec §5.5).
+            // never hide an undo (spec §5.5). Polite live region: the archive
+            // result is announced without stealing focus (issue 07).
             SnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                modifier =
+                    Modifier
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite },
             )
 
             HorizontalDivider()
@@ -557,7 +563,13 @@ private fun ThreadSelectionBar(
         Text(
             text = pluralStringResource(R.plurals.thread_selected_count, count, count),
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.weight(1f).padding(start = 4.dp),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(start = 4.dp)
+                    // The count is the only progress signal in selection mode;
+                    // announce it when it changes (issue 07).
+                    .semantics { liveRegion = LiveRegionMode.Polite },
         )
         IconButton(onClick = onArchive, enabled = count > 0) {
             Icon(
@@ -599,96 +611,6 @@ private fun ThreadSelectionBar(
             Spacer(modifier = Modifier.width(48.dp))
         }
     }
-}
-
-/**
- * Rename dialog (threads-spec §6.2): single-line, `Done` action, Save only
- * when the sanitized value changed, `Reset to automatic` only when a local
- * title exists (writes NULL — the automatic-excerpt state).
- */
-@Composable
-internal fun ThreadRenameDialog(
-    initialTitle: String,
-    onConfirm: (String) -> Unit,
-    onResetToAutomatic: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var text by remember(initialTitle) { mutableStateOf(initialTitle) }
-    val rules = threadRenameRules(initialTitle, text)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.thread_rename_title)) },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { new ->
-                        if (renameInputAllowed(current = text, proposed = new)) text = new
-                    },
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.thread_rename_hint)) },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(
-                        onDone = { if (rules.canSave) rules.saveValue?.let(onConfirm) },
-                    ),
-                )
-                if (rules.canReset) {
-                    TextButton(onClick = onResetToAutomatic) {
-                        Text(stringResource(R.string.thread_rename_reset))
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { rules.saveValue?.let(onConfirm) },
-                enabled = rules.canSave,
-            ) {
-                Text(stringResource(R.string.thread_rename_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.thread_action_cancel))
-            }
-        },
-    )
-}
-
-/**
- * Save/reset decision for the rename dialog (threads-spec §6.2): a blank or
- * unchanged value cannot be saved; reset is offered only when a local title
- * is stored (the automatic-excerpt state has nothing to reset).
- */
-internal data class ThreadRenameRules(
-    val saveValue: String?,
-    val canSave: Boolean,
-    val canReset: Boolean,
-)
-
-/**
- * Whether the rename field accepts an edit of [current] into [proposed].
- *
- * The stored title is capped, but the field is seeded with the thread's
- * automatic title — an excerpt that can be longer than the cap. A field the
- * user cannot shrink would make Rename a dead end, so deletions are always
- * accepted; growth stops at the cap.
- */
-internal fun renameInputAllowed(current: String, proposed: String): Boolean =
-    proposed.length <= ThreadPolicy.MAX_THREAD_TITLE_LENGTH || proposed.length < current.length
-
-internal fun threadRenameRules(
-    initialTitle: String,
-    input: String,
-): ThreadRenameRules {
-    val sanitized = ThreadPolicy.sanitizeThreadTitle(input)
-    val stored = initialTitle.ifBlank { null }
-    return ThreadRenameRules(
-        saveValue = sanitized,
-        canSave = sanitized != null && sanitized != stored,
-        canReset = stored != null,
-    )
 }
 
 /** Adds/removes one id from the selection set. */

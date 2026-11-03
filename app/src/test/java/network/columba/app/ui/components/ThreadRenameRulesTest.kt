@@ -1,4 +1,4 @@
-package network.columba.app.ui.screens
+package network.columba.app.ui.components
 
 import network.columba.app.data.util.ThreadPolicy
 import org.junit.Assert.assertEquals

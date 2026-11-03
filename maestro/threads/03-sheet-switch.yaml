@@ -11,15 +11,14 @@
 # plain reply that is only ever visible inside the thread — its
 # presence/absence is what proves the list swap.
 #
-# Params: APP_ID, PEER_HASH, PEER_NAME, MAIN_TOKEN, THREAD_TOKEN, THREAD_MSG2,
+# Params: APP_ID, PEER_NAME, MAIN_TOKEN, THREAD_TOKEN, THREAD_MSG2,
 #         DRAFT_TOKEN.
 appId: ${APP_ID}
 ---
 - runFlow:
-    file: lib/open-self-chat.yaml
+    file: lib/open-chat.yaml
     env:
       APP_ID: ${APP_ID}
-      PEER_HASH: ${PEER_HASH}
       PEER_NAME: ${PEER_NAME}
 
 - extendedWaitUntil:

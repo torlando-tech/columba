@@ -50,6 +50,7 @@ import network.columba.app.rns.api.model.DeliveryMethod
  *   network.columba.test.SEND_FILE   --es to,text,path,name         -> file_sent id=<hex> | file_send_err …
  *   network.columba.test.SEND_AUDIO  --es to,text,path,codec        -> audio_sent id=<hex> | audio_send_err …
  *   network.columba.test.SEND_ICON   --es to,text,icon,fg,bg        -> icon_sent id=<hex> | icon_send_err …
+ *   network.columba.test.THREAD_ARCHIVE --es peer,thread,archived    -> thread_archive_ok peer=<hex> thread=<hex> archived=<bool> | thread_archive_err …
  *
  * Dispatch happens off the main thread via [TestController]'s coroutine
  * scope, so we don't need [BroadcastReceiver.goAsync]; the broadcast
@@ -188,6 +189,30 @@ class TestReceiver : BroadcastReceiver() {
                 } else {
                     TestController.handleSendIcon(app, to, text, icon, fg, bg)
                 }
+            }
+
+            "network.columba.test.THREAD_ARCHIVE" -> {
+                val peer = intent.getStringExtra("peer") ?: ""
+                val thread = intent.getStringExtra("thread") ?: ""
+                // String form so `adb shell am broadcast --es archived true`
+                // works; missing means archive (the common case).
+                val archived =
+                    intent.getStringExtra("archived")?.equals("false", ignoreCase = true) != true
+                if (peer.isEmpty() || thread.isEmpty()) {
+                    Log.i(
+                        TestController.LOGCAT_TAG,
+                        "thread_archive_err reason=missing_args peer=$peer thread=$thread",
+                    )
+                } else {
+                    TestController.handleThreadArchive(app, peer, thread, archived)
+                }
+            }
+
+            "network.columba.test.CLEAR_DRAFTS" -> TestController.handleClearDrafts(app)
+
+            "network.columba.test.SET_THREADS_FLAG" -> {
+                val enabled = intent.getBooleanExtra("enabled", true)
+                TestController.handleSetThreadsFlag(app, enabled)
             }
 
             "network.columba.test.GET_MSG_STATE" -> {

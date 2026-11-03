@@ -1556,14 +1556,41 @@ class ConversationRepository
         /**
          * Rename a thread (local label; never touches the wire). A null title
          * resets the thread to its automatic excerpt (threads-spec D8).
+         *
+         * A thread minted by `+ New` has no row until its first draft or
+         * message, so naming it at creation inserts the row here: otherwise
+         * the UPDATE would match nothing and the title would be dropped
+         * (threads-spec §6.2 "title optional at creation"). Main (`X''`) is
+         * not a `threads` row — its label is the resource default — so it is
+         * a no-op.
          */
         suspend fun renameThread(
             peerHash: String,
             threadId: ByteArray,
             title: String?,
         ) {
+            if (threadId.isEmpty()) return
             val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
-            threadDao.renameThread(threadId, identityHash, peerHash, ThreadPolicy.sanitizeThreadTitle(title))
+            val sanitized = ThreadPolicy.sanitizeThreadTitle(title)
+            val existing = threadDao.getThread(identityHash, peerHash, threadId)
+            if (existing == null) {
+                if (sanitized == null) return
+                val now = System.currentTimeMillis()
+                threadDao.insertThreadIgnore(
+                    ThreadEntity(
+                        threadId = threadId,
+                        conversationHash = peerHash,
+                        identityHash = identityHash,
+                        rootMessageId = null,
+                        title = sanitized,
+                        createdAt = now,
+                        lastActivityAt = now,
+                        archivedAt = null,
+                    ),
+                )
+            } else {
+                threadDao.renameThread(threadId, identityHash, peerHash, sanitized)
+            }
         }
 
         /** Archive (true) / un-archive (false) a thread. Local presentation only; no wire traffic. */

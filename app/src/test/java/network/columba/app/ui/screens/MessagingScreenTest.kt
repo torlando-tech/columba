@@ -326,6 +326,54 @@ class MessagingScreenTest {
     }
 
     @Test
+    fun threadsOffMessageScreen_hasNoPillAndNoRenameEntry() {
+        // Default stubs: threadsEnabled = false, selectedThread = null.
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then - no thread control anywhere (threads-spec §5.1 flag-off path)
+        composeTestRule
+            .onNodeWithContentDescription("Switch thread", substring = true)
+            .assertDoesNotExist()
+
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Rename").assertDoesNotExist()
+    }
+
+    @Test
+    fun threadsOn_appBarOffersRenameForTheOpenThread() {
+        // Given - a thread is open and threads are enabled
+        val threadHex = "a1".repeat(16)
+        every { mockViewModel.threadsEnabled } returns MutableStateFlow(true)
+        every { mockViewModel.selectedThread } returns MutableStateFlow(threadHex)
+        every { mockViewModel.threadPill } returns
+            MutableStateFlow(ThreadPillUi(isMain = false, title = "Trip planning"))
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then - the pill names the thread and the app bar can rename it
+        composeTestRule
+            .onNodeWithContentDescription("Switch thread", substring = true)
+            .assertIsDisplayed()
+
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Rename").assertExists()
+    }
+
+    @Test
     fun topAppBar_syncMenuItem_callsSyncFromPropagationNode() {
         // Given
         composeTestRule.setContent {

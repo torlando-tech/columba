@@ -5,14 +5,13 @@
 # Archive batches every selected thread, with one snackbar and one Undo.
 # Back leaves selection without dismissing the sheet.
 #
-# Params: APP_ID, PEER_HASH, PEER_NAME, THREAD_TOKEN.
+# Params: APP_ID, PEER_NAME, THREAD_TOKEN.
 appId: ${APP_ID}
 ---
 - runFlow:
-    file: lib/open-self-chat.yaml
+    file: lib/open-chat.yaml
     env:
       APP_ID: ${APP_ID}
-      PEER_HASH: ${PEER_HASH}
       PEER_NAME: ${PEER_NAME}
 
 # Seed a thread with one message.
@@ -35,13 +34,20 @@ appId: ${APP_ID}
       APP_ID: ${APP_ID}
 
 # Long-press enters selection; the contextual bar replaces the sheet header.
+# The seeded row is appended at the top of Active, but the list is long enough
+# that the row still has to be scrolled into view first.
+- scrollUntilVisible:
+    element:
+      text: ".*${THREAD_TOKEN}.*"
+    direction: DOWN
+    timeout: 15000
 - longPressOn:
     text: ".*${THREAD_TOKEN}.*"
 - assertVisible: "1 selected"
 - assertNotVisible: "Search threads"
 
 # Leaving selection restores the header (Back, not a sheet dismiss).
-- pressBack
+- back
 - assertVisible: "Search threads"
 - assertNotVisible: "1 selected"
 
@@ -55,6 +61,6 @@ appId: ${APP_ID}
 - takeScreenshot: threads-selection-archived
 - tapOn: "Undo"
 - extendedWaitUntil:
-    notVisible: "Archived"
+    notVisible: ".*moved to Archived.*"
     timeout: 10000
 - takeScreenshot: threads-selection-undo

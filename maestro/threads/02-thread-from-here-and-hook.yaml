@@ -6,14 +6,13 @@
 # root bubble grows an "N replies" pill; tapping the pill reopens the thread
 # with the root pinned on top.
 #
-# Params: APP_ID, PEER_HASH, PEER_NAME, MAIN_TOKEN, REPLY_TOKEN.
+# Params: APP_ID, PEER_NAME, MAIN_TOKEN, REPLY_TOKEN.
 appId: ${APP_ID}
 ---
 - runFlow:
-    file: lib/open-self-chat.yaml
+    file: lib/open-chat.yaml
     env:
       APP_ID: ${APP_ID}
-      PEER_HASH: ${PEER_HASH}
       PEER_NAME: ${PEER_NAME}
 
 - extendedWaitUntil:
@@ -30,9 +29,23 @@ appId: ${APP_ID}
     visible: ${MAIN_TOKEN}
     timeout: 30000
 
+# A second message keeps the root off the composer edge: Maestro's long press
+# does not register on the bottom-most bubble.
+- tapOn: "Type a message..."
+- inputText: ${MAIN_TOKEN}-tail
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${MAIN_TOKEN}-tail
+    timeout: 30000
+
 # Case 2: long-press the root -> "Thread from here".
 - longPressOn:
     text: ${MAIN_TOKEN}
+# The reaction overlay fades; confirm it before the tap resolves.
+- extendedWaitUntil:
+    visible: "Thread from here"
+    timeout: 3000
 - tapOn: "Thread from here"
 
 # Composer retargeted and prefilled with an editable quote of the root —
@@ -41,17 +54,18 @@ appId: ${APP_ID}
 - assertVisible:
     text: ".*> ${MAIN_TOKEN}.*"
 
-- tapOn:
-    text: ".*> ${MAIN_TOKEN}.*"
+# Type without tapping the composer: a tap places the caret inside the
+# prefilled quote line and the reply would be spliced into the quote.
 - inputText: ${REPLY_TOKEN}
 - hideKeyboard
 - tapOn: "Send message"
+# The reply bubble carries the quote too, so match on the token inside it.
 - extendedWaitUntil:
-    visible: ${REPLY_TOKEN}
+    visible: ".*${REPLY_TOKEN}.*"
     timeout: 30000
 
 # Back from the thread lands on Main (not out of the chat).
-- pressBack
+- back
 - extendedWaitUntil:
     visible:
       text: "Switch thread: Main"
@@ -66,5 +80,6 @@ appId: ${APP_ID}
 # Hook navigation: tap the pill -> thread view with the root pinned on top.
 - tapOn: "1 reply"
 - assertVisible: ".*1 reply.*"
-- assertVisible: ${REPLY_TOKEN}
+- assertVisible:
+    text: ".*${REPLY_TOKEN}.*"
 - takeScreenshot: threads-hook-navigation

@@ -7,14 +7,13 @@
 # whose root was never received) and the pill takes its title from the first
 # message.
 #
-# Params: APP_ID, PEER_HASH, PEER_NAME, MSG_TOKEN.
+# Params: APP_ID, PEER_NAME, MSG_TOKEN.
 appId: ${APP_ID}
 ---
 - runFlow:
-    file: lib/open-self-chat.yaml
+    file: lib/open-chat.yaml
     env:
       APP_ID: ${APP_ID}
-      PEER_HASH: ${PEER_HASH}
       PEER_NAME: ${PEER_NAME}
 
 # The pill names the open target (Main on entry).

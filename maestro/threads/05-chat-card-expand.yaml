@@ -4,14 +4,13 @@
 # contact has threads; expanding it shows Main first plus the most recent
 # thread rows; the expansion state is a per-card local preference.
 #
-# Params: APP_ID, PEER_HASH, PEER_NAME, CARD_TOKEN.
+# Params: APP_ID, PEER_NAME, CARD_TOKEN.
 appId: ${APP_ID}
 ---
 - runFlow:
-    file: lib/open-self-chat.yaml
+    file: lib/open-chat.yaml
     env:
       APP_ID: ${APP_ID}
-      PEER_HASH: ${PEER_HASH}
       PEER_NAME: ${PEER_NAME}
 
 # Seed one thread so the card has something to expand into.
@@ -33,8 +32,8 @@ appId: ${APP_ID}
     timeout: 30000
 
 # Back to the chat list.
-- pressBack
-- pressBack
+- back
+- back
 
 # Toggle row on the contact's card, then expand.
 - extendedWaitUntil:

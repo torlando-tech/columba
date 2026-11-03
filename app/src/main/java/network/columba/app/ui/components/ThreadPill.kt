@@ -2,6 +2,7 @@ package network.columba.app.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -66,7 +67,12 @@ fun ThreadPill(
                 .semantics { contentDescription = description },
     ) {
         Row(
-            modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+            modifier =
+                Modifier
+                    .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp)
+                    // 48dp minimum touch target (issue 07): the text row alone
+                    // is ~36dp, below the M3 accessibility floor.
+                    .heightIn(min = 48.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {

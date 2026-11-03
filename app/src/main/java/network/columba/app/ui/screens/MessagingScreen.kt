@@ -76,6 +76,7 @@ import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
@@ -195,6 +196,7 @@ import network.columba.app.rns.api.model.Direction
 import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.ui.components.AttachmentPanel
 import network.columba.app.ui.components.ThreadPill
+import network.columba.app.ui.components.ThreadRenameDialog
 import network.columba.app.ui.components.OVERLAY_MAX_CAPTURE_HEIGHT_PX
 import network.columba.app.ui.components.VoiceMessageBubble
 import network.columba.app.ui.components.VoiceDraftPreview
@@ -565,6 +567,10 @@ fun MessagingScreen(
     var isProbingLinkSpeed by remember { mutableStateOf(false) }
     var showVoiceMessageQualityDialog by remember { mutableStateOf(false) }
     var voiceMessageFormat by remember(destinationHash) { mutableStateOf(VoiceMessageFormat.DEFAULT) }
+
+    // Threads: app-bar rename of the open thread (threads-spec §6.2). Holds the
+    // thread id whose title is being edited; null closes the dialog.
+    var renameThreadId by remember { mutableStateOf<String?>(null) }
 
     // Location permission launcher
     val locationPermissionLauncher =
@@ -1350,6 +1356,26 @@ fun MessagingScreen(
                                     showTextSizeDialog = true
                                 },
                             )
+                            // Threads: rename the open thread from the app bar
+                            // (threads-spec §6.2 entry point; the sheet row's
+                            // `⋮ → Rename` is the other one). Main has no
+                            // `threads` row — its label is the resource default.
+                            val openThreadId = activeThread
+                            if (threadsEnabled && openThreadId != null) {
+                                DropdownMenuItem(
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = null,
+                                        )
+                                    },
+                                    text = { Text(stringResource(R.string.thread_action_rename)) },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        renameThreadId = openThreadId
+                                    },
+                                )
+                            }
                             HorizontalDivider()
                             DropdownMenuItem(
                                 leadingIcon = {
@@ -2036,6 +2062,27 @@ fun MessagingScreen(
             onUnarchive = viewModel::unarchiveThreads,
             onReopenThread = viewModel::selectThread,
             onDelete = viewModel::deleteThread,
+        )
+    }
+
+    // Rename the open thread from the chat app bar (threads-spec §6.2). Seeded
+    // with the stored local title, so "Reset to automatic" appears only when
+    // one exists — the same rules as the sheet's dialog.
+    val renameTarget = renameThreadId
+    if (renameTarget != null) {
+        val localTitle =
+            threadSheetState.allRows.firstOrNull { it.threadIdHex == renameTarget }?.title.orEmpty()
+        ThreadRenameDialog(
+            initialTitle = localTitle,
+            onConfirm = { newTitle ->
+                viewModel.renameThread(renameTarget, newTitle)
+                renameThreadId = null
+            },
+            onResetToAutomatic = {
+                viewModel.renameThread(renameTarget, null)
+                renameThreadId = null
+            },
+            onDismiss = { renameThreadId = null },
         )
     }
 

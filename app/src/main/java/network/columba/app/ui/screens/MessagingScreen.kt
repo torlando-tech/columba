@@ -86,6 +86,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -227,6 +228,7 @@ import network.columba.app.ui.components.StarToggleButton
 import network.columba.app.ui.components.SwipeableMessageBubble
 import network.columba.app.ui.components.SyncStatusBottomSheet
 import network.columba.app.ui.components.ConversationTransferTray
+import network.columba.app.ui.components.UNVERIFIED_SENDER_TEXT
 import network.columba.app.ui.components.UnverifiedSenderChip
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.ui.model.CodecProfile
@@ -3649,65 +3651,58 @@ private fun TextSizeDialog(
 
 /**
  * Threads P2 pinned root header of the thread view (spec §6.5, mockup D2):
- * the root message stays pinned above the replies; a thread whose root was
- * never received shows the off-screen placeholder instead.
+ * the root message stays pinned above the replies, always as one line — root
+ * text (or the off-screen placeholder) plus the reply count. The card form
+ * cost ~90dp of viewport; one line keeps the root identifiable while the
+ * message list gets the space. A failed signature check keeps its warning as
+ * an inline icon (the full chip is on the message itself).
  */
 @Composable
 private fun ThreadPinnedHeader(
     header: ThreadHeaderUi,
     replyCount: Int,
 ) {
+    val text =
+        when (header) {
+            is ThreadHeaderUi.Root -> header.content
+            ThreadHeaderUi.OffScreen -> stringResource(R.string.thread_offscreen_placeholder)
+        }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        when (header) {
-            is ThreadHeaderUi.Root -> {
-                Surface(
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (header is ThreadHeaderUi.Root && header.signatureVerified == false) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = UNVERIFIED_SENDER_TEXT,
+                    tint = MaterialTheme.colorScheme.error,
                     modifier =
                         Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = header.content,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (header.signatureVerified == false) {
-                            UnverifiedSenderChip(modifier = Modifier.padding(bottom = 4.dp))
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = formatThreadTimestamp(header.timestamp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-            ThreadHeaderUi.OffScreen -> {
-                Text(
-                    text = stringResource(R.string.thread_offscreen_placeholder),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .padding(start = 8.dp)
+                            .size(14.dp),
                 )
             }
+            Text(
+                text = pluralStringResource(R.plurals.thread_replies_count, replyCount, replyCount),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 12.dp),
+            )
         }
-        Text(
-            text = pluralStringResource(R.plurals.thread_replies_count, replyCount, replyCount),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
@@ -3754,18 +3749,5 @@ private fun ThreadHookPill(
                 )
             }
         }
-    }
-}
-
-/** Same relative-date rules as the chat list rows and the thread sheet. */
-private fun formatThreadTimestamp(timestamp: Long): String {
-    val diff = System.currentTimeMillis() - timestamp
-
-    return when {
-        diff < 60_000 -> "Now"
-        diff < 3600_000 -> "${(diff / 60_000).toInt()}m"
-        diff < 86400_000 -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
-        diff < 604800_000 -> SimpleDateFormat("EEE", Locale.getDefault()).format(Date(timestamp))
-        else -> SimpleDateFormat("MMM dd", Locale.getDefault()).format(Date(timestamp))
     }
 }

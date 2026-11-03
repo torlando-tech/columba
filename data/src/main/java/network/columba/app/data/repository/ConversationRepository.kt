@@ -863,11 +863,6 @@ class ConversationRepository
         ) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
             val identityHash = activeIdentity.identityHash
-            // Drafts (and the thread row synced below) have a composite FK onto
-            // `conversations`: a peer opened through `Start Chat` has no row
-            // until the first message, and writing a draft for it would fail
-            // the check and drop the typed text.
-            ensureConversationRow(peerHash, identityHash, null)
             val isThread = threadId != null && threadId.isNotEmpty()
 
             if (content.isBlank()) {
@@ -896,6 +891,13 @@ class ConversationRepository
                 return
             }
 
+            // Drafts (and the thread row synced below) have a composite FK onto
+            // `conversations`: a peer opened through `Start Chat` has no row
+            // until the first message, and writing a draft for it would fail
+            // the check and drop the typed text. This stays below the blank
+            // branch so clearing a draft never conjures an empty chat for a
+            // peer the user only opened (Greptile P2).
+            ensureConversationRow(peerHash, identityHash, null)
             draftDao.insertOrReplaceDraft(
                 DraftEntity(
                     conversationHash = peerHash,

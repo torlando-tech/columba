@@ -143,6 +143,19 @@ class ThreadTitleRepositoryTest {
     }
 
     @Test
+    fun `clearing a draft never creates an empty conversation`() = kotlinx.coroutines.runBlocking {
+        repository.saveDraft(peerHash, "", freshThread)
+        repository.saveDraft(peerHash, "")
+
+        assertEquals(
+            "an abandoned draft must not leave a peer in Chats",
+            0,
+            conversations().size,
+        )
+        assertNull(repository.getThread(peerHash, freshThread))
+    }
+
+    @Test
     fun `an emptied draft keeps a thread the user named`() = kotlinx.coroutines.runBlocking {
         repository.renameThread(peerHash, freshThread, "Build notes")
 

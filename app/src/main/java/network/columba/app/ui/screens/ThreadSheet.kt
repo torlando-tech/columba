@@ -161,8 +161,12 @@ fun ThreadSheet(
                 snackbarHostState.showSnackbar(
                     message = message,
                     actionLabel = context.getString(R.string.thread_action_undo),
+                    // Undo is the only way back from a batch archive, and the
+                    // sheet's list plus the scrim leave the action easy to
+                    // miss in four seconds: M3 wants an action snackbar to
+                    // stay long enough to be used.
                     withDismissAction = true,
-                    duration = SnackbarDuration.Short,
+                    duration = SnackbarDuration.Long,
                 )
             if (result == SnackbarResult.ActionPerformed) {
                 if (archive) {

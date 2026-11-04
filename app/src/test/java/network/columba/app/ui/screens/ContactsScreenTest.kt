@@ -1,9 +1,12 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -45,7 +48,7 @@ import org.robolectric.shadows.ShadowToast
 @Config(sdk = [34], application = Application::class)
 class ContactsScreenTest {
     private val registerActivityRule = RegisterComponentActivityRule()
-    private val composeRule = createComposeRule()
+    private val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
@@ -227,6 +230,26 @@ class ContactsScreenTest {
         composeTestRule.onNodeWithContentDescription("Close search").performClick()
 
         // The live filter must stay visible outside the dismissed bar
+        composeTestRule.onNodeWithText("Filtering: \"Alice\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun contactsScreen_backWhileSearchOpen_collapsesSearchInsteadOfPoppingTheTab() {
+        var hostBackInvoked = false
+        val mockViewModel = createMockContactsViewModel(searchQuery = "Alice")
+
+        composeTestRule.setContent {
+            BackHandler { hostBackInvoked = true }
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        // The screen's BackHandler only becomes enabled once the toggle recomposes
+        composeTestRule.waitForIdle()
+        composeTestRule.runOnUiThread { composeTestRule.activity.onBackPressedDispatcher.onBackPressed() }
+
+        assertEquals(false, hostBackInvoked)
+        assertEquals("Alice", mockViewModel.searchQuery.value)
         composeTestRule.onNodeWithText("Filtering: \"Alice\"").assertIsDisplayed()
     }
 

@@ -1,9 +1,11 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -40,7 +42,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34], application = Application::class)
 class ChatsScreenTest {
     private val registerActivityRule = RegisterComponentActivityRule()
-    private val composeRule = createComposeRule()
+    private val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
@@ -1179,6 +1181,61 @@ class ChatsScreenTest {
 
         // Then - the still-active filter stays visible outside the bar
         composeTestRule.onNodeWithText("Filtering: \"bob\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun chatsScreen_backWhileSearchOpen_collapsesSearchInsteadOfPoppingTheTab() {
+        // Given - search surface open over a live query, plus a host handler that
+        // stands in for the tab's navigation handler
+        var hostBackInvoked = false
+        val mockViewModel = createMockChatsViewModel(searchQuery = "bob", isLoading = false)
+
+        composeTestRule.setContent {
+            BackHandler { hostBackInvoked = true }
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        // The screen's BackHandler only becomes enabled once the toggle recomposes
+        composeTestRule.waitForIdle()
+
+        // When - system back
+        composeTestRule.runOnUiThread { composeTestRule.activity.onBackPressedDispatcher.onBackPressed() }
+
+        // Then - the bar collapsed instead of the tab popping, query retained and visible
+        assertEquals(false, hostBackInvoked)
+        assertEquals("bob", mockViewModel.searchQuery.value)
+        composeTestRule.onNodeWithText("Filtering: \"bob\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun chatsScreen_backWhileSearchClosed_fallsThroughToTheHost() {
+        // Given - search bar collapsed (its BackHandler is disabled)
+        var hostBackInvoked = false
+        val mockViewModel = createMockChatsViewModel(searchQuery = "bob", isLoading = false)
+
+        composeTestRule.setContent {
+            BackHandler { hostBackInvoked = true }
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
+            )
+        }
+
+        // When - system back
+        composeTestRule.runOnUiThread { composeTestRule.activity.onBackPressedDispatcher.onBackPressed() }
+
+        // Then - the host sees back normally, as before this change
+        assertEquals(true, hostBackInvoked)
     }
 
     @Test

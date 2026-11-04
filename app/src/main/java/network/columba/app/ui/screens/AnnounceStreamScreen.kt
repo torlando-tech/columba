@@ -92,9 +92,6 @@ fun AnnounceStreamScreen(
     viewModel: AnnounceStreamViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.announces.collectAsLazyPagingItems()
-    // Only the initial refresh counts as loading; keeps the list from flickering
-    // to a spinner when new announces trigger a re-query.
-    val isAnnounceListLoading = pagingItems.loadState.refresh is androidx.paging.LoadState.Loading
     val reachableCount by viewModel.reachableAnnounceCount.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
@@ -270,7 +267,10 @@ fun AnnounceStreamScreen(
             if (!isSearching) {
                 SearchFilterSummary(
                     query = searchQuery.trim(),
-                    matchCount = pagingItems.itemCount.takeUnless { isAnnounceListLoading },
+                    // No count: the announce list is paged (30 rows per page, placeholders
+                    // off), so itemCount is the number of *loaded* rows, not matches — the
+                    // number would grow as the user scrolls.
+                    matchCount = null,
                     onClearSearch = { viewModel.searchQuery.value = "" },
                 )
             }
@@ -640,7 +640,9 @@ fun AnnounceStreamContent(
         if (showSearchFilter) {
             SearchFilterSummary(
                 query = searchQuery.trim(),
-                matchCount = pagingItems.itemCount.takeUnless { isLoading },
+                // No count: this list is paged, so itemCount counts *loaded* rows
+                // rather than matches (it would grow as the user scrolls).
+                matchCount = null,
                 onClearSearch = { viewModel.searchQuery.value = "" },
             )
         }

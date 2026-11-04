@@ -548,6 +548,42 @@ jobs:
           ./gradlew :rns-backend-py:assembleDebugAndroidTest :rns-backend-py:assembleDebug --stacktrace --max-workers=2
           echo "APKs built successfully"
 
+      # The emulator action installs these packages itself, but sdkmanager's ~1 GB
+      # system-image download intermittently ends in "Premature EOF" on hosted runners,
+      # which fails the job before any test runs. Warm them here with a bounded retry; the
+      # action's own install then finds them present and skips the download.
+      #
+      # sdkmanager is not on PATH for plain `run` steps on the hosted image (the emulator
+      # action adds it itself), so resolve it from the SDK root explicitly. This step never
+      # fails the job: anything it cannot install, the emulator action installs next and
+      # reports itself.
+      - name: Pre-install emulator SDK packages (retries flaky downloads)
+        run: |
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager" ]; then
+            sdkmanager="$(find "$sdk_root/cmdline-tools" -maxdepth 3 -type f -name sdkmanager 2>/dev/null | head -n 1)"
+          fi
+          if [ -z "$sdkmanager" ] || [ ! -x "$sdkmanager" ]; then
+            echo "::warning::sdkmanager not found under $sdk_root/cmdline-tools; leaving the install to the emulator action"
+            exit 0
+          fi
+          packages=(
+            platform-tools
+            emulator
+            "platforms;android-34"
+            "system-images;android-34;google_apis;x86_64"
+          )
+          for attempt in 1 2 3; do
+            if "$sdkmanager" --install "${packages[@]}"; then
+              echo "SDK packages ready"
+              exit 0
+            fi
+            echo "::warning::SDK package install failed (attempt ${attempt}/3); retrying"
+            sleep 15
+          done
+          echo "::warning::Could not install the emulator SDK packages after 3 attempts; leaving the install to the emulator action"
+
       - name: AVD cache
         uses: actions/cache@v6
         id: avd-cache
@@ -686,6 +722,42 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # The emulator action installs these packages itself, but sdkmanager's ~1 GB
+      # system-image download intermittently ends in "Premature EOF" on hosted runners,
+      # which fails the job before any test runs. Warm them here with a bounded retry; the
+      # action's own install then finds them present and skips the download.
+      #
+      # sdkmanager is not on PATH for plain `run` steps on the hosted image (the emulator
+      # action adds it itself), so resolve it from the SDK root explicitly. This step never
+      # fails the job: anything it cannot install, the emulator action installs next and
+      # reports itself.
+      - name: Pre-install emulator SDK packages (retries flaky downloads)
+        run: |
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager" ]; then
+            sdkmanager="$(find "$sdk_root/cmdline-tools" -maxdepth 3 -type f -name sdkmanager 2>/dev/null | head -n 1)"
+          fi
+          if [ -z "$sdkmanager" ] || [ ! -x "$sdkmanager" ]; then
+            echo "::warning::sdkmanager not found under $sdk_root/cmdline-tools; leaving the install to the emulator action"
+            exit 0
+          fi
+          packages=(
+            platform-tools
+            emulator
+            "platforms;android-34"
+            "system-images;android-34;google_apis;x86_64"
+          )
+          for attempt in 1 2 3; do
+            if "$sdkmanager" --install "${packages[@]}"; then
+              echo "SDK packages ready"
+              exit 0
+            fi
+            echo "::warning::SDK package install failed (attempt ${attempt}/3); retrying"
+            sleep 15
+          done
+          echo "::warning::Could not install the emulator SDK packages after 3 attempts; leaving the install to the emulator action"
+
       - name: Run real two-peer Resource progress E2E
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
@@ -763,6 +835,42 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+
+      # The emulator action installs these packages itself, but sdkmanager's ~1 GB
+      # system-image download intermittently ends in "Premature EOF" on hosted runners,
+      # which fails the job before any test runs. Warm them here with a bounded retry; the
+      # action's own install then finds them present and skips the download.
+      #
+      # sdkmanager is not on PATH for plain `run` steps on the hosted image (the emulator
+      # action adds it itself), so resolve it from the SDK root explicitly. This step never
+      # fails the job: anything it cannot install, the emulator action installs next and
+      # reports itself.
+      - name: Pre-install emulator SDK packages (retries flaky downloads)
+        run: |
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager" ]; then
+            sdkmanager="$(find "$sdk_root/cmdline-tools" -maxdepth 3 -type f -name sdkmanager 2>/dev/null | head -n 1)"
+          fi
+          if [ -z "$sdkmanager" ] || [ ! -x "$sdkmanager" ]; then
+            echo "::warning::sdkmanager not found under $sdk_root/cmdline-tools; leaving the install to the emulator action"
+            exit 0
+          fi
+          packages=(
+            platform-tools
+            emulator
+            "platforms;android-34"
+            "system-images;android-34;google_apis;x86_64"
+          )
+          for attempt in 1 2 3; do
+            if "$sdkmanager" --install "${packages[@]}"; then
+              echo "SDK packages ready"
+              exit 0
+            fi
+            echo "::warning::SDK package install failed (attempt ${attempt}/3); retrying"
+            sleep 15
+          done
+          echo "::warning::Could not install the emulator SDK packages after 3 attempts; leaving the install to the emulator action"
 
       # The suite self-onboards a fresh emulator (creates an identity + one
       # AutoInterface via the debug ONBOARD hook), so no manual onboarding step

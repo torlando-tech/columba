@@ -361,6 +361,7 @@
     </plurals>
     <string name="thread_offscreen_placeholder">Thread started off-screen</string>
     <string name="thread_from_here">Thread from here</string>
+    <string name="messaging_type_a_message">Type a message...</string>
     <string name="thread_reply_placeholder">Reply in thread\u2026</string>
     <string name="thread_rename_title">Rename thread</string>
     <string name="thread_rename_hint">Thread name</string>

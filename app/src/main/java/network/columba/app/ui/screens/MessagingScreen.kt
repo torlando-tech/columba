@@ -3168,7 +3168,7 @@ fun MessageInputBar(
                             Box {
                                 if (textFieldState.text.isEmpty()) {
                                     Text(
-                                        text = placeholder ?: "Type a message...",
+                                        text = placeholder ?: stringResource(R.string.messaging_type_a_message),
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )

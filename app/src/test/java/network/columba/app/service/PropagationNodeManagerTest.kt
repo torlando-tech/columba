@@ -20,6 +20,7 @@ import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -3317,6 +3318,459 @@ class PropagationNodeManagerTest {
             // The relay re-resolved to the legacy nearest node, not the removed one.
             assertEquals(announce.destinationHash, myRelayFlow.value?.destinationHash)
             assertNotEquals(preferredHash, myRelayFlow.value?.destinationHash)
+            manager.stop()
+        }
+
+    // ========== Decision takes effect: the LXMF router receives the new node ==========
+    //
+    // The writer tests above assert only that `isMyRelay` (and therefore `currentRelay`)
+    // converges. That is the database half of the decision. The half that actually routes
+    // traffic is the tail of the pipeline — `currentRelay` -> observeRelayChanges ->
+    // `rnsLxmf.setOutboundPropagationNode(...)` — so the tests below assert the *end of the
+    // chain*: the router is told about the newly resolved destination, exactly once per real
+    // change, and never re-told for an emission that resolves back to the same hash.
+
+    /** Hex-decode a relay hash the way the manager does, for exact-bytes assertions. */
+    private fun relayBytes(hex: String): ByteArray =
+        hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+
+    /** Verify the LXMF layer was told to route propagation through [hex] exactly [exactly] times. */
+    private fun coVerifyPushed(hex: String, exactly: Int = 1) {
+        coVerify(exactly = exactly) {
+            rnsLxmf.setOutboundPropagationNode(match { it != null && it.contentEquals(relayBytes(hex)) })
+        }
+    }
+
+    /**
+     * Drain the ready task queue without advancing virtual time so the relay-observer chain
+     * (`currentRelay` -> observeRelayChanges -> setOutboundPropagationNode) finishes after a
+     * writer decision. [flushRelayUntilStable] stops once the relay value is stable, i.e. before
+     * the downstream push has necessarily run.
+     */
+    private fun TestScope.drainReadyTasks(rounds: Int = 20) {
+        repeat(rounds) { runCurrent() }
+    }
+
+    @Test
+    fun `writer - pushes the resolved preferred node to the LXMF layer`() =
+        runTest {
+            val hash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(hash, "ANY"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(any()) } returns true
+
+            manager.start()
+            flushRelayUntilStable()
+            drainReadyTasks()
+
+            assertEquals(hash, myRelayFlow.value?.destinationHash)
+            // The router got the destination as the 8 decoded bytes, not the hex string.
+            coVerifyPushed(hash)
+            // The write happened once: a repeated emission of the same pair must not re-drive
+            // the writer into re-setting the same relay.
+            coVerify(exactly = 1) { contactRepository.setAsMyRelay(hash, clearOther = true) }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - transport flip pushes the newly resolved node and only that`() =
+        runTest {
+            val wifiHash = "a1b2c3d4e5f6a7b8"
+            val anyHash = "f6e5d4c3b2a10987"
+            preferredListFlow.value =
+                listOf(
+                    preferredNode(wifiHash, "WIFI_ONLY"),
+                    preferredNode(anyHash, "ANY"),
+                )
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 2
+            coEvery { contactRepository.hasContact(any()) } returns true
+
+            manager.start()
+            flushRelayUntilStable()
+            drainReadyTasks()
+            coVerifyPushed(wifiHash)
+
+            // Ashore: the wifi-only node stops matching and the ANY node takes over.
+            transportFlow.value = CurrentTransport.CELLULAR
+            flushRelayUntilStable()
+            drainReadyTasks()
+
+            assertEquals(anyHash, myRelayFlow.value?.destinationHash)
+            coVerifyPushed(anyHash)
+            // Exactly two non-null destinations over the whole run — one per resolved node.
+            coVerify(exactly = 2) { rnsLxmf.setOutboundPropagationNode(match { it != null }) }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - a transport blip resolving to the same node does not re-push the destination`() =
+        runTest {
+            // The `ANY`-matches-NONE deviation exists so a brief network blip cannot flap the
+            // router's destination. This asserts the consequence at the LXMF seam: with the hash
+            // unchanged, a re-emitted RelayInfo must not reach setOutboundPropagationNode again.
+            // The auto-select toggle is used as the emitter because it changes RelayInfo
+            // (isAutoSelected) while keeping the destination hash — exactly the shape of an
+            // announce refresh, whose hops/lastSeen also change under a stable hash.
+            val hash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(hash, "ANY"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(any()) } returns true
+
+            manager.start()
+            flushRelayUntilStable()
+            drainReadyTasks()
+            coVerifyPushed(hash)
+
+            // wifi -> NONE (blip): the same node still resolves, so nothing is re-pushed.
+            transportFlow.value = CurrentTransport.NONE
+            flushRelayUntilStable()
+            drainReadyTasks()
+            coVerifyPushed(hash)
+
+            // A re-emission of the relay with the same hash but different metadata must be
+            // swallowed by the hash-level dedupe.
+            autoSelectFlow.value = false
+            flushRelayUntilStable()
+            drainReadyTasks()
+            coVerifyPushed(hash)
+
+            autoSelectFlow.value = true
+            transportFlow.value = CurrentTransport.CELLULAR
+            flushRelayUntilStable()
+            drainReadyTasks()
+
+            assertEquals(hash, myRelayFlow.value?.destinationHash)
+            // Still a single destination push: neither the blip nor the re-emission flapped it.
+            coVerifyPushed(hash)
+            coVerify(exactly = 1) { rnsLxmf.setOutboundPropagationNode(match { it != null }) }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - editing a node's restriction re-resolves and pushes the new node`() =
+        runTest {
+            val wifiOnlyHash = "a1b2c3d4e5f6a7b8"
+            val anyHash = "f6e5d4c3b2a10987"
+            preferredListFlow.value =
+                listOf(
+                    preferredNode(wifiOnlyHash, "WIFI_ONLY"),
+                    preferredNode(anyHash, "ANY"),
+                )
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 2
+            coEvery { contactRepository.hasContact(any()) } returns true
+
+            manager.start()
+            flushRelayUntilStable()
+            drainReadyTasks()
+            coVerifyPushed(wifiOnlyHash)
+
+            // The user re-points the top row's chip at cellular. The DB write re-emits the
+            // enabled list, which is one of the writer's triggers.
+            preferredListFlow.value =
+                listOf(
+                    preferredNode(wifiOnlyHash, "CELLULAR_ONLY"),
+                    preferredNode(anyHash, "ANY"),
+                )
+            flushRelayUntilStable()
+            drainReadyTasks()
+
+            // On wifi the re-pointed node no longer matches, so ANY takes over — and the router
+            // is told about it.
+            assertEquals(anyHash, myRelayFlow.value?.destinationHash)
+            coVerifyPushed(anyHash)
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - reordering the list re-resolves and pushes the new top node`() =
+        runTest {
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            preferredListFlow.value =
+                listOf(
+                    preferredNode(aHash, "ANY").copy(priority = 0),
+                    preferredNode(bHash, "ANY").copy(priority = 1),
+                )
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 2
+            coEvery { contactRepository.hasContact(any()) } returns true
+
+            manager.start()
+            flushRelayUntilStable()
+            drainReadyTasks()
+            coVerifyPushed(aHash)
+
+            // Drag-end commits the new order as a single Room transaction; the writer observes
+            // the new priority order and must re-resolve to the newly-topmost node.
+            preferredListFlow.value =
+                listOf(
+                    preferredNode(bHash, "ANY").copy(priority = 0),
+                    preferredNode(aHash, "ANY").copy(priority = 1),
+                )
+            flushRelayUntilStable()
+            drainReadyTasks()
+
+            assertEquals(bHash, myRelayFlow.value?.destinationHash)
+            coVerifyPushed(bHash)
+            coVerify(exactly = 2) { rnsLxmf.setOutboundPropagationNode(match { it != null }) }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - failover pushes the replacement relay and never the unreachable one`() =
+        runTest {
+            val downHash = "a1b2c3d4e5f6a7b8"
+            val nextHash = "f6e5d4c3b2a10987"
+            preferredListFlow.value =
+                listOf(
+                    preferredNode(downHash, "ANY").copy(priority = 0, lastFailureAt = 42L),
+                    preferredNode(nextHash, "ANY").copy(priority = 1),
+                )
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 2
+            coEvery { contactRepository.hasContact(any()) } returns true
+            every { preferredRepository.isCurrentlyUnreachable(any(), any(), any()) } answers {
+                firstArg<PreferredPropagationNodeEntity>().destinationHash == downHash
+            }
+
+            manager.start()
+            flushRelayUntilStable()
+            drainReadyTasks()
+
+            assertEquals(nextHash, myRelayFlow.value?.destinationHash)
+            coVerifyPushed(nextHash)
+            // The down relay is never handed to the router, and the router is told about exactly
+            // one destination — the failover is invisible to LXMF.
+            coVerifyPushed(downHash, exactly = 0)
+            coVerify(exactly = 1) { rnsLxmf.setOutboundPropagationNode(match { it != null }) }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - emptying the list pushes the legacy nearest destination`() =
+        runTest {
+            // The non-empty -> empty handoff changes who owns `isMyRelay`; this asserts the other
+            // half — the newly chosen legacy relay actually reaches the router.
+            val preferredHash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(preferredHash, "ANY"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(any()) } returns true
+            val announce = TestFactories.createAnnounce(nodeType = "PROPAGATION_NODE")
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(announce))
+
+            manager.start()
+            flushRelayUntilStable()
+            drainReadyTasks()
+            coVerifyPushed(preferredHash)
+
+            // The user removes the last preferred node.
+            preferredListFlow.value = emptyList()
+            flushRelayUntilStable()
+            drainReadyTasks()
+
+            assertEquals(announce.destinationHash, myRelayFlow.value?.destinationHash)
+            coVerifyPushed(announce.destinationHash)
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - all-preferred-unreachable pushes the legacy nearest destination`() =
+        runTest {
+            // Tier 3 (list exhausted) must reach the router just like an in-list pick.
+            val downHash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(downHash, "ANY").copy(lastFailureAt = 42L))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(any()) } returns true
+            every { preferredRepository.isCurrentlyUnreachable(any(), any(), any()) } returns true
+            val announce = TestFactories.createAnnounce(nodeType = "PROPAGATION_NODE", hops = 1)
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(announce))
+
+            manager.start()
+            flushRelayUntilStable()
+            drainReadyTasks()
+
+            assertEquals(announce.destinationHash, myRelayFlow.value?.destinationHash)
+            coVerifyPushed(announce.destinationHash)
+            // The unreachable preferred node is never handed to the router.
+            coVerifyPushed(downHash, exactly = 0)
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - cooldown recovery re-pushes the recovered relay`() =
+        runTest {
+            // Same trigger as the writer cooldown test (a recheck token bump, no DB write), but
+            // asserted at the LXMF seam: the recovered higher-priority relay must be pushed, not
+            // just stored.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            val aFailedAt = 1_000_000L
+            clock.advance(aFailedAt)
+            preferredListFlow.value =
+                listOf(
+                    preferredNode(aHash, "ANY").copy(priority = 0, lastFailureAt = aFailedAt),
+                    preferredNode(bHash, "ANY").copy(priority = 1),
+                )
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 2
+            coEvery { contactRepository.hasContact(any()) } returns true
+            every { preferredRepository.isCurrentlyUnreachable(any(), any(), any()) } answers {
+                val node = firstArg<PreferredPropagationNodeEntity>()
+                val now = secondArg<Long>()
+                node.destinationHash == aHash && (now - node.lastFailureAt!!) in 0..600_000L
+            }
+
+            manager.start()
+            flushRelayUntilStable()
+            drainReadyTasks()
+            assertEquals(bHash, myRelayFlow.value?.destinationHash)
+            coVerifyPushed(bHash)
+
+            // A's cooldown elapses: the scheduled recheck re-evaluates and re-selects A.
+            advanceTimeBy(aFailedAt + 600_001L)
+            flushRelayUntilStable()
+            drainReadyTasks()
+
+            assertEquals(aHash, myRelayFlow.value?.destinationHash)
+            coVerifyPushed(aHash)
+            coVerify(exactly = 2) { rnsLxmf.setOutboundPropagationNode(match { it != null }) }
+            manager.stop()
+        }
+
+    // ========== Decision takes effect: contact creation before the push ==========
+    //
+    // A preferred node added by hash may have no contact yet. applyPreferredRelay creates one
+    // so the active relay is always backed by a contact; if that creation fails the decision is
+    // abandoned rather than half-applied (a relay pointing at a non-existent contact would
+    // leave the router routed at a destination the app cannot represent). None of the writer
+    // tests above cover this: they all stub `hasContact -> true`.
+
+    @Test
+    fun `writer - creates the contact from the announce before pushing the preferred relay`() =
+        runTest {
+            val hash = "a1b2c3d4e5f6a7b8"
+            val announce = TestFactories.createAnnounce(destinationHash = hash, peerName = "Boat relay")
+            preferredListFlow.value = listOf(preferredNode(hash, "ANY"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(hash) } returns false
+            coEvery { announceRepository.getAnnounce(hash) } returns announce
+
+            manager.start()
+            flushRelayUntilStable()
+            drainReadyTasks()
+
+            val keySlot = slot<ByteArray>()
+            coVerify { contactRepository.addContactFromAnnounce(hash, capture(keySlot)) }
+            assertTrue("contact created with the announce's public key", keySlot.captured.contentEquals(announce.publicKey))
+            coVerify { contactRepository.setAsMyRelay(hash, clearOther = true) }
+            coVerifyPushed(hash)
+            // Order is the invariant: the contact must exist before the relay is marked active
+            // and the router is pointed at it. The setAsMyRelay mock updates the relay flow even
+            // when no contact exists, so a reversed order would still pass the calls above.
+            coVerifyOrder {
+                contactRepository.addContactFromAnnounce(hash, any())
+                contactRepository.setAsMyRelay(hash, clearOther = true)
+                rnsLxmf.setOutboundPropagationNode(match { it != null && it.contentEquals(relayBytes(hash)) })
+            }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - creates the contact from the stored public key when no announce exists`() =
+        runTest {
+            // The announce expired but the list row denormalized the key at add time. The relay
+            // must still be usable (contact created from the stored key) — otherwise a hash-only
+            // node added earlier silently stops being selectable.
+            val hash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(hash, "ANY").copy(publicKey = "0102a0"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(hash) } returns false
+            coEvery { announceRepository.getAnnounce(hash) } returns null
+            coEvery { preferredRepository.findByHash(hash) } returns
+                preferredNode(hash, "ANY").copy(publicKey = "0102a0")
+
+            manager.start()
+            flushRelayUntilStable()
+            drainReadyTasks()
+
+            val keySlot = slot<ByteArray>()
+            coVerify { contactRepository.addContactFromAnnounce(hash, capture(keySlot)) }
+            assertTrue(
+                "contact created with the denormalized key",
+                keySlot.captured.contentEquals(byteArrayOf(0x01, 0x02, 0xA0.toByte())),
+            )
+            coVerifyPushed(hash)
+            coVerifyOrder {
+                contactRepository.addContactFromAnnounce(hash, any())
+                contactRepository.setAsMyRelay(hash, clearOther = true)
+                rnsLxmf.setOutboundPropagationNode(match { it != null && it.contentEquals(relayBytes(hash)) })
+            }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - creates a pending contact when there is no announce and no stored key`() =
+        runTest {
+            val hash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(hash, "ANY").copy(displayName = "by hash"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(hash) } returns false
+            coEvery { announceRepository.getAnnounce(hash) } returns null
+            coEvery { preferredRepository.findByHash(hash) } returns
+                preferredNode(hash, "ANY").copy(displayName = "by hash")
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.success(network.columba.app.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
+
+            manager.start()
+            flushRelayUntilStable()
+            drainReadyTasks()
+
+            coVerify { contactRepository.addPendingContact(hash, "by hash") }
+            // The hash-only node still becomes the active relay (unlike the creation-failure
+            // case below), so the router is routed through it despite having no announce.
+            assertEquals(hash, myRelayFlow.value?.destinationHash)
+            coVerifyPushed(hash)
+            coVerifyOrder {
+                contactRepository.addPendingContact(hash, any())
+                contactRepository.setAsMyRelay(hash, clearOther = true)
+                rnsLxmf.setOutboundPropagationNode(match { it != null && it.contentEquals(relayBytes(hash)) })
+            }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - does not set or push a relay whose contact could not be created`() =
+        runTest {
+            val hash = "a1b2c3d4e5f6a7b8"
+            val announce = TestFactories.createAnnounce(destinationHash = hash)
+            preferredListFlow.value = listOf(preferredNode(hash, "ANY"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(hash) } returns false
+            coEvery { announceRepository.getAnnounce(hash) } returns announce
+            coEvery { contactRepository.addContactFromAnnounce(any(), any()) } returns
+                Result.failure(IllegalStateException("No active identity found"))
+
+            manager.start()
+            flushRelayUntilStable()
+            drainReadyTasks()
+
+            // Nothing is half-applied: no relay is marked active and the router is not pointed
+            // at a destination the app cannot back with a contact.
+            assertNull(myRelayFlow.value)
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(any(), any()) }
+            coVerify(exactly = 0) { rnsLxmf.setOutboundPropagationNode(match { it != null }) }
             manager.stop()
         }
 

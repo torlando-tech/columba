@@ -39,7 +39,9 @@ import androidx.compose.ui.unit.dp
  * 32dp chip is not reliably hittable, so the chip does one thing only.
  *
  * @param query The live search query the list is currently filtered by
- * @param matchCount Filtered result count, or null while loading / unavailable
+ * @param matchCount Filtered result count. Omit it (null) while loading, and on
+ *   paged lists — `LazyPagingItems.itemCount` counts *loaded* rows, so a loaded-only
+ *   number would grow as the user scrolls instead of reporting matches.
  * @param onClearSearch Removes the filter (blanks the query)
  */
 @Composable

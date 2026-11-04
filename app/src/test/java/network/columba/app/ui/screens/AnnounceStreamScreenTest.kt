@@ -1,9 +1,11 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -22,6 +24,7 @@ import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.repository.Announce
 import network.columba.app.rns.api.model.NodeType
 import network.columba.app.test.RegisterComponentActivityRule
+import network.columba.app.test.TestFactories
 import network.columba.app.viewmodel.AnnounceStreamViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -41,7 +44,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34], application = Application::class)
 class AnnounceStreamScreenTest {
     private val registerActivityRule = RegisterComponentActivityRule()
-    private val composeRule = createComposeRule()
+    private val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
@@ -216,6 +219,78 @@ class AnnounceStreamScreenTest {
 
         // Search bar appears
         composeTestRule.onNodeWithText("Search by name or hash...").assertIsDisplayed()
+    }
+
+    @Test
+    fun announceStreamScreen_dismissedSearch_withNonBlankQuery_keepsFilterVisible() {
+        val mockViewModel = createMockAnnounceStreamViewModel(searchQuery = "alice")
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        // Open search: the chip is redundant while the bar shows the query
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        composeTestRule.onNodeWithText("Filtering: \"alice\"").assertDoesNotExist()
+
+        // Dismiss: the live filter must stay visible outside the bar
+        composeTestRule.onNodeWithContentDescription("Close search").performClick()
+        composeTestRule.onNodeWithText("Filtering: \"alice\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun announceStreamScreen_backWhileSearchOpen_collapsesSearchInsteadOfPoppingTheTab() {
+        var hostBackInvoked = false
+        val mockViewModel = createMockAnnounceStreamViewModel(searchQuery = "alice")
+
+        composeTestRule.setContent {
+            BackHandler { hostBackInvoked = true }
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        // The screen's BackHandler only becomes enabled once the toggle recomposes
+        composeTestRule.waitForIdle()
+        composeTestRule.runOnUiThread { composeTestRule.activity.onBackPressedDispatcher.onBackPressed() }
+
+        assertEquals(false, hostBackInvoked)
+        assertEquals("alice", mockViewModel.searchQuery.value)
+        composeTestRule.onNodeWithText("Filtering: \"alice\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun announceStreamContent_activeQuery_omitsTheLoadedOnlyCount() {
+        // The announce list is paged, so itemCount counts loaded rows, not matches:
+        // the chip must not advertise a number that grows while scrolling.
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                searchQuery = "alice",
+                announces =
+                    listOf(
+                        TestFactories.createAnnounce(peerName = "alice"),
+                        TestFactories.createAnnounce(destinationHash = "bobhash", peerName = "bob"),
+                    ),
+            )
+
+        composeTestRule.setContent {
+            AnnounceStreamContent(viewModel = mockViewModel, showSearchFilter = true)
+        }
+
+        composeTestRule.onNodeWithText("Filtering: \"alice\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("2 matches").assertDoesNotExist()
+        composeTestRule.onNodeWithText("0 matches").assertDoesNotExist()
+    }
+
+    @Test
+    fun announceStreamScreen_filteredEmpty_showsQueryAwareEmptyState() {
+        val mockViewModel = createMockAnnounceStreamViewModel(searchQuery = "alice")
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("No nodes match \"alice\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No nodes discovered yet").assertDoesNotExist()
     }
 
     // ========== Empty State Tests ==========
@@ -549,11 +624,13 @@ class AnnounceStreamScreenTest {
         showAudioAnnounces: Boolean = true,
         selectedInterfaceTypes: Set<InterfaceType> = emptySet(),
         searchQuery: String = "",
+        announces: List<Announce> = emptyList(),
     ): AnnounceStreamViewModel {
         val mockViewModel = mockk<AnnounceStreamViewModel>()
 
         // Stub StateFlow properties
-        every { mockViewModel.announces } returns flowOf(PagingData.empty<Announce>())
+        every { mockViewModel.announces } returns
+            flowOf(if (announces.isEmpty()) PagingData.empty<Announce>() else PagingData.from(announces))
         every { mockViewModel.reachableAnnounceCount } returns MutableStateFlow(reachableCount)
         every { mockViewModel.searchQuery } returns MutableStateFlow(searchQuery)
         every { mockViewModel.selectedNodeTypes } returns MutableStateFlow(selectedNodeTypes)

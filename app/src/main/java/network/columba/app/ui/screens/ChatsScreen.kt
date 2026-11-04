@@ -1,6 +1,7 @@
 package network.columba.app.ui.screens
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -91,6 +92,8 @@ import network.columba.app.navigation.ConversationNavigation.NEW_THREAD_ARG
 import androidx.compose.ui.res.pluralStringResource
 import network.columba.app.service.SyncResult
 import network.columba.app.ui.components.ProfileIcon
+import network.columba.app.ui.components.SearchFilterSummary
+import network.columba.app.ui.components.SearchNoResultsState
 import network.columba.app.ui.components.SearchableTopAppBar
 import network.columba.app.ui.components.StarToggleButton
 import network.columba.app.ui.components.SyncStatusBottomSheet
@@ -140,6 +143,11 @@ fun ChatsScreen(
     val threadsEnabled by viewModel.threadsEnabled.collectAsState()
     val expandedCards by viewModel.expandedCards.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
+
+    // M3: back collapses the search surface before it can pop the tab. The
+    // query stays live (and stays visible via SearchFilterSummary below the
+    // segment selector), matching a collapsed search bar that keeps its text.
+    BackHandler(enabled = isSearching) { isSearching = false }
 
     val context = LocalContext.current
     val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
@@ -313,6 +321,30 @@ fun ChatsScreen(
                         },
                     )
                 }
+                // Dismissing the search bar must not strand the filter: the
+                // query outlives the bar in the view model (and survives process
+                // death for the voice segment), so surface it as a removable
+                // chip next to the list it filters.
+                if (!isSearching) {
+                    val activeQuery =
+                        if (effectiveSegment == ChatsSegment.TEXT) searchQuery else voiceSearchQuery
+                    SearchFilterSummary(
+                        query = activeQuery.trim(),
+                        matchCount =
+                            if (effectiveSegment == ChatsSegment.TEXT) {
+                                chatsState.conversations.size.takeUnless { chatsState.isLoading }
+                            } else {
+                                voiceHistoryState.records.size.takeUnless { voiceHistoryState.isLoading }
+                            },
+                        onClearSearch = {
+                            if (effectiveSegment == ChatsSegment.TEXT) {
+                                viewModel.searchQuery.value = ""
+                            } else {
+                                viewModel.voiceSearchQuery.value = ""
+                            }
+                        },
+                    )
+                }
             }
         },
     ) { paddingValues ->
@@ -325,6 +357,8 @@ fun ChatsScreen(
                     state = voiceHistoryState,
                     onRecordClick = viewModel::openCallHistory,
                     onRetry = viewModel::retryVoiceHistory,
+                    searchQuery = voiceSearchQuery.trim(),
+                    onClearSearch = { viewModel.voiceSearchQuery.value = "" },
                     listState = voiceListState,
                     modifier =
                         Modifier
@@ -351,6 +385,17 @@ fun ChatsScreen(
         when {
             chatsState.isLoading && chatsState.conversations.isEmpty() -> {
                 LoadingConversationsState(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
+                )
+            }
+            !chatsState.isLoading && chatsState.conversations.isEmpty() && searchQuery.isNotBlank() -> {
+                SearchNoResultsState(
+                    query = searchQuery.trim(),
+                    itemNoun = "conversations",
+                    onClearSearch = { viewModel.searchQuery.value = "" },
                     modifier =
                         Modifier
                             .fillMaxSize()

@@ -1,6 +1,7 @@
 package network.columba.app.ui.screens
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,6 +73,8 @@ import network.columba.app.ui.components.LocalWindowSize
 import network.columba.app.ui.components.NodeTypeBadge
 import network.columba.app.ui.components.OtherBadge
 import network.columba.app.ui.components.PeerCard
+import network.columba.app.ui.components.SearchFilterSummary
+import network.columba.app.ui.components.SearchNoResultsState
 import network.columba.app.ui.components.SearchableTopAppBar
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.viewmodel.AnnounceStreamViewModel
@@ -88,6 +91,10 @@ fun AnnounceStreamScreen(
     val reachableCount by viewModel.reachableAnnounceCount.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
+
+    // M3: back collapses the search surface first; the live query stays visible
+    // through the SearchFilterSummary chip in AnnounceStreamContent.
+    BackHandler(enabled = isSearching) { isSearching = false }
     val selectedNodeTypes by viewModel.selectedNodeTypes.collectAsState()
     val showAudioAnnounces by viewModel.showAudioAnnounces.collectAsState()
     val selectedInterfaceTypes by viewModel.selectedInterfaceTypes.collectAsState()
@@ -252,6 +259,16 @@ fun AnnounceStreamScreen(
                     .padding(paddingValues)
                     .consumeWindowInsets(paddingValues),
         ) {
+            if (!isSearching) {
+                SearchFilterSummary(
+                    query = searchQuery.trim(),
+                    // No count: the announce list is paged (30 rows per page, placeholders
+                    // off), so itemCount is the number of *loaded* rows, not matches — the
+                    // number would grow as the user scrolls.
+                    matchCount = null,
+                    onClearSearch = { viewModel.searchQuery.value = "" },
+                )
+            }
             AnnounceFilterChips(
                 selectedNodeTypes = selectedNodeTypes,
                 showAudio = showAudioAnnounces,
@@ -266,9 +283,18 @@ fun AnnounceStreamScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 if (pagingItems.itemCount == 0) {
-                    EmptyAnnounceState(
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    if (searchQuery.isNotBlank()) {
+                        SearchNoResultsState(
+                            query = searchQuery.trim(),
+                            itemNoun = "nodes",
+                            onClearSearch = { viewModel.searchQuery.value = "" },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        EmptyAnnounceState(
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 } else {
                     LazyColumn(
                         state = listState,
@@ -539,9 +565,14 @@ fun AnnounceStreamContent(
     onExpandFiltersRequest: () -> Unit = {},
     onPeerClick: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
     onStartChat: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
+    // The search field lives in the host's app bar (see SearchableTopAppBar),
+    // so the host tells us whether it is collapsed; only then does the live
+    // query need an out-of-bar chip here.
+    showSearchFilter: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val pagingItems = viewModel.announces.collectAsLazyPagingItems()
+    val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedNodeTypes by viewModel.selectedNodeTypes.collectAsState()
     val showAudioAnnounces by viewModel.showAudioAnnounces.collectAsState()
     val selectedInterfaceTypes by viewModel.selectedInterfaceTypes.collectAsState()
@@ -601,6 +632,15 @@ fun AnnounceStreamContent(
     val isLoading = pagingItems.loadState.refresh is androidx.paging.LoadState.Loading
 
     Column(modifier = modifier.fillMaxSize()) {
+        if (showSearchFilter) {
+            SearchFilterSummary(
+                query = searchQuery.trim(),
+                // No count: this list is paged, so itemCount counts *loaded* rows
+                // rather than matches (it would grow as the user scrolls).
+                matchCount = null,
+                onClearSearch = { viewModel.searchQuery.value = "" },
+            )
+        }
         AnnounceFilterChips(
             selectedNodeTypes = selectedNodeTypes,
             showAudio = showAudioAnnounces,
@@ -614,6 +654,14 @@ fun AnnounceStreamContent(
         when {
             isLoading && pagingItems.itemCount == 0 -> {
                 LoadingNetworkState(modifier = Modifier.fillMaxSize())
+            }
+            !isLoading && pagingItems.itemCount == 0 && searchQuery.isNotBlank() -> {
+                SearchNoResultsState(
+                    query = searchQuery.trim(),
+                    itemNoun = "nodes",
+                    onClearSearch = { viewModel.searchQuery.value = "" },
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
             !isLoading && pagingItems.itemCount == 0 -> {
                 EmptyAnnounceState(modifier = Modifier.fillMaxSize())

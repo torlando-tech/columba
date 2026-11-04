@@ -1153,6 +1153,93 @@ class ChatsScreenTest {
         return mockViewModel
     }
 
+    // ========== Active Search Filter Visibility Tests ==========
+
+    @Test
+    fun chatsScreen_dismissedSearch_withNonBlankQuery_keepsFilterVisible() {
+        // Given - a live query that filters the list
+        val mockViewModel = createMockChatsViewModel(searchQuery = "bob", isLoading = false)
+
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
+            )
+        }
+
+        // While the search bar is open the chip stays out of the way
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        composeTestRule.onNodeWithText("Filtering: \"bob\"").assertDoesNotExist()
+
+        // When - dismissing the search bar
+        composeTestRule.onNodeWithContentDescription("Close search").performClick()
+
+        // Then - the still-active filter stays visible outside the bar
+        composeTestRule.onNodeWithText("Filtering: \"bob\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun chatsScreen_chipClearButton_clearsQuery() {
+        val mockViewModel = createMockChatsViewModel(searchQuery = "bob", isLoading = false)
+        val queryFlow = mockViewModel.searchQuery
+
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Clear search").performClick()
+
+        assertEquals("", queryFlow.value)
+    }
+
+    @Test
+    fun chatsScreen_filteredEmpty_showsQueryAwareEmptyState() {
+        // Given - filter active, nothing matches
+        val mockViewModel = createMockChatsViewModel(conversations = emptyList(), searchQuery = "bob", isLoading = false)
+
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
+            )
+        }
+
+        composeTestRule.onNodeWithText("No conversations match \"bob\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No conversations yet").assertDoesNotExist()
+    }
+
+    @Test
+    fun chatsScreen_noResultsClearButton_clearsQuery() {
+        val mockViewModel = createMockChatsViewModel(conversations = emptyList(), searchQuery = "bob", isLoading = false)
+        val queryFlow = mockViewModel.searchQuery
+
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Clear search").performClick()
+
+        assertEquals("", queryFlow.value)
+    }
+
     @Suppress("NoRelaxedMocks")
     private fun createMockSettingsViewModel(): network.columba.app.viewmodel.SettingsViewModel {
         val mock = mockk<network.columba.app.viewmodel.SettingsViewModel>(relaxed = true)

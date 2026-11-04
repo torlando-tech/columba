@@ -219,6 +219,35 @@ class AnnounceStreamScreenTest {
         composeTestRule.onNodeWithText("Search by name or hash...").assertIsDisplayed()
     }
 
+    @Test
+    fun announceStreamScreen_dismissedSearch_withNonBlankQuery_keepsFilterVisible() {
+        val mockViewModel = createMockAnnounceStreamViewModel(searchQuery = "alice")
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        // Open search: the chip is redundant while the bar shows the query
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        composeTestRule.onNodeWithText("Filtering: \"alice\"").assertDoesNotExist()
+
+        // Dismiss: the live filter must stay visible outside the bar
+        composeTestRule.onNodeWithContentDescription("Close search").performClick()
+        composeTestRule.onNodeWithText("Filtering: \"alice\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun announceStreamScreen_filteredEmpty_showsQueryAwareEmptyState() {
+        val mockViewModel = createMockAnnounceStreamViewModel(searchQuery = "alice")
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("No nodes match \"alice\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No nodes discovered yet").assertDoesNotExist()
+    }
+
     // ========== Empty State Tests ==========
 
     @Test

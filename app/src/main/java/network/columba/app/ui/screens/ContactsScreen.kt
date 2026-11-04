@@ -2,7 +2,7 @@ package network.columba.app.ui.screens
 
 import android.util.Log
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
@@ -51,7 +50,6 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -73,7 +71,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -81,7 +78,6 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.runtime.Composable
@@ -113,6 +109,9 @@ import network.columba.app.data.model.EnrichedContact
 import network.columba.app.ui.components.AddContactConfirmationDialog
 import network.columba.app.ui.components.LocalWindowSize
 import network.columba.app.ui.components.ProfileIcon
+import network.columba.app.ui.components.SearchFilterSummary
+import network.columba.app.ui.components.SearchNoResultsState
+import network.columba.app.ui.components.SearchableTopAppBar
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.ui.theme.MeshConnected
 import network.columba.app.ui.util.rememberLifecycleTickerMillis
@@ -155,6 +154,11 @@ fun ContactsScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val currentRelayInfo by viewModel.currentRelayInfo.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
+
+    // M3: back collapses the search surface before it can pop the tab; the query
+    // stays live and stays visible through the collapsed-filter chip.
+    BackHandler(enabled = isSearching) { isSearching = false }
+
     val contactsListState = rememberLazyListState()
     val timestampTick = rememberLifecycleTickerMillis(periodMs = 30_000L)
 
@@ -251,25 +255,44 @@ fun ContactsScreen(
         }
     }
 
+    // Query backing the visible list: the app bar, the collapsed-filter chip and
+    // the filtered-empty state all key off this single value.
+    val activeSearchQuery =
+        when (selectedTab) {
+            ContactsTab.MY_CONTACTS -> searchQuery
+            ContactsTab.NETWORK -> announceSearchQuery
+        }
+
     Scaffold(
         topBar = {
             Column {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = "Contacts",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    },
-                    actions = {
-                        // Search button
-                        IconButton(onClick = { isSearching = !isSearching }) {
-                            Icon(
-                                imageVector = if (isSearching) Icons.Default.Close else Icons.Default.Search,
-                                contentDescription = if (isSearching) "Close search" else "Search",
+                SearchableTopAppBar(
+                    title = "Contacts",
+                    subtitle = null,
+                    isSearching = isSearching,
+                    searchQuery = activeSearchQuery,
+                    onSearchQueryChange = { rawQuery ->
+                        // VALIDATION: Sanitize and limit search query. Trailing
+                        // spaces are intentionally preserved while the user is
+                        // typing (sanitizeSearchQuery does not trim); the query
+                        // is trimmed at match time in the view models.
+                        val sanitized =
+                            InputValidator.sanitizeSearchQuery(
+                                rawQuery,
+                                ValidationConstants.MAX_SEARCH_QUERY_LENGTH,
                             )
+                        when (selectedTab) {
+                            ContactsTab.MY_CONTACTS -> viewModel.onSearchQueryChanged(sanitized)
+                            ContactsTab.NETWORK -> announceViewModel.searchQuery.value = sanitized
                         }
+                    },
+                    onSearchToggle = { isSearching = !isSearching },
+                    searchPlaceholder =
+                        when (selectedTab) {
+                            ContactsTab.MY_CONTACTS -> "Search by name, hash, or tag..."
+                            ContactsTab.NETWORK -> "Search by name or hash..."
+                        },
+                    additionalActions = {
                         // My Contacts tab actions
                         if (selectedTab == ContactsTab.MY_CONTACTS) {
                             IconButton(onClick = { showAddContactSheet = true }) {
@@ -348,74 +371,8 @@ fun ContactsScreen(
                             }
                         }
                     },
-                    colors =
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        ),
                 )
 
-                // Search bar
-                AnimatedVisibility(visible = isSearching) {
-                    val currentSearchQuery =
-                        when (selectedTab) {
-                            ContactsTab.MY_CONTACTS -> searchQuery
-                            ContactsTab.NETWORK -> announceSearchQuery
-                        }
-                    val currentPlaceholder =
-                        when (selectedTab) {
-                            ContactsTab.MY_CONTACTS -> "Search by name, hash, or tag..."
-                            ContactsTab.NETWORK -> "Search by name or hash..."
-                        }
-                    OutlinedTextField(
-                        value = currentSearchQuery,
-                        onValueChange = { query ->
-                            // VALIDATION: Sanitize and limit search query.
-                            // Trailing spaces are intentionally preserved while the user
-                            // is typing (sanitizeSearchQuery does not trim); the query is
-                            // trimmed at match time in the view models.
-                            val sanitized =
-                                InputValidator.sanitizeSearchQuery(
-                                    query,
-                                    ValidationConstants.MAX_SEARCH_QUERY_LENGTH,
-                                )
-                            when (selectedTab) {
-                                ContactsTab.MY_CONTACTS -> viewModel.onSearchQueryChanged(sanitized)
-                                ContactsTab.NETWORK -> announceViewModel.searchQuery.value = sanitized
-                            }
-                        },
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                        placeholder = { Text(currentPlaceholder) },
-                        leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = null)
-                        },
-                        trailingIcon = {
-                            if (currentSearchQuery.isNotEmpty()) {
-                                IconButton(
-                                    onClick = {
-                                        when (selectedTab) {
-                                            ContactsTab.MY_CONTACTS -> viewModel.onSearchQueryChanged("")
-                                            ContactsTab.NETWORK -> announceViewModel.searchQuery.value = ""
-                                        }
-                                    },
-                                ) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Clear search")
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        colors =
-                            OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                            ),
-                    )
-                }
-
-                // Tab selector
                 SingleChoiceSegmentedButtonRow(
                     modifier =
                         Modifier
@@ -436,6 +393,21 @@ fun ContactsScreen(
                             Text(label)
                         }
                     }
+                }
+
+                // Dismissing the search bar must not strand the filter: the query
+                // stays live in the view model, so surface it as a removable chip
+                // next to the list it filters. The Network tab renders its own chip
+                // inside AnnounceStreamContent.
+                if (!isSearching && selectedTab == ContactsTab.MY_CONTACTS) {
+                    SearchFilterSummary(
+                        query = activeSearchQuery.trim(),
+                        matchCount =
+                            (if (contactsState.groupedContacts.relay != null) 1 else 0) +
+                                contactsState.groupedContacts.pinned.size +
+                                contactsState.groupedContacts.all.size,
+                        onClearSearch = { viewModel.onSearchQueryChanged("") },
+                    )
                 }
             }
         },
@@ -463,6 +435,17 @@ fun ContactsScreen(
                 when {
                     contactsState.isLoading && !hasContacts -> {
                         LoadingContactsState(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(paddingValues),
+                        )
+                    }
+                    !contactsState.isLoading && !hasContacts && activeSearchQuery.isNotBlank() -> {
+                        SearchNoResultsState(
+                            query = activeSearchQuery.trim(),
+                            itemNoun = "contacts",
+                            onClearSearch = { viewModel.onSearchQueryChanged("") },
                             modifier =
                                 Modifier
                                     .fillMaxSize()
@@ -663,6 +646,7 @@ fun ContactsScreen(
                 AnnounceStreamContent(
                     filtersExpanded = filtersExpanded,
                     onExpandFiltersRequest = { filtersExpanded = true },
+                    showSearchFilter = !isSearching,
                     onPeerClick = { destinationHash, _ -> onViewPeerDetails(destinationHash) },
                     onStartChat = { destinationHash, displayName ->
                         if (!effectivePendingSharedText.isNullOrBlank()) {

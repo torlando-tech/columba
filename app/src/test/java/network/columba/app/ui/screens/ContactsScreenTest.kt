@@ -210,6 +210,33 @@ class ContactsScreenTest {
     }
 
     @Test
+    fun contactsScreen_dismissedSearch_withNonBlankQuery_keepsFilterVisible() {
+        val mockViewModel = createMockContactsViewModel(searchQuery = "Alice")
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        composeTestRule.onNodeWithContentDescription("Close search").performClick()
+
+        // The live filter must stay visible outside the dismissed bar
+        composeTestRule.onNodeWithText("Filtering: \"Alice\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun contactsScreen_filteredEmpty_showsQueryAwareEmptyState() {
+        val mockViewModel = createMockContactsViewModel(searchQuery = "Alice", isLoading = false)
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithText("No contacts match \"Alice\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No contacts yet").assertDoesNotExist()
+    }
+
+    @Test
     fun contactsScreen_searchBar_textInput_updatesViewModel() {
         val mockViewModel = createMockContactsViewModel()
 

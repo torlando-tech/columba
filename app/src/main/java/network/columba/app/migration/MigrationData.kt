@@ -15,6 +15,8 @@ data class MigrationBundle(
     val identities: List<IdentityExport>,
     val conversations: List<ConversationExport>,
     val messages: List<MessageExport>,
+    /** Thread rows (threads-spec §5); empty in bundles from before v9. */
+    val threads: List<ThreadExport> = emptyList(),
     val contacts: List<ContactExport>,
     val announces: List<AnnounceExport> = emptyList(),
     val peerIdentities: List<PeerIdentityExport> = emptyList(),
@@ -29,7 +31,7 @@ data class MigrationBundle(
     val keysEncrypted: Boolean = false,
 ) {
     companion object {
-        const val CURRENT_VERSION = 8
+        const val CURRENT_VERSION = 9
 
         // Minimum version we can import - older files may have incompatible structure
         const val MINIMUM_VERSION = 1
@@ -103,6 +105,24 @@ data class MessageExport(
     // `fieldsJson.field16.reactions`; MigrationImporter routes either
     // shape into the new column.
     val reactionsJson: String? = null,
+    /** Hex of the raw `FIELD_THREAD` (0x08) bytes; null = Main (pre-v9 bundles: null). */
+    val threadId: String? = null,
+)
+
+/**
+ * Exported thread row (threads-spec §5). `threadId` is hex of the raw wire
+ * bytes; `rootMessageId` is a soft reference (same caveat as ThreadEntity).
+ */
+@Serializable
+data class ThreadExport(
+    val threadId: String,
+    val conversationHash: String,
+    val identityHash: String,
+    val rootMessageId: String? = null,
+    val title: String? = null,
+    val createdAt: Long,
+    val lastActivityAt: Long,
+    val archivedAt: Long? = null,
 )
 
 /**

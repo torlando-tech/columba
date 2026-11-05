@@ -17,6 +17,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
@@ -35,6 +36,10 @@ import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
 import network.columba.app.ui.model.ReplyPreviewUi
+import network.columba.app.ui.model.ThreadHeaderUi
+import network.columba.app.ui.model.ThreadPillUi
+import network.columba.app.ui.model.ThreadSheetUiState
+import network.columba.app.ui.model.ThreadViewUi
 import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.MessagingViewModel
 import network.columba.app.viewmodel.ComposerSendResult
@@ -66,6 +71,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MessagingScreenTest {
+
     @Test
     fun `text send keeps keyboard panel while IME remains visible`() {
         assertEquals(
@@ -171,6 +177,14 @@ class MessagingScreenTest {
         every { mockViewModel.voiceRecordingState } returns MutableStateFlow(VoiceMessageRecordingState())
         every { mockViewModel.isVoiceMessageSupported } returns true
         every { mockViewModel.isVoiceRecordingBlockedByCall } returns MutableStateFlow(false)
+        // Threads (P2) mocks
+        every { mockViewModel.threadsEnabled } returns MutableStateFlow(false)
+        every { mockViewModel.selectedThread } returns MutableStateFlow(null)
+        every { mockViewModel.threadPill } returns MutableStateFlow(ThreadPillUi())
+        every { mockViewModel.threadSheetState } returns MutableStateFlow(ThreadSheetUiState())
+        every { mockViewModel.threadHooks } returns MutableStateFlow(emptyMap())
+        every { mockViewModel.threadView } returns MutableStateFlow(null)
+        every { mockViewModel.threadComposerPrefill } returns MutableSharedFlow()
     }
 
     // ========== Empty State Tests ==========
@@ -313,6 +327,54 @@ class MessagingScreenTest {
 
         // Then
         assertTrue(peerClicked)
+    }
+
+    @Test
+    fun threadsOffMessageScreen_hasNoPillAndNoRenameEntry() {
+        // Default stubs: threadsEnabled = false, selectedThread = null.
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then - no thread control anywhere (threads-spec §5.1 flag-off path)
+        composeTestRule
+            .onNodeWithContentDescription("Switch thread", substring = true)
+            .assertDoesNotExist()
+
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Rename").assertDoesNotExist()
+    }
+
+    @Test
+    fun threadsOn_appBarOffersRenameForTheOpenThread() {
+        // Given - a thread is open and threads are enabled
+        val threadHex = "a1".repeat(16)
+        every { mockViewModel.threadsEnabled } returns MutableStateFlow(true)
+        every { mockViewModel.selectedThread } returns MutableStateFlow(threadHex)
+        every { mockViewModel.threadPill } returns
+            MutableStateFlow(ThreadPillUi(isMain = false, title = "Trip planning"))
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then - the pill names the thread and the app bar can rename it
+        composeTestRule
+            .onNodeWithContentDescription("Switch thread", substring = true)
+            .assertIsDisplayed()
+
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Rename").assertExists()
     }
 
     @Test
@@ -2275,5 +2337,60 @@ class MessagingScreenTest {
                 + "wiring a coordinator that never triggers forced scroll",
             composeError == null,
         )
+    }
+
+    @Test
+    fun threadPinnedHeader_staysOneLineAtAndBelowTheNewestMessage() {
+        // Given - a thread view whose root keeps a failed signature check
+        every { mockViewModel.threadsEnabled } returns MutableStateFlow(true)
+        every { mockViewModel.selectedThread } returns MutableStateFlow("a1b2c3d4e5f60718")
+        every { mockViewModel.threadPill } returns
+            MutableStateFlow(ThreadPillUi(isMain = false, title = "Hi Thread"))
+        every { mockViewModel.threadView } returns
+            MutableStateFlow(
+                ThreadViewUi(
+                    header =
+                        ThreadHeaderUi.Root(
+                            content = "Root text",
+                            isFromMe = false,
+                            timestamp = System.currentTimeMillis() - 86_400_000L,
+                            signatureVerified = false,
+                        ),
+                    replyCount = 12,
+                ),
+            )
+        every { mockViewModel.messages } returns
+            flowOf(PagingData.from(MessagingTestFixtures.createMultipleMessages(30)))
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - root text, reply count and the unverified warning share one row
+        composeTestRule.onNodeWithText("Root text").assertIsDisplayed()
+        composeTestRule.onNodeWithText("12 replies").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithContentDescription("Unverified sender — may be forged")
+            .assertIsDisplayed()
+
+        // When - the reader scrolls into history
+        composeTestRule
+            .onNode(
+                SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange),
+            ).performScrollToIndex(10)
+        composeTestRule.waitForIdle()
+
+        // Then - the header is unchanged: one line either way, no card to lose
+        composeTestRule.onNodeWithText("Root text").assertIsDisplayed()
+        composeTestRule.onNodeWithText("12 replies").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithContentDescription("Unverified sender — may be forged")
+            .assertIsDisplayed()
     }
 }

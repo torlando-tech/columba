@@ -5,23 +5,33 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.map
 import androidx.room.Transaction
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import network.columba.app.data.db.ColumbaDatabase
+import network.columba.app.data.db.ThreadGrouping
 import network.columba.app.data.db.dao.ConversationDao
 import network.columba.app.data.db.dao.DraftDao
 import network.columba.app.data.db.dao.LocalIdentityDao
 import network.columba.app.data.db.dao.MessageDao
 import network.columba.app.data.db.dao.PeerIdentityDao
+import network.columba.app.data.db.dao.ThreadDao
+import network.columba.app.data.db.dao.ThreadFirstMessage
+import network.columba.app.data.db.dao.ThreadUnreadCount
+import network.columba.app.data.db.dao.ThreadLastMessage
+import network.columba.app.data.db.dao.ThreadMessageCount
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.DraftEntity
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.db.entity.PeerIdentityEntity
+import network.columba.app.data.db.entity.ThreadEntity
 import network.columba.app.data.model.EnrichedConversation
 import network.columba.app.data.storage.AttachmentStorageManager
 import network.columba.app.data.util.TextSanitizer
+import network.columba.app.data.util.ThreadPolicy
 import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
@@ -75,6 +85,10 @@ data class Message(
     // a per-event `fields[0x10] = {reaction_to, emoji, sender}` that
     // the receiver routes into this field on the *target* message.
     val reactionsJson: String? = null,
+    // LXMF FIELD_THREAD (0x08) raw bytes; null = Main conversation.
+    // Producers parse it from `fieldsJson` key "8" (ThreadFieldCodec);
+    // `saveMessage` persists it and applies the §4.3 grouping algorithm.
+    val threadId: ByteArray? = null,
 )
 
 /**
@@ -101,6 +115,8 @@ class ConversationRepository
         private val localIdentityDao: LocalIdentityDao,
         private val attachmentStorage: AttachmentStorageManager,
         private val draftDao: DraftDao,
+        private val threadDao: ThreadDao,
+        private val database: ColumbaDatabase,
     ) {
         /**
          * Get all conversations for the active identity, sorted by most recent activity.
@@ -239,6 +255,7 @@ class ConversationRepository
          * Save a message and update the conversation
          * Creates conversation if it doesn't exist
          */
+        @Suppress("LongMethod") // Pre-existing size (134 lines at TOR-24); P2 only threads threadId through it
         @Transaction
         suspend fun saveMessage(
             peerHash: String,
@@ -328,6 +345,22 @@ class ConversationRepository
                         processedFieldsJson = processedFieldsJson,
                     )
                 messageDao.insertMessage(messageEntity)
+
+                // Threads-spec §4.3: implicit thread creation / activity bump
+                // / first-sighting root hook, inside this transaction so the
+                // first-sighting check is race-free. Null threadId (Main) is
+                // a no-op; an unresolved 0x30 target degrades to no root and
+                // never affects message persistence (already committed above).
+                ThreadGrouping.applyMessageActivity(
+                    threadDao = threadDao,
+                    messageDao = messageDao,
+                    identityHash = identityHash,
+                    conversationHash = peerHash,
+                    threadId = message.threadId,
+                    replyToMessageId = message.replyToMessageId,
+                    content = sanitizedContent,
+                    activityAt = conversationTimestamp,
+                )
 
                 // Check if this message has file attachments and should supersede a pending notification
                 if (!message.isFromMe && message.fieldsJson != null) {
@@ -629,6 +662,7 @@ class ConversationRepository
                 sentInterface = sentInterface,
                 signatureVerified = signatureVerified,
                 reactionsJson = reactionsJson,
+                threadId = threadId,
             )
 
         /**
@@ -665,6 +699,7 @@ class ConversationRepository
             receivedAt = message.receivedAt,
             sentInterface = message.sentInterface,
             signatureVerified = message.signatureVerified,
+            threadId = message.threadId, // FIELD_THREAD bytes; null = Main
         )
 
         /**
@@ -819,47 +854,85 @@ class ConversationRepository
         // --- Draft operations ---
 
         /**
-         * Save a draft message for a conversation.
+         * Save a draft for one (conversation, thread) target.
+         * [threadId] null or empty = Main (stored as the empty-blob sentinel).
          * If content is blank, the draft is deleted instead.
          */
         suspend fun saveDraft(
             peerHash: String,
             content: String,
+            threadId: ByteArray? = null,
         ) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            val identityHash = activeIdentity.identityHash
+            val isThread = threadId != null && threadId.isNotEmpty()
+
             if (content.isBlank()) {
-                draftDao.deleteDraft(peerHash, activeIdentity.identityHash)
-            } else {
-                draftDao.insertOrReplaceDraft(
-                    DraftEntity(
-                        conversationHash = peerHash,
-                        identityHash = activeIdentity.identityHash,
-                        content = content,
-                        updatedTimestamp = System.currentTimeMillis(),
-                    ),
-                )
+                draftDao.deleteDraft(peerHash, identityHash, threadId.orMainThreadId())
+                if (isThread && threadDao.getThread(identityHash, peerHash, threadId) != null) {
+                    // Atomic delete-if-empty: a first send completing right now
+                    // has already inserted its message, so the row survives and
+                    // the reply can never be orphaned outside Main. Any title is
+                    // kept: an unnamed message-less row has nothing to preserve,
+                    // while a named one is a thread the user created (Greptile
+                    // P1).
+                    threadDao.deleteThreadIfEmpty(threadId, identityHash, peerHash)
+                }
+                return
             }
+
+            // Drafts have a composite FK onto
+            // `conversations`: a peer opened through `Start Chat` has no row
+            // until the first message, and writing a draft for it would fail
+            // the check and drop the typed text. This stays below the blank
+            // branch so clearing a draft never conjures an empty chat for a
+            // peer the user only opened (Greptile P2).
+            ensureConversationRow(peerHash, identityHash, null)
+            draftDao.insertOrReplaceDraft(
+                DraftEntity(
+                    conversationHash = peerHash,
+                    identityHash = identityHash,
+                    content = content,
+                    updatedTimestamp = System.currentTimeMillis(),
+                    threadId = threadId.orMainThreadId(),
+                ),
+            )
+            // A draft never creates a thread: no thread row exists until a
+            // message is sent in it (or the user names it), so a target the
+            // user cancels leaves no hook, no sheet row and no chat-card
+            // entry behind. The draft itself still lives in `drafts`, keyed by
+            // thread id, so the open target keeps its text across a retarget.
         }
 
         /**
-         * Get the saved draft for a conversation, if any.
+         * Get the saved draft for one (conversation, thread) target, if any.
+         * [threadId] null or empty = Main.
          */
-        suspend fun getDraft(peerHash: String): String? {
+        suspend fun getDraft(
+            peerHash: String,
+            threadId: ByteArray? = null,
+        ): String? {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return null
-            return draftDao.getDraft(peerHash, activeIdentity.identityHash)?.content
+            return draftDao.getDraft(peerHash, activeIdentity.identityHash, threadId.orMainThreadId())?.content
         }
 
         /**
-         * Clear the draft for a conversation (e.g., after sending a message).
+         * Clear the draft for one (conversation, thread) target (e.g., after
+         * sending a message). [threadId] null or empty = Main.
          */
-        suspend fun clearDraft(peerHash: String) {
+        suspend fun clearDraft(
+            peerHash: String,
+            threadId: ByteArray? = null,
+        ) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
-            draftDao.deleteDraft(peerHash, activeIdentity.identityHash)
+            draftDao.deleteDraft(peerHash, activeIdentity.identityHash, threadId.orMainThreadId())
         }
 
         /**
-         * Observe all drafts for the active identity as a map of peerHash -> draft content.
-         * Used by the conversation list to show draft previews.
+         * Observe Main-conversation drafts for the active identity as a map of
+         * peerHash -> draft content. Used by the conversation list to show
+         * draft previews. Per-thread drafts are loaded by the messaging
+         * screen via [getDraft]; the chat list only ever previews Main.
          */
         fun observeDrafts(): Flow<Map<String, String>> =
             localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
@@ -867,7 +940,8 @@ class ConversationRepository
                     flowOf(emptyMap())
                 } else {
                     draftDao.observeDraftsForIdentity(identity.identityHash).map { drafts ->
-                        drafts.associate { it.conversationHash to it.content }
+                        drafts.filter { DraftEntity.isMainThreadId(it.threadId) }
+                            .associate { it.conversationHash to it.content }
                     }
                 }
             }
@@ -1349,4 +1423,375 @@ class ConversationRepository
                 null
             }
         }
+
+        // --- Threads (P1, threads-spec §5) ---
+
+        /**
+         * Threads of one contact's conversation, most recent activity first
+         * (chip bar / thread sheet order). Archived threads excluded unless
+         * [includeArchived]. Main is not a row here — it is always the first
+         * chip by construction (P2 invariant).
+         */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
+        suspend fun threadsForConversation(
+            peerHash: String,
+            includeArchived: Boolean = false,
+        ): Flow<List<ThreadEntity>> {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
+                ?: return flowOf(emptyList())
+            return threadDao.threadsForConversation(identityHash, peerHash, includeArchived)
+        }
+
+        /** Oldest message of one thread (thread-view header); LIMIT 1 read. */
+        suspend fun firstMessageInThread(
+            peerHash: String,
+            threadId: ByteArray,
+        ): MessageEntity? {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return null
+            return messageDao.getFirstMessageForThread(peerHash, identityHash, threadId)
+        }
+
+        /** Paged thread messages (newest first), mirroring [getMessagesPaged] for Main. */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
+        suspend fun getThreadMessagesPaged(
+            peerHash: String,
+            threadId: ByteArray,
+            sortBySent: Boolean = false,
+        ): Flow<PagingData<MessageEntity>> {
+            val identityHash =
+                localIdentityDao.getActiveIdentitySync()?.identityHash
+                    ?: return emptyFlow()
+            return Pager(
+                config =
+                    PagingConfig(
+                        pageSize = 30,
+                        initialLoadSize = 30,
+                        prefetchDistance = 20,
+                        enablePlaceholders = false,
+                    ),
+                pagingSourceFactory = {
+                    if (sortBySent) {
+                        messageDao.getMessagesForThreadPagedBySentTime(peerHash, identityHash, threadId)
+                    } else {
+                        messageDao.getMessagesForThreadPaged(peerHash, identityHash, threadId)
+                    }
+                },
+            ).flow
+        }
+
+        /** Unread received-message count for one thread (chip unread dot). */
+        suspend fun unreadCountForThread(
+            peerHash: String,
+            threadId: ByteArray,
+        ): Int {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return 0
+            return messageDao.getUnreadCountForThread(peerHash, identityHash, threadId)
+        }
+
+        /** Unread received-message count for Main (`threadId IS NULL`). */
+        suspend fun unreadCountForMain(peerHash: String): Int {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return 0
+            return messageDao.getUnreadCountForMain(peerHash, identityHash)
+        }
+
+        /** Per-thread unread counts for a conversation; the null-threadId row is Main. */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
+        suspend fun observeUnreadCountsPerThread(peerHash: String): Flow<List<ThreadUnreadCount>> {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
+                ?: return flowOf(emptyList())
+            return messageDao.observeUnreadCountsPerThread(peerHash, identityHash)
+        }
+
+        /** Mark one thread's received messages read (opening a thread view). */
+        suspend fun markThreadAsRead(
+            peerHash: String,
+            threadId: ByteArray,
+        ) {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
+            messageDao.markThreadMessagesAsRead(peerHash, identityHash, threadId)
+        }
+
+        /**
+         * Drop the stored draft of a target that never became a thread.
+         *
+         * A thread row exists only after its first message (or an explicit
+         * name), so leaving an unnamed, message-less target is a cancel: its
+         * draft goes with it instead of lingering unreachable. A named target
+         * has a row and keeps its draft for a later reopen.
+         */
+        suspend fun discardDraftIfUnsent(
+            peerHash: String,
+            threadId: ByteArray?,
+        ) {
+            if (threadId == null || threadId.isEmpty()) return
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
+            if (threadDao.getThread(identityHash, peerHash, threadId) == null) {
+                draftDao.deleteDraft(peerHash, identityHash, threadId)
+            }
+        }
+
+        /** Thread row for one (conversation, thread) pair, or null. */
+        suspend fun getThread(
+            peerHash: String,
+            threadId: ByteArray,
+        ): ThreadEntity? {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return null
+            return threadDao.getThread(identityHash, peerHash, threadId)
+        }
+
+        /**
+         * Insert the parent `conversations` row when it does not exist yet.
+         *
+         * `threads` has a composite FK onto `conversations`, and a peer reached
+         * through `Start Chat` has no row until the first message. Naming a
+         * thread (or saving its first draft) would otherwise fail the check and
+         * lose the user's input with only a logged error. IGNORE keeps a
+         * concurrently inserted real conversation intact.
+         */
+        private suspend fun ensureConversationRow(
+            peerHash: String,
+            identityHash: String,
+            peerName: String?,
+        ) {
+            if (conversationDao.getConversation(peerHash, identityHash) != null) return
+            conversationDao.insertConversationIgnore(
+                ConversationEntity(
+                    peerHash = peerHash,
+                    identityHash = identityHash,
+                    peerName = TextSanitizer.sanitizePeerName(peerName ?: "Unknown"),
+                    peerPublicKey = null,
+                    lastMessage = "",
+                    lastMessageTimestamp = 0,
+                    unreadCount = 0,
+                    lastSeenTimestamp = 0,
+                ),
+            )
+        }
+
+        /**
+         * Rename a thread (local label; never touches the wire). A null title
+         * resets the thread to its automatic excerpt (threads-spec D8).
+         *
+         * A thread minted by `+ New` has no row until its first draft or
+         * message, so naming it at creation inserts the row here: otherwise
+         * the UPDATE would match nothing and the title would be dropped
+         * (threads-spec §6.2 "title optional at creation"). Main (`X''`) is
+         * not a `threads` row — its label is the resource default — so it is
+         * a no-op.
+         */
+        suspend fun renameThread(
+            peerHash: String,
+            threadId: ByteArray,
+            title: String?,
+            peerName: String? = null,
+        ) {
+            if (threadId.isEmpty()) return
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
+            val sanitized = ThreadPolicy.sanitizeThreadTitle(title)
+            val existing = threadDao.getThread(identityHash, peerHash, threadId)
+            if (existing == null) {
+                if (sanitized == null) return
+                ensureConversationRow(peerHash, identityHash, peerName)
+                val now = System.currentTimeMillis()
+                threadDao.insertThreadIgnore(
+                    ThreadEntity(
+                        threadId = threadId,
+                        conversationHash = peerHash,
+                        identityHash = identityHash,
+                        rootMessageId = null,
+                        title = sanitized,
+                        createdAt = now,
+                        lastActivityAt = now,
+                        archivedAt = null,
+                    ),
+                )
+            } else {
+                threadDao.renameThread(threadId, identityHash, peerHash, sanitized)
+            }
+        }
+
+        /** Archive (true) / un-archive (false) a thread. Local presentation only; no wire traffic. */
+        suspend fun setThreadArchived(
+            peerHash: String,
+            threadId: ByteArray,
+            archived: Boolean,
+        ) {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
+            threadDao.setArchived(
+                threadId,
+                identityHash,
+                peerHash,
+                archivedAt = if (archived) System.currentTimeMillis() else null,
+            )
+        }
+
+        /**
+         * Archive / un-archive several threads at once (selection-mode batch
+         * and the single-row swipe path). One UPDATE statement — atomic, so a
+         * failure cannot leave a partially archived batch behind
+         * (threads-spec §5.3). Local presentation only; no wire traffic.
+         */
+        suspend fun setThreadsArchived(
+            peerHash: String,
+            threadIds: List<ByteArray>,
+            archived: Boolean,
+        ) {
+            if (threadIds.isEmpty()) return
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
+            threadDao.setArchivedBatch(
+                threadIds = threadIds,
+                identityHash = identityHash,
+                conversationHash = peerHash,
+                archivedAt = if (archived) System.currentTimeMillis() else null,
+            )
+        }
+
+        /**
+         * Oldest message per thread for a conversation — the automatic-title
+         * source for threads whose local title was reset to NULL.
+         */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
+        suspend fun observeFirstMessagesPerThread(peerHash: String): Flow<List<ThreadFirstMessage>> {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
+                ?: return flowOf(emptyList())
+            return messageDao.observeFirstMessagesPerThread(peerHash, identityHash)
+        }
+
+        /**
+         * Delete a thread locally (thread sheet long-press, with confirm):
+         * thread row + its messages + its draft. Main rows and the wire
+         * history are untouched — this emits no wire traffic (threads-spec
+         * §6.3 "local only"). The deletes run in a real Room transaction
+         * (this class is not an @Dao, so a @Transaction annotation would be
+         * inert) so an incoming message cannot slip between the message
+         * delete and the thread-row delete and end up orphaned outside
+         * Main. The conversation preview is rebuilt from the remaining
+         * messages so a deleted thread's last message cannot linger in the
+         * chat list (same pattern as deleteMessage).
+         */
+        suspend fun deleteThread(
+            peerHash: String,
+            threadId: ByteArray,
+        ) {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
+            database.withTransaction {
+                messageDao.deleteMessagesForThread(peerHash, identityHash, threadId)
+                draftDao.deleteDraft(peerHash, identityHash, threadId)
+                threadDao.deleteThread(threadId, identityHash, peerHash)
+                // Rebuild the summary inside the same transaction: a message
+                // arriving between the deletes and this update must never be
+                // clobbered by a stale copy (unread count / preview).
+                val conversation = conversationDao.getConversation(peerHash, identityHash)
+                if (conversation != null) {
+                    val lastMessage = messageDao.getLastMessage(peerHash, identityHash)
+                    conversationDao.updateConversation(
+                        conversation.copy(
+                            lastMessage = lastMessage?.let { TextSanitizer.sanitizePreview(it.content) } ?: "",
+                            lastMessageTimestamp = lastMessage?.receivedAt ?: lastMessage?.timestamp ?: 0L,
+                        ),
+                    )
+                }
+            }
+        }
+
+        /**
+         * Thread-aware read path for opening Main: clears the conversation
+         * badge and Main's unread messages only — thread unread dots survive
+         * (threads-spec §6.2).
+         */
+        suspend fun markMainAsRead(peerHash: String) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            conversationDao.markAsRead(peerHash, activeIdentity.identityHash)
+            messageDao.markMainMessagesAsRead(peerHash, activeIdentity.identityHash)
+        }
+
+        /** Total message counts per thread ("N replies" hook); null-threadId row = Main. */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
+        suspend fun observeMessageCountsPerThread(peerHash: String): Flow<List<ThreadMessageCount>> {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
+                ?: return flowOf(emptyList())
+            return messageDao.observeMessageCountsPerThread(peerHash, identityHash)
+        }
+
+        /** Newest message per thread (thread sheet / expanding card previews). */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
+        suspend fun observeLastMessagesPerThread(peerHash: String): Flow<List<ThreadLastMessage>> {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
+                ?: return flowOf(emptyList())
+            return messageDao.observeLastMessagesPerThread(peerHash, identityHash)
+        }
+
+        /** Mark Main received messages read (thread-aware read path; thread rows untouched). */
+        suspend fun markMainMessagesAsRead(peerHash: String) {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash ?: return
+            messageDao.markMainMessagesAsRead(peerHash, identityHash)
+        }
+
+        /** Paged Main-only messages (threads-enabled Main chip list), newest first. */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
+        suspend fun getMainMessagesPaged(
+            peerHash: String,
+            sortBySent: Boolean = false,
+        ): Flow<PagingData<Message>> {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyFlow()
+            val identityHash = activeIdentity.identityHash
+            return Pager(
+                config =
+                    PagingConfig(
+                        pageSize = 30,
+                        initialLoadSize = 30,
+                        prefetchDistance = 20,
+                        enablePlaceholders = false,
+                    ),
+                pagingSourceFactory = {
+                    if (sortBySent) {
+                        messageDao.getMainMessagesPagedBySentTime(peerHash, identityHash)
+                    } else {
+                        messageDao.getMainMessagesPaged(peerHash, identityHash)
+                    }
+                },
+            ).flow.map { pagingData ->
+                pagingData.map { entity -> entity.toMessage() }
+            }
+        }
+
+        /** Newest Main message (expanding chat card Main-row preview). */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend fetches the active identity before building the Flow
+        suspend fun observeMainLastMessage(peerHash: String): Flow<ThreadLastMessage?> {
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
+                ?: return flowOf(null)
+            return messageDao.observeMainLastMessage(peerHash, identityHash)
+        }
     }
+
+    /** Main sentinel for draft targeting: null or empty threadId -> empty blob. */
+    internal fun ByteArray?.orMainThreadId(): ByteArray =
+        if (this == null || isEmpty()) DraftEntity.MAIN_THREAD_ID else this
+
+/**
+ * Map a stored [MessageEntity] back to the domain [Message]. Used by the
+ * thread-scoped and Main-scoped paged queries (which return entities) so
+ * they can share the existing `Message.toMessageUi()` presentation mapping.
+ */
+fun MessageEntity.toDomainMessage(): Message =
+    Message(
+        id = id,
+        destinationHash = conversationHash,
+        content = content,
+        timestamp = timestamp,
+        isFromMe = isFromMe,
+        status = status,
+        fieldsJson = fieldsJson,
+        deliveryMethod = deliveryMethod,
+        errorMessage = errorMessage,
+        replyToMessageId = replyToMessageId,
+        receivedHopCount = receivedHopCount,
+        receivedInterface = receivedInterface,
+        receivedRssi = receivedRssi,
+        receivedSnr = receivedSnr,
+        receivedAt = receivedAt,
+        sentInterface = sentInterface,
+        signatureVerified = signatureVerified,
+        reactionsJson = reactionsJson,
+        threadId = threadId,
+    )

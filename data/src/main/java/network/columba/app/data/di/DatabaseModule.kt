@@ -29,6 +29,7 @@ import network.columba.app.data.db.dao.PeerIdentityDao
 import network.columba.app.data.db.dao.PreferredPropagationNodeDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.dao.RmspServerDao
+import network.columba.app.data.db.dao.ThreadDao
 import javax.inject.Singleton
 
 @Module
@@ -105,26 +106,20 @@ object DatabaseModule {
     @Singleton
     fun provideColumbaDatabase(
         @ApplicationContext context: Context,
-    ): ColumbaDatabase =
-        Room
-            .databaseBuilder(
-                context,
-                ColumbaDatabase::class.java,
-                DATABASE_NAME,
-            ).addMigrations(
-                ColumbaDatabase.MIGRATION_1_2,
-                ColumbaDatabase.MIGRATION_2_3,
-                ColumbaDatabase.MIGRATION_3_4,
-                ColumbaDatabase.MIGRATION_4_5,
-                ColumbaDatabase.MIGRATION_5_6,
-                ColumbaDatabase.MIGRATION_6_7,
-                ColumbaDatabase.MIGRATION_7_8,
-                ColumbaDatabase.MIGRATION_8_9,
-                ColumbaDatabase.MIGRATION_9_10,
-            )
-            .enableMultiInstanceInvalidation()
-            .addCallback(DURABILITY_CALLBACK)
-            .build()
+    ): ColumbaDatabase {
+        val builder =
+            Room
+                .databaseBuilder(
+                    context,
+                    ColumbaDatabase::class.java,
+                    DATABASE_NAME,
+                ).enableMultiInstanceInvalidation()
+                .addCallback(DURABILITY_CALLBACK)
+        // Registered one by one: a spread would copy the whole migration array
+        // on every call.
+        ColumbaDatabase.MIGRATIONS.forEach { builder.addMigrations(it) }
+        return builder.build()
+    }
 
     @Provides
     fun provideConversationDao(database: ColumbaDatabase): ConversationDao = database.conversationDao()
@@ -174,6 +169,9 @@ object DatabaseModule {
 
     @Provides
     fun provideInterfaceFirstSeenDao(database: ColumbaDatabase): InterfaceFirstSeenDao = database.interfaceFirstSeenDao()
+
+    @Provides
+    fun provideThreadDao(database: ColumbaDatabase): ThreadDao = database.threadDao()
 
     @Provides
     @Singleton

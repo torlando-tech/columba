@@ -17,6 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+/** Copy for the unverified-sender warning, shared by the chip and the collapsed
+ * thread header's icon. */
+const val UNVERIFIED_SENDER_TEXT = "Unverified sender — may be forged"
+
 /**
  * Inline warning banner for messages whose LXMF signature could not be verified
  * against a known sender identity (`UnverifiedReason.SOURCE_UNKNOWN`). Mirrors
@@ -52,7 +56,7 @@ fun UnverifiedSenderChip(modifier: Modifier = Modifier) {
                 modifier = Modifier.size(14.dp),
             )
             Text(
-                text = "Unverified sender — may be forged",
+                text = UNVERIFIED_SENDER_TEXT,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 fontWeight = FontWeight.Medium,

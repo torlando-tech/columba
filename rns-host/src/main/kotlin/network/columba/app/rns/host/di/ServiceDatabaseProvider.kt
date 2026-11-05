@@ -23,23 +23,16 @@ object ServiceDatabaseProvider {
             INSTANCE ?: createDatabase(context).also { INSTANCE = it }
         }
 
+    // Spread is required: Room's addMigrations(vararg migrations) is variadic
+    // and the single source of truth is the array shared with the app process.
+    @Suppress("SpreadOperator")
     private fun createDatabase(context: Context): ColumbaDatabase =
         Room
             .databaseBuilder(
                 context.applicationContext,
                 ColumbaDatabase::class.java,
                 DatabaseModule.DATABASE_NAME,
-            ).addMigrations(
-                ColumbaDatabase.MIGRATION_1_2,
-                ColumbaDatabase.MIGRATION_2_3,
-                ColumbaDatabase.MIGRATION_3_4,
-                ColumbaDatabase.MIGRATION_4_5,
-                ColumbaDatabase.MIGRATION_5_6,
-                ColumbaDatabase.MIGRATION_6_7,
-                ColumbaDatabase.MIGRATION_7_8,
-                ColumbaDatabase.MIGRATION_8_9,
-                ColumbaDatabase.MIGRATION_9_10,
-            )
+            ).addMigrations(*ColumbaDatabase.MIGRATIONS)
             .enableMultiInstanceInvalidation()
             .addCallback(DatabaseModule.DURABILITY_CALLBACK)
             .build()

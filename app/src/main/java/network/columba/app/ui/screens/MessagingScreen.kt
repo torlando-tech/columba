@@ -1,3 +1,4 @@
+@file:Suppress("TooManyFunctions") // Single cohesive messaging surface; chip bar, thread view, and hook-pill helpers live with the screen
 package network.columba.app.ui.screens
 
 import android.content.Intent
@@ -55,6 +56,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -66,6 +68,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Call
@@ -73,6 +76,7 @@ import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
@@ -82,6 +86,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -114,6 +119,8 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
@@ -149,6 +156,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -159,6 +167,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -187,6 +196,8 @@ import network.columba.app.rns.api.BackendCapabilities.Support
 import network.columba.app.rns.api.model.Direction
 import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.ui.components.AttachmentPanel
+import network.columba.app.ui.components.ThreadPill
+import network.columba.app.ui.components.ThreadRenameDialog
 import network.columba.app.ui.components.OVERLAY_MAX_CAPTURE_HEIGHT_PX
 import network.columba.app.ui.components.VoiceMessageBubble
 import network.columba.app.ui.components.VoiceDraftPreview
@@ -217,6 +228,7 @@ import network.columba.app.ui.components.StarToggleButton
 import network.columba.app.ui.components.SwipeableMessageBubble
 import network.columba.app.ui.components.SyncStatusBottomSheet
 import network.columba.app.ui.components.ConversationTransferTray
+import network.columba.app.ui.components.UNVERIFIED_SENDER_TEXT
 import network.columba.app.ui.components.UnverifiedSenderChip
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.ui.model.CodecProfile
@@ -227,6 +239,9 @@ import network.columba.app.audio.VoiceMessageMetadata
 import network.columba.app.audio.VoiceMessagePlayerState
 import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.ui.model.AudioAttachmentUi
+import network.columba.app.navigation.ConversationNavigation
+import network.columba.app.ui.model.ThreadHeaderUi
+import network.columba.app.ui.model.ThreadHookUi
 import network.columba.app.ui.theme.MeshConnected
 import network.columba.app.ui.theme.MeshOffline
 import network.columba.app.ui.util.rememberLifecycleTickerMillis
@@ -378,27 +393,82 @@ fun MessagingScreen(
     onUpdatePyxisPackage: (Uri) -> Unit = {},
     fromNotification: Boolean = false,
     notificationEventId: Long = 0L,
+    initialThreadId: String? = null,
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
     val peerActivity by viewModel.peerActivity.collectAsStateWithLifecycle()
     val currentConversationHash by viewModel.currentConversationHash.collectAsStateWithLifecycle()
     val conversationLinkState by viewModel.conversationLinkState.collectAsStateWithLifecycle()
-    val listState = rememberLazyListState()
+    // Threads P2 state (every surface is gated by threads_enabled).
+    val threadsEnabled by viewModel.threadsEnabled.collectAsStateWithLifecycle()
+    val selectedThread by viewModel.selectedThread.collectAsStateWithLifecycle()
+    val threadPill by viewModel.threadPill.collectAsStateWithLifecycle()
+    val threadSheetState by viewModel.threadSheetState.collectAsStateWithLifecycle()
+    val threadHooks by viewModel.threadHooks.collectAsStateWithLifecycle()
+    val threadView by viewModel.threadView.collectAsStateWithLifecycle()
+    var showThreadSheet by remember { mutableStateOf(false) }
+    // Null when the flag is off: the screen behaves exactly like pre-P2.
+    val activeThread = if (threadsEnabled) selectedThread else null
+
+    // Threads P2: one scroll state per target so switching to a thread and
+    // back preserves Main's scroll position (spec §6.2).
+    val scrollStates = remember { mutableStateMapOf<String, LazyListState>() }
+    val listState =
+        remember(activeThread) {
+            scrollStates.getOrPut(activeThread ?: "main") { LazyListState() }
+        }
 
     var messageText by remember { mutableStateOf("") }
     // Track whether the initial draft has been restored to avoid overwriting user typing
     // Keyed to destinationHash so it resets when switching between conversations
     var draftRestored by remember(destinationHash) { mutableStateOf(false) }
+    // Threads P2: which target the composer currently holds text for; a chip
+    // switch retargets it to the new thread's draft (spec §6.7).
+    var composerThread by remember(destinationHash) { mutableStateOf<String?>(null) }
+    var composerThreadSet by remember(destinationHash) { mutableStateOf(false) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
 
     // Restore draft text when opening a conversation
     val draftText by viewModel.draftText.collectAsStateWithLifecycle()
-    LaunchedEffect(draftText, destinationHash) {
-        if (!draftRestored && draftText != null) {
-            messageText = draftText ?: ""
-            draftRestored = true
+    LaunchedEffect(draftText, destinationHash, activeThread) {
+        when {
+            composerThreadSet && composerThread != activeThread -> {
+                // Chip switch: the VM swaps draftText to the new target before
+                // announcing the selection, so reading it here is race-free.
+                messageText = draftText.orEmpty()
+                composerThread = activeThread
+            }
+            !draftRestored && draftText != null -> {
+                messageText = draftText ?: ""
+                draftRestored = true
+                composerThread = activeThread
+                composerThreadSet = true
+            }
+            !composerThreadSet -> {
+                composerThread = activeThread
+                composerThreadSet = true
+            }
+        }
+    }
+
+    // Threads P2: "Thread from here" prefills the composer with an editable quote.
+    LaunchedEffect(Unit) {
+        viewModel.threadComposerPrefill.collect { prefill ->
+            // Bound to the target it was created for: a switch while the root
+            // was persisting must not put the quote in another thread's draft.
+            if (viewModel.selectedThread.value != prefill.threadIdHex) return@collect
+            val merged =
+                if (messageText.isBlank()) {
+                    prefill.text
+                } else {
+                    messageText.trimEnd() + "\n" + prefill.text
+                }
+            messageText = merged
+            // Same path as typing: an untouched quoted draft must still be
+            // flushed to the thread when the user switches away.
+            viewModel.onDraftTextChanged(merged)
         }
     }
 
@@ -499,6 +569,10 @@ fun MessagingScreen(
     var isProbingLinkSpeed by remember { mutableStateOf(false) }
     var showVoiceMessageQualityDialog by remember { mutableStateOf(false) }
     var voiceMessageFormat by remember(destinationHash) { mutableStateOf(VoiceMessageFormat.DEFAULT) }
+
+    // Threads: app-bar rename of the open thread (threads-spec §6.2). Holds the
+    // thread id whose title is being edited; null closes the dialog.
+    var renameThreadId by remember { mutableStateOf<String?>(null) }
 
     // Location permission launcher
     val locationPermissionLauncher =
@@ -764,13 +838,18 @@ fun MessagingScreen(
 
     var showVoiceControls by remember { mutableStateOf(false) }
     var audioPermissionPermanentlyDenied by remember { mutableStateOf(false) }
+    // The collect coroutine outlives recompositions; read the live thread so a
+    // send completing after a thread switch cannot clear the NEW target's
+    // composer when both happen to hold the same text.
+    val currentActiveThread by rememberUpdatedState(activeThread)
     LaunchedEffect(destinationHash, viewModel) {
         viewModel.composerSendResult.collect { result ->
-            if (
+            val clearsComposer =
                 result.destinationHash == destinationHash &&
-                result.clearComposer &&
-                messageText == result.submittedText
-            ) {
+                    result.clearComposer &&
+                    messageText == result.submittedText &&
+                    result.threadId == currentActiveThread
+            if (clearsComposer) {
                 messageText = ""
                 showVoiceControls = false
             }
@@ -842,15 +921,17 @@ fun MessagingScreen(
         }
     }
 
-    // Track if we've done the initial scroll for this conversation
-    // Resets when switching to a different conversation
-    var hasScrolledToBottom by remember(destinationHash) { mutableStateOf(false) }
+    // Per-target initial-scroll flag: each thread (or Main) scrolls to the
+    // bottom once per conversation; returning to a target keeps the reader's
+    // position in that target's saved LazyListState.
+    val scrolledTargets = remember(destinationHash) { mutableStateMapOf<String, Boolean>() }
+    val scrollTargetKey = activeThread ?: "main"
 
     // Detect if user is at the bottom (index 0 with reverseLayout)
     // Wrapped in derivedStateOf to avoid recomposition on every scroll
     // Note: Use <= 1 instead of == 0 because when a new message arrives, it takes index 0
     // and the previously-newest message shifts to index 1 BEFORE the scroll effect runs
-    val isAtBottom by remember {
+    val isAtBottom by remember(listState) {
         derivedStateOf { listState.firstVisibleItemIndex <= 1 }
     }
 
@@ -866,10 +947,10 @@ fun MessagingScreen(
     // Initial scroll to bottom when messages first load for a conversation
     // This ensures opening a conversation always shows the most recent messages
     // Uses newestMessageId instead of itemCount to avoid triggering on pagination
-    LaunchedEffect(destinationHash, newestMessageId) {
-        if (newestMessageId != null && !hasScrolledToBottom) {
+    LaunchedEffect(destinationHash, activeThread, newestMessageId) {
+        if (newestMessageId != null && scrolledTargets[scrollTargetKey] != true) {
             listState.scrollToItem(0) // Instant scroll to index 0 (newest message)
-            hasScrolledToBottom = true
+            scrolledTargets[scrollTargetKey] = true
         }
     }
 
@@ -895,7 +976,7 @@ fun MessagingScreen(
         if (notifScrollCoordinator.shouldScroll()) {
             Log.d("MessagingScreen", "Notification entry: scrolling to newest message")
             listState.scrollToItem(0)
-            hasScrolledToBottom = true
+            scrolledTargets[scrollTargetKey] = true
         }
     }
 
@@ -906,7 +987,7 @@ fun MessagingScreen(
     // - itemCount changes when loading old messages during scroll → caused snap-back bug
     // - newestMessageId only changes when a NEW message arrives → correct behavior
     LaunchedEffect(newestMessageId) {
-        if (newestMessageId != null && hasScrolledToBottom) {
+        if (newestMessageId != null && scrolledTargets[scrollTargetKey] == true) {
             // Check if we should auto-scroll for this new message
             val newestMessage = pagingItems.itemSnapshotList.firstOrNull()
             val shouldScroll =
@@ -942,12 +1023,42 @@ fun MessagingScreen(
         viewModel.loadMessages(destinationHash, peerName)
     }
 
+    // Threads P2: apply the thread the route asked for (hook pill, sheet row,
+    // expanding-card thread row, "+ New" via NEW_THREAD_ARG, or the thread of
+    // the message a notification was tapped for). Keyed on [initialThreadId]
+    // too: a notification can reuse the entry that is already showing this
+    // conversation, and only its argument changes.
+    // "+ New" must create exactly one thread per saved entry: activity
+    // recreation re-runs the effect, and the reload resets the selection to
+    // Main, so the created id is saved and re-selected instead of re-created.
+    var startedThreadHex by rememberSaveable(destinationHash, initialThreadId) {
+        mutableStateOf<String?>(null)
+    }
+    LaunchedEffect(destinationHash, initialThreadId, currentConversationHash) {
+        if (currentConversationHash != destinationHash) return@LaunchedEffect
+        when (initialThreadId) {
+            null -> Unit
+            ConversationNavigation.NEW_THREAD_ARG -> {
+                val existing = startedThreadHex
+                // selectThread is idempotent, so re-applying after a reload is
+                // what restores the thread the user was reading.
+                if (existing != null) viewModel.selectThread(existing) else startedThreadHex = viewModel.startNewThread()
+            }
+            else -> viewModel.selectThread(initialThreadId)
+        }
+    }
+
     // Mark conversation as read continuously while viewing
     // Uses newestMessageId to only trigger on new messages, not pagination
     LaunchedEffect(destinationHash, newestMessageId) {
         if (newestMessageId != null) {
             viewModel.markAsRead(destinationHash)
         }
+    }
+
+    // Threads P2: back from a thread view returns to Main, keeping the chat.
+    BackHandler(enabled = activeThread != null) {
+        viewModel.selectThread(null)
     }
 
     // Handle back button when reaction mode is active
@@ -1247,6 +1358,26 @@ fun MessagingScreen(
                                     showTextSizeDialog = true
                                 },
                             )
+                            // Threads: rename the open thread from the app bar
+                            // (threads-spec §6.2 entry point; the sheet row's
+                            // `⋮ → Rename` is the other one). Main has no
+                            // `threads` row — its label is the resource default.
+                            val openThreadId = activeThread
+                            if (threadsEnabled && openThreadId != null) {
+                                DropdownMenuItem(
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = null,
+                                        )
+                                    },
+                                    text = { Text(stringResource(R.string.thread_action_rename)) },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        renameThreadId = openThreadId
+                                    },
+                                )
+                            }
                             HorizontalDivider()
                             DropdownMenuItem(
                                 leadingIcon = {
@@ -1283,6 +1414,17 @@ fun MessagingScreen(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
 
+            // Threads P2: the header pill (threads-spec §5.1) is the single
+            // thread control on this screen — it names the open target and
+            // opens the sheets switcher. Replaces the old chip bar.
+            if (threadsEnabled) {
+                ThreadPill(
+                    pill = threadPill,
+                    onClick = { showThreadSheet = true },
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
+                )
+            }
+
             // Messages + Input area using Google's official pattern
             Column(
                 modifier =
@@ -1290,6 +1432,15 @@ fun MessagingScreen(
                         .weight(1f)
                         .fillMaxWidth(),
             ) {
+                    // Threads P2: pinned root header for the thread view (spec §6.5).
+                    val threadHeader = threadView?.header
+                    if (activeThread != null && threadHeader != null) {
+                        ThreadPinnedHeader(
+                            header = threadHeader,
+                            replyCount = threadView?.replyCount ?: 0,
+                        )
+                    }
+
                 Box(
                     modifier =
                         Modifier
@@ -1400,6 +1551,8 @@ fun MessagingScreen(
                                             message = displayMessage,
                                             isFromMe = displayMessage.isFromMe,
                                             clipboardManager = clipboardManager,
+                                            threadHook = threadHooks[message.id],
+                                            onThreadHookClick = { viewModel.selectThread(it) },
                                             myIdentityHash = myIdentityHash,
                                             peerName = peerName,
                                             syncProgress = syncProgress,
@@ -1505,6 +1658,12 @@ fun MessagingScreen(
                 } else {
                     // Message Input Bar - at bottom of Column
                     MessageInputBar(
+                    placeholder =
+                        if (activeThread != null) {
+                            stringResource(R.string.thread_reply_placeholder)
+                        } else {
+                            null
+                        },
                     modifier =
                         Modifier
                             .fillMaxWidth(),
@@ -1734,6 +1893,17 @@ fun MessagingScreen(
                             null
                         },
                     onDelete = { showDeleteConfirmation = true },
+                    onThreadFromHere =
+                        if (threadsEnabled && activeThread == null) {
+                            {
+                                val rootContent =
+                                    pagingItems.itemSnapshotList
+                                        .find { it?.id == state.messageId }?.content.orEmpty()
+                                viewModel.startThreadFromMessage(state.messageId, rootContent)
+                            }
+                        } else {
+                            null
+                        },
                     onDismissStarted = {
                         // Show original message immediately when dismiss animation starts
                         viewModel.showOriginalMessage()
@@ -1870,6 +2040,51 @@ fun MessagingScreen(
                 showImageOptionsSheet = false
                 selectedImageMessageId = null
             },
+        )
+    }
+
+    // Threads P2: threads sheet (header pill entry point; chat-card "View all"
+    // opens the same sheet from the chat list).
+    if (showThreadSheet) {
+        ThreadSheet(
+            state = threadSheetState,
+            onDismiss = { showThreadSheet = false },
+            onThreadClick = { threadIdHex ->
+                showThreadSheet = false
+                viewModel.selectThread(threadIdHex)
+            },
+            onMainClick = { viewModel.selectThread(null) },
+            onCreateThread = {
+                showThreadSheet = false
+                viewModel.startNewThread()
+            },
+            onRename = viewModel::renameThread,
+            onMarkRead = viewModel::markThreadRead,
+            onArchive = viewModel::archiveThreads,
+            onUnarchive = viewModel::unarchiveThreads,
+            onReopenThread = viewModel::selectThread,
+            onDelete = viewModel::deleteThread,
+        )
+    }
+
+    // Rename the open thread from the chat app bar (threads-spec §6.2). Seeded
+    // with the stored local title, so "Reset to automatic" appears only when
+    // one exists — the same rules as the sheet's dialog.
+    val renameTarget = renameThreadId
+    if (renameTarget != null) {
+        val localTitle =
+            threadSheetState.allRows.firstOrNull { it.threadIdHex == renameTarget }?.title.orEmpty()
+        ThreadRenameDialog(
+            initialTitle = localTitle,
+            onConfirm = { newTitle ->
+                viewModel.renameThread(renameTarget, newTitle)
+                renameThreadId = null
+            },
+            onResetToAutomatic = {
+                viewModel.renameThread(renameTarget, null)
+                renameThreadId = null
+            },
+            onDismiss = { renameThreadId = null },
         )
     }
 
@@ -2092,6 +2307,9 @@ fun MessageBubble(
         width: Int,
         height: Int,
     ) -> Unit = { _, _, _, _, _, _, _, _ -> },
+    /** Threads P2: "N replies" hook under this bubble (Main roots only). */
+    threadHook: ThreadHookUi? = null,
+    onThreadHookClick: (threadIdHex: String) -> Unit = {},
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     val graphicsLayer = rememberGraphicsLayer()
@@ -2602,6 +2820,14 @@ fun MessageBubble(
                 modifier = Modifier.offset(y = (-8).dp),
             )
         }
+
+        // Threads P2: replies hook under the root bubble (spec §6.6).
+        threadHook?.let { hook ->
+            ThreadHookPill(
+                hook = hook,
+                onClick = { onThreadHookClick(hook.threadIdHex) },
+            )
+        }
     }
 }
 
@@ -2700,6 +2926,8 @@ fun MessageInputBar(
     isSending: Boolean = false,
     onAttachmentPanelToggle: () -> Unit = {},
     isAttachmentPanelActive: Boolean = false,
+    /** Threads P2: composer hint override when replying inside a thread. */
+    placeholder: String? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2940,7 +3168,7 @@ fun MessageInputBar(
                             Box {
                                 if (textFieldState.text.isEmpty()) {
                                     Text(
-                                        text = "Type a message...",
+                                        text = placeholder ?: stringResource(R.string.messaging_type_a_message),
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -3419,4 +3647,107 @@ private fun TextSizeDialog(
             }
         },
     )
+}
+
+/**
+ * Threads P2 pinned root header of the thread view (spec §6.5, mockup D2):
+ * the root message stays pinned above the replies, always as one line — root
+ * text (or the off-screen placeholder) plus the reply count. The card form
+ * cost ~90dp of viewport; one line keeps the root identifiable while the
+ * message list gets the space. A failed signature check keeps its warning as
+ * an inline icon (the full chip is on the message itself).
+ */
+@Composable
+private fun ThreadPinnedHeader(
+    header: ThreadHeaderUi,
+    replyCount: Int,
+) {
+    val text =
+        when (header) {
+            is ThreadHeaderUi.Root -> header.content
+            ThreadHeaderUi.OffScreen -> stringResource(R.string.thread_offscreen_placeholder)
+        }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (header is ThreadHeaderUi.Root && header.signatureVerified == false) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = UNVERIFIED_SENDER_TEXT,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier =
+                        Modifier
+                            .padding(start = 8.dp)
+                            .size(14.dp),
+                )
+            }
+            Text(
+                text = pluralStringResource(R.plurals.thread_replies_count, replyCount, replyCount),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 12.dp),
+            )
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+}
+
+/**
+ * Threads P2 "N replies" hook pill under Main root bubbles (spec §6.6):
+ * accent-colored, unread dot when the thread has unread replies, tap opens
+ * the thread.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ThreadHookPill(
+    hook: ThreadHookUi,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.padding(top = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Reply,
+                contentDescription = stringResource(R.string.thread_open_thread),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                text = pluralStringResource(R.plurals.thread_replies_count, hook.replyCount, hook.replyCount),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            if (hook.unreadCount > 0) {
+                Icon(
+                    imageVector = Icons.Default.Circle,
+                    contentDescription = stringResource(R.string.thread_unread_indicator),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(8.dp),
+                )
+            }
+        }
+    }
 }

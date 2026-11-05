@@ -117,6 +117,30 @@ class NotificationHelperTest {
             assertTrue("Notification should be posted", notifications.isNotEmpty())
         }
 
+    @Test
+    fun `notifyMessageReceived puts the thread id on the open intent`() =
+        runBlocking {
+            // When: a thread message is notified
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Thread reply",
+                isFavorite = false,
+                threadIdHex = "02000000000000000000000000000002",
+            )
+
+            // Then: tapping it carries the thread to the navigation layer
+            val notification =
+                shadowOf(notificationManager).allNotifications.single()
+            val openIntent =
+                shadowOf(notification.contentIntent).savedIntent
+            assertEquals(NotificationHelper.ACTION_OPEN_CONVERSATION, openIntent.action)
+            assertEquals(
+                "02000000000000000000000000000002",
+                openIntent.getStringExtra(NotificationHelper.EXTRA_THREAD_ID),
+            )
+        }
+
     // ========== Message Notification Preference Tests ==========
 
     @Test

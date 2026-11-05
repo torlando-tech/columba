@@ -1,0 +1,40 @@
+# lib/open-chat.yaml
+#
+# Shared prologue for the threads suite: open the conversation named
+# PEER_NAME from the Chats tab, then reset it to the Main thread and wait for
+# the header pill.
+#
+# The Main reset matters because the app remembers the last selected thread
+# for a chat while the process lives: without it, a flow starts in whatever
+# thread the previous flow left open (and its composer draft).
+#
+# The suite asserts thread UI only (never delivery), so the target just has to
+# exist as a conversation on the device; run-threads.sh takes its name as an
+# argument. Reaching a chat through Contacts does not work for a peer with no
+# stored announce (details shows "Node not found" and no Start Chat), and the
+# lxma:// deep link lands on Contacts, so the chats list is the stable entry.
+#
+# Params: APP_ID, PEER_NAME.
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: false
+- tapOn:
+    text: "Chats"
+- tapOn:
+    text: ${PEER_NAME}
+- extendedWaitUntil:
+    visible:
+      text: "Switch thread:.*"
+    timeout: 15000
+- tapOn:
+    text: "Switch thread:.*"
+- extendedWaitUntil:
+    visible: "Search threads"
+    timeout: 10000
+- tapOn:
+    text: "Main"
+- extendedWaitUntil:
+    visible:
+      text: "Switch thread: Main"
+    timeout: 15000

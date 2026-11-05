@@ -36,6 +36,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
@@ -65,12 +66,14 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import network.columba.app.ui.model.ReactionUi
+import network.columba.app.R
 import kotlinx.coroutines.launch
 
 /**
@@ -826,6 +829,8 @@ fun ReactionModeOverlay(
     onViewDetails: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
+    /** Threads P2: "Thread from here" (case 2). Null = action hidden (flag off or inside a thread). */
+    onThreadFromHere: (() -> Unit)? = null,
     /** Called when dismiss animation starts */
     onDismissStarted: () -> Unit = {},
     /** Called when dismiss animation completes */
@@ -929,6 +934,14 @@ fun ReactionModeOverlay(
             {
                 it()
                 // Note: Don't dismiss here - delete confirmation dialog handles its own dismiss
+            }
+        }
+
+    val wrappedOnThreadFromHere: (() -> Unit)? =
+        onThreadFromHere?.let {
+            {
+                it()
+                handleDismiss()
             }
         }
 
@@ -1039,6 +1052,7 @@ fun ReactionModeOverlay(
                     onSelectText = wrappedOnSelectText,
                     onViewDetails = wrappedOnViewDetails,
                     onRetry = wrappedOnRetry,
+                    onThreadFromHere = wrappedOnThreadFromHere,
                     onDelete = wrappedOnDelete,
                     modifier =
                         Modifier
@@ -1214,6 +1228,7 @@ private fun MessageActionButtons(
     onSelectText: (() -> Unit)? = null,
     onViewDetails: (() -> Unit)?,
     onRetry: (() -> Unit)?,
+    onThreadFromHere: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -1244,6 +1259,15 @@ private fun MessageActionButtons(
                 label = "Reply",
                 onClick = onReply,
             )
+
+            // Threads P2: start a thread from this message (Main view only)
+            if (onThreadFromHere != null) {
+                ReactionModeActionButton(
+                    icon = Icons.Default.Chat,
+                    label = stringResource(R.string.thread_from_here),
+                    onClick = onThreadFromHere,
+                )
+            }
 
             // Copy button (all messages)
             ReactionModeActionButton(

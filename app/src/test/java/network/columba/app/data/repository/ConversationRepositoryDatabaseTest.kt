@@ -144,9 +144,9 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
                 false,
                 messageDao.getMessageById("msg_sig_false", TEST_IDENTITY_HASH)?.signatureVerified,
             )
-            assertNull(
-                messageDao.getMessageById("msg_sig_null", TEST_IDENTITY_HASH)?.signatureVerified,
-            )
+            val savedLegacy = messageDao.getMessageById("msg_sig_null", TEST_IDENTITY_HASH)
+            assertNotNull("Legacy message should be saved", savedLegacy)
+            assertNull(savedLegacy!!.signatureVerified)
         }
 
     @Test

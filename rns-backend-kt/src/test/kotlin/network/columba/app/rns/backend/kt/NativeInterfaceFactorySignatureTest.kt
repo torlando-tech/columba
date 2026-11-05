@@ -16,7 +16,7 @@ import org.junit.Test
 class NativeInterfaceFactorySignatureTest {
     private fun tcpClient(mode: String, kissFraming: Boolean) =
         InterfaceConfig.TCPClient(
-            name = "tcp-$mode",
+            name = "tcp-test",
             enabled = true,
             targetHost = "127.0.0.1",
             targetPort = 4242,

@@ -213,6 +213,22 @@ class MessageMapperTest {
         assertNull(result.fieldsJson)
     }
 
+    /**
+     * The unverified-sender warning is gated on exactly `false`; a mapper that
+     * drops or coerces the flag (false -> null/true) silently disables the
+     * forgery warning, so pin all three states.
+     */
+    @Test
+    fun `toMessageUi carries signatureVerified false true and null unchanged`() {
+        val unverified = createMessage(TestMessageConfig(signatureVerified = false)).toMessageUi()
+        val verified = createMessage(TestMessageConfig(signatureVerified = true)).toMessageUi()
+        val legacy = createMessage(TestMessageConfig(signatureVerified = null)).toMessageUi()
+
+        assertEquals(false, unverified.signatureVerified)
+        assertEquals(true, verified.signatureVerified)
+        assertNull(legacy.signatureVerified)
+    }
+
     @Test
     fun `toMessageUi includes deliveryMethod and errorMessage`() {
         val message =
@@ -716,6 +732,7 @@ class MessageMapperTest {
         val deliveryMethod: String? = null,
         val errorMessage: String? = null,
         val replyToMessageId: String? = null,
+        val signatureVerified: Boolean? = null,
     )
 
     private fun createMessage(config: TestMessageConfig = TestMessageConfig()): Message =
@@ -730,6 +747,7 @@ class MessageMapperTest {
             deliveryMethod = config.deliveryMethod,
             errorMessage = config.errorMessage,
             replyToMessageId = config.replyToMessageId,
+            signatureVerified = config.signatureVerified,
         )
 
     private fun createTestBitmap() = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).asImageBitmap()

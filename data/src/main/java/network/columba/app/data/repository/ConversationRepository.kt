@@ -64,8 +64,10 @@ data class Message(
     val sentInterface: String? = null,
     // For received messages: whether the LXMF signature was verified against
     // the sender's known identity. false = potential forgery (sender identity
-    // unknown to us at receive time); null = sent by us, legacy rows, or the
-    // Python backend. See MessageEntity.signatureVerified for full semantics.
+    // unknown to us at receive time, or an invalid signature on the Python
+    // backend); null = sent by us or a pre-v10 legacy row. Both backends now
+    // forward a definite value for delivered messages. See
+    // MessageEntity.signatureVerified for full semantics.
     val signatureVerified: Boolean? = null,
     // DB-local per-target-message reactions aggregation. Flat shape:
     //   {"👍": ["sender_hex_1", ...], "❤️": [...]}

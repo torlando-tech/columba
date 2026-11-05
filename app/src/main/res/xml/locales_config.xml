@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Languages the app ships translations for. Android 13+ (API 33) lists these
+  in Settings > System > Languages > App languages, so the user can choose the
+  app language independently of the system language.
+  Keep in sync with the res/values-<lang> directories.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="ru" />
+</locale-config>

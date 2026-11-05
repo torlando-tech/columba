@@ -1,5 +1,7 @@
 package network.columba.app.micron
 
+import java.time.DateTimeException
+
 /**
  * Parser for Micron markup language used by NomadNet.
  *
@@ -20,6 +22,7 @@ package network.columba.app.micron
  * - `` `f `` reset foreground, `` `b `` reset background
  * - `` `c `` center, `` `l `` left, `` `r `` right, `` `a `` default alignment
  * - `` ` `` (backtick + backtick or end of token) reset all formatting
+ * - `` `T<seconds>`T `` / `` `T<seconds>|<format>`T `` timestamp, see [MicronTimestamp]
  */
 object MicronParser {
     private const val DEFAULT_FIELD_WIDTH = 24
@@ -334,6 +337,16 @@ object MicronParser {
                     continue
                 }
 
+                // Timestamp: `T<seconds>`T or `T<seconds>|<format>`T
+                if (cmd == 'T') {
+                    flushText()
+                    val timestamp = parseTimestamp(line, i)
+                    if (timestamp != null) elements.add(MicronElement.Text(timestamp.rendered, style))
+                    // The marker is always consumed; an unusable payload stays text.
+                    i = timestamp?.nextIndex ?: i + 2
+                    continue
+                }
+
                 // Unknown formatting command — consume backtick + command char
                 // (matches Python MicronParser.py lines 684-686: unrecognized
                 // chars in formatting mode are silently discarded)
@@ -362,6 +375,51 @@ object MicronParser {
         val alignment: MicronAlignment,
         val nextIndex: Int,
     )
+
+    /** A parsed timestamp construct: its rendered text and the index just past it. */
+    private data class Timestamp(
+        val rendered: String,
+        val nextIndex: Int,
+    )
+
+    /**
+     * Parses a `` `T `` construct whose opening marker is at [backtickIndex], or returns
+     * null when it is unusable: no closing marker, a payload that is not unix seconds, or
+     * an instant this platform cannot represent.
+     */
+    private fun parseTimestamp(
+        line: String,
+        backtickIndex: Int,
+    ): Timestamp? {
+        val markerLength = MicronTimestamp.MARKER.length
+        val body = backtickIndex + markerLength
+        val end = line.indexOf(MicronTimestamp.MARKER, body)
+        if (end < 0) return null
+
+        val payload = line.substring(body, end)
+        val separator = payload.indexOf('|')
+        val secondsText = if (separator < 0) payload else payload.substring(0, separator)
+        val format = if (separator < 0) "" else payload.substring(separator + 1)
+        val seconds = secondsText.trim().toLongOrNull() ?: return null
+
+        return renderTimestamp(seconds, format)?.let { Timestamp(it, end + markerLength) }
+    }
+
+    /**
+     * Renders [seconds], or null when the instant falls outside `java.time`'s calendar,
+     * which ends near year ±1e9 and so is reachable from a Long. Rendering a page must not
+     * throw on the seconds a page chose to name.
+     */
+    @Suppress("SwallowedException")
+    private fun renderTimestamp(
+        seconds: Long,
+        format: String,
+    ): String? =
+        try {
+            MicronTimestamp.formatUnix(seconds, format)
+        } catch (e: DateTimeException) {
+            null
+        }
 
     @Suppress("CyclomaticComplexMethod")
     private fun processFormatCommand(

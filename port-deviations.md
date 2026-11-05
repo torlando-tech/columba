@@ -42,3 +42,21 @@ unrestricted IP interfaces stay up while Wi-Fi-only and cellular-only interfaces
 safely filtered out. If Android exposes a deterministic underlying transport on the same
 default-network capabilities, that underlying transport wins. `NONE` is reserved for the
 absence of a live default route.
+
+---
+
+## Micron `` `T `` timestamp construct
+
+`MicronParser` understands `` `T<unix-seconds>`T `` and
+`` `T<unix-seconds>|<strftime-format>`T ``, which render an instant in the reader's own
+timezone. Python's `MicronParser.make_output` has no such construct — it consumes the
+marker and renders the payload as text — so a reader on the reference client sees raw
+seconds where Columba shows a local time.
+
+The construct is defined by the gonomadnet port, and its format language is POSIX strftime:
+the conversions Python 3's `time.strftime` accepts, so a page renders identically on every
+client that supports it. A page that does not use `` `T `` parses exactly as before.
+
+One divergence is accepted: an instant outside `java.time`'s calendar renders as its payload
+rather than as a year beyond it. `%Z` is read from Java's `z` formatter, since
+`ZoneId.getDisplayName` returns CLDR metazone titles (`ET` where strftime says `EDT`).

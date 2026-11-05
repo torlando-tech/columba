@@ -188,7 +188,7 @@ internal object NativeInterfaceFactory {
      * later edit must restart the interface to apply: the mode, plus KISS
      * framing for TCP clients (it selects the packet codec at construction).
      */
-    private fun configSignatureOf(config: InterfaceConfig): String =
+    internal fun configSignatureOf(config: InterfaceConfig): String =
         when (config) {
             is InterfaceConfig.AutoInterface -> config.mode
             is InterfaceConfig.TCPClient -> config.mode + if (config.kissFraming) "|kiss" else "|raw"

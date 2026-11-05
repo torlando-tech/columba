@@ -286,16 +286,7 @@ class PartialManager(
     }
 
     private fun buildFormDataJson(allowedFields: List<String>): String? {
-        val fields = formFields()
-        if (fields.isEmpty()) return null
-        // Match NomadNet TUI: only forward fields declared by the partial.
-        // "*" means all fields; empty list means no fields.
-        val filtered =
-            when {
-                "*" in allowedFields -> fields
-                allowedFields.isEmpty() -> emptyMap()
-                else -> fields.filterKeys { it in allowedFields }
-            }
+        val filtered = filterDeclaredFormFields(formFields(), allowedFields)
         if (filtered.isEmpty()) return null
         val json = JSONObject()
         for ((k, v) in filtered) {
@@ -304,3 +295,21 @@ class PartialManager(
         return json.toString()
     }
 }
+
+/**
+ * Match NomadNet TUI: only forward the form fields a partial explicitly declares.
+ *
+ * `"*"` means every field; an empty declaration means no fields (NomadNet's
+ * `partial` markup omits field names unless the author listed them). Sending
+ * undeclared fields leaks form state the page never asked for, and upstream
+ * Node.py keys its response on exactly the declared names.
+ */
+internal fun filterDeclaredFormFields(
+    available: Map<String, String>,
+    declaredFields: List<String>,
+): Map<String, String> =
+    when {
+        "*" in declaredFields -> available
+        declaredFields.isEmpty() -> emptyMap()
+        else -> available.filterKeys { it in declaredFields }
+    }

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
+import network.columba.app.rns.api.model.NodeType
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.RelayInfo
@@ -18,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -91,6 +93,13 @@ class ContactsViewModel
         private val _searchQuery = MutableStateFlow("")
         val searchQuery: StateFlow<String> = _searchQuery
 
+        // Contact-type filter state (GH issue #863). An empty set means "All":
+        // no restriction, so contacts that never announced — and therefore have
+        // no nodeType — stay visible. A non-empty set restricts the list to the
+        // selected [NodeType]s (PEER / NODE / PROPAGATION_NODE / PHONE).
+        private val _selectedContactTypes = MutableStateFlow<Set<NodeType>>(emptySet())
+        val selectedContactTypes: StateFlow<Set<NodeType>> = _selectedContactTypes.asStateFlow()
+
         // Current relay info (includes isAutoSelected for showing "(auto)" badge)
         val currentRelayInfo: StateFlow<RelayInfo?> = propagationNodeManager.currentRelay
 
@@ -116,23 +125,31 @@ class ContactsViewModel
             }
         }
 
-        // Filtered contacts based on search query
+        // Filtered contacts based on the search query and the contact-type chips
         val filteredContacts: StateFlow<List<EnrichedContact>> =
             combine(
                 contacts,
                 searchQuery,
-            ) { contacts, rawQuery ->
-                // The search field preserves trailing spaces while typing, so trim at
-                // match time (mirrors AnnounceStreamViewModel's query.trim() before SQL).
-                val query = rawQuery.trim()
-                if (query.isEmpty()) {
+                _selectedContactTypes,
+            ) { contacts, rawQuery, selectedTypes ->
+                if (rawQuery.isBlank() && selectedTypes.isEmpty()) {
                     contacts
                 } else {
+                    // The search field preserves trailing spaces while typing, so trim at
+                    // match time (mirrors AnnounceStreamViewModel's query.trim() before SQL).
+                    val query = rawQuery.trim()
+                    // Empty type set = All. `nodeType` is null for contacts that never
+                    // announced, so those only survive the unfiltered view.
+                    val typeNames = selectedTypes.mapTo(HashSet()) { it.name }
                     contacts.filter { contact ->
-                        contact.displayName.contains(query, ignoreCase = true) ||
-                            contact.destinationHash.contains(query, ignoreCase = true) ||
-                            contact.announceName?.contains(query, ignoreCase = true) == true ||
-                            contact.getTagsList().any { it.contains(query, ignoreCase = true) }
+                        val matchesQuery =
+                            query.isEmpty() ||
+                                contact.displayName.contains(query, ignoreCase = true) ||
+                                contact.destinationHash.contains(query, ignoreCase = true) ||
+                                contact.announceName?.contains(query, ignoreCase = true) == true ||
+                                contact.getTagsList().any { it.contains(query, ignoreCase = true) }
+                        val matchesType = typeNames.isEmpty() || contact.nodeType in typeNames
+                        matchesQuery && matchesType
                     }
                 }
             }.stateIn(
@@ -181,6 +198,14 @@ class ContactsViewModel
          */
         fun onSearchQueryChanged(query: String) {
             _searchQuery.value = query
+        }
+
+        /**
+         * Replace the contact-type filter. An empty set restores "All".
+         * Chips are exclusive, so callers normally pass a single type.
+         */
+        fun updateSelectedContactTypes(types: Set<NodeType>) {
+            _selectedContactTypes.value = types
         }
 
         /**

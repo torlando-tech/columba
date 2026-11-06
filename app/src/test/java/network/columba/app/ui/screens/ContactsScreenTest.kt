@@ -2,14 +2,18 @@ package network.columba.app.ui.screens
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import network.columba.app.data.db.entity.ContactStatus
+import network.columba.app.rns.api.model.NodeType
 import network.columba.app.service.RelayInfo
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.test.TestFactories
@@ -22,6 +26,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -29,6 +34,7 @@ import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowToast
 
 /**
  * Comprehensive UI tests for ContactsScreen.kt (1,473 lines).
@@ -1263,13 +1269,247 @@ class ContactsScreenTest {
         composeTestRule.onNodeWithText("No contacts yet").assertIsDisplayed()
     }
 
+    // ========== Contact-Type Filter + Announce actions (GH issue #863) ==========
+
+    @Test
+    fun contactsScreen_myContactsTab_displaysFilterToggle() {
+        val mockViewModel = createMockContactsViewModel()
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        // Default is expanded on non-compact heights (Robolectric's default
+        // window is 360x800dp), so the icon is the "hide" variant.
+        composeTestRule.onNodeWithContentDescription("Hide filters").assertIsDisplayed()
+    }
+
+    @Test
+    fun contactsScreen_myContactsTab_displaysAnnounceButton() {
+        val mockViewModel = createMockContactsViewModel()
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithContentDescription("Announce now").assertIsDisplayed()
+    }
+
+    @Test
+    fun contactsScreen_myContactsTab_announceButton_triggersAnnounce() {
+        val mockViewModel = createMockContactsViewModel()
+        val mockAnnounceViewModel = createMockAnnounceStreamViewModel()
+        val announceSuccessFlow = MutableStateFlow(false)
+        every { mockAnnounceViewModel.announceSuccess } returns announceSuccessFlow
+        every { mockAnnounceViewModel.triggerAnnounce() } answers { announceSuccessFlow.value = true }
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = mockAnnounceViewModel)
+        }
+
+        composeTestRule.onNodeWithContentDescription("Announce now").performClick()
+        composeTestRule.waitForIdle()
+
+        // The screen's success toast is the user-visible outcome of the click.
+        assertEquals("Announce sent!", ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test
+    fun contactsScreen_myContactsTab_displaysContactTypeChips() {
+        val mockViewModel = createMockContactsViewModel()
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithText("Peers").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Sites").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Relays").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Audio").assertIsDisplayed()
+    }
+
+    @Test
+    fun contactsScreen_myContactsTab_toolbarOrder_searchFilterAnnounceAdd() {
+        val mockViewModel = createMockContactsViewModel()
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        val searchLeft = toolbarLeft("Search")
+        val filterLeft = toolbarLeft("Hide filters")
+        val announceLeft = toolbarLeft("Announce now")
+        // "Add contact" also labels the FAB; the top bar copy is the topmost node.
+        val addLeft =
+            composeTestRule
+                .onAllNodesWithContentDescription("Add contact")
+                .fetchSemanticsNodes()
+                .minBy { it.boundsInRoot.top }
+                .boundsInRoot
+                .left
+
+        // My Contacts mirrors the Network tab's leading Search / Filter /
+        // Announce order, with its own Add action trailing.
+        assertTrue("Search must precede Filter", searchLeft < filterLeft)
+        assertTrue("Filter must precede Announce", filterLeft < announceLeft)
+        assertTrue("Announce must precede Add", announceLeft < addLeft)
+    }
+
+    private fun toolbarLeft(contentDescription: String): Float =
+        composeTestRule
+            .onNodeWithContentDescription(contentDescription)
+            .fetchSemanticsNode()
+            .boundsInRoot
+            .left
+
+    @Test
+    fun contactsScreen_contactTypeChip_selectsSingleType() {
+        val mockViewModel = createMockContactsViewModel()
+        bindFilters(mockViewModel)
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithText("Relays").performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("Relays").assertIsSelected()
+        composeTestRule.onNodeWithText("All").assertIsNotSelected()
+    }
+
+    @Test
+    fun contactsScreen_activeContactTypeChip_tapAgain_clearsFilter() {
+        val mockViewModel = createMockContactsViewModel()
+        bindFilters(mockViewModel, initialTypes = setOf(NodeType.PEER))
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithText("Peers").assertIsSelected()
+
+        composeTestRule.onNodeWithText("Peers").performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("All").assertIsSelected()
+    }
+
+    @Test
+    fun contactsScreen_filterIcon_collapsesContactTypeChips() {
+        val mockViewModel = createMockContactsViewModel()
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithContentDescription("Hide filters").performClick()
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithContentDescription("Show filters").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Peers").assertDoesNotExist()
+    }
+
+    @Test
+    fun contactsScreen_collapsedFilterWithActiveType_showsFilteringPill() {
+        val mockViewModel = createMockContactsViewModel(selectedContactTypes = setOf(NodeType.PEER))
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithContentDescription("Hide filters").performClick()
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
+
+        // Collapsed pill keeps the active filter visible and expands on tap.
+        composeTestRule.onNodeWithContentDescription("Active filters: Peers. Tap to edit.").assertIsDisplayed()
+    }
+
+    @Test
+    fun contactsScreen_typeFilterHidesAllContacts_showsFilterEmptyState() {
+        val mockViewModel =
+            createMockContactsViewModel(
+                groupedContacts = ContactGroups(null, emptyList(), emptyList()),
+            )
+        bindFilters(mockViewModel, initialTypes = setOf(NodeType.NODE))
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithText("No contacts match your filters").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No contacts yet").assertDoesNotExist()
+    }
+
+    @Test
+    fun contactsScreen_searchQueryHidesAllContacts_showsFilterEmptyState() {
+        // Search alone can empty the list; that must not read as an empty
+        // address book, and the recovery action must clear the query too.
+        val mockViewModel =
+            createMockContactsViewModel(
+                groupedContacts = ContactGroups(null, emptyList(), emptyList()),
+            )
+        bindFilters(mockViewModel, initialQuery = "zzz")
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithText("No contacts match your filters").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No contacts yet").assertDoesNotExist()
+    }
+
+    @Test
+    fun contactsScreen_filterEmptyState_clearFilters_restoresEmptyAddressBookState() {
+        val mockViewModel =
+            createMockContactsViewModel(
+                groupedContacts = ContactGroups(null, emptyList(), emptyList()),
+            )
+        // Both filters active: clearing only one would keep the list empty.
+        bindFilters(mockViewModel, initialTypes = setOf(NodeType.NODE), initialQuery = "zzz")
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithText("No contacts match your filters").assertIsDisplayed()
+
+        composeTestRule.onNodeWithText("Clear filters").performClick()
+        composeTestRule.waitForIdle()
+
+        // Both filters dropped -> the genuine "no contacts" state takes over.
+        composeTestRule.onNodeWithText("No contacts yet").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No contacts match your filters").assertDoesNotExist()
+    }
+
     // ========== Test Helpers ==========
+
+    /**
+     * Wires the mock's filter state (contact type + search query) to real flows
+     * so chip taps, typing and clearing land on observable UI state instead of
+     * only being recorded by the mock.
+     */
+    private fun bindFilters(
+        mockViewModel: ContactsViewModel,
+        initialTypes: Set<NodeType> = emptySet(),
+        initialQuery: String = "",
+    ) {
+        val typesFlow = MutableStateFlow(initialTypes)
+        val queryFlow = MutableStateFlow(initialQuery)
+        every { mockViewModel.selectedContactTypes } returns typesFlow
+        every { mockViewModel.updateSelectedContactTypes(any()) } answers { typesFlow.value = firstArg() }
+        every { mockViewModel.searchQuery } returns queryFlow
+        every { mockViewModel.onSearchQueryChanged(any()) } answers { queryFlow.value = firstArg() }
+    }
 
     @Suppress("NoRelaxedMocks") // ContactsViewModel is a complex ViewModel with many properties; explicit stubbing for all would be excessive
     private fun createMockContactsViewModel(
         groupedContacts: ContactGroups = ContactGroups(null, emptyList(), emptyList()),
         contactCount: Int = 0,
         searchQuery: String = "",
+        selectedContactTypes: Set<NodeType> = emptySet(),
         currentRelayInfo: RelayInfo? = null,
         isLoading: Boolean = false,
     ): ContactsViewModel {
@@ -1284,6 +1524,7 @@ class ContactsScreenTest {
             )
         every { mockViewModel.contactCount } returns MutableStateFlow(contactCount)
         every { mockViewModel.searchQuery } returns MutableStateFlow(searchQuery)
+        every { mockViewModel.selectedContactTypes } returns MutableStateFlow(selectedContactTypes)
         every { mockViewModel.currentRelayInfo } returns MutableStateFlow(currentRelayInfo)
 
         // Mock decodeQrCode to return null by default

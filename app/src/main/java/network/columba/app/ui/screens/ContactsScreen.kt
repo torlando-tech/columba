@@ -111,6 +111,7 @@ import network.columba.app.R
 import network.columba.app.data.db.entity.ContactStatus
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.ui.components.AddContactConfirmationDialog
+import network.columba.app.ui.components.ContactFilterChips
 import network.columba.app.ui.components.LocalWindowSize
 import network.columba.app.ui.components.ProfileIcon
 import network.columba.app.ui.components.simpleVerticalScrollbar
@@ -153,6 +154,7 @@ fun ContactsScreen(
     val contactsState by viewModel.contactsState.collectAsState()
     val contactCount by viewModel.contactCount.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val selectedContactTypes by viewModel.selectedContactTypes.collectAsState()
     val currentRelayInfo by viewModel.currentRelayInfo.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
     val contactsListState = rememberLazyListState()
@@ -171,12 +173,13 @@ fun ContactsScreen(
     var showNetworkOverflowMenu by remember { mutableStateOf(false) }
     var showClearAllAnnouncesDialog by remember { mutableStateOf(false) }
 
-    // Network tab filter-chip expand state — driven from the Filter icon in
-    // the top bar. Default: expanded except on compact-height windows
-    // (landscape phones), where two chip rows + the segmented tab + bottom
-    // nav eat the whole screen (GH issue #922). Keyed on heightSizeClass so
-    // rotation snaps back to the per-class default; the user's explicit
-    // toggle persists within a single orientation session.
+    // Filter-chip expand state — driven by the Filter icon in the top bar and
+    // shared by both tabs: My Contacts has one contact-type chip row, Network
+    // has the aspect + interface rows. Default: expanded except on
+    // compact-height windows (landscape phones), where the chip rows + the
+    // segmented tab + bottom nav eat the whole screen (GH issue #922). Keyed
+    // on heightSizeClass so rotation snaps back to the per-class default; the
+    // user's explicit toggle persists within a single orientation session.
     val heightSizeClass = LocalWindowSize.current.heightSizeClass
     var filtersExpanded by remember(heightSizeClass) {
         mutableStateOf(heightSizeClass != WindowHeightSizeClass.Compact)
@@ -270,7 +273,45 @@ fun ContactsScreen(
                                 contentDescription = if (isSearching) "Close search" else "Search",
                             )
                         }
-                        // My Contacts tab actions
+                        // Filter chips toggle — collapses the chip row(s) so
+                        // landscape / compact-height windows can see more of the
+                        // list (GH issue #922). Present on both tabs: My Contacts
+                        // filters by contact type, Network by aspect + interface
+                        // (GH issue #863).
+                        IconButton(onClick = { filtersExpanded = !filtersExpanded }) {
+                            Icon(
+                                imageVector =
+                                    if (filtersExpanded) {
+                                        Icons.Default.FilterAltOff
+                                    } else {
+                                        Icons.Default.FilterAlt
+                                    },
+                                contentDescription =
+                                    if (filtersExpanded) "Hide filters" else "Show filters",
+                            )
+                        }
+                        // Announce button — present on both tabs so the user can
+                        // announce without switching to the Network tab
+                        // (GH issue #863).
+                        IconButton(
+                            onClick = { announceViewModel.triggerAnnounce() },
+                            enabled = !isAnnouncing,
+                        ) {
+                            if (isAnnouncing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Campaign,
+                                    contentDescription = "Announce now",
+                                )
+                            }
+                        }
+                        // My Contacts tab action — kept last so the leading
+                        // Search / Filter / Announce order matches the Network
+                        // tab (GH issue #863).
                         if (selectedTab == ContactsTab.MY_CONTACTS) {
                             IconButton(onClick = { showAddContactSheet = true }) {
                                 Icon(
@@ -281,38 +322,6 @@ fun ContactsScreen(
                         }
                         // Network tab actions
                         if (selectedTab == ContactsTab.NETWORK) {
-                            // Filter chips toggle — collapses the chip rows so
-                            // landscape / compact-height windows can see more
-                            // of the announce list (GH issue #922).
-                            IconButton(onClick = { filtersExpanded = !filtersExpanded }) {
-                                Icon(
-                                    imageVector =
-                                        if (filtersExpanded) {
-                                            Icons.Default.FilterAltOff
-                                        } else {
-                                            Icons.Default.FilterAlt
-                                        },
-                                    contentDescription =
-                                        if (filtersExpanded) "Hide filters" else "Show filters",
-                                )
-                            }
-                            // Announce button
-                            IconButton(
-                                onClick = { announceViewModel.triggerAnnounce() },
-                                enabled = !isAnnouncing,
-                            ) {
-                                if (isAnnouncing) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        strokeWidth = 2.dp,
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Campaign,
-                                        contentDescription = "Announce now",
-                                    )
-                                }
-                            }
                             // Overflow menu
                             Box {
                                 IconButton(onClick = { showNetworkOverflowMenu = true }) {
@@ -437,6 +446,19 @@ fun ContactsScreen(
                         }
                     }
                 }
+
+                // Contact-type filter chips for My Contacts (GH issue #863),
+                // mirroring the Network tab's aspect chips. Sits directly below
+                // the tab row, i.e. exactly where the Network tab's chip rows
+                // render, so the Filter icon behaves the same on both tabs.
+                if (selectedTab == ContactsTab.MY_CONTACTS) {
+                    ContactFilterChips(
+                        selectedTypes = selectedContactTypes,
+                        onTypesChange = viewModel::updateSelectedContactTypes,
+                        expanded = filtersExpanded,
+                        onExpandRequest = { filtersExpanded = true },
+                    )
+                }
             }
         },
         floatingActionButton = {
@@ -460,9 +482,32 @@ fun ContactsScreen(
                     contactsState.groupedContacts.relay != null ||
                         contactsState.groupedContacts.pinned.isNotEmpty() ||
                         contactsState.groupedContacts.all.isNotEmpty()
+                // Contacts exist but the active filters — contact type and/or
+                // search query — hide all of them. Distinct from the "No
+                // contacts yet" state below so a filter never reads as an empty
+                // address book (GH issue #863).
+                val filtersHideEverything =
+                    !hasContacts &&
+                        !contactsState.isLoading &&
+                        (searchQuery.isNotBlank() || selectedContactTypes.isNotEmpty())
                 when {
                     contactsState.isLoading && !hasContacts -> {
                         LoadingContactsState(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(paddingValues),
+                        )
+                    }
+                    filtersHideEverything -> {
+                        NoContactsMatchFilterState(
+                            // Clear both filters: either one alone can still hide
+                            // every contact, which would strand the user on a
+                            // still-empty list.
+                            onClearFilters = {
+                                viewModel.onSearchQueryChanged("")
+                                viewModel.updateSelectedContactTypes(emptySet())
+                            },
                             modifier =
                                 Modifier
                                     .fillMaxSize()
@@ -1420,6 +1465,42 @@ fun EmptyContactsState(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             modifier = Modifier.padding(horizontal = 32.dp),
         )
+    }
+}
+
+/**
+ * Shown when the active filters (contact type and/or search query) hide every
+ * saved contact (GH issue #863). Kept distinct from [EmptyContactsState] so a
+ * filter never reads as an empty address book; the chip row above stays visible
+ * and [onClearFilters] drops both filters to restore the full list.
+ */
+@Composable
+fun NoContactsMatchFilterState(
+    onClearFilters: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Default.FilterAltOff,
+            contentDescription = null,
+            modifier = Modifier.size(72.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "No contacts match your filters",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        TextButton(onClick = onClearFilters) {
+            Text("Clear filters")
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 package network.columba.app.notifications
 
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -18,6 +19,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import network.columba.app.MainActivity
 import network.columba.app.R
 import network.columba.app.data.model.InterfaceType
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -48,6 +50,7 @@ class NotificationHelper
             private const val NOTIFICATION_ID_ANNOUNCE = 2000
             private const val NOTIFICATION_ID_BLE = 3000
             private const val NOTIFICATION_TAG_MESSAGE_PREFIX = "message:"
+
 
             // Intent actions
             const val ACTION_OPEN_ANNOUNCE = "network.columba.app.ACTION_OPEN_ANNOUNCE"
@@ -155,6 +158,9 @@ class NotificationHelper
         ) {
             if (!shouldNotifyMessage(destinationHash, isFavorite, threadIdHex)) return
 
+            // Read once per post so a settings change applies to the next notification.
+            val privacyLevel = settingsRepository.notificationPrivacyLevelFlow.first()
+
             // Create intent to open the conversation
             // Use SINGLE_TOP to reuse existing activity via onNewIntent (avoids splash screen flash)
             val openIntent =
@@ -182,18 +188,13 @@ class NotificationHelper
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
-            // Create notification
             val notification =
-                NotificationCompat
-                    .Builder(context, CHANNEL_ID_MESSAGES)
-                    .setSmallIcon(R.drawable.ic_notification_stat)
-                    .setContentTitle(peerName)
-                    .setContentText(messagePreview)
-                    .setPriority(NotificationCompat.PRIORITY_HIGH)
-                    .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-                    .setAutoCancel(true)
-                    .setContentIntent(openPendingIntent)
-                    .build()
+                buildMessageNotification(
+                    privacyLevel = privacyLevel,
+                    peerName = peerName,
+                    messagePreview = messagePreview,
+                    contentIntent = openPendingIntent,
+                )
 
             try {
                 notificationManager.notify(
@@ -205,6 +206,66 @@ class NotificationHelper
                 // Permission was revoked
             }
         }
+
+        /**
+         * Build the message notification for [privacyLevel].
+         *
+         * [NotificationPrivacyLevel.FULL] is the only branch that passes [messagePreview] to
+         * Android. The other levels build a notification whose title and text are both fixed
+         * strings, so the message text never reaches the notification object — and therefore
+         * never reaches the lock screen, the system's notification history, or any app
+         * listening for notifications.
+         */
+        private fun buildMessageNotification(
+            privacyLevel: NotificationPrivacyLevel,
+            peerName: String,
+            messagePreview: String,
+            contentIntent: PendingIntent,
+        ): Notification {
+            // Used as the body (NAME_ONLY) or title (NONE); never derived from the preview.
+            val genericText = context.getString(R.string.notif_generic_message)
+            val title: String
+            val text: String?
+            when (privacyLevel) {
+                NotificationPrivacyLevel.FULL -> {
+                    title = peerName
+                    text = messagePreview
+                }
+                NotificationPrivacyLevel.NAME_ONLY -> {
+                    title = peerName
+                    text = genericText
+                }
+                NotificationPrivacyLevel.NONE -> {
+                    title = genericText
+                    text = null
+                }
+            }
+
+            val builder = messageNotificationBuilder(title, text, contentIntent)
+            if (privacyLevel != NotificationPrivacyLevel.FULL) {
+                // Marks the notification sensitive on secure lock screens and supplies a
+                // redacted twin for them. Both versions are built from the same generic
+                // strings; the preview is never part of either.
+                builder.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                builder.setPublicVersion(messageNotificationBuilder(title, text, contentIntent).build())
+            }
+            return builder.build()
+        }
+
+        private fun messageNotificationBuilder(
+            title: String,
+            text: String?,
+            contentIntent: PendingIntent,
+        ): NotificationCompat.Builder =
+            NotificationCompat
+                .Builder(context, CHANNEL_ID_MESSAGES)
+                .setSmallIcon(R.drawable.ic_notification_stat)
+                .setContentTitle(title)
+                .apply { text?.let { setContentText(it) } }
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setAutoCancel(true)
+                .setContentIntent(contentIntent)
 
         /**
          * Extract a user-friendly interface label from the raw interface name.
@@ -464,6 +525,20 @@ class NotificationHelper
                 messageNotificationTag(destinationHash),
                 NOTIFICATION_ID_MESSAGE,
             )
+        }
+
+        /**
+         * Cancel every posted message notification.
+         *
+         * Called when the message privacy level is tightened. A notification already in the
+         * shade keeps whatever text it was built with until it is dismissed, and the
+         * system's notification history cannot be rewritten from here. Announce, BLE and
+         * foreground-service notifications are untouched.
+         */
+        fun cancelMessageNotifications() {
+            notificationManager.activeNotifications
+                .filter { it.tag?.startsWith(NOTIFICATION_TAG_MESSAGE_PREFIX) == true }
+                .forEach { notificationManager.cancel(it.tag, it.id) }
         }
 
         /**

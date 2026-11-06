@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -1326,6 +1327,40 @@ class ContactsScreenTest {
         composeTestRule.onNodeWithText("Relays").assertIsDisplayed()
         composeTestRule.onNodeWithText("Audio").assertIsDisplayed()
     }
+
+    @Test
+    fun contactsScreen_myContactsTab_toolbarOrder_searchFilterAnnounceAdd() {
+        val mockViewModel = createMockContactsViewModel()
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        val searchLeft = toolbarLeft("Search")
+        val filterLeft = toolbarLeft("Hide filters")
+        val announceLeft = toolbarLeft("Announce now")
+        // "Add contact" also labels the FAB; the top bar copy is the topmost node.
+        val addLeft =
+            composeTestRule
+                .onAllNodesWithContentDescription("Add contact")
+                .fetchSemanticsNodes()
+                .minBy { it.boundsInRoot.top }
+                .boundsInRoot
+                .left
+
+        // My Contacts mirrors the Network tab's leading Search / Filter /
+        // Announce order, with its own Add action trailing.
+        assertTrue("Search must precede Filter", searchLeft < filterLeft)
+        assertTrue("Filter must precede Announce", filterLeft < announceLeft)
+        assertTrue("Announce must precede Add", announceLeft < addLeft)
+    }
+
+    private fun toolbarLeft(contentDescription: String): Float =
+        composeTestRule
+            .onNodeWithContentDescription(contentDescription)
+            .fetchSemanticsNode()
+            .boundsInRoot
+            .left
 
     @Test
     fun contactsScreen_contactTypeChip_selectsSingleType() {

@@ -273,15 +273,6 @@ fun ContactsScreen(
                                 contentDescription = if (isSearching) "Close search" else "Search",
                             )
                         }
-                        // My Contacts tab actions
-                        if (selectedTab == ContactsTab.MY_CONTACTS) {
-                            IconButton(onClick = { showAddContactSheet = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = "Add contact",
-                                )
-                            }
-                        }
                         // Filter chips toggle — collapses the chip row(s) so
                         // landscape / compact-height windows can see more of the
                         // list (GH issue #922). Present on both tabs: My Contacts
@@ -315,6 +306,17 @@ fun ContactsScreen(
                                 Icon(
                                     imageVector = Icons.Default.Campaign,
                                     contentDescription = "Announce now",
+                                )
+                            }
+                        }
+                        // My Contacts tab action — kept last so the leading
+                        // Search / Filter / Announce order matches the Network
+                        // tab (GH issue #863).
+                        if (selectedTab == ContactsTab.MY_CONTACTS) {
+                            IconButton(onClick = { showAddContactSheet = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add contact",
                                 )
                             }
                         }

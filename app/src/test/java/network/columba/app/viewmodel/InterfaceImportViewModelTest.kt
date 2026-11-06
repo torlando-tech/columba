@@ -192,10 +192,25 @@ class InterfaceImportViewModelTest {
             viewModel.importSelected()
             runCurrent()
             viewModel.close()
-            viewModel.open("")
+            viewModel.open(
+                """
+                [[One]]
+                  type = TCPClientInterface
+                  target_host = 10.0.0.21
+                  target_port = 4242
+
+                [[Two]]
+                  type = TCPClientInterface
+                  target_host = 10.0.0.22
+                  target_port = 4242
+                """.trimIndent(),
+            )
             runCurrent()
 
             assertTrue(viewModel.state.value.isImporting)
+            assertEquals(2, viewModel.state.value.items.size)
+            viewModel.toggle(0)
+            assertFalse(viewModel.state.value.items[0].selected)
             viewModel.importSelected()
             runCurrent()
             coVerify(exactly = 1) { importManager.importInterfaces(any()) }
@@ -206,6 +221,9 @@ class InterfaceImportViewModelTest {
             assertTrue(viewModel.state.value.isOpen)
             assertFalse(viewModel.state.value.isImporting)
             assertEquals(0, viewModel.state.value.importedCount)
+            assertEquals(2, viewModel.state.value.items.size)
+            assertFalse(viewModel.state.value.items[0].selected)
+            assertTrue(viewModel.state.value.items[1].selected)
         }
 
     @Test

@@ -1330,7 +1330,7 @@ class ContactsScreenTest {
     @Test
     fun contactsScreen_contactTypeChip_selectsSingleType() {
         val mockViewModel = createMockContactsViewModel()
-        bindContactTypeFilter(mockViewModel)
+        bindFilters(mockViewModel)
 
         composeTestRule.setContent {
             ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
@@ -1346,7 +1346,7 @@ class ContactsScreenTest {
     @Test
     fun contactsScreen_activeContactTypeChip_tapAgain_clearsFilter() {
         val mockViewModel = createMockContactsViewModel()
-        bindContactTypeFilter(mockViewModel, initialTypes = setOf(NodeType.PEER))
+        bindFilters(mockViewModel, initialTypes = setOf(NodeType.PEER))
 
         composeTestRule.setContent {
             ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
@@ -1393,57 +1393,80 @@ class ContactsScreenTest {
     }
 
     @Test
-    fun contactsScreen_filterHidesAllContacts_showsFilterEmptyState() {
+    fun contactsScreen_typeFilterHidesAllContacts_showsFilterEmptyState() {
         val mockViewModel =
             createMockContactsViewModel(
                 groupedContacts = ContactGroups(null, emptyList(), emptyList()),
-                selectedContactTypes = setOf(NodeType.NODE),
             )
+        bindFilters(mockViewModel, initialTypes = setOf(NodeType.NODE))
 
         composeTestRule.setContent {
             ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
-        composeTestRule.onNodeWithText("No contacts match this filter").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No contacts match your filters").assertIsDisplayed()
         composeTestRule.onNodeWithText("No contacts yet").assertDoesNotExist()
     }
 
     @Test
-    fun contactsScreen_filterEmptyState_showAllContacts_restoresEmptyAddressBookState() {
+    fun contactsScreen_searchQueryHidesAllContacts_showsFilterEmptyState() {
+        // Search alone can empty the list; that must not read as an empty
+        // address book, and the recovery action must clear the query too.
         val mockViewModel =
             createMockContactsViewModel(
                 groupedContacts = ContactGroups(null, emptyList(), emptyList()),
             )
-        bindContactTypeFilter(mockViewModel, initialTypes = setOf(NodeType.NODE))
+        bindFilters(mockViewModel, initialQuery = "zzz")
 
         composeTestRule.setContent {
             ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
-        composeTestRule.onNodeWithText("No contacts match this filter").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No contacts match your filters").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No contacts yet").assertDoesNotExist()
+    }
 
-        composeTestRule.onNodeWithText("Show all contacts").performClick()
+    @Test
+    fun contactsScreen_filterEmptyState_clearFilters_restoresEmptyAddressBookState() {
+        val mockViewModel =
+            createMockContactsViewModel(
+                groupedContacts = ContactGroups(null, emptyList(), emptyList()),
+            )
+        // Both filters active: clearing only one would keep the list empty.
+        bindFilters(mockViewModel, initialTypes = setOf(NodeType.NODE), initialQuery = "zzz")
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithText("No contacts match your filters").assertIsDisplayed()
+
+        composeTestRule.onNodeWithText("Clear filters").performClick()
         composeTestRule.waitForIdle()
 
-        // Filter cleared -> the genuine "no contacts" state takes over.
+        // Both filters dropped -> the genuine "no contacts" state takes over.
         composeTestRule.onNodeWithText("No contacts yet").assertIsDisplayed()
-        composeTestRule.onNodeWithText("No contacts match this filter").assertDoesNotExist()
+        composeTestRule.onNodeWithText("No contacts match your filters").assertDoesNotExist()
     }
 
     // ========== Test Helpers ==========
 
     /**
-     * Wires the mock's contact-type filter to a real flow so chip taps land on
-     * observable UI state (chip selection / list state) instead of only being
-     * recorded by the mock.
+     * Wires the mock's filter state (contact type + search query) to real flows
+     * so chip taps, typing and clearing land on observable UI state instead of
+     * only being recorded by the mock.
      */
-    private fun bindContactTypeFilter(
+    private fun bindFilters(
         mockViewModel: ContactsViewModel,
         initialTypes: Set<NodeType> = emptySet(),
+        initialQuery: String = "",
     ) {
-        val flow = MutableStateFlow(initialTypes)
-        every { mockViewModel.selectedContactTypes } returns flow
-        every { mockViewModel.updateSelectedContactTypes(any()) } answers { flow.value = firstArg() }
+        val typesFlow = MutableStateFlow(initialTypes)
+        val queryFlow = MutableStateFlow(initialQuery)
+        every { mockViewModel.selectedContactTypes } returns typesFlow
+        every { mockViewModel.updateSelectedContactTypes(any()) } answers { typesFlow.value = firstArg() }
+        every { mockViewModel.searchQuery } returns queryFlow
+        every { mockViewModel.onSearchQueryChanged(any()) } answers { queryFlow.value = firstArg() }
     }
 
     @Suppress("NoRelaxedMocks") // ContactsViewModel is a complex ViewModel with many properties; explicit stubbing for all would be excessive

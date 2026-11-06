@@ -480,11 +480,14 @@ fun ContactsScreen(
                     contactsState.groupedContacts.relay != null ||
                         contactsState.groupedContacts.pinned.isNotEmpty() ||
                         contactsState.groupedContacts.all.isNotEmpty()
-                // Contacts exist but the contact-type filter hides all of them.
-                // Distinct from the "No contacts yet" state below so a filter
-                // never reads as an empty address book (GH issue #863).
-                val filterHidesEverything =
-                    !hasContacts && !contactsState.isLoading && selectedContactTypes.isNotEmpty()
+                // Contacts exist but the active filters — contact type and/or
+                // search query — hide all of them. Distinct from the "No
+                // contacts yet" state below so a filter never reads as an empty
+                // address book (GH issue #863).
+                val filtersHideEverything =
+                    !hasContacts &&
+                        !contactsState.isLoading &&
+                        (searchQuery.isNotBlank() || selectedContactTypes.isNotEmpty())
                 when {
                     contactsState.isLoading && !hasContacts -> {
                         LoadingContactsState(
@@ -494,9 +497,15 @@ fun ContactsScreen(
                                     .padding(paddingValues),
                         )
                     }
-                    filterHidesEverything -> {
+                    filtersHideEverything -> {
                         NoContactsMatchFilterState(
-                            onClearFilter = { viewModel.updateSelectedContactTypes(emptySet()) },
+                            // Clear both filters: either one alone can still hide
+                            // every contact, which would strand the user on a
+                            // still-empty list.
+                            onClearFilters = {
+                                viewModel.onSearchQueryChanged("")
+                                viewModel.updateSelectedContactTypes(emptySet())
+                            },
                             modifier =
                                 Modifier
                                     .fillMaxSize()
@@ -1458,14 +1467,14 @@ fun EmptyContactsState(modifier: Modifier = Modifier) {
 }
 
 /**
- * Shown when a contact-type filter (GH issue #863) hides every saved contact.
- * Kept distinct from [EmptyContactsState] so a filter never reads as an empty
- * address book; the chip row above stays visible and [onClearFilter] restores
- * the full list.
+ * Shown when the active filters (contact type and/or search query) hide every
+ * saved contact (GH issue #863). Kept distinct from [EmptyContactsState] so a
+ * filter never reads as an empty address book; the chip row above stays visible
+ * and [onClearFilters] drops both filters to restore the full list.
  */
 @Composable
 fun NoContactsMatchFilterState(
-    onClearFilter: () -> Unit,
+    onClearFilters: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -1481,14 +1490,14 @@ fun NoContactsMatchFilterState(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "No contacts match this filter",
+            text = "No contacts match your filters",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(8.dp))
-        TextButton(onClick = onClearFilter) {
-            Text("Show all contacts")
+        TextButton(onClick = onClearFilters) {
+            Text("Clear filters")
         }
     }
 }

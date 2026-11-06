@@ -58,3 +58,35 @@ off the `kotlinBackend` flavor's classpath entirely. `:rns-backend-py` only
 reaches a build through `:rns-host`'s `pythonBackendImplementation` edge — a
 `kotlinBackend` build configures this module but never executes its Chaquopy
 tasks.
+
+## Never do work on an RNS-allocated callback thread
+
+Upstream RNS allocates a **fresh OS thread for every event** it hands to a
+registered callback — `Transport.receive()` spawns one thread per announce per
+registered announce handler, `Interface` spawns one per held-announce release,
+and so on. With LXMF registering two announce handlers (delivery +
+propagation) and `event_bridge.py` one, a mesh announce burst of N
+destinations is ~3N threads. Whatever a handler does inline keeps its thread
+alive, so a burst large enough (a peer replaying its announce buffer, a
+device with a dozen BLE links) exhausts the process's thread slots: the next
+`pthread_create` throws `OutOfMemoryError: pthread_create (1040KB max stack)
+failed: Try again`, the `:reticulum` process dies, and every interface goes
+down with it (columba#1228; Sentry `COLUMBA-E6/E2/DB/DZ/DP/EF`).
+
+The rule: **a callback the upstream stack calls must return immediately.**
+Hand the raw event to a module-level worker on a bounded queue and do the
+translation / JNI hop there. `_AnnounceHandler.received_announce` →
+`_enqueue_announce` → `_announce_worker` → `_dispatch_announce` is the worked
+example (one worker, FIFO, bounded queue that sheds announcements — with a
+rate-limited log — only when the Kotlin consumer is genuinely wedged). Tests
+that assert on emitted payloads need `_flush_announce_queue()` first.
+
+Shedding is a deliberate last resort, not a normal path: the announce stream
+already drops announcements it cannot buffer Kotlin-side, and dropping under
+a wedged consumer is far better than dying.
+
+Teardown fences as well as drains: `deregister_callbacks()` runs
+`_reset_announce_dispatch()`, which bumps the dispatch generation and discards
+the backlog, so an announce queued against a stopped stack is never delivered
+to the stack that replaces it (it would otherwise be persisted with the
+restart's timestamp and show up as fresh peer activity).

@@ -292,6 +292,52 @@ class OnboardingViewModelPermissionsTest {
         }
 
     @Test
+    fun checkBlePermissionsStatus_marksDeniedAfterGrantThenRevoke() =
+        runTest {
+            // Issue #901: grant BLE via the launcher, then revoke it in system
+            // Settings. The revoke delivers only an ON_RESUME — no launcher result —
+            // so the re-check must flip the card to the red denied state on its own.
+            stubBlePermissionsAllGranted()
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.onBlePermissionsResult(allGranted = true, anyDenied = false)
+            advanceUntilIdle()
+
+            stubBlePermissionsScanDenied()
+            viewModel.checkBlePermissionsStatus(context)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.blePermissionsGranted)
+                assertTrue(
+                    "Revoked-after-grant must surface the denied state",
+                    state.blePermissionsDenied,
+                )
+            }
+        }
+
+    @Test
+    fun checkBlePermissionsStatus_marksDeniedWhenGrantWasOnlyObservedByResume() =
+        runTest {
+            // Same revoke handling when the initial grant was observed by an
+            // ON_RESUME re-check rather than the launcher callback (no process death,
+            // but the launcher result was never replayed).
+            stubBlePermissionsAllGranted()
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.checkBlePermissionsStatus(context)
+            advanceUntilIdle()
+
+            stubBlePermissionsScanDenied()
+            viewModel.checkBlePermissionsStatus(context)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.state.value.blePermissionsGranted)
+            assertTrue(viewModel.state.value.blePermissionsDenied)
+        }
+
+    @Test
     fun checkBlePermissionsStatus_doesNotMutateSelectedInterfaces() =
         runTest {
             // Pre-populate selectedInterfaces with BLE; then run the on-resume re-check

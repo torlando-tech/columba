@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import network.columba.app.data.config.InterfaceConfigCodec
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.repository.BleStatusRepository
@@ -623,6 +624,20 @@ class InterfaceManagementViewModel
                 showError("Failed to load interface: ${e.message}")
             }
         }
+
+        /**
+         * Render an interface as a portable Reticulum config snippet for
+         * "copy/share config". Returns null for interfaces that are bound to
+         * this device (Bluetooth LE, Bluetooth/USB RNode) and cannot be
+         * reproduced elsewhere.
+         */
+        fun exportConfigText(interfaceEntity: InterfaceEntity): String? =
+            try {
+                InterfaceConfigCodec.renderSnippet(interfaceRepository.entityToConfig(interfaceEntity))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to render config for '${interfaceEntity.name}': ${e.message}", e)
+                null
+            }
 
         /**
          * Hide the add/edit dialog.

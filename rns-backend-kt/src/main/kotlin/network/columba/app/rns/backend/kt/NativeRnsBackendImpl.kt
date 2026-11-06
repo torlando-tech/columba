@@ -348,21 +348,21 @@ class NativeRnsBackendImpl(
         get() = callCoordinator.isPttActive
 
     /**
-     * Bounded poller mirroring the active LXST codec-profile abbreviation
-     * while a call is in progress. Reads [NativeCallManager.telephone]'s
-     * `activeProfile` (guarding `lateinit` and the null manager window), so it
-     * tracks both local-initiated and remote-initiated `PREFERRED_PROFILE`
-     * switches. Emits `null` when no call is active or the manager is absent.
+     * Bounded poller mirroring the active LXST codec-profile id while a call
+     * is in progress. Reads [NativeCallManager.telephone]'s `activeProfile`
+     * (guarding `lateinit` and the null manager window), so it tracks both
+     * local-initiated and remote-initiated `PREFERRED_PROFILE` switches.
+     * Emits `null` when no call is active or the manager is absent.
      */
-    private val activeProfileObserver =
-        PeriodicStateObserver<String?>(
+    private val activeProfileCodeObserver =
+        PeriodicStateObserver<Int?>(
             scope = telephonyRelayScope,
             pollIntervalMs = 500L,
             isCallInProgress = { callCoordinator.hasActiveCall() },
-            reader = { callManager?.activeProfileAbbreviation() },
+            reader = { callManager?.activeProfileCode() },
         )
-    override val activeProfile: StateFlow<String?>
-        get() = activeProfileObserver.state
+    override val activeProfileCode: StateFlow<Int?>
+        get() = activeProfileCodeObserver.state
 
     /**
      * Bounded poller mirroring the active LXST call-mode abbreviation (FDX/HDX)
@@ -2232,12 +2232,12 @@ class NativeRnsBackendImpl(
         }
     }
 
-    override suspend fun cycleCallProfile() {
+    override suspend fun switchCallProfile(profileCode: Int) {
         withContext(Dispatchers.IO) {
             try {
-                callManager?.cycleProfile()
+                callManager?.switchProfile(profileCode)
             } catch (e: Exception) {
-                Log.w(TAG, "Ignored error cycling LXST profile: $e")
+                Log.w(TAG, "Ignored error switching LXST profile to 0x${profileCode.toString(16)}: $e")
             }
         }
     }

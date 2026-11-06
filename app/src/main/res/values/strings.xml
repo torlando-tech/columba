@@ -416,4 +416,29 @@
         <item quantity="other">%1$d threads restored</item>
     </plurals>
     <string name="thread_rename_reset">Reset to automatic</string>
+    <!-- Interface config paste / share -->
+    <string name="interface_paste_config">Paste configuration</string>
+    <string name="interface_paste_config_description">Import interfaces copied from rns.fyi, rns.recipes or a friend</string>
+    <string name="copy_interface_config">Copy config</string>
+    <string name="share_interface_config">Share config</string>
+    <string name="interface_config_copied">Config copied to clipboard</string>
+    <string name="interface_config_import_title">Paste interface config</string>
+    <string name="interface_config_import_explainer">Paste a Reticulum interface section. Works with snippets copied from rns.fyi, rns.recipes, or a friend.</string>
+    <string name="interface_config_import_field_label">Interface config</string>
+    <string name="interface_config_import_paste_clipboard">Paste from clipboard</string>
+    <string name="interface_config_import_checking">Checking existing interfaces…</string>
+    <string name="interface_config_import_found_one">1 interface found</string>
+    <string name="interface_config_import_found_many">%1$d interfaces found</string>
+    <string name="interface_config_import_none_found">No importable interfaces found in this text.</string>
+    <string name="interface_config_import_add_one">Add interface</string>
+    <string name="interface_config_import_add_many">Add %1$d interfaces</string>
+    <string name="interface_config_import_duplicate">Already configured</string>
+    <string name="interface_config_import_renamed">Renamed from “%1$s” to avoid a duplicate name</string>
+    <string name="interface_config_detected_title">Reticulum interface</string>
+    <string name="interface_config_add_to_interfaces">Add to interfaces</string>
+    <string name="call_profile_title">Audio profile</string>
+    <string name="call_profile_subtitle">Switches the active call for both ends</string>
+    <string name="call_profile_experimental">Experimental</string>
+    <string name="call_profile_control">Audio</string>
+    <string name="call_profile_control_content_description">Audio profile</string>
 </resources>

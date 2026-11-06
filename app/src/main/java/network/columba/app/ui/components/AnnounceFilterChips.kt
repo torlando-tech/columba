@@ -166,7 +166,7 @@ fun AnnounceFilterChips(
  * fight the chip rows' exclusive contract.
  */
 @Composable
-private fun ActiveFilterPillRow(
+internal fun ActiveFilterPillRow(
     aspectLabel: String?,
     interfaceLabel: String?,
     onClick: () -> Unit,

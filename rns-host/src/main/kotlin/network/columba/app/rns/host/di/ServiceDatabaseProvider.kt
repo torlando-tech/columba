@@ -1,7 +1,6 @@
 package network.columba.app.rns.host.di
 
 import android.content.Context
-import androidx.room.Room
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.di.DatabaseModule
 
@@ -12,7 +11,8 @@ import network.columba.app.data.di.DatabaseModule
  * in the service process. This allows the service to persist announces and messages
  * directly to the database even when the app process is killed.
  *
- * Uses [enableMultiInstanceInvalidation] to handle cross-process database access safely.
+ * Uses [DatabaseModule.buildColumbaDatabase] so the service process opens the file with the same
+ * migrations, pragmas, multi-instance invalidation, and busy-retry behaviour as the app process.
  */
 object ServiceDatabaseProvider {
     @Volatile
@@ -20,29 +20,8 @@ object ServiceDatabaseProvider {
 
     fun getDatabase(context: Context): ColumbaDatabase =
         INSTANCE ?: synchronized(this) {
-            INSTANCE ?: createDatabase(context).also { INSTANCE = it }
+            INSTANCE ?: DatabaseModule.buildColumbaDatabase(context).also { INSTANCE = it }
         }
-
-    private fun createDatabase(context: Context): ColumbaDatabase =
-        Room
-            .databaseBuilder(
-                context.applicationContext,
-                ColumbaDatabase::class.java,
-                DatabaseModule.DATABASE_NAME,
-            ).addMigrations(
-                ColumbaDatabase.MIGRATION_1_2,
-                ColumbaDatabase.MIGRATION_2_3,
-                ColumbaDatabase.MIGRATION_3_4,
-                ColumbaDatabase.MIGRATION_4_5,
-                ColumbaDatabase.MIGRATION_5_6,
-                ColumbaDatabase.MIGRATION_6_7,
-                ColumbaDatabase.MIGRATION_7_8,
-                ColumbaDatabase.MIGRATION_8_9,
-                ColumbaDatabase.MIGRATION_9_10,
-            )
-            .enableMultiInstanceInvalidation()
-            .addCallback(DatabaseModule.DURABILITY_CALLBACK)
-            .build()
 
     fun close() {
         synchronized(this) {

@@ -3231,4 +3231,17 @@
     <string name="call_profile_experimental">Experimental</string>
     <string name="call_profile_control">Audio</string>
     <string name="call_profile_control_content_description">Audio profile</string>
+    <!-- Message privacy (settings + onboarding) -->
+    <string name="message_privacy_title">Message Privacy</string>
+    <string name="message_privacy_cd">Message privacy</string>
+    <string name="message_privacy_body">Choose how much a message notification reveals. With \"Name only\" or \"No name or message\" the message text never reaches the notification, so it cannot appear on the lock screen, in Android\'s notification history, or in apps that have notification access. Applies to new notifications only.</string>
+    <string name="onboarding_message_privacy_title">Message privacy</string>
+    <string name="onboarding_message_privacy_body">Message text otherwise shows on your lock screen and in Android\'s notification history. Choose what new-message notifications reveal.</string>
+    <string name="message_privacy_level_full_name">Name and message</string>
+    <string name="message_privacy_level_full_desc">Notifications show the sender\'s name and the message text.</string>
+    <string name="message_privacy_level_name_only_name">Name only</string>
+    <string name="message_privacy_level_name_only_desc">Notifications show the sender\'s name, never the message text.</string>
+    <string name="message_privacy_level_none_name">No name or message</string>
+    <string name="message_privacy_level_none_desc">Notifications only say that a message arrived.</string>
+    <string name="notif_generic_message">New message</string>
 </resources>

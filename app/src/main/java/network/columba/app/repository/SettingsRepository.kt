@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.model.MapStylePreference
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.data.repository.CustomThemeRepository
 import network.columba.app.nomadnet.NomadNetSavedSite
 import network.columba.app.nomadnet.NomadNetSavedSites
@@ -79,6 +80,7 @@ class SettingsRepository
             val NOTIFICATION_ANNOUNCE_EXCLUDE_TCP = booleanPreferencesKey("notification_announce_exclude_tcp")
             val NOTIFICATION_BLE_CONNECTED = booleanPreferencesKey("notification_ble_connected")
             val NOTIFICATION_BLE_DISCONNECTED = booleanPreferencesKey("notification_ble_disconnected")
+            val NOTIFICATION_PRIVACY_LEVEL = stringPreferencesKey("notification_privacy_level")
             val HAS_REQUESTED_NOTIFICATION_PERMISSION = booleanPreferencesKey("has_requested_notification_permission")
 
             // Location permission preferences
@@ -424,6 +426,33 @@ class SettingsRepository
         suspend fun saveNotificationBleDisconnected(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.NOTIFICATION_BLE_DISCONNECTED] = enabled
+            }
+        }
+
+        /**
+         * Flow of how much a received-message notification reveals.
+         * Defaults to [NotificationPrivacyLevel.DEFAULT] when no level was ever stored;
+         * a stored but unrecognised value fails closed to [NotificationPrivacyLevel.NONE].
+         */
+        val notificationPrivacyLevelFlow: Flow<NotificationPrivacyLevel> =
+            context.dataStore.data
+                .map { preferences ->
+                    val stored = preferences[PreferencesKeys.NOTIFICATION_PRIVACY_LEVEL]
+                    if (stored == null) {
+                        NotificationPrivacyLevel.DEFAULT
+                    } else {
+                        NotificationPrivacyLevel.fromStoredName(stored)
+                    }
+                }.distinctUntilChanged()
+
+        /**
+         * Save the message privacy level used when building message notifications.
+         *
+         * @param level How much the notification may reveal
+         */
+        suspend fun saveNotificationPrivacyLevel(level: NotificationPrivacyLevel) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.NOTIFICATION_PRIVACY_LEVEL] = level.name
             }
         }
 

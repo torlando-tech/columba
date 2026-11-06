@@ -19,7 +19,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.db.entity.LocalIdentityEntity
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.data.repository.IdentityRepository
+import network.columba.app.notifications.NotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.InterfaceConfig
@@ -48,6 +50,7 @@ class OnboardingViewModelTest {
     private lateinit var mockInterfaceRepository: InterfaceRepository
     private lateinit var mockInterfaceConfigManager: InterfaceConfigManager
     private lateinit var mockCrashReportManager: network.columba.app.util.CrashReportManager
+    private lateinit var mockNotificationHelper: NotificationHelper
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
@@ -59,13 +62,17 @@ class OnboardingViewModelTest {
         mockInterfaceRepository = mockk()
         mockInterfaceConfigManager = mockk()
         mockCrashReportManager = mockk()
+        mockNotificationHelper = mockk()
+        every { mockNotificationHelper.cancelMessageNotifications() } just Runs
         coEvery { mockCrashReportManager.updateCrashReportingConsent(any(), any(), any()) } returns Unit
 
         // Default stubs for SettingsRepository
         coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
+        coEvery { mockSettingsRepository.notificationPrivacyLevelFlow } returns MutableStateFlow(NotificationPrivacyLevel.FULL)
         coEvery { mockSettingsRepository.needsIdentityUnlockFlow } returns MutableStateFlow(false)
         coEvery { mockSettingsRepository.markOnboardingCompleted() } just Runs
         coEvery { mockSettingsRepository.markCrashReportingPromptSeen() } just Runs
+        coEvery { mockSettingsRepository.saveNotificationPrivacyLevel(any()) } just Runs
 
         // Default stubs for IdentityRepository
         coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
@@ -99,6 +106,7 @@ class OnboardingViewModelTest {
             mockInterfaceRepository,
             mockInterfaceConfigManager,
             mockCrashReportManager,
+            mockNotificationHelper,
         )
 
     private fun createTestIdentity(

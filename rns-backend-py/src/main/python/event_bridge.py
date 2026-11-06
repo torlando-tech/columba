@@ -547,6 +547,131 @@ def _enqueue_fallback(task):
         return False
 
 
+# ----------------------------------------------------------------------------
+# Announce dispatch: O(1) hand-off, never work on the announce thread.
+#
+# RNS's `Transport.receive()` allocates a fresh OS thread for *every* announce
+# it hands to a registered announce handler — one `threading.Thread(...)` per
+# matching handler. LXMF registers two handlers (delivery + propagation) and
+# this module one, so a mesh announce burst of N destinations allocates ~3N
+# threads. What those threads do inline is what keeps them alive: aspect
+# resolution, the JNI crossings into Kotlin, and the Kotlin-side announcement
+# translation. On low-end devices a burst is enough to exhaust the process's
+# thread slots, and the next `pthread_create` fails with
+# `OutOfMemoryError: pthread_create (1040KB max stack) failed: Try again` —
+# killing the :reticulum process and every interface with it (columba#1228;
+# Sentry COLUMBA-E6/E2/DB/DZ/DP/EF are the same failure).
+#
+# So `received_announce` stays O(1): it enqueues the raw announce and returns,
+# letting the allocating thread die immediately. One module-level worker
+# drains the queue FIFO and does the enrichment + Kotlin emit. The queue is
+# bounded so a wedged consumer cannot convert thread exhaustion into heap
+# exhaustion; shedding announces under that overload matches the announce
+# stream's existing best-effort contract (the Kotlin `SharedFlow` behind it
+# already drops announcements it cannot buffer via `tryEmit`).
+_ANNOUNCE_QUEUE_MAXSIZE = 4096
+_ANNOUNCE_DROP_LOG_INTERVAL_S = 10.0
+
+_announce_queue = queue.Queue(maxsize=_ANNOUNCE_QUEUE_MAXSIZE)
+_announce_dropped = 0
+_announce_drop_logged_at = 0.0
+# Bumped by teardown so announce work queued against a stopped stack can never
+# be dispatched against the stack that replaces it (see
+# `_reset_announce_dispatch`).
+_announce_generation = 0
+
+
+def _announce_worker():
+    """Single consumer for queued announces. Daemon thread, never exits."""
+    while True:
+        item = _announce_queue.get()
+        try:
+            _dispatch_announce(*item)
+        except Exception as e:  # noqa: BLE001 — worker must survive one bad announce
+            RNS.log(f"event_bridge: announce dispatch failed: {e}", RNS.LOG_ERROR)
+        finally:
+            _announce_queue.task_done()
+
+
+def _reset_announce_dispatch():
+    """Fence off and discard announce work queued against a stopped stack.
+
+    Called from `deregister_callbacks()`, i.e. on backend teardown and on
+    Apply & Restart. Without it a queued announce could be dispatched seconds
+    later — after the replacement stack is live — and be persisted with the
+    restart's timestamp, surfacing stale traffic as fresh peer activity.
+    """
+    global _announce_generation
+
+    _announce_generation += 1
+    while True:
+        try:
+            _announce_queue.get_nowait()
+        except queue.Empty:
+            return
+        else:
+            _announce_queue.task_done()
+
+
+threading.Thread(
+    target=_announce_worker,
+    name="columba-announce-dispatch",
+    daemon=True,
+).start()
+
+
+def _enqueue_announce(
+    destination_hash,
+    announced_identity,
+    app_data,
+    announce_packet_hash,
+    is_path_response,
+):
+    """Hand a raw announce to the dispatch worker without blocking."""
+    global _announce_dropped, _announce_drop_logged_at
+
+    try:
+        _announce_queue.put_nowait(
+            (
+                _announce_generation,
+                destination_hash,
+                announced_identity,
+                app_data,
+                announce_packet_hash,
+                is_path_response,
+            )
+        )
+    except queue.Full:
+        _announce_dropped += 1
+        import time as _time
+
+        now = _time.time()
+        # Rate-limit: a sustained overload must not flood logcat at
+        # announce rate on top of the overload itself.
+        if now - _announce_drop_logged_at >= _ANNOUNCE_DROP_LOG_INTERVAL_S:
+            _announce_drop_logged_at = now
+            RNS.log(
+                "event_bridge: announce dispatch backlog full "
+                f"({_ANNOUNCE_QUEUE_MAXSIZE}), {_announce_dropped} announces dropped",
+                RNS.LOG_WARNING,
+            )
+
+
+def _flush_announce_queue(timeout=5.0):
+    """Block until every queued announce has been dispatched.
+
+    Nothing in the bridge needs this — the worker drains on its own. It exists
+    for tests that assert on emitted payloads, which would otherwise race the
+    worker.
+    """
+    import time as _time
+
+    deadline = _time.time() + timeout
+    while _announce_queue.unfinished_tasks and _time.time() < deadline:
+        _time.sleep(0.002)
+    return not _announce_queue.unfinished_tasks
+
+
 def _hex(b):
     """bytes / Chaquopy jarray -> lowercase hex str. None passes through."""
     if b is None:
@@ -748,10 +873,13 @@ def _announce_enrichment(destination_hash, identity, app_data):
 class _AnnounceHandler:
     """RNS announce handler — `aspect_filter = None` catches every aspect.
 
-    RNS calls `received_announce` on the Transport thread; we resolve the
-    aspect, and — for the four aspects Columba tracks — flatten and hand the
-    announce off to Kotlin. Announces for any other aspect are dropped (see
-    `received_announce`).
+    RNS allocates one OS thread per announce per registered handler to invoke
+    this method (`Transport.receive()`), so it MUST return immediately: the
+    raw announce is handed to the module-level dispatch worker (see the
+    announce-dispatch comment above), which resolves the aspect and — for the
+    four aspects Columba tracks — flattens and hands the announce off to
+    Kotlin. Announces for any other aspect are dropped by the worker (see
+    `_dispatch_announce`).
     """
 
     aspect_filter = None
@@ -765,48 +893,74 @@ class _AnnounceHandler:
         announce_packet_hash=None,
         is_path_response=False,
     ):
-        enrichment = _announce_enrichment(destination_hash, announced_identity, app_data)
-        # Only surface announces for aspects Columba tracks. This matches the
-        # kotlin backend's RichAnnounceHandler, which returns False (drops the
-        # announce) when no known aspect matches. `aspect_filter = None` above
-        # means RNS hands us *every* announce, including ones from unrelated
-        # RNS apps — without this drop those leak into the announce stream with
-        # a junk display name (whatever their app_data decodes to) and an
-        # "unknown" aspect, and collide into the "Site" filter.
-        if enrichment.get("aspect") is None:
-            return
-        # Receiving interface annotation. RNS doesn't surface a per-announce
-        # `received_on` interface on `received_announce(...)` — we have to
-        # look it up from `Transport.path_table[destination_hash][5]` (the
-        # IDX_PT_RVCD_IF slot). Same fallback the LXMF delivery handler
-        # uses below. Without this every announce shipped to Kotlin had
-        # `receiving_interface = ""`, so 99% of `announces` rows landed
-        # with `receivingInterfaceType = "UNKNOWN"` and the announce-stream
-        # interface-type icon never rendered.
-        recv_iface_name = None
-        try:
-            path_entry = RNS.Transport.path_table.get(destination_hash)
-            if path_entry is not None and len(path_entry) > 5:
-                iface = path_entry[5]
-                if iface is not None:
-                    recv_iface_name = _format_iface_for_emit(iface)
-        except Exception as e:  # noqa: BLE001 — annotation is best-effort, never fatal
-            RNS.log(
-                f"event_bridge: receiving_interface lookup failed: {e}",
-                RNS.LOG_DEBUG,
-            )
+        _enqueue_announce(
+            destination_hash,
+            announced_identity,
+            app_data,
+            announce_packet_hash,
+            is_path_response,
+        )
 
-        payload = {
-            "destination_hash": _hex(destination_hash),
-            "identity_hash": _hex(announced_identity.hash) if announced_identity is not None else None,
-            "public_key": _hex(announced_identity.get_public_key()) if announced_identity is not None else None,
-            "app_data": _hex(app_data),
-            "announce_packet_hash": _hex(announce_packet_hash),
-            "is_path_response": bool(is_path_response),
-            "receiving_interface": recv_iface_name,
-        }
-        payload.update(enrichment)
-        _emit(_on_announce, payload)
+
+def _dispatch_announce(
+    generation,
+    destination_hash,
+    announced_identity,
+    app_data,
+    announce_packet_hash,
+    is_path_response,
+):
+    """Enrich one announce and emit it to Kotlin. Runs on the dispatch worker.
+
+    `generation` is the one captured when the announce was enqueued; a mismatch
+    means the stack that received it is gone, so it is dropped rather than
+    delivered to whichever Kotlin sink is registered now.
+    """
+    if generation != _announce_generation:
+        return
+
+    enrichment = _announce_enrichment(destination_hash, announced_identity, app_data)
+    # Only surface announces for aspects Columba tracks. This matches the
+    # kotlin backend's RichAnnounceHandler, which returns False (drops the
+    # announce) when no known aspect matches. `aspect_filter = None` above
+    # means RNS hands us *every* announce, including ones from unrelated
+    # RNS apps — without this drop those leak into the announce stream with
+    # a junk display name (whatever their app_data decodes to) and an
+    # "unknown" aspect, and collide into the "Site" filter.
+    if enrichment.get("aspect") is None:
+        return
+    # Receiving interface annotation. RNS doesn't surface a per-announce
+    # `received_on` interface on `received_announce(...)` — we have to
+    # look it up from `Transport.path_table[destination_hash][5]` (the
+    # IDX_PT_RVCD_IF slot). Same fallback the LXMF delivery handler
+    # uses below. Without this every announce shipped to Kotlin had
+    # `receiving_interface = ""`, so 99% of `announces` rows landed
+    # with `receivingInterfaceType = "UNKNOWN"` and the announce-stream
+    # interface-type icon never rendered.
+    recv_iface_name = None
+    try:
+        path_entry = RNS.Transport.path_table.get(destination_hash)
+        if path_entry is not None and len(path_entry) > 5:
+            iface = path_entry[5]
+            if iface is not None:
+                recv_iface_name = _format_iface_for_emit(iface)
+    except Exception as e:  # noqa: BLE001 — annotation is best-effort, never fatal
+        RNS.log(
+            f"event_bridge: receiving_interface lookup failed: {e}",
+            RNS.LOG_DEBUG,
+        )
+
+    payload = {
+        "destination_hash": _hex(destination_hash),
+        "identity_hash": _hex(announced_identity.hash) if announced_identity is not None else None,
+        "public_key": _hex(announced_identity.get_public_key()) if announced_identity is not None else None,
+        "app_data": _hex(app_data),
+        "announce_packet_hash": _hex(announce_packet_hash),
+        "is_path_response": bool(is_path_response),
+        "receiving_interface": recv_iface_name,
+    }
+    payload.update(enrichment)
+    _emit(_on_announce, payload)
 
 
 # Inbound LXMF message-size cap (KB; 0 = unlimited). Set from Kotlin via
@@ -1458,6 +1612,7 @@ def register_callbacks(
 def deregister_callbacks():
     """Tear-down counterpart to register_callbacks(). Best-effort."""
     global _announce_handler
+    _reset_announce_dispatch()
     try:
         if _announce_handler is not None and _rns_transport is not None:
             RNS.Transport.deregister_announce_handler(_announce_handler)

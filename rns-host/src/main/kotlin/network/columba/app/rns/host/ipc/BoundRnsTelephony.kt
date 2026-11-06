@@ -48,8 +48,8 @@ internal class BoundRnsTelephony(
         awaitBound().telephony.setCallSpeaker(speakerOn)
     }
 
-    override suspend fun cycleCallProfile() {
-        awaitBound().telephony.cycleCallProfile()
+    override suspend fun switchCallProfile(profileCode: Int) {
+        awaitBound().telephony.switchCallProfile(profileCode)
     }
 
     override suspend fun cycleCallMode() {
@@ -106,10 +106,10 @@ internal class BoundRnsTelephony(
             .stateIn(scope, SharingStarted.Eagerly, false)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    override val activeProfile: StateFlow<String?> =
+    override val activeProfileCode: StateFlow<Int?> =
         backendFlow
             .filterNotNull()
-            .flatMapLatest { it.telephony.activeProfile }
+            .flatMapLatest { it.telephony.activeProfileCode }
             .stateIn(scope, SharingStarted.Eagerly, null)
 
     @OptIn(ExperimentalCoroutinesApi::class)

@@ -16,6 +16,7 @@ package network.columba.app.rns.ipc;
 
 import network.columba.app.rns.ipc.callback.IRnsBoolEventCallback;
 import network.columba.app.rns.ipc.callback.IRnsCallStateCallback;
+import network.columba.app.rns.ipc.callback.IRnsNullableIntEventCallback;
 import network.columba.app.rns.ipc.callback.IRnsNullableStringEventCallback;
 import network.columba.app.rns.ipc.callback.IRnsResultCallback;
 
@@ -32,9 +33,10 @@ oneway interface IRnsTelephony {
     void setCallMuted(boolean muted, in IRnsResultCallback cb);
     void setCallSpeaker(boolean speakerOn, in IRnsResultCallback cb);
 
-    // Cycle to the next LXST audio profile and signal it to the remote peer
-    // (LXST Profile Negotiation). No-op unless a call is established.
-    void cycleCallProfile(in IRnsResultCallback cb);
+    // Switch the LXST audio profile to profileCode and signal it to the remote
+    // peer (LXST Profile Negotiation). No-op unless a call is established.
+    // profileCode is one of the LXST Profile ids (0x10-0x80).
+    void switchCallProfile(int profileCode, in IRnsResultCallback cb);
 
     // Cycle to the next LXST call mode (FDX<->HDX) and signal it to the remote
     // peer (LXST Call Mode Negotiation). No-op unless a call is established.
@@ -81,11 +83,11 @@ oneway interface IRnsTelephony {
     void registerIsPttActiveObserver(in IRnsBoolEventCallback cb);
     void unregisterIsPttActiveObserver(in IRnsBoolEventCallback cb);
 
-    // StateFlow<String?> activeProfile — LXST codec profile abbreviation,
-    // null when no call is active.
-    void getCurrentActiveProfile(in IRnsNullableStringEventCallback cb);
-    void registerActiveProfileObserver(in IRnsNullableStringEventCallback cb);
-    void unregisterActiveProfileObserver(in IRnsNullableStringEventCallback cb);
+    // StateFlow<Int?> activeProfileCode — LXST codec profile id (0x10-0x80),
+    // null when no call is active. Nullness travels as (value, hasValue).
+    void getCurrentActiveProfileCode(in IRnsNullableIntEventCallback cb);
+    void registerActiveProfileCodeObserver(in IRnsNullableIntEventCallback cb);
+    void unregisterActiveProfileCodeObserver(in IRnsNullableIntEventCallback cb);
 
     // StateFlow<String?> callMode — LXST call-mode abbreviation (FDX/HDX),
     // null when no call is active.

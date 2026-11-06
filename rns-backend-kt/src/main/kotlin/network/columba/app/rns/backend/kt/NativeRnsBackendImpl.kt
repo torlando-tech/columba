@@ -645,7 +645,23 @@ class NativeRnsBackendImpl(
                     // Lost a race with the other initializer (UI vs. service self-init):
                     // the stack is already up, so this is a no-op — same contract as
                     // PythonRnsRuntime.start() and what BackendInitializer documents.
-                    Log.i(TAG, "initialize() called while already running — ignoring")
+                    // `lastConfig` has the delivery key scrubbed after startup, so scrub
+                    // the incoming one too: fresh key bytes for an otherwise identical
+                    // config are not a mismatch.
+                    val mismatch =
+                        lastConfig?.let { config.copy(deliveryIdentityKey = null) != it } == true
+                    if (mismatch) {
+                        // The stack keeps the config it started with; this call's config is
+                        // dropped, so anything derived from it (interfaces, transport flags,
+                        // display name) will not match what is actually running.
+                        Log.w(
+                            TAG,
+                            "initialize() called while already running with a DIFFERENT " +
+                                "config — ignoring; the stack keeps the previously applied config",
+                        )
+                    } else {
+                        Log.i(TAG, "initialize() called while already running — ignoring")
+                    }
                     Result.success(Unit)
                 } else {
                     initializeLocked(config)

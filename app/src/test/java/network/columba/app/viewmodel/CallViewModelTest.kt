@@ -375,15 +375,20 @@ class CallViewModelTest {
         }
 
     @Test
-    fun `switchProfile skips the IPC when the profile is already active`() =
+    fun `switchProfile forwards a selection the stale mirror still calls active`() =
         runTest {
+            // The peer moved off QUALITY_HIGH, but activeProfileCode is polled
+            // (~500 ms) and still reports it. Choosing the row the UI shows as
+            // active must still reach the backend: LXST is the only place that
+            // can compare against the live Telephone.activeProfile, and a
+            // drop here would silently discard the user's choice.
             callStateFlow.value = CallState.Active("abc123")
             activeProfileCodeFlow.value = CodecProfile.QUALITY_HIGH.code
 
             viewModel.switchProfile(CodecProfile.QUALITY_HIGH)
             testDispatcher.scheduler.advanceTimeBy(1000L)
 
-            coVerify(exactly = 0) { mockTelephony.switchCallProfile(any()) }
+            coVerify(exactly = 1) { mockTelephony.switchCallProfile(CodecProfile.QUALITY_HIGH.code) }
             callStateFlow.value = CallState.Idle // Stop duration timer
         }
 

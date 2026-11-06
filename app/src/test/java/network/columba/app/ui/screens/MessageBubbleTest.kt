@@ -97,6 +97,60 @@ class MessageBubbleTest {
         composeTestRule.onNodeWithText("Just now").assertDoesNotExist()
     }
 
+    // ========== Interface config detection ==========
+
+    @Test
+    fun `received message with interface config shows add to interfaces action`() {
+        val configText =
+            """
+            [[Central Oklahoma Reticulum Hub]]
+              type = BackboneInterface
+              enabled = yes
+              remote = reticulum.mcswain.dev
+              target_port = 4242
+            """.trimIndent()
+        val message = MessagingTestFixtures.createReceivedMessage(content = configText)
+        var addedConfig: String? = null
+
+        composeTestRule.setContent {
+            val clipboardManager = LocalClipboardManager.current
+            MessageBubble(
+                message = message,
+                isFromMe = false,
+                clipboardManager = clipboardManager,
+                onAddInterfaceConfig = { addedConfig = it },
+            )
+        }
+
+        composeTestRule.onNodeWithText("Reticulum interface").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Add to interfaces").performClick()
+        assertTrue(addedConfig == configText)
+    }
+
+    @Test
+    fun `sent message with interface config does not show add action`() {
+        val configText =
+            """
+            [[Central Oklahoma Reticulum Hub]]
+              type = TCPClientInterface
+              enabled = yes
+              target_host = reticulum.mcswain.dev
+              target_port = 4242
+            """.trimIndent()
+        val message = MessagingTestFixtures.createSentMessage(content = configText)
+
+        composeTestRule.setContent {
+            val clipboardManager = LocalClipboardManager.current
+            MessageBubble(
+                message = message,
+                isFromMe = true,
+                clipboardManager = clipboardManager,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Add to interfaces").assertDoesNotExist()
+    }
+
     // ========== Missing Image Placeholder Tests ==========
 
     @Test

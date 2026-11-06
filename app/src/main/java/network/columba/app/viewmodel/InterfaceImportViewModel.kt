@@ -69,7 +69,7 @@ class InterfaceImportViewModel
             val importGeneration: Int = 0,
         ) {
             val selectedCount: Int get() = items.count { it.selected }
-            val canImport: Boolean get() = selectedCount > 0 && !isImporting
+            val canImport: Boolean get() = selectedCount > 0 && !isImporting && !isLoadingExisting
         }
 
         private val _state = MutableStateFlow(State())
@@ -79,18 +79,23 @@ class InterfaceImportViewModel
         private var loadJob: Job? = null
         private var importJob: Job? = null
 
+        /** Bumped on every open/close so stale jobs cannot update a later session. */
+        @Volatile
+        private var session: Int = 0
+
         /**
          * Open the dialog. [initialText] prefills the editor (used by the chat
          * suggestion card); the user can still edit before importing.
          */
         fun open(initialText: String = "") {
+            session++
             _state.value =
                 State(
                     isOpen = true,
                     text = initialText,
                     isLoadingExisting = true,
                 )
-            loadExisting()
+            loadExisting(session)
         }
 
         fun updateText(text: String) {
@@ -110,14 +115,18 @@ class InterfaceImportViewModel
         }
 
         fun importSelected() {
-            val selected = _state.value.items.filter { it.selected }
+            val current = _state.value
+            if (current.isLoadingExisting || current.isImporting) return
+            val selected = current.items.filter { it.selected }
             if (selected.isEmpty()) return
             _state.update { it.copy(isImporting = true) }
             importJob?.cancel()
+            val jobSession = session
             importJob =
                 viewModelScope.launch(ioDispatcher) {
                     try {
                         val result = importManager.importInterfaces(selected.map { it.config })
+                        if (jobSession != session) return@launch
                         existingConfigs = existingConfigs + selected.map { it.config }
                         _state.update { current ->
                             current.copy(
@@ -129,7 +138,10 @@ class InterfaceImportViewModel
                                     buildString {
                                         append("Added ${result.insertedIds.size} interface")
                                         if (result.insertedIds.size != 1) append("s")
-                                        if (!result.appliedLive) append(" — open Network Interfaces to apply")
+                                        if (!result.appliedLive) {
+                                            append(" — open Network Interfaces to apply")
+                                            result.applyErrorMessage?.let { append(" (live apply failed: $it)") }
+                                        }
                                     },
                                 importGeneration = current.importGeneration + 1,
                             )
@@ -137,11 +149,13 @@ class InterfaceImportViewModel
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        _state.update {
-                            it.copy(
-                                isImporting = false,
-                                resultMessage = "Couldn't add interfaces: ${e.message ?: "unknown error"}",
-                            )
+                        if (jobSession == session) {
+                            _state.update {
+                                it.copy(
+                                    isImporting = false,
+                                    resultMessage = "Couldn't add interfaces: ${e.message ?: "unknown error"}",
+                                )
+                            }
                         }
                     }
                 }
@@ -176,7 +190,9 @@ class InterfaceImportViewModel
         }
 
         fun close() {
+            session++
             loadJob?.cancel()
+            importJob?.cancel()
             _state.update { it.copy(isOpen = false) }
         }
 
@@ -185,13 +201,14 @@ class InterfaceImportViewModel
             _state.update { it.copy(resultMessage = null) }
         }
 
-        private fun loadExisting() {
+        private fun loadExisting(sessionAtStart: Int) {
             loadJob?.cancel()
             loadJob =
                 viewModelScope.launch(ioDispatcher) {
                     existingConfigs =
                         runCatching { interfaceRepository.allInterfaces.first() }
                             .getOrDefault(emptyList())
+                    if (sessionAtStart != session) return@launch
                     _state.update { it.copy(isLoadingExisting = false) }
                     reparse()
                 }

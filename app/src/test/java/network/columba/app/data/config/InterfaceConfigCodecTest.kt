@@ -108,6 +108,22 @@ class InterfaceConfigCodecTest {
     }
 
     @Test
+    fun `interface_enabled no alone disables the snippet`() {
+        val result =
+            InterfaceConfigCodec.parseSnippet(
+                """
+                [[Paused Alias]]
+                  type = TCPClientInterface
+                  interface_enabled = no
+                  target_host = 10.0.0.5
+                  target_port = 4242
+                """.trimIndent(),
+            )
+
+        assertFalse(result.interfaces.single().config.enabled)
+    }
+
+    @Test
     fun `comments blank lines and semicolons are ignored`() {
         val result =
             InterfaceConfigCodec.parseSnippet(
@@ -497,7 +513,7 @@ class InterfaceConfigCodecTest {
                 enabled = true,
                 connectionMode = "tcp",
                 tcpHost = "10.0.0.10",
-                tcpPort = 7633,
+                tcpPort = 7634,
                 frequency = 868_000_000L,
                 bandwidth = 125_000,
                 txPower = 14,
@@ -527,6 +543,33 @@ class InterfaceConfigCodecTest {
                 targetHost = "10.0.0.11",
                 targetPort = 4242,
                 passphrase = "a \"quoted\" pass phrase",
+            )
+
+        assertEquals(config, parseRendered(config))
+    }
+
+    @Test
+    fun `passphrase that is only quotes round-trips`() {
+        val config =
+            InterfaceConfig.TCPClient(
+                name = "Quote Only",
+                targetHost = "10.0.0.15",
+                targetPort = 4242,
+                passphrase = "\"secret\"",
+            )
+
+        assertEquals(config, parseRendered(config))
+    }
+
+    @Test
+    fun `literal none credentials are preserved`() {
+        val config =
+            InterfaceConfig.TCPClient(
+                name = "Literal None",
+                targetHost = "10.0.0.16",
+                targetPort = 4242,
+                networkName = "none",
+                passphrase = "none",
             )
 
         assertEquals(config, parseRendered(config))
@@ -598,6 +641,26 @@ class InterfaceConfigCodecTest {
         val resolved = InterfaceConfigCodec.resolveImports(parsed, emptyList())
         assertFalse(resolved[0].duplicate)
         assertTrue(resolved[1].duplicate)
+    }
+
+    @Test
+    fun `selecting an existing endpoint still gets a unique name`() {
+        val existing = InterfaceConfig.TCPClient(name = "Node", targetHost = "node.example.com", targetPort = 4242)
+        val parsed =
+            InterfaceConfigCodec
+                .parseSnippet(
+                    """
+                    [[Node]]
+                      type = TCPClientInterface
+                      enabled = yes
+                      target_host = node.example.com
+                      target_port = 4242
+                    """.trimIndent(),
+                ).interfaces
+
+        val resolved = InterfaceConfigCodec.resolveImports(parsed, listOf(existing)).single()
+        assertTrue(resolved.duplicate)
+        assertEquals("Node (2)", resolved.config.name)
     }
 
     @Test

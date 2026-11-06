@@ -4,12 +4,14 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import network.columba.app.repository.InterfaceRepository
@@ -158,6 +160,46 @@ class InterfaceImportViewModelTest {
             val state = viewModel.state.value
             assertTrue(state.needsManualApply)
             assertTrue(state.resultMessage!!.contains("apply"))
+            assertTrue(state.resultMessage!!.contains("reload failed"))
+        }
+
+    @Test
+    fun `loading existing interfaces blocks import`() =
+        runTest {
+            viewModel = InterfaceImportViewModel(interfaceRepository, importManager)
+            viewModel.open(snippet)
+            // The load runs on the test dispatcher; reparse still sees no existing rows.
+            viewModel.updateText(snippet)
+
+            assertTrue(viewModel.state.value.isLoadingExisting)
+            assertFalse(viewModel.state.value.canImport)
+
+            viewModel.importSelected()
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { importManager.importInterfaces(any()) }
+        }
+
+    @Test
+    fun `cancelling an import cannot close a reopened dialog`() =
+        runTest {
+            val gate = CompletableDeferred<InterfaceImportManager.ImportApplyResult>()
+            coEvery { importManager.importInterfaces(any()) } coAnswers { gate.await() }
+            viewModel = InterfaceImportViewModel(interfaceRepository, importManager)
+            viewModel.open(snippet)
+            advanceUntilIdle()
+
+            viewModel.importSelected()
+            runCurrent()
+            viewModel.close()
+            viewModel.open("")
+            advanceUntilIdle()
+
+            gate.complete(InterfaceImportManager.ImportApplyResult(insertedIds = listOf(7L), appliedLive = true))
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.isOpen)
+            assertEquals(0, viewModel.state.value.importedCount)
         }
 
     @Test

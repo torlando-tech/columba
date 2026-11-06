@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -12,6 +13,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import network.columba.app.data.db.BusyRetryingOpenHelperFactory
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.dao.AnnounceDao
 import network.columba.app.data.db.dao.BlockedPeerDao
@@ -101,30 +103,47 @@ object DatabaseModule {
             override fun onOpen(db: SupportSQLiteDatabase) = applyPragmas(db)
         }
 
+    /**
+     * Builds the process-wide [ColumbaDatabase].
+     *
+     * Shared by the Hilt graph (app process) and `ServiceDatabaseProvider` (`:reticulum` process)
+     * so both processes open the same file with identical pragmas, multi-instance invalidation,
+     * and busy-retry behaviour. Retrying lock-contended transaction starts is what keeps a
+     * `SQLITE_BUSY` burst from crashing the process (issue #1029); see
+     * [network.columba.app.data.db.BusyRetryingOpenHelperFactory].
+     */
+    fun buildColumbaDatabase(
+        context: Context,
+        name: String = DATABASE_NAME,
+        multiInstanceInvalidation: Boolean = true,
+    ): ColumbaDatabase {
+        val builder =
+            Room
+                .databaseBuilder(context.applicationContext, ColumbaDatabase::class.java, name)
+                .addMigrations(
+                    ColumbaDatabase.MIGRATION_1_2,
+                    ColumbaDatabase.MIGRATION_2_3,
+                    ColumbaDatabase.MIGRATION_3_4,
+                    ColumbaDatabase.MIGRATION_4_5,
+                    ColumbaDatabase.MIGRATION_5_6,
+                    ColumbaDatabase.MIGRATION_6_7,
+                    ColumbaDatabase.MIGRATION_7_8,
+                    ColumbaDatabase.MIGRATION_8_9,
+                    ColumbaDatabase.MIGRATION_9_10,
+                ).openHelperFactory(
+                    BusyRetryingOpenHelperFactory(FrameworkSQLiteOpenHelperFactory()),
+                ).addCallback(DURABILITY_CALLBACK)
+        if (multiInstanceInvalidation) {
+            builder.enableMultiInstanceInvalidation()
+        }
+        return builder.build()
+    }
+
     @Provides
     @Singleton
     fun provideColumbaDatabase(
         @ApplicationContext context: Context,
-    ): ColumbaDatabase =
-        Room
-            .databaseBuilder(
-                context,
-                ColumbaDatabase::class.java,
-                DATABASE_NAME,
-            ).addMigrations(
-                ColumbaDatabase.MIGRATION_1_2,
-                ColumbaDatabase.MIGRATION_2_3,
-                ColumbaDatabase.MIGRATION_3_4,
-                ColumbaDatabase.MIGRATION_4_5,
-                ColumbaDatabase.MIGRATION_5_6,
-                ColumbaDatabase.MIGRATION_6_7,
-                ColumbaDatabase.MIGRATION_7_8,
-                ColumbaDatabase.MIGRATION_8_9,
-                ColumbaDatabase.MIGRATION_9_10,
-            )
-            .enableMultiInstanceInvalidation()
-            .addCallback(DURABILITY_CALLBACK)
-            .build()
+    ): ColumbaDatabase = buildColumbaDatabase(context)
 
     @Provides
     fun provideConversationDao(database: ColumbaDatabase): ConversationDao = database.conversationDao()

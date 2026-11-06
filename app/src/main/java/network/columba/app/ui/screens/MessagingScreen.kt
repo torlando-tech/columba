@@ -186,6 +186,7 @@ import network.columba.app.service.SyncResult
 import network.columba.app.rns.api.BackendCapabilities.Support
 import network.columba.app.rns.api.model.Direction
 import network.columba.app.rns.api.model.TransferProgressUpdate
+import network.columba.app.data.config.InterfaceConfigCodec
 import network.columba.app.ui.components.AttachmentPanel
 import network.columba.app.ui.components.OVERLAY_MAX_CAPTURE_HEIGHT_PX
 import network.columba.app.ui.components.VoiceMessageBubble
@@ -203,6 +204,8 @@ import network.columba.app.ui.components.ImageOptionsSheet
 import network.columba.app.ui.components.ImageQualitySelectionDialog
 import network.columba.app.ui.components.LocationPermissionBottomSheet
 import network.columba.app.ui.components.LocalCapabilities
+import network.columba.app.ui.components.InterfaceConfigImportDialog
+import network.columba.app.ui.components.InterfaceConfigSuggestionCard
 import network.columba.app.ui.components.MarkdownMessageText
 import network.columba.app.ui.components.MessageTransferProgress
 import network.columba.app.ui.components.MessageStatusIndicator
@@ -242,6 +245,7 @@ import network.columba.app.util.launchSafely
 import network.columba.app.util.showNoFileManagerToast
 import network.columba.app.util.validation.ValidationConstants
 import network.columba.app.viewmodel.ContactToggleResult
+import network.columba.app.viewmodel.InterfaceImportViewModel
 import network.columba.app.viewmodel.MessagingViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
@@ -392,6 +396,10 @@ fun MessagingScreen(
     var draftRestored by remember(destinationHash) { mutableStateOf(false) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Interface config text detected in a received message; non-null while the
+    // import dialog is available for it.
+    var pendingInterfaceConfig by remember { mutableStateOf<String?>(null) }
 
     // Restore draft text when opening a conversation
     val draftText by viewModel.draftText.collectAsStateWithLifecycle()
@@ -1426,6 +1434,9 @@ fun MessagingScreen(
                                             },
                                             onViewDetails = onViewMessageDetails,
                                             onRetry = { viewModel.retryFailedMessage(message.id) },
+                                            onAddInterfaceConfig = { configText ->
+                                                pendingInterfaceConfig = configText
+                                            },
                                             onFileAttachmentTap = { messageId, fileIndex, filename ->
                                                 selectedFileInfo = Triple(messageId, fileIndex, filename)
                                                 showFileOptionsSheet = true
@@ -2053,6 +2064,41 @@ fun MessagingScreen(
             onDismiss = { showBlockDialog = false },
         )
     }
+
+    pendingInterfaceConfig?.let { configText ->
+        val interfaceImportViewModel: InterfaceImportViewModel = hiltViewModel()
+        val importState by interfaceImportViewModel.state.collectAsStateWithLifecycle()
+        // Only consume results after this dialog instance opened, so a stale
+        // result from an earlier chat/screen can never close it immediately.
+        var dialogReady by remember(configText) { mutableStateOf(false) }
+
+        LaunchedEffect(configText) {
+            interfaceImportViewModel.open(configText)
+            dialogReady = true
+        }
+        LaunchedEffect(importState.resultMessage, dialogReady) {
+            if (dialogReady) {
+                importState.resultMessage?.let { message ->
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    interfaceImportViewModel.consumeResult()
+                    if (message.startsWith("Added ")) pendingInterfaceConfig = null
+                }
+            }
+        }
+
+        if (importState.isOpen) {
+            InterfaceConfigImportDialog(
+                state = importState,
+                onDismiss = {
+                    interfaceImportViewModel.close()
+                    pendingInterfaceConfig = null
+                },
+                onTextChange = interfaceImportViewModel::updateText,
+                onToggle = interfaceImportViewModel::toggle,
+                onImport = interfaceImportViewModel::importSelected,
+            )
+        }
+    }
 }
 
 @Suppress("UnusedParameter") // Params kept for API consistency; actions handled by overlay
@@ -2077,6 +2123,7 @@ fun MessageBubble(
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },
+    onAddInterfaceConfig: (configText: String) -> Unit = {},
     onReply: () -> Unit = {},
     onReplyPreviewClick: (replyToMessageId: String) -> Unit = {},
     onReact: (emoji: String) -> Unit = {},
@@ -2142,6 +2189,20 @@ fun MessageBubble(
     val context = LocalContext.current
     var showFullscreenImage by remember { mutableStateOf(false) }
     var showMissingImageInfo by remember { mutableStateOf(false) }
+
+    // Lightweight prefilters keep the parser off unrelated messages. Parsing
+    // is pure and bounded (MAX_CONFIG_FILE_SIZE) so it is safe on the UI thread.
+    val detectedInterfaceConfigs =
+        remember(message.content, message.isFromMe) {
+            if (!message.isFromMe &&
+                message.content.contains("[[") &&
+                message.content.contains('=')
+            ) {
+                InterfaceConfigCodec.parseSnippet(message.content).interfaces
+            } else {
+                emptyList()
+            }
+        }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -2590,6 +2651,15 @@ fun MessageBubble(
                     }
                 }
             }
+        }
+
+        // Received messages that contain a Reticulum config section get an
+        // inline "Add to interfaces" affordance.
+        if (detectedInterfaceConfigs.isNotEmpty()) {
+            InterfaceConfigSuggestionCard(
+                parsed = detectedInterfaceConfigs,
+                onAdd = { onAddInterfaceConfig(message.content) },
+            )
         }
 
         // Display reaction chips overlapping the bottom of message bubble

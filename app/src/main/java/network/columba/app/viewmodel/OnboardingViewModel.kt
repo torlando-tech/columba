@@ -65,6 +65,19 @@ class OnboardingViewModel
                 initialValue = false,
             )
 
+        /**
+         * True once the BLE permission set has been observed fully granted, either by the
+         * launcher callback or by an on-resume re-check.
+         *
+         * This is the only reliable signal that distinguishes "not granted because the user
+         * has never been asked" (fresh install) from "not granted because the user revoked
+         * the permission in system Settings". `shouldShowRequestPermissionRationale` cannot
+         * make that distinction: revoking in Settings clears the user-set flags, so the
+         * rationale reads exactly like "never asked". Session-scoped on purpose — losing it
+         * on process death only reverts the card to neutral, never to a false "granted".
+         */
+        private var blePermissionsEverGranted = false
+
         init {
             checkOnboardingStatus()
         }
@@ -150,6 +163,9 @@ class OnboardingViewModel
             allGranted: Boolean,
             anyDenied: Boolean,
         ) {
+            if (allGranted) {
+                blePermissionsEverGranted = true
+            }
             _state.value =
                 _state.value.copy(
                     blePermissionsGranted = allGranted,
@@ -205,8 +221,9 @@ class OnboardingViewModel
         /**
          * Re-evaluate the BLE runtime permission set. Mirrors
          * [checkNotificationPermissionStatus] for the BLE card on the
-         * ConnectivityPage; covers the manual-Settings grant flow for which
-         * the permission launcher callback never fires.
+         * ConnectivityPage; covers both the manual-Settings grant flow and the
+         * revoke-in-Settings flow, for which the permission launcher callback
+         * never fires.
          *
          * Intentionally does NOT mutate selectedInterfaces. The launcher
          * callback path in [onBlePermissionsResult] is the only place that
@@ -222,17 +239,28 @@ class OnboardingViewModel
                 }
             val allGranted = grantedFlags.all { it }
             val anyDenied = grantedFlags.any { !it }
-            // The resume re-check only CLEARS blePermissionsDenied (when perms are
-            // now granted) — it never sets it true. The launcher callback in
-            // [onBlePermissionsResult] remains the sole setter, so a fresh install
-            // (where checkSelfPermission says "not granted" before the user has
-            // ever interacted with BLE) does not flip the card into the red
-            // "Permissions denied" state on the first ON_RESUME.
+            if (allGranted) {
+                blePermissionsEverGranted = true
+            }
+            // Asymmetric on purpose. Before any full grant has been observed, "not
+            // granted" means "not asked yet" (fresh install: BLE runtime perms are
+            // never pre-granted), so the flag is left untouched and the card stays
+            // neutral. After a full grant has been observed, "not granted" can only
+            // mean the user revoked it in system Settings — the one case where the
+            // red state must appear even though the launcher never fired.
+            // `shouldShowRequestPermissionRationale` is unusable here: revoking in
+            // Settings clears the user-set flags, so it reports false for a revoked
+            // permission exactly as for a never-asked one (and it needs an Activity).
+            val denied =
+                when {
+                    allGranted -> false
+                    blePermissionsEverGranted -> true
+                    else -> _state.value.blePermissionsDenied
+                }
             _state.value =
                 _state.value.copy(
                     blePermissionsGranted = allGranted,
-                    blePermissionsDenied =
-                        if (allGranted) false else _state.value.blePermissionsDenied,
+                    blePermissionsDenied = denied,
                 )
             Log.d(TAG, "BLE permissions status: allGranted=$allGranted, anyDenied=$anyDenied")
         }

@@ -140,8 +140,10 @@ interface RnsTelephony {
      *
      * The id is resolved to an LXST-kt `Profile` and routed through the
      * stack, which sends the `PREFERRED_PROFILE` signalling frame and
-     * reconfigures the transmit pipeline. The applied profile is read back
-     * through [activeProfileCode].
+     * reconfigures the transmit pipeline. Requesting the profile the call is
+     * already on is dropped by LXST against its live `activeProfile`, so
+     * re-selecting it puts nothing on the wire. The applied profile is read
+     * back through [activeProfileCode].
      */
     suspend fun switchCallProfile(profileCode: Int)
 

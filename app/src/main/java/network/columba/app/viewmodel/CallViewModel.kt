@@ -325,15 +325,17 @@ class CallViewModel
          * Negotiation).
          *
          * Only meaningful while a call is established: the backend's
-         * `Telephone.switchProfile` is a no-op otherwise. Re-selecting the
-         * profile that is already active is dropped here so the UI cannot put
-         * a redundant `PREFERRED_PROFILE` frame on the wire (and reconfigure
-         * the transmit pipeline) for a no-op change. The UI reads the applied
-         * profile back through [activeProfileCode].
+         * `Telephone.switchProfile` is a no-op otherwise. A selection is always
+         * forwarded: LXST drops a request for the profile the call is already
+         * on, and that check runs against the live `Telephone.activeProfile`.
+         * Repeating it here against [activeProfileCode] would be wrong, because
+         * the observable is polled (~500 ms) and can lag a peer-initiated
+         * switch — a user choosing what the mirror still calls active would be
+         * silently ignored. The UI reads the applied profile back through
+         * [activeProfileCode].
          */
         fun switchProfile(profile: CodecProfile) {
             if (callState.value !is CallState.Active) return
-            if (activeProfileCode.value == profile.code) return
             Log.d(TAG, "Switching LXST profile to ${profile.abbreviation} (0x${profile.code.toString(16)})")
             viewModelScope.launch {
                 telephony.switchCallProfile(profile.code)

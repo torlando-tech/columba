@@ -193,12 +193,18 @@ class InterfaceImportViewModelTest {
             runCurrent()
             viewModel.close()
             viewModel.open("")
-            advanceUntilIdle()
+            runCurrent()
+
+            assertTrue(viewModel.state.value.isImporting)
+            viewModel.importSelected()
+            runCurrent()
+            coVerify(exactly = 1) { importManager.importInterfaces(any()) }
 
             gate.complete(InterfaceImportManager.ImportApplyResult(insertedIds = listOf(7L), appliedLive = true))
             advanceUntilIdle()
 
             assertTrue(viewModel.state.value.isOpen)
+            assertFalse(viewModel.state.value.isImporting)
             assertEquals(0, viewModel.state.value.importedCount)
         }
 

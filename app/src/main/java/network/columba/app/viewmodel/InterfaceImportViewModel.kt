@@ -89,11 +89,14 @@ class InterfaceImportViewModel
          */
         fun open(initialText: String = "") {
             session++
+            // A dismissed dialog may still be applying its import. Keep Add
+            // disabled for the new dialog until that work finishes.
             _state.value =
                 State(
                     isOpen = true,
                     text = initialText,
                     isLoadingExisting = true,
+                    isImporting = importJob?.isActive == true,
                 )
             loadExisting(session)
         }
@@ -126,7 +129,20 @@ class InterfaceImportViewModel
                 viewModelScope.launch(ioDispatcher) {
                     try {
                         val result = importManager.importInterfaces(selected.map { it.config })
-                        if (jobSession != session) return@launch
+                        if (jobSession != session) {
+                            _state.update { current ->
+                                current.copy(
+                                    isImporting = false,
+                                    isLoadingExisting = true,
+                                    needsManualApply =
+                                        current.needsManualApply ||
+                                            (!result.appliedLive && result.insertedIds.isNotEmpty()),
+                                    importGeneration = current.importGeneration + 1,
+                                )
+                            }
+                            loadExisting(session)
+                            return@launch
+                        }
                         existingConfigs = existingConfigs + selected.map { it.config }
                         _state.update { current ->
                             current.copy(
@@ -156,6 +172,9 @@ class InterfaceImportViewModel
                                     resultMessage = "Couldn't add interfaces: ${e.message ?: "unknown error"}",
                                 )
                             }
+                        } else {
+                            _state.update { it.copy(isImporting = false, isLoadingExisting = true) }
+                            loadExisting(session)
                         }
                     }
                 }

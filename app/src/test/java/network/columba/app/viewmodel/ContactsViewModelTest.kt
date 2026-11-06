@@ -6,6 +6,7 @@ import app.cash.turbine.test
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
+import network.columba.app.rns.api.model.NodeType
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.RelayInfo
@@ -361,6 +362,231 @@ class ContactsViewModelTest {
                 advanceUntilIdle()
                 val filtered = awaitItem()
                 assertEquals(1, filtered.size)
+            }
+        }
+
+    // ========== Contact-Type Filter Tests (GH issue #863) ==========
+
+    @Test
+    fun `filteredContacts - empty type filter returns all contacts`() =
+        runTest {
+            // Given: mixed aspects, including a contact that never announced
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(destinationHash = "peer_hash", displayName = "Peer"),
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(
+                            destinationHash = "site_hash",
+                            displayName = "Site",
+                            nodeType = NodeType.NODE.name,
+                        ),
+                    ),
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(
+                            destinationHash = "silent_hash",
+                            displayName = "Never Announced",
+                            nodeType = null,
+                        ),
+                    ),
+                )
+            contactsFlow.value = contacts
+            advanceUntilIdle()
+
+            // When: no type filter (All)
+            viewModel.updateSelectedContactTypes(emptySet())
+            advanceUntilIdle()
+
+            // Then
+            viewModel.filteredContacts.test {
+                skipItems(1)
+                advanceUntilIdle()
+                assertEquals(3, awaitItem().size)
+            }
+        }
+
+    @Test
+    fun `filteredContacts - selected type keeps only matching contacts`() =
+        runTest {
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(destinationHash = "peer_hash", displayName = "Peer"),
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(
+                            destinationHash = "site_hash",
+                            displayName = "Site",
+                            nodeType = NodeType.NODE.name,
+                        ),
+                    ),
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(
+                            destinationHash = "relay_hash",
+                            displayName = "Relay",
+                            nodeType = NodeType.PROPAGATION_NODE.name,
+                        ),
+                    ),
+                )
+            contactsFlow.value = contacts
+            advanceUntilIdle()
+
+            viewModel.updateSelectedContactTypes(setOf(NodeType.NODE))
+            advanceUntilIdle()
+
+            viewModel.filteredContacts.test {
+                skipItems(1)
+                advanceUntilIdle()
+                val filtered = awaitItem()
+                assertEquals(1, filtered.size)
+                assertEquals("site_hash", filtered[0].destinationHash)
+            }
+        }
+
+    @Test
+    fun `filteredContacts - audio filter keeps telephony destinations`() =
+        runTest {
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(destinationHash = "peer_hash", displayName = "Peer"),
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(
+                            destinationHash = "audio_hash",
+                            displayName = "Audio",
+                            nodeType = NodeType.PHONE.name,
+                        ),
+                    ),
+                )
+            contactsFlow.value = contacts
+            advanceUntilIdle()
+
+            viewModel.updateSelectedContactTypes(setOf(NodeType.PHONE))
+            advanceUntilIdle()
+
+            viewModel.filteredContacts.test {
+                skipItems(1)
+                advanceUntilIdle()
+                val filtered = awaitItem()
+                assertEquals(1, filtered.size)
+                assertEquals("audio_hash", filtered[0].destinationHash)
+            }
+        }
+
+    @Test
+    fun `filteredContacts - type filter hides never-announced contacts`() =
+        runTest {
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(destinationHash = "peer_hash", displayName = "Peer"),
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(
+                            destinationHash = "silent_hash",
+                            displayName = "Never Announced",
+                            nodeType = null,
+                        ),
+                    ),
+                )
+            contactsFlow.value = contacts
+            advanceUntilIdle()
+
+            viewModel.updateSelectedContactTypes(setOf(NodeType.PEER))
+            advanceUntilIdle()
+
+            viewModel.filteredContacts.test {
+                skipItems(1)
+                advanceUntilIdle()
+                val filtered = awaitItem()
+                assertEquals(1, filtered.size)
+                assertEquals("peer_hash", filtered[0].destinationHash)
+            }
+        }
+
+    @Test
+    fun `filteredContacts - type filter combines with search query`() =
+        runTest {
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(destinationHash = "peer_hash", displayName = "Ann"),
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(
+                            destinationHash = "site_hash",
+                            displayName = "Ann Site",
+                            nodeType = NodeType.NODE.name,
+                        ),
+                    ),
+                )
+            contactsFlow.value = contacts
+            advanceUntilIdle()
+
+            viewModel.onSearchQueryChanged("Ann")
+            viewModel.updateSelectedContactTypes(setOf(NodeType.NODE))
+            advanceUntilIdle()
+
+            viewModel.filteredContacts.test {
+                skipItems(1)
+                advanceUntilIdle()
+                val filtered = awaitItem()
+                assertEquals(1, filtered.size)
+                assertEquals("site_hash", filtered[0].destinationHash)
+            }
+        }
+
+    @Test
+    fun `filteredContacts - clearing type filter restores all contacts`() =
+        runTest {
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(destinationHash = "peer_hash", displayName = "Peer"),
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(
+                            destinationHash = "site_hash",
+                            displayName = "Site",
+                            nodeType = NodeType.NODE.name,
+                        ),
+                    ),
+                )
+            contactsFlow.value = contacts
+            advanceUntilIdle()
+
+            viewModel.updateSelectedContactTypes(setOf(NodeType.NODE))
+            viewModel.updateSelectedContactTypes(emptySet())
+            advanceUntilIdle()
+
+            viewModel.filteredContacts.test {
+                skipItems(1)
+                advanceUntilIdle()
+                assertEquals(2, awaitItem().size)
+            }
+        }
+
+    @Test
+    fun `contactsState - type filter applies to grouped sections`() =
+        runTest {
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(destinationHash = "peer_hash", displayName = "Peer"),
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(
+                            destinationHash = "relay_hash",
+                            displayName = "Relay",
+                            isMyRelay = true,
+                            nodeType = NodeType.PROPAGATION_NODE.name,
+                        ),
+                    ),
+                )
+            contactsFlow.value = contacts
+            advanceUntilIdle()
+
+            // When: filtering to Peers hides the propagation-node relay
+            viewModel.updateSelectedContactTypes(setOf(NodeType.PEER))
+            advanceUntilIdle()
+
+            viewModel.contactsState.test {
+                var state = awaitItem()
+                while (state.isLoading || state.groupedContacts.all.isEmpty()) {
+                    advanceUntilIdle()
+                    state = awaitItem()
+                }
+                assertNull(state.groupedContacts.relay)
+                assertEquals(1, state.groupedContacts.all.size)
+                assertEquals("peer_hash", state.groupedContacts.all[0].destinationHash)
             }
         }
 

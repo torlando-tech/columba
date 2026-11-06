@@ -68,6 +68,10 @@ class AnnounceProvenanceBridgeTests(unittest.TestCase):
             b"packet-hash",
             True,
         )
+        # received_announce hands the announce to the module's dispatch worker
+        # (it must never do the work on the thread RNS allocated for it), so
+        # wait for the worker to drain before asserting on the payloads.
+        self.assertTrue(getattr(self.module, "_flush_announce_queue", lambda: True)())
 
         self.assertEqual(1, len(callback.payloads))
         self.assertEqual(

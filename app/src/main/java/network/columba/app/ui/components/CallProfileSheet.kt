@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
@@ -60,7 +61,12 @@ fun CallProfileSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        // Other modal sheets in the app replace M3's default content window
+        // insets with an explicit systemBarsPadding() on the sheet; match that
+        // so a tall navigation bar cannot cover the end of the scrollable
+        // profile list.
         contentWindowInsets = { WindowInsets(0) },
+        modifier = Modifier.systemBarsPadding(),
     ) {
         CallProfileSheetContent(
             activeProfileCode = activeProfileCode,

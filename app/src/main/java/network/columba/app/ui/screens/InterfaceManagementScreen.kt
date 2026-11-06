@@ -2,6 +2,12 @@
 
 package network.columba.app.ui.screens
 
+import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -35,6 +41,8 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
@@ -97,9 +105,11 @@ import network.columba.app.rns.host.ble.util.BlePermissionManager
 import network.columba.app.rns.host.manager.CurrentTransport
 import network.columba.app.ui.components.BlePermissionBottomSheet
 import network.columba.app.ui.components.InterfaceConfigDialog
+import network.columba.app.ui.components.InterfaceConfigImportDialog
 import network.columba.app.ui.components.LocalCapabilities
 import network.columba.app.ui.components.RNodeBatteryIndicator
 import network.columba.app.ui.components.interfaceTypeIconData
+import network.columba.app.viewmodel.InterfaceImportViewModel
 import network.columba.app.viewmodel.InterfaceManagementViewModel
 
 /**
@@ -119,6 +129,8 @@ fun InterfaceManagementScreen(
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     val configState by viewModel.configState.collectAsState()
+    val importViewModel: InterfaceImportViewModel = hiltViewModel()
+    val importState by importViewModel.state.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner, viewModel) {
@@ -135,8 +147,16 @@ fun InterfaceManagementScreen(
     // State for delete confirmation dialog
     var interfaceToDelete by remember { mutableStateOf<InterfaceEntity?>(null) }
 
-    // State for long-press context menu (Edit / Delete)
+    // State for long-press context menu (Edit / Copy / Share / Delete)
     var contextMenuInterface by remember { mutableStateOf<InterfaceEntity?>(null) }
+
+    // Portable config snippet for the interface whose context menu is open.
+    // Null for device-bound interfaces (BLE / Bluetooth RNode), which hide the
+    // copy/share actions rather than offering an unusable snippet.
+    val contextMenuExportText =
+        remember(contextMenuInterface) {
+            contextMenuInterface?.let { viewModel.exportConfigText(it) }
+        }
 
     // State for error dialog
     var errorDialogInterface by remember { mutableStateOf<InterfaceEntity?>(null) }
@@ -172,6 +192,20 @@ fun InterfaceManagementScreen(
     LaunchedEffect(state.showBlePermissionRequest) {
         if (state.showBlePermissionRequest) {
             // Bottom sheet will be shown below
+        }
+    }
+
+    // Import result toast + surface the Apply button when the backend could
+    // not hot-reload the freshly imported interfaces.
+    LaunchedEffect(importState.resultMessage) {
+        importState.resultMessage?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            importViewModel.consumeResult()
+        }
+    }
+    LaunchedEffect(importState.importGeneration) {
+        if (importState.importGeneration > 0) {
+            viewModel.refreshExternalPendingChanges()
         }
     }
 
@@ -386,6 +420,20 @@ fun InterfaceManagementScreen(
                                                     else -> viewModel.showEditDialog(iface)
                                                 }
                                             },
+                                            onCopyConfig =
+                                                contextMenuExportText?.let { configText ->
+                                                    {
+                                                        copyInterfaceConfig(context, iface.name, configText)
+                                                        contextMenuInterface = null
+                                                    }
+                                                },
+                                            onShareConfig =
+                                                contextMenuExportText?.let { configText ->
+                                                    {
+                                                        shareInterfaceConfig(context, iface.name, configText)
+                                                        contextMenuInterface = null
+                                                    }
+                                                },
                                             onDelete = {
                                                 interfaceToDelete = iface
                                                 contextMenuInterface = null
@@ -552,9 +600,24 @@ fun InterfaceManagementScreen(
         )
     }
 
+    // Paste/import config dialog (also reachable from in-chat suggestions).
+    if (importState.isOpen) {
+        InterfaceConfigImportDialog(
+            state = importState,
+            onDismiss = importViewModel::close,
+            onTextChange = importViewModel::updateText,
+            onToggle = importViewModel::toggle,
+            onImport = importViewModel::importSelected,
+        )
+    }
+
     // Interface type selection dialog
     if (showTypeSelector) {
         InterfaceTypeSelector(
+            onPasteConfig = {
+                showTypeSelector = false
+                importViewModel.open()
+            },
             onTypeSelected = { type ->
                 showTypeSelector = false
                 when (type) {
@@ -978,6 +1041,8 @@ fun InterfaceCardContextMenu(
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onCopyConfig: (() -> Unit)? = null,
+    onShareConfig: (() -> Unit)? = null,
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -995,6 +1060,32 @@ fun InterfaceCardContextMenu(
             text = { Text(stringResource(R.string.edit_interface)) },
             onClick = onEdit,
         )
+
+        if (onCopyConfig != null) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = null,
+                    )
+                },
+                text = { Text(stringResource(R.string.copy_interface_config)) },
+                onClick = onCopyConfig,
+            )
+        }
+
+        if (onShareConfig != null) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = null,
+                    )
+                },
+                text = { Text(stringResource(R.string.share_interface_config)) },
+                onClick = onShareConfig,
+            )
+        }
 
         HorizontalDivider()
 
@@ -1377,6 +1468,7 @@ private fun getInterfaceDescription(interfaceEntity: InterfaceEntity): String {
 fun InterfaceTypeSelector(
     onTypeSelected: (String) -> Unit,
     onDismiss: () -> Unit,
+    onPasteConfig: () -> Unit = {},
 ) {
     var advancedExpanded by remember { mutableStateOf(false) }
     val rotationAngle by animateFloatAsState(
@@ -1411,6 +1503,13 @@ fun InterfaceTypeSelector(
                     title = "RNode LoRa",
                     description = "Connects to separate RNode hardware via BLE or Bluetooth Classic",
                     onClick = { onTypeSelected("RNode") },
+                )
+
+                InterfaceTypeOption(
+                    title = stringResource(R.string.interface_paste_config),
+                    description = stringResource(R.string.interface_paste_config_description),
+                    onClick = onPasteConfig,
+                    isHighlighted = true,
                 )
 
                 // Collapsible Advanced section
@@ -1819,4 +1918,37 @@ private fun StatusBadge(
             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
         )
     }
+}
+
+/**
+ * Put a portable Reticulum config snippet on the clipboard so it can be
+ * pasted into another Columba install (or any RNS config file).
+ */
+private fun copyInterfaceConfig(
+    context: Context,
+    interfaceName: String,
+    configText: String,
+) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("Reticulum interface $interfaceName", configText))
+    Toast.makeText(context, context.getString(R.string.interface_config_copied), Toast.LENGTH_SHORT).show()
+}
+
+/** Share a portable config snippet through the system share sheet. */
+private fun shareInterfaceConfig(
+    context: Context,
+    interfaceName: String,
+    configText: String,
+) {
+    val intent =
+        Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "Reticulum interface: $interfaceName")
+            putExtra(Intent.EXTRA_TEXT, configText)
+        }
+    val chooser = Intent.createChooser(intent, context.getString(R.string.share_interface_config))
+    if (context !is Activity) {
+        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    context.startActivity(chooser)
 }

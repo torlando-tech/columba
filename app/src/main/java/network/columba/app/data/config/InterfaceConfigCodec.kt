@@ -41,7 +41,7 @@ object InterfaceConfigCodec {
     // Keeps parsing bounded for a clipboard/message payload. The same cap is
     // used by the legacy config-file import path.
     private val IGNORED_LINE_PREFIXES = listOf("#", ";", "```")
-    private val QUOTE_TRIGGER_CHARS = setOf('#', ';', '[', ']')
+    private val QUOTE_TRIGGER_CHARS = setOf('#', ';', '[', ']', '"', '\'')
 
     private const val MAX_TEXT_BYTES = ValidationConstants.MAX_CONFIG_FILE_SIZE
 
@@ -132,9 +132,15 @@ object InterfaceConfigCodec {
         fun flushCurrent() {
             val section = current ?: return
             current = null
+            // The snippet default applies only when neither key is present. An
+            // explicit but unparseable value keeps that default; `no` stays off.
             val enabled =
-                section.boolean("enabled", defaultValue = includeDisabled) ||
-                    section.boolean("interface_enabled", defaultValue = false)
+                when {
+                    "enabled" in section.params -> section.boolean("enabled", defaultValue = includeDisabled)
+                    "interface_enabled" in section.params ->
+                        section.boolean("interface_enabled", defaultValue = includeDisabled)
+                    else -> includeDisabled
+                }
             if (!enabled && !includeDisabled) return
             try {
                 val parsed = buildInterface(section, enabled = enabled)
@@ -502,6 +508,7 @@ object InterfaceConfigCodec {
                         line("type", "RNodeInterface")
                         line("enabled", yesNo(config.enabled))
                         line("tcp_host", host)
+                        line("tcp_port", config.tcpPort.toString())
                         line("frequency", config.frequency.toString())
                         line("bandwidth", config.bandwidth.toString())
                         line("txpower", config.txPower.toString())
@@ -569,11 +576,9 @@ object InterfaceConfigCodec {
             val identity = identityKey(entry.config)
             val duplicate = identity in usedIdentities
             val originalName = entry.config.name
-            val uniqueName = if (duplicate) originalName else uniqueName(originalName, usedNames)
-            if (!duplicate) {
-                usedNames += uniqueName.lowercase()
-                usedIdentities += identity
-            }
+            val uniqueName = uniqueName(originalName, usedNames)
+            usedNames += uniqueName.lowercase()
+            if (!duplicate) usedIdentities += identity
             resolved +=
                 ResolvedImport(
                     config = entry.config.withName(uniqueName),
@@ -764,6 +769,9 @@ object InterfaceConfigCodec {
 
         fun param(key: String): String? = params[key]?.takeIf { it.isNotBlank() && it.lowercase() != "none" }
 
+        /** Literal text for credentials, where `none` can be a real value. */
+        fun textParam(key: String): String? = params[key]?.takeIf { it.isNotBlank() }
+
         fun boolean(
             key: String,
             defaultValue: Boolean,
@@ -790,9 +798,9 @@ object InterfaceConfigCodec {
 
         fun double(key: String): Double? = param(key)?.toDoubleOrNull()
 
-        fun ifacNetworkName(): String? = param("network_name") ?: param("networkname")
+        fun ifacNetworkName(): String? = textParam("network_name") ?: textParam("networkname")
 
-        fun ifacPassphrase(): String? = param("passphrase") ?: param("pass_phrase")
+        fun ifacPassphrase(): String? = textParam("passphrase") ?: textParam("pass_phrase")
 
         fun mode(warnings: MutableList<String>): String {
             val raw = param("mode") ?: return InterfaceMode.FULL.value

@@ -2,8 +2,11 @@ package network.columba.app.notifications
 
 import android.Manifest
 import android.app.Application
+import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
+import androidx.core.app.NotificationCompat
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.service.ActiveConversationManager
 import io.mockk.coEvery
@@ -13,7 +16,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -46,6 +52,20 @@ class NotificationHelperTest {
                 it.tag == NotificationHelper.messageNotificationTag(destinationHash)
         }
 
+    /**
+     * Everything a notification listener or the system's notification history can read
+     * from a notification: the extras bundle (title, text, any style lines) and ticker,
+     * including the lock-screen public version.
+     */
+    private fun notificationDump(notification: Notification): String =
+        listOfNotNull(
+            notification.extras.toString(),
+            notification.tickerText?.toString(),
+            notification.publicVersion?.let { public ->
+                public.extras.toString() + public.tickerText?.toString().orEmpty()
+            },
+        ).joinToString("\n")
+
     @Before
     fun setup() {
         context = RuntimeEnvironment.getApplication()
@@ -69,6 +89,7 @@ class NotificationHelperTest {
         coEvery { settingsRepository.notificationHeardAnnounceFlow } returns flowOf(true)
         coEvery { settingsRepository.notificationBleConnectedFlow } returns flowOf(true)
         coEvery { settingsRepository.notificationBleDisconnectedFlow } returns flowOf(true)
+        coEvery { settingsRepository.notificationPrivacyLevelFlow } returns flowOf(NotificationPrivacyLevel.FULL)
 
         notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager)
     }
@@ -183,6 +204,106 @@ class NotificationHelperTest {
             val shadowNotificationManager = shadowOf(notificationManager)
             val notifications = shadowNotificationManager.allNotifications
             assertTrue("Notification should be posted (general covers favorites)", notifications.isNotEmpty())
+        }
+
+    // ========== Message Privacy Tests ==========
+
+    @Test
+    fun `notifyMessageReceived FULL keeps the preview in the notification`() =
+        runBlocking {
+            coEvery { settingsRepository.notificationPrivacyLevelFlow } returns
+                flowOf(NotificationPrivacyLevel.FULL)
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Hello there",
+                isFavorite = false,
+            )
+
+            val posted = messageNotification("abc123def456")
+            assertNotNull("Notification should be posted", posted)
+            assertEquals("Test Peer", posted!!.notification.extras.getCharSequence(Notification.EXTRA_TITLE))
+            assertEquals("Hello there", posted.notification.extras.getCharSequence(Notification.EXTRA_TEXT))
+        }
+
+    @Test
+    fun `notifyMessageReceived NAME_ONLY keeps sender name but never the preview`() =
+        runBlocking {
+            coEvery { settingsRepository.notificationPrivacyLevelFlow } returns
+                flowOf(NotificationPrivacyLevel.NAME_ONLY)
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "SECRET-PREVIEW-123",
+                isFavorite = false,
+            )
+
+            val posted = messageNotification("abc123def456")
+            assertNotNull("Notification should be posted", posted)
+            val notification = posted!!.notification
+            assertEquals("Test Peer", notification.extras.getCharSequence(Notification.EXTRA_TITLE))
+            assertEquals("New message", notification.extras.getCharSequence(Notification.EXTRA_TEXT))
+            assertFalse(
+                "Preview must not appear anywhere in the notification",
+                notificationDump(notification).contains("SECRET-PREVIEW-123"),
+            )
+            assertEquals(NotificationCompat.VISIBILITY_PRIVATE, notification.visibility)
+            assertNotNull("Privacy levels must supply a redacted lock-screen version", notification.publicVersion)
+        }
+
+    @Test
+    fun `notifyMessageReceived NONE keeps neither sender name nor preview`() =
+        runBlocking {
+            coEvery { settingsRepository.notificationPrivacyLevelFlow } returns
+                flowOf(NotificationPrivacyLevel.NONE)
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "SECRET-PREVIEW-123",
+                isFavorite = false,
+            )
+
+            val posted = messageNotification("abc123def456")
+            assertNotNull("Notification should be posted", posted)
+            val notification = posted!!.notification
+            assertEquals("New message", notification.extras.getCharSequence(Notification.EXTRA_TITLE))
+            assertNull(notification.extras.getCharSequence(Notification.EXTRA_TEXT))
+            val dump = notificationDump(notification)
+            assertFalse("Sender name must not appear", dump.contains("Test Peer"))
+            assertFalse("Preview must not appear anywhere, including the lock-screen version", dump.contains("SECRET-PREVIEW-123"))
+        }
+
+    @Test
+    fun `cancelMessageNotifications cancels message notifications only`() =
+        runBlocking {
+            coEvery { settingsRepository.notificationAnnounceDirectOnlyFlow } returns flowOf(false)
+            coEvery { settingsRepository.notificationAnnounceExcludeTcpFlow } returns flowOf(false)
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+            )
+            notificationHelper.notifyAnnounceHeard(
+                destinationHash = "ffeeddccbbaa",
+                peerName = "Announcer",
+                hops = 2,
+            )
+
+            notificationHelper.cancelMessageNotifications()
+
+            assertNull("Message notification should be cancelled", messageNotification("abc123def456"))
+            val remaining = shadowOf(notificationManager).allNotifications
+            assertTrue(
+                "Announce notification should survive",
+                remaining.any {
+                    it.extras.getCharSequence(Notification.EXTRA_TITLE) == "Announce from Announcer"
+                },
+            )
         }
 
     // ========== Active Conversation Suppression Tests ==========

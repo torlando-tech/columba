@@ -16,8 +16,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.data.model.TcpCommunityServers
 import network.columba.app.data.repository.IdentityRepository
+import network.columba.app.notifications.NotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.InterfaceConfig
@@ -42,6 +44,7 @@ class OnboardingViewModel
         private val interfaceRepository: InterfaceRepository,
         private val interfaceConfigManager: InterfaceConfigManager,
         private val crashReportManager: CrashReportManager,
+        private val notificationHelper: NotificationHelper,
     ) : ViewModel() {
         companion object {
             private const val TAG = "OnboardingViewModel"
@@ -83,12 +86,16 @@ class OnboardingViewModel
             viewModelScope.launch {
                 try {
                     val hasCompleted = settingsRepository.hasCompletedOnboardingFlow.first()
+                    // Load the persisted level so re-running onboarding starts from the
+                    // user's current choice instead of silently resetting it.
+                    val privacyLevel = settingsRepository.notificationPrivacyLevelFlow.first()
                     _state.value =
                         _state.value.copy(
                             isLoading = false,
                             hasCompletedOnboarding = hasCompleted,
+                            notificationPrivacyLevel = privacyLevel,
                         )
-                    Log.d(TAG, "Onboarding status checked: hasCompleted=$hasCompleted")
+                    Log.d(TAG, "Onboarding status checked: hasCompleted=$hasCompleted, privacyLevel=${privacyLevel.name}")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error checking onboarding status", e)
                     _state.value = _state.value.copy(isLoading = false)
@@ -116,6 +123,14 @@ class OnboardingViewModel
          */
         fun setCrashReportingEnabled(enabled: Boolean) {
             _state.value = _state.value.copy(crashReportingEnabled = enabled)
+        }
+
+        /**
+         * Update the message privacy choice. Persisted when onboarding completes
+         * (see [completeOnboarding]).
+         */
+        fun setNotificationPrivacyLevel(level: NotificationPrivacyLevel) {
+            _state.value = _state.value.copy(notificationPrivacyLevel = level)
         }
 
         /**
@@ -273,6 +288,16 @@ class OnboardingViewModel
                     val interfacesCreated = createSelectedInterfaces()
                     if (!interfacesCreated) {
                         hasWarnings = true
+                    }
+
+                    // Persist the message privacy choice. If onboarding is being re-run and
+                    // the level got stricter, drop message notifications already in the
+                    // shade — they were built with the previous level.
+                    val privacyLevel = _state.value.notificationPrivacyLevel
+                    val previousPrivacyLevel = settingsRepository.notificationPrivacyLevelFlow.first()
+                    settingsRepository.saveNotificationPrivacyLevel(privacyLevel)
+                    if (privacyLevel.isMoreRestrictiveThan(previousPrivacyLevel)) {
+                        notificationHelper.cancelMessageNotifications()
                     }
 
                     // Mark onboarding as completed - this is critical and will throw if it fails

@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.test.RegisterComponentActivityRule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -49,6 +50,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -67,6 +70,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -87,6 +92,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -105,6 +112,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -123,6 +132,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -143,6 +154,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -161,6 +174,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -179,6 +194,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = true, // Battery already exempt to isolate notification button
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -198,6 +215,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = true, // Battery already exempt to isolate notification button
                 onEnableNotifications = { callbackInvoked = true },
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -219,6 +238,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -239,6 +260,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -257,6 +280,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -275,6 +300,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -293,6 +320,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -312,6 +341,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = { callbackInvoked = true },
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -333,6 +364,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = true,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -353,6 +386,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = true,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -371,6 +406,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -392,6 +429,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -411,6 +450,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = { callbackInvoked = true },
                 onContinue = {},
             )
@@ -432,6 +473,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -451,6 +494,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = { callbackInvoked = true },
             )
@@ -475,6 +520,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = { callCount++ },
                 onContinue = {},
             )
@@ -497,6 +544,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = { callCount++ },
             )
@@ -519,6 +568,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = true, // Isolate notification button
                 onEnableNotifications = { callCount++ },
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -541,6 +592,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = { callCount++ },
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -564,6 +617,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false, // Battery not exempt so we have exactly one Granted icon
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -587,6 +642,8 @@ class PermissionsPageTest {
                 batteryOptimizationExempt = false,
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onNotificationPrivacyLevelChange = {},
                 onBack = {},
                 onContinue = {},
             )
@@ -605,5 +662,49 @@ class PermissionsPageTest {
         composeTestRule.onNodeWithText("Prevents Android from pausing Columba").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Back").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Continue").performScrollTo().assertIsDisplayed()
+    }
+
+    // ========== Message Privacy Tests ==========
+
+    @Test
+    fun permissionsPage_displaysMessagePrivacySection() {
+        composeTestRule.setContent {
+            PermissionsPage(
+                notificationsGranted = false,
+                batteryOptimizationExempt = false,
+                notificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+                onEnableNotifications = {},
+                onEnableBatteryOptimization = {},
+                onNotificationPrivacyLevelChange = {},
+                onBack = {},
+                onContinue = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Message privacy").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Name and message").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Name only").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("No name or message").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun permissionsPage_selectingPrivacyLevel_invokesCallback() {
+        var selectedLevel: NotificationPrivacyLevel? = null
+        composeTestRule.setContent {
+            PermissionsPage(
+                notificationsGranted = false,
+                batteryOptimizationExempt = false,
+                notificationPrivacyLevel = NotificationPrivacyLevel.FULL,
+                onEnableNotifications = {},
+                onEnableBatteryOptimization = {},
+                onNotificationPrivacyLevelChange = { selectedLevel = it },
+                onBack = {},
+                onContinue = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("No name or message").performScrollTo().performClick()
+
+        assertEquals(NotificationPrivacyLevel.NONE, selectedLevel)
     }
 }

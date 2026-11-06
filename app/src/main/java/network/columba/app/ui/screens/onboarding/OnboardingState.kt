@@ -1,6 +1,7 @@
 package network.columba.app.ui.screens.onboarding
 
 import androidx.compose.runtime.Immutable
+import network.columba.app.data.model.NotificationPrivacyLevel
 
 /**
  * State for the paged onboarding flow.
@@ -13,6 +14,7 @@ data class OnboardingState(
     val notificationsEnabled: Boolean = false,
     val notificationsGranted: Boolean = false,
     val batteryOptimizationExempt: Boolean = false,
+    val notificationPrivacyLevel: NotificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
     val crashReportingEnabled: Boolean = false,
     val isSaving: Boolean = false,
     val isLoading: Boolean = true,

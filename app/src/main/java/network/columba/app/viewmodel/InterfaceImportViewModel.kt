@@ -83,22 +83,31 @@ class InterfaceImportViewModel
         @Volatile
         private var session: Int = 0
 
+        /** Serialises open() with an import's final state transition. */
+        private val stateLock = Any()
+
+        /** Set synchronously before launch and cleared in the job's finally. */
+        @Volatile
+        private var importRunning = false
+
         /**
          * Open the dialog. [initialText] prefills the editor (used by the chat
          * suggestion card); the user can still edit before importing.
          */
         fun open(initialText: String = "") {
-            session++
-            // A dismissed dialog may still be applying its import. Keep Add
-            // disabled for the new dialog until that work finishes.
-            _state.value =
-                State(
-                    isOpen = true,
-                    text = initialText,
-                    isLoadingExisting = true,
-                    isImporting = importJob?.isActive == true,
-                )
-            loadExisting(session)
+            synchronized(stateLock) {
+                session++
+                // A dismissed dialog may still be applying its import. Keep Add
+                // disabled for the new dialog until that work finishes.
+                _state.value =
+                    State(
+                        isOpen = true,
+                        text = initialText,
+                        isLoadingExisting = true,
+                        isImporting = importRunning,
+                    )
+                loadExisting(session)
+            }
         }
 
         fun updateText(text: String) {
@@ -118,71 +127,87 @@ class InterfaceImportViewModel
         }
 
         fun importSelected() {
-            val current = _state.value
-            if (current.isLoadingExisting || current.isImporting) return
-            val selected = current.items.filter { it.selected }
-            if (selected.isEmpty()) return
-            _state.update { it.copy(isImporting = true) }
-            importJob?.cancel()
-            val jobSession = session
-            importJob =
-                viewModelScope.launch(ioDispatcher) {
-                    try {
-                        val result = importManager.importInterfaces(selected.map { it.config })
-                        if (jobSession != session) {
+            synchronized(stateLock) {
+                val current = _state.value
+                if (current.isLoadingExisting || current.isImporting || importRunning) return
+                val selected = current.items.filter { it.selected }
+                if (selected.isEmpty()) return
+                importRunning = true
+                _state.update { it.copy(isImporting = true) }
+                importJob?.cancel()
+                val jobSession = session
+                importJob =
+                    viewModelScope.launch(ioDispatcher) {
+                        try {
+                            val result = importManager.importInterfaces(selected.map { it.config })
+                            if (jobSession != session) {
+                                _state.update { current ->
+                                    current.copy(
+                                        isImporting = false,
+                                        isLoadingExisting = true,
+                                        needsManualApply =
+                                            current.needsManualApply ||
+                                                (!result.appliedLive && result.insertedIds.isNotEmpty()),
+                                        importGeneration = current.importGeneration + 1,
+                                    )
+                                }
+                                loadExisting(session, preserveSelection = true)
+                                return@launch
+                            }
+                            existingConfigs = existingConfigs + selected.map { it.config }
                             _state.update { current ->
                                 current.copy(
                                     isImporting = false,
-                                    isLoadingExisting = true,
-                                    needsManualApply =
-                                        current.needsManualApply ||
-                                            (!result.appliedLive && result.insertedIds.isNotEmpty()),
+                                    isOpen = false,
+                                    importedCount = result.insertedIds.size,
+                                    needsManualApply = !result.appliedLive && result.insertedIds.isNotEmpty(),
+                                    resultMessage =
+                                        buildString {
+                                            append("Added ${result.insertedIds.size} interface")
+                                            if (result.insertedIds.size != 1) append("s")
+                                            if (!result.appliedLive) {
+                                                append(" — open Network Interfaces to apply")
+                                                result.applyErrorMessage?.let { append(" (live apply failed: $it)") }
+                                            }
+                                        },
                                     importGeneration = current.importGeneration + 1,
                                 )
                             }
-                            loadExisting(session)
-                            return@launch
-                        }
-                        existingConfigs = existingConfigs + selected.map { it.config }
-                        _state.update { current ->
-                            current.copy(
-                                isImporting = false,
-                                isOpen = false,
-                                importedCount = result.insertedIds.size,
-                                needsManualApply = !result.appliedLive && result.insertedIds.isNotEmpty(),
-                                resultMessage =
-                                    buildString {
-                                        append("Added ${result.insertedIds.size} interface")
-                                        if (result.insertedIds.size != 1) append("s")
-                                        if (!result.appliedLive) {
-                                            append(" — open Network Interfaces to apply")
-                                            result.applyErrorMessage?.let { append(" (live apply failed: $it)") }
-                                        }
-                                    },
-                                importGeneration = current.importGeneration + 1,
-                            )
-                        }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        if (jobSession == session) {
-                            _state.update {
-                                it.copy(
-                                    isImporting = false,
-                                    resultMessage = "Couldn't add interfaces: ${e.message ?: "unknown error"}",
-                                )
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            if (jobSession == session) {
+                                _state.update {
+                                    it.copy(
+                                        isImporting = false,
+                                        resultMessage = "Couldn't add interfaces: ${e.message ?: "unknown error"}",
+                                    )
+                                }
+                            } else {
+                                _state.update { it.copy(isImporting = false, isLoadingExisting = true) }
+                                loadExisting(session, preserveSelection = true)
                             }
-                        } else {
-                            _state.update { it.copy(isImporting = false, isLoadingExisting = true) }
-                            loadExisting(session)
+                        } finally {
+                            synchronized(stateLock) {
+                                importRunning = false
+                                _state.update { it.copy(isImporting = false) }
+                            }
                         }
                     }
-                }
+            }
         }
 
         /** Restart parsing from the current text without reopening. */
-        fun reparse() {
+        fun reparse(preserveSelection: Boolean = false) {
             val current = _state.value
+            val previousSelections =
+                if (preserveSelection) {
+                    current.items.associate {
+                        it.originalName + "|" + InterfaceConfigCodec.identityKey(it.config) to it.selected
+                    }
+                } else {
+                    emptyMap()
+                }
             if (current.text.isBlank()) {
                 _state.update { it.copy(items = emptyList(), errors = emptyList(), warnings = emptyList()) }
                 return
@@ -196,7 +221,9 @@ class InterfaceImportViewModel
                         originalName = entry.originalName,
                         duplicate = entry.duplicate,
                         warnings = entry.warnings,
-                        selected = !entry.duplicate,
+                        selected =
+                            previousSelections[entry.originalName + "|" + InterfaceConfigCodec.identityKey(entry.config)]
+                                ?: !entry.duplicate,
                     )
                 }
             _state.update {
@@ -220,7 +247,10 @@ class InterfaceImportViewModel
             _state.update { it.copy(resultMessage = null) }
         }
 
-        private fun loadExisting(sessionAtStart: Int) {
+        private fun loadExisting(
+            sessionAtStart: Int,
+            preserveSelection: Boolean = false,
+        ) {
             loadJob?.cancel()
             loadJob =
                 viewModelScope.launch(ioDispatcher) {
@@ -229,7 +259,7 @@ class InterfaceImportViewModel
                             .getOrDefault(emptyList())
                     if (sessionAtStart != session) return@launch
                     _state.update { it.copy(isLoadingExisting = false) }
-                    reparse()
+                    reparse(preserveSelection)
                 }
         }
 

@@ -130,13 +130,18 @@ class PythonCallManager(
             }
             backend.telephonyImpl.setIncomingEnabledHook = ::setIncomingEnabled
             // LXST Profile Negotiation: let PythonRnsTelephony read the active
-            // codec profile and cycle it via this manager's Telephone. The
-            // telephone is lateinit, so the read hook guards initialization
-            // (returns null before setup has run).
-            backend.telephonyImpl.activeProfileReadHook = {
+            // codec profile and switch it via this manager's Telephone. The
+            // telephone is lateinit, so the read hooks guard initialization
+            // (return null before setup has run). The abbreviation hook feeds
+            // the legacy VoiceCallState; the id hook feeds the typed
+            // activeProfileCode observable.
+            backend.telephonyImpl.activeProfileAbbreviationReadHook = {
                 if (::telephone.isInitialized) telephone.activeProfile.abbreviation else null
             }
-            backend.telephonyImpl.cycleCallProfileHook = ::cycleProfile
+            backend.telephonyImpl.activeProfileCodeReadHook = {
+                if (::telephone.isInitialized) telephone.activeProfile.id else null
+            }
+            backend.telephonyImpl.switchCallProfileHook = ::switchProfile
             // LXST Call Mode Negotiation: let PythonRnsTelephony read the active
             // call mode, cycle it, and set the wire-level PTT state via this
             // manager's Telephone. The telephone is lateinit, so the read hook
@@ -352,25 +357,28 @@ class PythonCallManager(
     }
 
     /**
-     * Cycle to the next LXST audio profile and signal it to the remote peer
-     * (LXST Profile Negotiation). Invoked by [PythonRnsTelephony]'s
-     * `cycleCallProfileHook`.
+     * Switch to the LXST audio profile [profileCode] and signal it to the
+     * remote peer (LXST Profile Negotiation). Invoked by [PythonRnsTelephony]'s
+     * `switchCallProfileHook`.
      *
      * `Telephone.switchProfile` is a no-op when there is no active call (the
-     * pipeline is not configured), so this is safe to call any time. It picks
-     * the next profile from the current active one via [Profile.next] and
-     * routes the switch through the LXST-kt stack, which sends the
-     * `PREFERRED_PROFILE` signalling frame and reconfigures the transmit
-     * pipeline.
+     * pipeline is not configured), so this is safe to call any time. Unknown
+     * ids are dropped rather than defaulted: silently switching a live call to
+     * a profile the caller did not ask for is worse than ignoring the request.
      */
-    fun cycleProfile() {
+    fun switchProfile(profileCode: Int) {
         if (!::telephone.isInitialized || !telephone.isCallActive()) {
-            Log.w(TAG, "cycleProfile() before telephone is active — ignoring")
+            Log.w(TAG, "switchProfile(0x${profileCode.toString(16)}) before telephone is active — ignoring")
             return
         }
-        val next = Profile.next(telephone.activeProfile)
-        telephone.switchProfile(next)
-        Log.i(TAG, "Cycled LXST profile to ${next.abbreviation}")
+        val profile =
+            Profile.fromId(profileCode)
+                ?: run {
+                    Log.w(TAG, "Unknown LXST profile code 0x${profileCode.toString(16)} — ignoring")
+                    return
+                }
+        telephone.switchProfile(profile)
+        Log.i(TAG, "Switched LXST profile to ${profile.abbreviation}")
     }
 
     // ===== LXST Call Mode Negotiation (full/half duplex) =====

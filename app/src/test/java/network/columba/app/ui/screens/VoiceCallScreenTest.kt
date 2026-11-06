@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
@@ -30,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -42,8 +40,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.test.core.app.ApplicationProvider
-import network.columba.app.R
 import network.columba.app.test.RegisterComponentActivityRule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -79,9 +75,6 @@ class VoiceCallScreenTest {
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
     val composeTestRule get() = composeRule
-
-    private fun resText(id: Int): String =
-        ApplicationProvider.getApplicationContext<Application>().getString(id)
 
     // ========== Peer Name Display Tests ==========
 
@@ -129,7 +122,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = formattedHash,
-                callStatus = resText(R.string.call_status_connecting_long),
+                callStatus = "Connecting...",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -150,7 +143,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "Bob",
-                callStatus = resText(R.string.call_status_connecting_long),
+                callStatus = "Connecting...",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -161,7 +154,7 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText(resText(R.string.call_status_connecting_long)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Connecting...").assertIsDisplayed()
     }
 
     @Test
@@ -169,7 +162,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "Charlie",
-                callStatus = resText(R.string.call_status_ringing_long),
+                callStatus = "Ringing...",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -180,7 +173,7 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText(resText(R.string.call_status_ringing_long)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Ringing...").assertIsDisplayed()
     }
 
     @Test
@@ -207,7 +200,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "Eve",
-                callStatus = resText(R.string.call_status_call_ended),
+                callStatus = "Call Ended",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -218,7 +211,7 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText(resText(R.string.call_status_call_ended)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Call Ended").assertIsDisplayed()
     }
 
     @Test
@@ -226,7 +219,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "Frank",
-                callStatus = resText(R.string.call_status_line_busy),
+                callStatus = "Line Busy",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -237,7 +230,7 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText(resText(R.string.call_status_line_busy)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Line Busy").assertIsDisplayed()
     }
 
     @Test
@@ -245,7 +238,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "Grace",
-                callStatus = resText(R.string.call_status_call_rejected),
+                callStatus = "Call Rejected",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -256,7 +249,7 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText(resText(R.string.call_status_call_rejected)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Call Rejected").assertIsDisplayed()
     }
 
     @Test
@@ -264,7 +257,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "Henry",
-                callStatus = resText(R.string.call_status_calling_long),
+                callStatus = "Calling...",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -275,7 +268,7 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText(resText(R.string.call_status_calling_long)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Calling...").assertIsDisplayed()
     }
 
     // ========== Call Duration Tests ==========
@@ -423,7 +416,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "Patricia",
-                callStatus = resText(R.string.call_status_connecting_long),
+                callStatus = "Connecting...",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -542,7 +535,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "Victor",
-                callStatus = resText(R.string.call_status_ringing_long),
+                callStatus = "Ringing...",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -593,7 +586,7 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNode(hasContentDescription(resText(R.string.call_end_call_content_description)), useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNode(hasContentDescription("End call"), useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -615,7 +608,7 @@ class VoiceCallScreenTest {
         // Verify End Call label text exists in the tree
         // Note: The label may be positioned outside visible bounds in test environment,
         // but we verify the end call button exists and works via content description
-        composeTestRule.onNode(hasContentDescription(resText(R.string.call_end_call_content_description)), useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNode(hasContentDescription("End call"), useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -636,7 +629,7 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNode(hasContentDescription(resText(R.string.call_end_call_content_description)), useUnmergedTree = true).performClick()
+        composeTestRule.onNode(hasContentDescription("End call"), useUnmergedTree = true).performClick()
         assertTrue(endCallCalled)
     }
 
@@ -647,7 +640,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "Alice",
-                callStatus = resText(R.string.call_status_connecting_long),
+                callStatus = "Connecting...",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -658,7 +651,7 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNode(hasContentDescription(resText(R.string.call_end_call_content_description)), useUnmergedTree = true).performClick()
+        composeTestRule.onNode(hasContentDescription("End call"), useUnmergedTree = true).performClick()
         assertTrue(endCallCalled)
     }
 
@@ -669,7 +662,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "Bob",
-                callStatus = resText(R.string.call_status_ringing_long),
+                callStatus = "Ringing...",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -680,7 +673,7 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNode(hasContentDescription(resText(R.string.call_end_call_content_description)), useUnmergedTree = true).performClick()
+        composeTestRule.onNode(hasContentDescription("End call"), useUnmergedTree = true).performClick()
         assertTrue(endCallCalled)
     }
 
@@ -777,7 +770,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "Grace",
-                callStatus = resText(R.string.call_status_connecting_long),
+                callStatus = "Connecting...",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -789,10 +782,10 @@ class VoiceCallScreenTest {
         }
 
         composeTestRule.onNodeWithText("Grace").assertIsDisplayed()
-        composeTestRule.onNodeWithText(resText(R.string.call_status_connecting_long)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Connecting...").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Mute").assertIsNotEnabled()
         composeTestRule.onNodeWithContentDescription("Speaker").assertIsNotEnabled()
-        composeTestRule.onNode(hasContentDescription(resText(R.string.call_end_call_content_description)), useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNode(hasContentDescription("End call"), useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -815,7 +808,7 @@ class VoiceCallScreenTest {
         composeTestRule.onNodeWithText("02:15").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Mute").assertIsEnabled()
         composeTestRule.onNodeWithContentDescription("Speaker").assertIsEnabled()
-        composeTestRule.onNode(hasContentDescription(resText(R.string.call_end_call_content_description)), useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNode(hasContentDescription("End call"), useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -823,7 +816,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "Ivy",
-                callStatus = resText(R.string.call_status_call_ended),
+                callStatus = "Call Ended",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -835,7 +828,7 @@ class VoiceCallScreenTest {
         }
 
         composeTestRule.onNodeWithText("Ivy").assertIsDisplayed()
-        composeTestRule.onNodeWithText(resText(R.string.call_status_call_ended)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Call Ended").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Mute").assertIsNotEnabled()
         composeTestRule.onNodeWithContentDescription("Speaker").assertIsNotEnabled()
     }
@@ -985,7 +978,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "",
-                callStatus = resText(R.string.call_status_connecting_long),
+                callStatus = "Connecting...",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -997,7 +990,7 @@ class VoiceCallScreenTest {
         }
 
         // Screen should render without crashing
-        composeTestRule.onNodeWithText(resText(R.string.call_status_connecting_long)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Connecting...").assertIsDisplayed()
     }
 
     @Test
@@ -1050,7 +1043,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "PTT User",
-                callStatus = resText(R.string.call_status_listening),
+                callStatus = "Listening",
                 callDuration = "01:00",
                 isMuted = true,
                 isSpeakerOn = false,
@@ -1099,7 +1092,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "PTT User",
-                callStatus = resText(R.string.call_status_listening),
+                callStatus = "Listening",
                 callDuration = "01:00",
                 isMuted = true,
                 isSpeakerOn = false,
@@ -1121,7 +1114,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "PTT User",
-                callStatus = resText(R.string.call_status_transmitting),
+                callStatus = "Transmitting",
                 callDuration = "01:00",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -1166,7 +1159,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "PTT User",
-                callStatus = resText(R.string.call_status_listening),
+                callStatus = "Listening",
                 callDuration = "01:00",
                 isMuted = true,
                 isSpeakerOn = false,
@@ -1189,7 +1182,7 @@ class VoiceCallScreenTest {
         composeTestRule.setContent {
             TestVoiceCallScreen(
                 peerName = "PTT User",
-                callStatus = resText(R.string.call_status_connecting_long),
+                callStatus = "Connecting...",
                 callDuration = "",
                 isMuted = false,
                 isSpeakerOn = false,
@@ -1206,115 +1199,11 @@ class VoiceCallScreenTest {
         composeTestRule.onNodeWithContentDescription("PTT").assertIsNotEnabled()
     }
 
-    // ========== LXST Profile Cycle Button Tests ==========
-
-    @Test
-    fun `profile button shows Audio label when no profile reported`() {
-        composeTestRule.setContent {
-            TestVoiceCallScreen(
-                peerName = "Profile User",
-                callStatus = "Connected",
-                callDuration = "00:30",
-                isMuted = false,
-                isSpeakerOn = false,
-                isCallActive = true,
-                activeProfile = null,
-                onToggleMute = {},
-                onToggleSpeaker = {},
-                onCycleProfile = {},
-                onEndCall = {},
-            )
-        }
-
-        composeTestRule.onNodeWithContentDescription("AUDIO").assertIsDisplayed()
-    }
-
-    @Test
-    fun `profile button shows the active profile abbreviation`() {
-        composeTestRule.setContent {
-            TestVoiceCallScreen(
-                peerName = "Profile User",
-                callStatus = "Connected",
-                callDuration = "00:30",
-                isMuted = false,
-                isSpeakerOn = false,
-                isCallActive = true,
-                activeProfile = "HQ",
-                onToggleMute = {},
-                onToggleSpeaker = {},
-                onCycleProfile = {},
-                onEndCall = {},
-            )
-        }
-
-        composeTestRule.onNodeWithContentDescription("HQ").assertIsDisplayed()
-    }
-
-    @Test
-    fun `profile button calls callback when clicked`() {
-        var profileCycled = false
-
-        composeTestRule.setContent {
-            TestVoiceCallScreen(
-                peerName = "Profile User",
-                callStatus = "Connected",
-                callDuration = "00:30",
-                isMuted = false,
-                isSpeakerOn = false,
-                isCallActive = true,
-                activeProfile = "MQ",
-                onToggleMute = {},
-                onToggleSpeaker = {},
-                onCycleProfile = { profileCycled = true },
-                onEndCall = {},
-            )
-        }
-
-        composeTestRule.onNodeWithContentDescription("MQ").performClick()
-        assertTrue(profileCycled)
-    }
-
-    @Test
-    fun `profile button is disabled when call not active`() {
-        composeTestRule.setContent {
-            TestVoiceCallScreen(
-                peerName = "Profile User",
-                callStatus = resText(R.string.call_status_connecting_long),
-                callDuration = "",
-                isMuted = false,
-                isSpeakerOn = false,
-                isCallActive = false,
-                activeProfile = null,
-                onToggleMute = {},
-                onToggleSpeaker = {},
-                onCycleProfile = {},
-                onEndCall = {},
-            )
-        }
-
-        composeTestRule.onNodeWithContentDescription("AUDIO").assertIsNotEnabled()
-    }
-
-    @Test
-    fun `profile button is enabled when call is active`() {
-        composeTestRule.setContent {
-            TestVoiceCallScreen(
-                peerName = "Profile User",
-                callStatus = "00:20",
-                callDuration = "00:20",
-                isMuted = false,
-                isSpeakerOn = false,
-                isCallActive = true,
-                activeProfile = "SHQ",
-                onToggleMute = {},
-                onToggleSpeaker = {},
-                onCycleProfile = {},
-                onEndCall = {},
-            )
-        }
-
-        composeTestRule.onNodeWithContentDescription("SHQ").assertIsEnabled()
-    }
+    // ========== LXST Audio Profile Picker Tests ==========
+    //
+    // The picker and its selection behaviour are covered by
+    // CallProfileSheetTest against the production CallProfileSheetContent, and
+    // its call-screen wiring by VoiceCallScreenProfilePickerTest.
 }
 
 // ========== Test Composables ==========
@@ -1335,11 +1224,9 @@ private fun TestVoiceCallScreen(
     isCallActive: Boolean,
     isPttMode: Boolean = false,
     isPttActive: Boolean = false,
-    activeProfile: String? = null,
     onToggleMute: () -> Unit,
     onToggleSpeaker: () -> Unit,
     onTogglePtt: () -> Unit = {},
-    onCycleProfile: () -> Unit = {},
     onEndCall: () -> Unit,
 ) {
     MaterialTheme {
@@ -1450,15 +1337,6 @@ private fun TestVoiceCallScreen(
                     onClick = onToggleSpeaker,
                     enabled = isCallActive,
                 )
-
-                // LXST profile cycle button
-                TestCallControlButton(
-                    icon = Icons.Default.AudioFile,
-                    label = (activeProfile ?: "Audio").uppercase(),
-                    isActive = false,
-                    onClick = onCycleProfile,
-                    enabled = isCallActive,
-                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -1475,7 +1353,7 @@ private fun TestVoiceCallScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.CallEnd,
-                    contentDescription = stringResource(R.string.call_end_call_content_description),
+                    contentDescription = "End call",
                     modifier = Modifier.size(32.dp),
                     tint = MaterialTheme.colorScheme.onError,
                 )
@@ -1484,7 +1362,7 @@ private fun TestVoiceCallScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = stringResource(R.string.call_end_call),
+                text = "End Call",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

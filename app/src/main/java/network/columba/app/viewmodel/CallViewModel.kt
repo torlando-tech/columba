@@ -10,6 +10,7 @@ import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
+import network.columba.app.ui.model.CodecProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -74,7 +75,7 @@ class CallViewModel
         val isPttMode: StateFlow<Boolean> = telephony.isPttMode
         val isPttActive: StateFlow<Boolean> = telephony.isPttActive
         val remoteIdentity: StateFlow<String?> = telephony.remoteIdentity
-        val activeProfile: StateFlow<String?> = telephony.activeProfile
+        val activeProfileCode: StateFlow<Int?> = telephony.activeProfileCode
         val callMode: StateFlow<String?> = telephony.callMode
 
         // Call duration (updated every second during active call)
@@ -324,19 +325,22 @@ class CallViewModel
         }
 
         /**
-         * Cycle to the next LXST audio profile and signal it to the remote
-         * peer (LXST Profile Negotiation).
+         * Switch to [profile] and signal it to the remote peer (LXST Profile
+         * Negotiation).
          *
          * Only meaningful while a call is established: the backend's
-         * `Telephone.switchProfile` is a no-op otherwise. The next profile is
-         * chosen by the backend from the current active one (via
-         * `Profile.next`); the UI reads the result back through [activeProfile].
+         * `Telephone.switchProfile` is a no-op otherwise. Re-selecting the
+         * profile that is already active is dropped here so the UI cannot put
+         * a redundant `PREFERRED_PROFILE` frame on the wire (and reconfigure
+         * the transmit pipeline) for a no-op change. The UI reads the applied
+         * profile back through [activeProfileCode].
          */
-        fun cycleProfile() {
+        fun switchProfile(profile: CodecProfile) {
             if (callState.value !is CallState.Active) return
-            Log.d(TAG, "Cycling LXST profile (current=${activeProfile.value})")
+            if (activeProfileCode.value == profile.code) return
+            Log.d(TAG, "Switching LXST profile to ${profile.abbreviation} (0x${profile.code.toString(16)})")
             viewModelScope.launch {
-                telephony.cycleCallProfile()
+                telephony.switchCallProfile(profile.code)
             }
         }
 

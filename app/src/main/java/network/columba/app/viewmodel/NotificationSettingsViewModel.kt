@@ -3,6 +3,8 @@ package network.columba.app.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import network.columba.app.data.model.NotificationPrivacyLevel
+import network.columba.app.notifications.NotificationHelper
 import network.columba.app.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +25,7 @@ data class NotificationSettingsState(
     val announceExcludeTcp: Boolean = true,
     val bleConnected: Boolean = false,
     val bleDisconnected: Boolean = false,
+    val privacyLevel: NotificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
     val hasRequestedNotificationPermission: Boolean = false,
     val isLoading: Boolean = true,
 )
@@ -32,6 +35,7 @@ class NotificationSettingsViewModel
     @Inject
     constructor(
         private val settingsRepository: SettingsRepository,
+        private val notificationHelper: NotificationHelper,
     ) : ViewModel() {
         companion object {
             private const val TAG = "NotificationSettingsVM"
@@ -55,12 +59,14 @@ class NotificationSettingsViewModel
                             settingsRepository.notificationReceivedMessageFlow,
                             settingsRepository.notificationReceivedMessageFavoriteFlow,
                             settingsRepository.notificationHeardAnnounceFlow,
-                        ) { enabled, msg, fav, announce ->
+                            settingsRepository.notificationPrivacyLevelFlow,
+                        ) { enabled, msg, fav, announce, privacyLevel ->
                             NotificationSettingsState(
                                 notificationsEnabled = enabled,
                                 receivedMessage = msg,
                                 receivedMessageFavorite = fav,
                                 heardAnnounce = announce,
+                                privacyLevel = privacyLevel,
                             )
                         },
                         combine(
@@ -103,6 +109,27 @@ class NotificationSettingsViewModel
                     Log.d(TAG, "Master notifications enabled: $enabled")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error saving notifications enabled", e)
+                }
+            }
+        }
+
+        /**
+         * Persist the message privacy level. Tightening it also drops message
+         * notifications that are already in the shade, since those were built with the
+         * previous (more revealing) level. The system's notification history is
+         * append-only and cannot be rewritten from here.
+         */
+        fun setNotificationPrivacyLevel(level: NotificationPrivacyLevel) {
+            val previousLevel = _state.value.privacyLevel
+            viewModelScope.launch {
+                try {
+                    settingsRepository.saveNotificationPrivacyLevel(level)
+                    if (level.isMoreRestrictiveThan(previousLevel)) {
+                        notificationHelper.cancelMessageNotifications()
+                    }
+                    Log.d(TAG, "Message privacy level: ${level.name}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error saving message privacy level", e)
                 }
             }
         }

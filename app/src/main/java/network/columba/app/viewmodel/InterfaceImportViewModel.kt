@@ -190,9 +190,9 @@ class InterfaceImportViewModel
         }
 
         fun close() {
-            session++
+            // Let an in-flight import finish so already-saved rows still get
+            // applied. A later open bumps the session and ignores its result.
             loadJob?.cancel()
-            importJob?.cancel()
             _state.update { it.copy(isOpen = false) }
         }
 

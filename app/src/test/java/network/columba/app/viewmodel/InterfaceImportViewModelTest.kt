@@ -181,7 +181,7 @@ class InterfaceImportViewModelTest {
         }
 
     @Test
-    fun `cancelling an import cannot close a reopened dialog`() =
+    fun `late import cannot close a reopened dialog`() =
         runTest {
             val gate = CompletableDeferred<InterfaceImportManager.ImportApplyResult>()
             coEvery { importManager.importInterfaces(any()) } coAnswers { gate.await() }

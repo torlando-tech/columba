@@ -116,17 +116,13 @@ class NotificationSettingsViewModel
         /**
          * Persist the message privacy level. Tightening it also drops message
          * notifications that are already in the shade, since those were built with the
-         * previous (more revealing) level. The system's notification history is
-         * append-only and cannot be rewritten from here.
+         * previous (more revealing) level. Saving and cancelling happen under the same
+         * lock the notification post takes, so a post cannot slip in with the old level.
          */
         fun setNotificationPrivacyLevel(level: NotificationPrivacyLevel) {
-            val previousLevel = _state.value.privacyLevel
             viewModelScope.launch {
                 try {
-                    settingsRepository.saveNotificationPrivacyLevel(level)
-                    if (level.isMoreRestrictiveThan(previousLevel)) {
-                        notificationHelper.cancelMessageNotifications()
-                    }
+                    notificationHelper.setMessagePrivacyLevel(level)
                     Log.d(TAG, "Message privacy level: ${level.name}")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error saving message privacy level", e)

@@ -9,6 +9,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,7 +64,7 @@ class OnboardingViewModelTest {
         mockInterfaceConfigManager = mockk()
         mockCrashReportManager = mockk()
         mockNotificationHelper = mockk()
-        every { mockNotificationHelper.cancelMessageNotifications() } just Runs
+        coEvery { mockNotificationHelper.setMessagePrivacyLevel(any()) } just Runs
         coEvery { mockCrashReportManager.updateCrashReportingConsent(any(), any(), any()) } returns Unit
 
         // Default stubs for SettingsRepository
@@ -72,7 +73,6 @@ class OnboardingViewModelTest {
         coEvery { mockSettingsRepository.needsIdentityUnlockFlow } returns MutableStateFlow(false)
         coEvery { mockSettingsRepository.markOnboardingCompleted() } just Runs
         coEvery { mockSettingsRepository.markCrashReportingPromptSeen() } just Runs
-        coEvery { mockSettingsRepository.saveNotificationPrivacyLevel(any()) } just Runs
 
         // Default stubs for IdentityRepository
         coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
@@ -497,6 +497,46 @@ class OnboardingViewModelTest {
 
             assertTrue("Callback should be called on completion", callbackCalled)
             coVerify { mockSettingsRepository.markOnboardingCompleted() }
+        }
+
+    @Test
+    fun `completeOnboarding persists the message privacy level`() =
+        runTest {
+            val requestedLevel = slot<NotificationPrivacyLevel>()
+            coEvery { mockNotificationHelper.setMessagePrivacyLevel(capture(requestedLevel)) } just Runs
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setNotificationPrivacyLevel(NotificationPrivacyLevel.NONE)
+            viewModel.completeOnboarding { }
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals("Level must be saved on completion", NotificationPrivacyLevel.NONE, requestedLevel.captured)
+                assertEquals(NotificationPrivacyLevel.NONE, state.notificationPrivacyLevel)
+            }
+        }
+
+    @Test
+    fun `skipOnboarding persists the message privacy level`() =
+        runTest {
+            coEvery { mockInterfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            val requestedLevel = slot<NotificationPrivacyLevel>()
+            coEvery { mockNotificationHelper.setMessagePrivacyLevel(capture(requestedLevel)) } just Runs
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // The Permissions page's Skip action leaves through this path.
+            viewModel.setNotificationPrivacyLevel(NotificationPrivacyLevel.NAME_ONLY)
+            viewModel.skipOnboarding { }
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals("Skip must not discard the chosen level", NotificationPrivacyLevel.NAME_ONLY, requestedLevel.captured)
+                assertTrue(state.hasCompletedOnboarding)
+            }
         }
 
     @Test

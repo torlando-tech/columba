@@ -655,6 +655,8 @@ sealed class PendingNavigation {
     data class NomadNetBrowser(
         val nodeHash: String,
         val path: String,
+        /** Request data (JSON) saved with a pinned shortcut's page; null for plain pages. */
+        val requestData: String? = null,
     ) : PendingNavigation()
 }
 
@@ -1016,7 +1018,11 @@ fun ColumbaNavigation(
                         Log.d("ColumbaNavigation", "Navigated to flasher (direct): ${navigation.usbDeviceId}")
                     }
                     is PendingNavigation.NomadNetBrowser -> {
-                        navController.openNomadNetPage(navigation.nodeHash, navigation.path)
+                        navController.openNomadNetPage(
+                            navigation.nodeHash,
+                            navigation.path,
+                            requestData = navigation.requestData,
+                        )
                         Log.d("ColumbaNavigation", "Navigated to NomadNet browser: ${navigation.nodeHash}")
                     }
                 }
@@ -2405,6 +2411,10 @@ fun ColumbaNavigation(
                                             type = NavType.BoolType
                                             defaultValue = false
                                         },
+                                        navArgument("requestData") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                        },
                                     ),
                             ) { backStackEntry ->
                                 val destHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
@@ -2414,6 +2424,10 @@ fun ColumbaNavigation(
                                 // form drafts) instead of re-fetching.
                                 val restoreSession =
                                     backStackEntry.arguments?.getBoolean("restoreSession") ?: false
+                                // Set when a saved page or its pinned shortcut
+                                // remembers the request that fetched it.
+                                val requestData =
+                                    backStackEntry.arguments?.getString("requestData")?.takeIf { it.isNotEmpty() }
                                 // The browser is always pushed on top of the NomadNet
                                 // tab home, so Back (system or toolbar) is a plain pop
                                 // back onto that home. The screen's own BackHandler
@@ -2424,6 +2438,7 @@ fun ColumbaNavigation(
                                     destinationHash = destHash,
                                     initialPath = path,
                                     restoreSession = restoreSession,
+                                    initialRequestData = requestData,
                                     onBackClick = { navController.popBackStack() },
                                     // Close Site drops the persisted last node (see the
                                     // screen's closeSite() call) and then leaves the
@@ -2448,7 +2463,9 @@ fun ColumbaNavigation(
                                 NomadNetHomeScreen(
                                     lastPageNodeHash = settingsState.nomadNetLastNodeHash,
                                     lastPagePath = settingsState.nomadNetLastViewPath,
-                                    onOpenPage = { nodeHash, path -> navController.openNomadNetPage(nodeHash, path) },
+                                    onOpenPage = { nodeHash, path, requestData ->
+                                        navController.openNomadNetPage(nodeHash, path, requestData = requestData)
+                                    },
                                     // Continue reopens the page the user left on with
                                     // its drafts and in-page history intact.
                                     onContinuePage = { nodeHash, path ->

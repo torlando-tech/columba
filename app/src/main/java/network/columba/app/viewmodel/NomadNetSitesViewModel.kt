@@ -102,8 +102,11 @@ class NomadNetSitesViewModel
             nodeHash: String,
             persistPath: String,
             label: String? = null,
+            requestData: String? = null,
         ) {
-            viewModelScope.launch { settingsRepository.toggleNomadNetSavedSite(nodeHash, persistPath, label) }
+            viewModelScope.launch {
+                settingsRepository.toggleNomadNetSavedSite(nodeHash, persistPath, label, requestData)
+            }
         }
 
         fun removeSaved(

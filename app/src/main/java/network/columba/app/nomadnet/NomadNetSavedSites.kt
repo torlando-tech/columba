@@ -15,15 +15,26 @@ import org.json.JSONObject
  * [label] is the page's own heading captured at save time; it is only used
  * until an announce/contact name for [nodeHash] is known, and survives for
  * nodes that never announce a name.
+ *
+ * [requestData] is the JSON the node was asked with when the page was reached
+ * through a form submission (a search, a filtered forum index). Reopening the
+ * page replays it, because [persistPath] only names the submitted fields - the
+ * values are not in the path and would otherwise be lost. Null for plain pages,
+ * which re-fetch with no request data.
  */
 data class NomadNetSavedSite(
     val nodeHash: String,
     val persistPath: String,
     val label: String?,
     val savedAt: Long,
+    val requestData: String? = null,
 ) {
-    /** Identity of a saved page: one entry per node + path (incl. field block). */
-    val key: String get() = NomadNetShortcuts.shortcutId(nodeHash, persistPath)
+    /**
+     * Identity of a saved page: the full node + path pair (incl. the field
+     * block). Not a digest - the two halves are compared directly, so no hash
+     * collision can merge two pages.
+     */
+    val key: String get() = NomadNetSavedSites.key(nodeHash, persistPath)
 }
 
 /**
@@ -37,10 +48,21 @@ data class NomadNetSavedSite(
  * can never drop an entry.
  */
 object NomadNetSavedSites {
+    /**
+     * Stored identity of a page: the full node + path pair, field block
+     * included. Compared as plain strings rather than a hash digest, so two
+     * pages can never collide.
+     */
+    fun key(
+        nodeHash: String,
+        persistPath: String,
+    ): String = "$nodeHash:$persistPath"
+
     private const val KEY_NODE = "h"
     private const val KEY_PATH = "p"
     private const val KEY_LABEL = "l"
     private const val KEY_SAVED_AT = "t"
+    private const val KEY_REQUEST_DATA = "r"
 
     /** Destination hashes are 32 hex chars; anything else is not browsable. */
     private val NODE_HASH = Regex("^[0-9a-f]{32}$")
@@ -91,7 +113,8 @@ object NomadNetSavedSites {
                     .put(KEY_NODE, site.nodeHash)
                     .put(KEY_PATH, site.persistPath)
                     .put(KEY_SAVED_AT, site.savedAt)
-                    .apply { site.label?.let { put(KEY_LABEL, it) } },
+                    .apply { site.label?.let { put(KEY_LABEL, it) } }
+                    .apply { site.requestData?.let { put(KEY_REQUEST_DATA, it) } },
             )
         }
         return array.toString()
@@ -115,30 +138,29 @@ object NomadNetSavedSites {
         sites: List<NomadNetSavedSite>,
         nodeHash: String,
         persistPath: String,
-    ): List<NomadNetSavedSite> {
-        val key = NomadNetShortcuts.shortcutId(nodeHash, persistPath)
-        return sites.filterNot { it.key == key }
-    }
+    ): List<NomadNetSavedSite> =
+        sites.filterNot { site ->
+            site.nodeHash == nodeHash && site.persistPath == persistPath
+        }
 
     fun contains(
         sites: List<NomadNetSavedSite>,
         nodeHash: String,
         persistPath: String,
-    ): Boolean {
-        val key = NomadNetShortcuts.shortcutId(nodeHash, persistPath)
-        return sites.any { it.key == key }
-    }
+    ): Boolean = sites.any { site -> site.nodeHash == nodeHash && site.persistPath == persistPath }
 
     private fun JSONObject.toSavedSite(): NomadNetSavedSite? {
         val nodeHash = normalizeNodeHash(optString(KEY_NODE)) ?: return null
         val persistPath = optString(KEY_PATH).trim()
         if (persistPath.isEmpty()) return null
         val label = optString(KEY_LABEL).trim().takeIf { it.isNotEmpty() }
+        val requestData = optString(KEY_REQUEST_DATA).trim().takeIf { it.isNotEmpty() }
         return NomadNetSavedSite(
             nodeHash = nodeHash,
             persistPath = persistPath,
             label = label,
             savedAt = optLong(KEY_SAVED_AT),
+            requestData = requestData,
         )
     }
 }

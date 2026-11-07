@@ -3,6 +3,7 @@ package network.columba.app.viewmodel
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +20,7 @@ import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.nomadnet.NomadNetSavedSite
-import network.columba.app.nomadnet.NomadNetShortcuts
+import network.columba.app.nomadnet.NomadNetSavedSites
 import network.columba.app.repository.SettingsRepository
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -63,7 +64,7 @@ class NomadNetSitesViewModelTest {
         every { announceRepository.getAnnounceFlow(any()) } returns flowOf(null)
         // Write through the same flow the view model observes, so the tests
         // assert the resulting list rather than only that a call happened.
-        coEvery { settingsRepository.toggleNomadNetSavedSite(any(), any(), any()) } answers {
+        coEvery { settingsRepository.toggleNomadNetSavedSite(any(), any(), any(), any()) } answers {
             val saved = NomadNetSavedSite(firstArg(), secondArg(), thirdArg<String?>(), SAVED_AT)
             savedSitesFlow.value = listOf(saved) + savedSitesFlow.value.filterNot { it.key == saved.key }
             true
@@ -99,7 +100,7 @@ class NomadNetSitesViewModelTest {
     @Test
     fun `savedKeys exposes page keys for the browser bookmark state`() =
         runTest {
-            assertTrue(NomadNetShortcuts.shortcutId(nodeA, "/page/index.mu") in viewModel.savedKeys.first())
+            assertTrue(NomadNetSavedSites.key(nodeA, "/page/index.mu") in viewModel.savedKeys.first())
         }
 
     @Test
@@ -152,6 +153,22 @@ class NomadNetSitesViewModelTest {
             viewModel.removeSaved(nodeA, nodePath)
 
             assertTrue(viewModel.savedSites.first().isEmpty())
+        }
+
+    @Test
+    fun `toggleSaved forwards the page's request data so reopening can replay it`() =
+        runTest {
+            viewModel.toggleSaved(nodeA, "/page/search.mu`query", "Search", "{\"query\":\"rngit\"}")
+
+            coVerify {
+                settingsRepository.toggleNomadNetSavedSite(
+                    nodeA,
+                    "/page/search.mu`query",
+                    "Search",
+                    "{\"query\":\"rngit\"}",
+                )
+            }
+            assertEquals("/page/search.mu`query", savedSitesFlow.value.single().persistPath)
         }
 
     @Test

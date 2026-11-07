@@ -52,21 +52,28 @@ object NomadNetShortcutPinner {
             .setShortLabel(spec.shortLabel)
             .setLongLabel(spec.longLabel)
             .setIcon(nodeIcon(spec.nodeHash))
-            .setIntent(shortcutIntent(context, spec.deepLink))
+            .setIntent(shortcutIntent(context, spec.deepLink, spec.requestData))
             .build()
 
     /**
      * The launch intent a launcher fires for this shortcut. Explicit component
      * (no intent-filter matching needed) + `NEW_TASK`, which `singleTask`
      * collapses onto the live task.
+     *
+     * [requestData] rides along as an extra rather than in the URI: the
+     * `nomadnetwork://hash:/path` deep link is parsed by hand and has no room
+     * for an encoded JSON payload, and `MainActivityIntentHandler` reads the
+     * same extra, so a pinned form-result page re-submits its request.
      */
     fun shortcutIntent(
         context: Context,
         deepLink: String,
+        requestData: String? = null,
     ): Intent =
         Intent(Intent.ACTION_VIEW, Uri.parse(deepLink)).apply {
             setClass(context, MainActivity::class.java)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            requestData?.let { putExtra(NomadNetShortcuts.EXTRA_REQUEST_DATA, it) }
         }
 
     /**

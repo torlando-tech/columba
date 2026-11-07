@@ -343,16 +343,22 @@ class UiTextDumper(
 
     /**
      * Single-line skeleton for a value that may carry plural or conditional
-     * variants (format args, concatenation parts, local vals).
+     * variants (format args, concatenation parts, local vals). Each variant
+     * keeps its label and escapes `\` / `|`, so `"A|B"` + `"C"` can never encode
+     * as `"A"` + `"B|C"`.
      */
     private fun flattened(expression: KtExpression): String? {
         val resolved = resolveExpr(expression) ?: return null
         return if (resolved.size == 1 && resolved[0].first.isEmpty()) {
             resolved[0].second
         } else {
-            resolved.joinToString("|") { it.second }
+            resolved.joinToString("|") { (kind, skeleton) ->
+                if (kind.isEmpty()) escapeVariant(skeleton) else "$kind ${escapeVariant(skeleton)}"
+            }
         }
     }
+
+    private fun escapeVariant(skeleton: String): String = skeleton.replace("\\", "\\\\").replace("|", "\\|")
 
     /**
      * Qualified name of a message-carrier constructor call — `UiMessage.Text`,

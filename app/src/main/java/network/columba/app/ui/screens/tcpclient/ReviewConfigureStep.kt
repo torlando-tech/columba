@@ -289,14 +289,11 @@ fun ReviewConfigureStep(viewModel: TcpClientWizardViewModel) {
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "KISS Framing (TNC / Modem)",
+                        stringResource(R.string.tcp_wizard_kiss_framing_title),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
-                        "Use only when connecting to a software TNC or soundmodem that " +
-                            "exposes KISS-over-TCP. Do NOT enable for Reticulum " +
-                            "TCPServerInterface or Backbone connections — it disables " +
-                            "the internal reliability and recovery mechanisms.",
+                        stringResource(R.string.tcp_wizard_kiss_framing_description),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

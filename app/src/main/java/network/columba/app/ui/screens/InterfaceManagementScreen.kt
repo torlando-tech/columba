@@ -1951,7 +1951,9 @@ private fun copyInterfaceConfig(
     configText: String,
 ) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    clipboard.setPrimaryClip(ClipData.newPlainText("Reticulum interface $interfaceName", configText))
+    clipboard.setPrimaryClip(
+        ClipData.newPlainText(context.getString(R.string.interface_config_clip_label, interfaceName), configText),
+    )
     Toast.makeText(context, context.getString(R.string.interface_config_copied), Toast.LENGTH_SHORT).show()
 }
 

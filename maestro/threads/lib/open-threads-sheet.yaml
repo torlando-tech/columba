@@ -1,0 +1,12 @@
+# lib/open-threads-sheet.yaml
+#
+# Opens the threads sheet from the header pill. The pill's accessibility
+# label is "Switch thread: <target>" (threads-spec §5.1), so this flow works
+# from Main and from inside a thread.
+appId: ${APP_ID}
+---
+- tapOn:
+    text: "Switch thread:.*"
+- extendedWaitUntil:
+    visible: "Search threads"
+    timeout: 10000

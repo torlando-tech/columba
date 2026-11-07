@@ -124,6 +124,7 @@ internal class ServerRnsLxmf(
         replyQuotedContent: String?,
         iconAppearance: IconAppearance?,
         extraFields: Bundle?,
+        threadId: ByteArray?,
         cb: IRnsResultCallback,
     ) = dispatch(cb, scope) {
         // Read the out-of-band attachment payload back into memory (fast local
@@ -148,6 +149,7 @@ internal class ServerRnsLxmf(
             replyQuotedContent,
             iconAppearance,
             decodedExtraFields,
+            threadId,
         ).getOrThrow()
         Bundle().apply { putParcelable(BundleKeys.RECEIPT, receipt) }
     }

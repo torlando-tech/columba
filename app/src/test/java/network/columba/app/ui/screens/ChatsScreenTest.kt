@@ -1,15 +1,21 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.test.TestFactories
+import network.columba.app.ui.model.ChatCardThreadsUi
+import network.columba.app.ui.model.ThreadMainRowUi
+import network.columba.app.ui.model.ThreadRowUi
+import network.columba.app.ui.model.ThreadSheetUiState
 import network.columba.app.viewmodel.ChatsViewModel
 import io.mockk.every
 import io.mockk.mockk
@@ -390,6 +396,164 @@ class ChatsScreenTest {
         // Then
         composeTestRule.onNodeWithText("Test User").assertIsDisplayed()
     }
+
+    @Test
+    fun conversationCard_expandedMainRow_showsMainPreviewAndUnread() {
+        // The conversation row carries a THREAD message: opening Main cannot
+        // show it, so the card's Main row must use Main's own preview/unread.
+        val conversation =
+            TestFactories.createConversation(
+                lastMessage = "thread reply from Alice",
+                unreadCount = 0,
+            )
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet =
+                    ThreadSheetUiState(
+                        active =
+                            listOf(
+                                ThreadRowUi(
+                                    threadIdHex = "01000000000000000000000000000001",
+                                    title = "Trip",
+                                    autoTitle = null,
+                                    preview = "latest in thread",
+                                    timestamp = 3_000L,
+                                    unreadCount = 0,
+                                ),
+                            ),
+                        main = ThreadMainRowUi(preview = "main thread text", timestamp = 4_000L, unreadCount = 1),
+                    ),
+            )
+
+        composeTestRule.setContent {
+            ConversationCard(
+                conversation = conversation,
+                threadsUi = threadsUi,
+                isExpanded = true,
+            )
+        }
+
+        composeTestRule.onNodeWithText("main thread text").assertIsDisplayed()
+
+        // The thread message appears once — the card's own preview — never twice
+        // as the Main row's preview, which opening Main could not show.
+        composeTestRule.onAllNodesWithText("thread reply from Alice").assertCountEquals(1)
+    }
+
+    @Test
+    fun conversationCard_expandedThreadRow_showsAutomaticTitle() {
+        val conversation = TestFactories.createConversation()
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet =
+                    ThreadSheetUiState(
+                        active =
+                            listOf(
+                                ThreadRowUi(
+                                    threadIdHex = "02000000000000000000000000000002",
+                                    title = null,
+                                    autoTitle = "automatic excerpt",
+                                    preview = "latest in thread",
+                                    timestamp = 1_000L,
+                                    unreadCount = 0,
+                                ),
+                            ),
+                    ),
+            )
+
+        composeTestRule.setContent {
+            ConversationCard(
+                conversation = conversation,
+                threadsUi = threadsUi,
+                isExpanded = true,
+            )
+        }
+
+        composeTestRule.onNodeWithText("automatic excerpt").assertIsDisplayed()
+    }
+
+    @Test
+    fun conversationCard_countsOnlyUnarchivedThreads() {
+        val conversation = TestFactories.createConversation()
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet =
+                    ThreadSheetUiState(
+                        active = listOf(threadRow("01")),
+                        archived = List(3) { threadRow("a$it") },
+                    ),
+            )
+
+        composeTestRule.setContent {
+            ConversationCard(conversation = conversation, threadsUi = threadsUi)
+        }
+
+        composeTestRule.onNodeWithText("1 thread").assertIsDisplayed()
+        composeTestRule.onNodeWithText("4 threads").assertDoesNotExist()
+    }
+
+    @Test
+    fun conversationCard_allArchived_labelNamesTheArchiveAndOpensTheSheet() {
+        val conversation = TestFactories.createConversation()
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet = ThreadSheetUiState(archived = List(2) { threadRow("a$it") }),
+            )
+        var toggled = 0
+        var viewedAll = 0
+
+        composeTestRule.setContent {
+            ConversationCard(
+                conversation = conversation,
+                threadsUi = threadsUi,
+                onToggleExpand = { toggled++ },
+                onViewAllThreads = { viewedAll++ },
+            )
+        }
+
+        composeTestRule.onNodeWithText("2 archived").assertIsDisplayed()
+        composeTestRule.onNodeWithText("0 threads").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Open archived threads").performClick()
+
+        assertEquals("archived-only cards have nothing to expand", 0, toggled)
+        assertEquals("the archived rows live in the sheet", 1, viewedAll)
+    }
+
+    @Test
+    fun conversationCard_allArchived_expandedStillCollapses() {
+        val conversation = TestFactories.createConversation()
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet = ThreadSheetUiState(archived = List(2) { threadRow("a$it") }),
+            )
+        var toggled = 0
+        var viewedAll = 0
+
+        composeTestRule.setContent {
+            ConversationCard(
+                conversation = conversation,
+                threadsUi = threadsUi,
+                isExpanded = true,
+                onToggleExpand = { toggled++ },
+                onViewAllThreads = { viewedAll++ },
+            )
+        }
+
+        composeTestRule.onNodeWithText("2 archived").performClick()
+
+        assertEquals("an open archive-only card must still close", 1, toggled)
+        assertEquals("collapsing is not a jump to the sheet", 0, viewedAll)
+    }
+
+    private fun threadRow(suffix: String) =
+        ThreadRowUi(
+            threadIdHex = suffix.padStart(32, '0'),
+            title = "Thread $suffix",
+            autoTitle = null,
+            preview = "preview $suffix",
+            timestamp = 1_000L,
+            unreadCount = 0,
+        )
 
     @Test
     fun conversationCard_displaysLastMessage() {
@@ -980,6 +1144,11 @@ class ChatsScreenTest {
 
         // Default: contacts are not saved
         every { mockViewModel.isContactSaved(any()) } returns MutableStateFlow(false)
+
+        // Threads (P2) defaults: flag off, nothing expanded, empty bundle
+        every { mockViewModel.threadsEnabled } returns MutableStateFlow(false)
+        every { mockViewModel.expandedCards } returns MutableStateFlow(emptySet())
+        every { mockViewModel.cardThreads(any()) } returns MutableStateFlow(ChatCardThreadsUi())
 
         return mockViewModel
     }

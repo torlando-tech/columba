@@ -1366,6 +1366,7 @@ class NativeRnsBackendImpl(
         replyQuotedContent: String?,
         iconAppearance: IconAppearance?,
         extraFields: Map<Int, Any>?,
+        threadId: ByteArray?,
     ): Result<MessageReceipt> =
         messageSender.sendLxmfMessageWithMethod(
             destinationHash = destinationHash,
@@ -1383,6 +1384,7 @@ class NativeRnsBackendImpl(
                     replyQuotedContent = replyQuotedContent,
                     iconAppearance = iconAppearance,
                     extraFields = extraFields,
+                    threadId = threadId,
                 ),
         )
 

@@ -209,19 +209,17 @@ fun MessageDetailScreen(
                         if (verified) {
                             MessageInfoCard(
                                 icon = Icons.Default.VerifiedUser,
-                                title = "Signature",
-                                content = "Verified",
-                                subtitle = "The sender's identity was confirmed against their announce.",
+                                title = stringResource(R.string.message_detail_signature_title),
+                                content = stringResource(R.string.message_detail_signature_verified),
+                                subtitle = stringResource(R.string.message_detail_signature_verified_detail),
                             )
                         } else {
                             MessageInfoCard(
                                 icon = Icons.Default.Warning,
                                 iconTint = MaterialTheme.colorScheme.error,
-                                title = "Signature",
-                                content = "Unverified",
-                                subtitle = "The sender's signature could not be verified. Their identity " +
-                                    "may be unknown to your node, or the signature check may have failed. " +
-                                    "The message could be forged. Treat with caution.",
+                                title = stringResource(R.string.message_detail_signature_title),
+                                content = stringResource(R.string.message_detail_signature_unverified),
+                                subtitle = stringResource(R.string.message_detail_signature_unverified_detail),
                                 contentColor = MaterialTheme.colorScheme.error,
                             )
                         }

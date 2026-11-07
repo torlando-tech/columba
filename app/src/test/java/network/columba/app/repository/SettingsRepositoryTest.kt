@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.data.repository.CustomThemeRepository
 import network.columba.app.ui.theme.ThemeMode
 import io.mockk.clearAllMocks
@@ -152,6 +153,30 @@ class SettingsRepositoryTest {
                 // Save opposite value - should emit
                 repository.saveNotificationReceivedMessage(!initial)
                 assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun notificationPrivacyLevelFlow_emitsOnlyOnChange() =
+        runTest {
+            // Normalize first: the DataStore singleton persists across tests in this class.
+            repository.saveNotificationPrivacyLevel(NotificationPrivacyLevel.FULL)
+
+            repository.notificationPrivacyLevelFlow.test(timeout = 5.seconds) {
+                assertEquals(NotificationPrivacyLevel.FULL, awaitItem())
+
+                // Save same value - should NOT emit
+                repository.saveNotificationPrivacyLevel(NotificationPrivacyLevel.FULL)
+                expectNoEvents()
+
+                // Any change emits the new level
+                repository.saveNotificationPrivacyLevel(NotificationPrivacyLevel.NAME_ONLY)
+                assertEquals(NotificationPrivacyLevel.NAME_ONLY, awaitItem())
+
+                repository.saveNotificationPrivacyLevel(NotificationPrivacyLevel.NONE)
+                assertEquals(NotificationPrivacyLevel.NONE, awaitItem())
 
                 cancelAndIgnoreRemainingEvents()
             }

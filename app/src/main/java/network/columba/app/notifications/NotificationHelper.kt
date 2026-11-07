@@ -1,6 +1,7 @@
 package network.columba.app.notifications
 
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -18,9 +19,12 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import network.columba.app.MainActivity
 import network.columba.app.R
 import network.columba.app.data.model.InterfaceType
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,6 +40,14 @@ class NotificationHelper
         private val settingsRepository: SettingsRepository,
         private val activeConversationManager: network.columba.app.service.ActiveConversationManager,
     ) {
+        /**
+         * Serialises reading the message privacy level and building/posting a message
+         * notification against saving a stricter level and dropping message notifications
+         * already posted. Without it, a post that read `FULL` could land in the shade after
+         * the user tightened the level and cancelled everything.
+         */
+        private val messagePrivacyLock = Mutex()
+
         companion object {
             // Notification channel IDs
             private const val CHANNEL_ID_MESSAGES = "messages"
@@ -48,6 +60,12 @@ class NotificationHelper
             private const val NOTIFICATION_ID_ANNOUNCE = 2000
             private const val NOTIFICATION_ID_BLE = 3000
             private const val NOTIFICATION_TAG_MESSAGE_PREFIX = "message:"
+
+            /**
+             * Used as the body (NAME_ONLY) or title (NONE) when the message privacy level
+             * forbids handing the message text to Android.
+             */
+            private const val GENERIC_MESSAGE_TEXT = "New message"
 
             // Intent actions
             const val ACTION_OPEN_ANNOUNCE = "network.columba.app.ACTION_OPEN_ANNOUNCE"
@@ -147,30 +165,29 @@ class NotificationHelper
             messagePreview: String,
             isFavorite: Boolean,
         ) {
-            // Check master notification toggle
-            if (!settingsRepository.notificationsEnabledFlow.first()) return
-
-            // Check specific notification preference
-            val generalMessageNotifications = settingsRepository.notificationReceivedMessageFlow.first()
-            val favoriteMessageNotifications = settingsRepository.notificationReceivedMessageFavoriteFlow.first()
-
-            val messageNotificationsEnabled =
-                if (isFavorite) {
-                    // If it's a favorite, check both general messages and favorite messages
-                    generalMessageNotifications || favoriteMessageNotifications
-                } else {
-                    generalMessageNotifications
-                }
-
-            if (!messageNotificationsEnabled) return
-
-            // Check permission
-            if (!hasNotificationPermission()) return
+            if (!shouldNotifyMessage(isFavorite)) return
 
             // Suppress notification only if this conversation is active AND the app is in the
             // foreground. When the screen is off or the app is backgrounded, the user can't see
             // the conversation, so they should still receive the notification.
             if (isAppInForeground() && activeConversationManager.activeConversation.value == destinationHash) return
+
+            messagePrivacyLock.withLock {
+                postMessageNotification(destinationHash, peerName, messagePreview)
+            }
+        }
+
+        /**
+         * Build and post the message notification while [messagePrivacyLock] is held, so the
+         * level read here cannot be overtaken by a tightening that lands after it.
+         */
+        private suspend fun postMessageNotification(
+            destinationHash: String,
+            peerName: String,
+            messagePreview: String,
+        ) {
+            // Read once per post so a settings change applies to the next notification.
+            val privacyLevel = settingsRepository.notificationPrivacyLevelFlow.first()
 
             // Create intent to open the conversation
             // Use SINGLE_TOP to reuse existing activity via onNewIntent (avoids splash screen flash)
@@ -197,18 +214,13 @@ class NotificationHelper
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
-            // Create notification
             val notification =
-                NotificationCompat
-                    .Builder(context, CHANNEL_ID_MESSAGES)
-                    .setSmallIcon(R.drawable.ic_notification_stat)
-                    .setContentTitle(peerName)
-                    .setContentText(messagePreview)
-                    .setPriority(NotificationCompat.PRIORITY_HIGH)
-                    .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-                    .setAutoCancel(true)
-                    .setContentIntent(openPendingIntent)
-                    .build()
+                buildMessageNotification(
+                    privacyLevel = privacyLevel,
+                    peerName = peerName,
+                    messagePreview = messagePreview,
+                    contentIntent = openPendingIntent,
+                )
 
             try {
                 notificationManager.notify(
@@ -220,6 +232,85 @@ class NotificationHelper
                 // Permission was revoked
             }
         }
+
+        /**
+         * Decide whether a received-message notification should be posted at all.
+         * Master toggle, per-type preference (with the favorite exception) and runtime
+         * permission. Single expression keeps the caller's early-return count low.
+         */
+        private suspend fun shouldNotifyMessage(isFavorite: Boolean): Boolean {
+            val masterEnabled = settingsRepository.notificationsEnabledFlow.first()
+            val generalMessageNotifications = settingsRepository.notificationReceivedMessageFlow.first()
+            val favoriteMessageNotifications = settingsRepository.notificationReceivedMessageFavoriteFlow.first()
+
+            // A favorite qualifies when either the general or the favorite preference is on.
+            val typeEnabled =
+                if (isFavorite) {
+                    generalMessageNotifications || favoriteMessageNotifications
+                } else {
+                    generalMessageNotifications
+                }
+
+            return masterEnabled && typeEnabled && hasNotificationPermission()
+        }
+
+        /**
+         * Build the message notification for [privacyLevel].
+         *
+         * [NotificationPrivacyLevel.FULL] is the only branch that passes [messagePreview] to
+         * Android. The other levels build a notification whose title and text are both fixed
+         * strings, so the message text never reaches the notification object — and therefore
+         * never reaches the lock screen, the system's notification history, or any app
+         * listening for notifications.
+         */
+        private fun buildMessageNotification(
+            privacyLevel: NotificationPrivacyLevel,
+            peerName: String,
+            messagePreview: String,
+            contentIntent: PendingIntent,
+        ): Notification {
+            val title: String
+            val text: String?
+            when (privacyLevel) {
+                NotificationPrivacyLevel.FULL -> {
+                    title = peerName
+                    text = messagePreview
+                }
+                NotificationPrivacyLevel.NAME_ONLY -> {
+                    title = peerName
+                    text = GENERIC_MESSAGE_TEXT
+                }
+                NotificationPrivacyLevel.NONE -> {
+                    title = GENERIC_MESSAGE_TEXT
+                    text = null
+                }
+            }
+
+            val builder = messageNotificationBuilder(title, text, contentIntent)
+            if (privacyLevel != NotificationPrivacyLevel.FULL) {
+                // Marks the notification sensitive on secure lock screens and supplies a
+                // redacted twin for them. Both versions are built from the same generic
+                // strings; the preview is never part of either.
+                builder.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                builder.setPublicVersion(messageNotificationBuilder(title, text, contentIntent).build())
+            }
+            return builder.build()
+        }
+
+        private fun messageNotificationBuilder(
+            title: String,
+            text: String?,
+            contentIntent: PendingIntent,
+        ): NotificationCompat.Builder =
+            NotificationCompat
+                .Builder(context, CHANNEL_ID_MESSAGES)
+                .setSmallIcon(R.drawable.ic_notification_stat)
+                .setContentTitle(title)
+                .apply { text?.let { setContentText(it) } }
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setAutoCancel(true)
+                .setContentIntent(contentIntent)
 
         /**
          * Extract a user-friendly interface label from the raw interface name.
@@ -441,6 +532,37 @@ class NotificationHelper
                 messageNotificationTag(destinationHash),
                 NOTIFICATION_ID_MESSAGE,
             )
+        }
+
+        /**
+         * Persist [level] and, when it is stricter than the previous level, drop every message
+         * notification already in the shade.
+         *
+         * Runs under [messagePrivacyLock] so it cannot interleave with a post that already read
+         * the looser level: either that post finishes first and is cancelled here, or it starts
+         * afterwards and reads the new level. The system's notification history is append-only
+         * and cannot be rewritten from here.
+         */
+        suspend fun setMessagePrivacyLevel(level: NotificationPrivacyLevel) {
+            messagePrivacyLock.withLock {
+                val previousLevel = settingsRepository.notificationPrivacyLevelFlow.first()
+                settingsRepository.saveNotificationPrivacyLevel(level)
+                if (level.isMoreRestrictiveThan(previousLevel)) {
+                    cancelMessageNotificationsLocked()
+                }
+            }
+        }
+
+        /**
+         * Cancel every posted message notification. Callers must hold [messagePrivacyLock].
+         *
+         * A notification already in the shade keeps whatever text it was built with until it
+         * is dismissed. Announce, BLE and foreground-service notifications are untouched.
+         */
+        private fun cancelMessageNotificationsLocked() {
+            notificationManager.activeNotifications
+                .filter { it.tag?.startsWith(NOTIFICATION_TAG_MESSAGE_PREFIX) == true }
+                .forEach { notificationManager.cancel(it.tag, it.id) }
         }
 
         /**

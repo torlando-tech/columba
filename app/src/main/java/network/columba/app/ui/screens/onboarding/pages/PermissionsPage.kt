@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -33,6 +34,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import network.columba.app.data.model.NotificationPrivacyLevel
+import network.columba.app.ui.components.NotificationPrivacyChooser
 
 /**
  * Permissions page - explains and requests notification and battery permissions.
@@ -41,8 +44,10 @@ import androidx.compose.ui.unit.dp
 fun PermissionsPage(
     notificationsGranted: Boolean,
     batteryOptimizationExempt: Boolean,
+    notificationPrivacyLevel: NotificationPrivacyLevel,
     onEnableNotifications: () -> Unit,
     onEnableBatteryOptimization: () -> Unit,
+    onNotificationPrivacyLevelChange: (NotificationPrivacyLevel) -> Unit,
     onBack: () -> Unit,
     onContinue: () -> Unit,
     modifier: Modifier = Modifier,
@@ -111,6 +116,14 @@ fun PermissionsPage(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // Message privacy choice (text exposure is app-controlled, not just an OS setting)
+        MessagePrivacySection(
+            privacyLevel = notificationPrivacyLevel,
+            onPrivacyLevelChange = onNotificationPrivacyLevelChange,
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         // Battery optimization card
         PermissionCard(
             icon = Icons.Default.BatteryChargingFull,
@@ -175,6 +188,59 @@ private fun FeatureItem(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun MessagePrivacySection(
+    privacyLevel: NotificationPrivacyLevel,
+    onPrivacyLevelChange: (NotificationPrivacyLevel) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = "Message privacy",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+
+            Text(
+                text =
+                    "Message text otherwise shows on your lock screen and in Android's " +
+                        "notification history. Choose what new-message notifications reveal.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            NotificationPrivacyChooser(
+                selected = privacyLevel,
+                onSelect = onPrivacyLevelChange,
+            )
+        }
     }
 }
 

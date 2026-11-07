@@ -17,16 +17,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.micron.MicronParser
+import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsNomadnet
@@ -40,6 +40,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Tests for [NomadNetBrowserViewModel] — navigation state machine, caching,
@@ -62,8 +63,7 @@ class NomadNetBrowserViewModelTest {
     private val simplePage = ">Hello World"
 
     /** Fake of the singleton session store, shared across VM instances. */
-    private val sessionSnapshot =
-        java.util.concurrent.atomic.AtomicReference<NomadNetPageCache.SessionSnapshot?>(null)
+    private val sessionSnapshot = AtomicReference<NomadNetPageCache.SessionSnapshot?>(null)
 
     @Before
     fun setUp() {
@@ -882,6 +882,29 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
+    fun `loadPage replays saved request data instead of rebuilding empty form values`() =
+        runTest(testDispatcher) {
+            // A saved search page: the path only names the field, so without
+            // replaying the stored request the node would be asked with "".
+            every { pageCache.get(any(), any()) } returns null
+            val formDataSlot = slot<String>()
+            coEvery {
+                protocol.requestNomadnetPage(any(), any(), capture(formDataSlot), any())
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/search.mu"))
+
+            viewModel.loadPage(
+                destinationHash = nodeHash,
+                path = "/page/search.mu`query",
+                requestDataJson = "{\"query\":\"rngit\"}",
+            )
+            advanceUntilIdle()
+            Thread.sleep(200) // the page request runs on Dispatchers.IO
+            advanceUntilIdle()
+
+            assertEquals("{\"query\":\"rngit\"}", formDataSlot.captured)
+        }
+
+    @Test
     fun `navigateToLink submits parser-declared default for unmodified field`() =
         runTest(testDispatcher) {
             // Forum-style page: display_name pre-filled, message empty.
@@ -1620,8 +1643,10 @@ class NomadNetBrowserViewModelTest {
             // The form page is still the loaded page (not re-submitted into a new
             // in-flight state by the identify refresh).
             val state = vm.browserState.value
-            assertTrue("the form page should remain loaded after the flag",
-                state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertTrue(
+                "the form page should remain loaded after the flag",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
             assertEquals(nodeHash, (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).nodeHash)
         }
 

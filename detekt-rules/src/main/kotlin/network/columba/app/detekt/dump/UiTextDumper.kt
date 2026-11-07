@@ -4,6 +4,7 @@ import network.columba.app.detekt.rules.UiSinkTable
 import org.jetbrains.kotlin.com.intellij.psi.util.PsiTreeUtil
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtBinaryExpression
+import org.jetbrains.kotlin.psi.KtBlockExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtConstantExpression
@@ -12,6 +13,7 @@ import org.jetbrains.kotlin.psi.KtEnumEntry
 import org.jetbrains.kotlin.psi.KtEscapeStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtIfExpression
 import org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
@@ -19,6 +21,7 @@ import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.psi.KtValueArgumentList
+import org.jetbrains.kotlin.psi.KtWhenExpression
 import org.jetbrains.kotlin.psi.psiUtil.parents
 
 /**
@@ -35,8 +38,13 @@ import org.jetbrains.kotlin.psi.psiUtil.parents
  *    English resource text, so a pure extraction (literal -> identical resource)
  *    produces an identical skeleton;
  *  - plurals contribute `one` + `other` entries;
- *  - anything else (variables, function calls, conditionals) becomes `{}` —
- *    stable under renames; the gate cannot see inside without type resolution.
+ *  - `if`/`when`/`?:` results are followed branch-by-branch (including a
+ *    conditional resource id passed to `stringResource`/`getString`), so a text
+ *    change in any branch surfaces as its own entry instead of hiding behind
+ *    one opaque `{}`;
+ *  - anything else (variables, function calls, unknown conditionals) becomes
+ *    `{}` — stable under renames; the gate cannot see inside without type
+ *    resolution.
  */
 class UiTextDumper(
     private val res: ResResolver,
@@ -157,7 +165,7 @@ class UiTextDumper(
                 val skeleton =
                     when {
                         init is KtStringTemplateExpression -> templateSkeleton(init)
-                        else -> resolveExpr(init)?.singleOrNull()?.takeIf { it.first.isEmpty() }?.second
+                        else -> flattened(init)
                     }
                 if (skeleton != null) {
                     val scope = localVals.getOrPut(fn) { HashMap() }
@@ -219,6 +227,7 @@ class UiTextDumper(
      * (`ctx.getString(…)`) are unwrapped; the receiver never affects the text.
      */
     private fun resolveExpr(expression: KtExpression): List<Pair<String, String>>? {
+        resolveConditional(expression)?.let { return it }
         rRefOf(expression)?.let { (pkg, type, name) -> return resolveRef(pkg, type, name) }
         val call =
             when (expression) {
@@ -228,16 +237,48 @@ class UiTextDumper(
             } ?: return null
         val callee = call.calleeExpression?.text ?: return null
         carrierName(call)?.let { return uiMessageSkeleton(it, call) }
-        val ref =
-            call.valueArguments
-                .mapNotNull { rRefOf(it.getArgumentExpression()) }
-                .firstOrNull() ?: return null
-        val (pkg, type, name) = ref
-        val args =
-            call.valueArguments
-                .filter { rRefOf(it.getArgumentExpression()) == null }
-                .map { argSkeleton(it.getArgumentExpression()) }
-        return when {
+        val idArg = call.valueArguments.firstOrNull { rRefOf(it.getArgumentExpression()) != null }
+        if (idArg != null) {
+            val args =
+                call.valueArguments
+                    .filter { it !== idArg }
+                    .map { argSkeleton(it.getArgumentExpression()) }
+            val (pkg, type, name) = rRefOf(idArg.getArgumentExpression()) ?: return null
+            return resolveResourceCall(callee, pkg, type, name, args)
+        }
+        // Conditional resource id: `stringResource(if (…) R.string.a else R.string.b)`
+        // — the id slot is positional, so format args are everything after it.
+        val branches =
+            conditionalBranches(unwrapBlock(call.valueArguments.firstOrNull()?.getArgumentExpression()))
+                ?: return null
+        val tailArgs = call.valueArguments.drop(1).map { argSkeleton(it.getArgumentExpression()) }
+        return branches
+            .mapNotNull { (suffix, branch) ->
+                val ref = rRefOf(branch)
+                val resolved =
+                    when {
+                        ref != null -> resolveResourceCall(callee, ref.first, ref.second, ref.third, tailArgs)
+                        branch != null -> resolveExpr(branch)
+                        else -> null
+                    } ?: return@mapNotNull null
+                resolved.map { (sub, skeleton) -> (suffix + sub) to skeleton }
+            }.flatten()
+            .ifEmpty { null }
+    }
+
+    /**
+     * Text contributions of a resource call: `stringResource`/`getString` -> one
+     * entry, plurals -> `[one]` + `[other]` (the quantity selects the form, it is
+     * not a format argument). [args] are the skeletons of every other argument.
+     */
+    private fun resolveResourceCall(
+        callee: String,
+        pkg: String?,
+        type: String,
+        name: String,
+        args: List<String>,
+    ): List<Pair<String, String>>? =
+        when {
             callee in STRING_CALLERS && type == "string" ->
                 res.resolveString(pkg, moduleName, name)?.let { listOf("" to normalizeText(substituteFmt(it, args))) }
             callee in PLURAL_CALLERS && type == "plurals" -> {
@@ -252,6 +293,64 @@ class UiTextDumper(
                 }
             }
             else -> null
+        }
+
+    /**
+     * Branch-wise text of an `if`/`when`/`?:` expression, or null when the
+     * expression is not conditional. Each resolvable branch becomes its own
+     * entry (`[then][when2]…`), so the gate sees a text change in either branch
+     * instead of one opaque `{}`.
+     */
+    private fun resolveConditional(expression: KtExpression?): List<Pair<String, String>>? {
+        val branches = conditionalBranches(expression) ?: return null
+        val out = ArrayList<Pair<String, String>>()
+        branches.forEach { (suffix, branch) ->
+            branchSkeleton(branch)?.forEach { (sub, skeleton) -> out += (suffix + sub) to skeleton }
+        }
+        return out.ifEmpty { null }
+    }
+
+    /** Conditional shapes with stable, source-order labels; conditions never label. */
+    private fun conditionalBranches(expression: KtExpression?): List<Pair<String, KtExpression?>>? =
+        when (expression) {
+            is KtIfExpression ->
+                listOf("[then]" to expression.then, "[else]" to expression.`else`)
+            is KtWhenExpression ->
+                expression.entries.mapIndexed { index, entry -> "[when${index + 1}]" to entry.expression }
+            is KtBinaryExpression ->
+                if (expression.operationToken == KtTokens.ELVIS) {
+                    listOf("[left]" to expression.left, "[right]" to expression.right)
+                } else {
+                    null
+                }
+            else -> null
+        }
+
+    /** Resolved skeleton of one conditional branch, including literal/concat/local-val forms. */
+    private fun branchSkeleton(expression: KtExpression?): List<Pair<String, String>>? {
+        val expr = unwrapBlock(expression) ?: return null
+        return when {
+            expr is KtStringTemplateExpression -> listOf("" to templateSkeleton(expr))
+            expr is KtBinaryExpression && expr.operationToken == KtTokens.PLUS -> listOf("" to concatSkeleton(expr))
+            expr is KtNameReferenceExpression -> localVal(expr)?.let { listOf("" to it) }
+            else -> resolveExpr(expr)
+        }
+    }
+
+    /** A branch written as `{ …; value }` contributes its final expression. */
+    private fun unwrapBlock(expression: KtExpression?): KtExpression? =
+        if (expression is KtBlockExpression) expression.statements.lastOrNull() as? KtExpression else expression
+
+    /**
+     * Single-line skeleton for a value that may carry plural or conditional
+     * variants (format args, concatenation parts, local vals).
+     */
+    private fun flattened(expression: KtExpression): String? {
+        val resolved = resolveExpr(expression) ?: return null
+        return if (resolved.size == 1 && resolved[0].first.isEmpty()) {
+            resolved[0].second
+        } else {
+            resolved.joinToString("|") { it.second }
         }
     }
 
@@ -271,9 +370,10 @@ class UiTextDumper(
 
     /**
      * Resolved text of a carrier construction. Only fires when the first
-     * positional argument is an `R.string`/`R.plurals` reference, so an
-     * unrelated constructor with a matching name never matches. Format args
-     * come from a `listOf(…)` literal; anything else contributes none.
+     * positional argument is an `R.string`/`R.plurals` reference (or an
+     * `if`/`when`/`?:` whose branches are), so an unrelated constructor with a
+     * matching name never matches. Format args come from a `listOf(…)` literal;
+     * anything else contributes none.
      */
     private fun uiMessageSkeleton(
         name: String,
@@ -281,8 +381,7 @@ class UiTextDumper(
     ): List<Pair<String, String>>? {
         val positional = call.valueArguments.filter { it.getArgumentName() == null }
         val plural = name in PLURAL_CONSTRUCTORS
-        val (pkg, type, resName) = rRefOf(positional.firstOrNull()?.getArgumentExpression()) ?: return null
-        if (type != if (plural) "plurals" else "string") return null
+        val idExpr = positional.firstOrNull()?.getArgumentExpression() ?: return null
         val fmtArgs =
             if (name == "flashText") {
                 // `flashText(id, vararg args)` — format args are positional.
@@ -290,6 +389,25 @@ class UiTextDumper(
             } else {
                 formatArgsOf(positional.getOrNull(if (plural) 2 else 1)?.getArgumentExpression())
             }
+        rRefOf(idExpr)?.let { (pkg, type, resName) -> return resolveCarrier(plural, pkg, type, resName, fmtArgs) }
+        val branches = conditionalBranches(unwrapBlock(idExpr)) ?: return null
+        return branches
+            .mapNotNull { (suffix, branch) ->
+                val (pkg, type, resName) = rRefOf(branch) ?: return@mapNotNull null
+                resolveCarrier(plural, pkg, type, resName, fmtArgs)
+                    ?.map { (sub, skeleton) -> (suffix + sub) to skeleton }
+            }.flatten()
+            .ifEmpty { null }
+    }
+
+    private fun resolveCarrier(
+        plural: Boolean,
+        pkg: String?,
+        type: String,
+        resName: String,
+        fmtArgs: List<String>,
+    ): List<Pair<String, String>>? {
+        if (type != if (plural) "plurals" else "string") return null
         return if (plural) {
             res.resolvePlurals(pkg, moduleName, resName)?.let { quantities ->
                 listOf("one", "other").mapNotNull { q ->
@@ -333,7 +451,7 @@ class UiTextDumper(
             expr == null -> "{}"
             expr is KtStringTemplateExpression -> templateSkeleton(expr)
             expr is KtConstantExpression -> expr.text
-            else -> resolveExpr(expr)?.singleOrNull()?.takeIf { it.first.isEmpty() }?.second ?: "{}"
+            else -> flattened(expr) ?: "{}"
         }
 
     private fun resolveRef(
@@ -382,7 +500,7 @@ class UiTextDumper(
                 expr == null -> ""
                 expr is KtBinaryExpression && expr.operationToken == KtTokens.PLUS -> concatSkeleton(expr)
                 expr is KtStringTemplateExpression -> templateSkeleton(expr)
-                else -> resolveExpr(expr)?.joinToString("") { it.second } ?: "{}"
+                else -> flattened(expr) ?: "{}"
             }
         // Skeletons are whitespace-normalized; join with a space so
         // `"Hello " + name` and `"Hello" + " " + name` agree.

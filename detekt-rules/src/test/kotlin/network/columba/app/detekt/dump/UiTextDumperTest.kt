@@ -352,4 +352,127 @@ class UiTextDumperTest {
         assertEquals(1, entries.size)
         assertEquals("Text arg0", entries[0].kind)
     }
+
+    @Test
+    fun `if sink follows both branches`() {
+        module("a", "com.test.a", """<string name="open">Open</string><string name="close">Close</string>""")
+        val code = "fun s(x: Boolean) { Text(if (x) stringResource(R.string.open) else stringResource(R.string.close)) }"
+        val entries = dump("a", code)
+        assertEquals(listOf("Text arg0[then]", "Text arg0[else]"), entries.map { it.kind })
+        assertEquals(listOf("Open", "Close"), entries.map { it.skeleton })
+    }
+
+    @Test
+    fun `literal branches match extracted resources`() {
+        module("a", "com.test.a", """<string name="open">Open</string><string name="close">Close</string>""")
+        val literal = dump("a", "fun s(x: Boolean) { Text(if (x) \"Open\" else \"Close\") }")
+        val resource = dump("a", "fun s(x: Boolean) { Text(if (x) stringResource(R.string.open) else stringResource(R.string.close)) }")
+        assertEquals(literal.map { it.kind to it.skeleton }, resource.map { it.kind to it.skeleton })
+    }
+
+    @Test
+    fun `elvis sink follows both sides`() {
+        module("a", "com.test.a", """<string name="fallback">No name</string>""")
+        val entries = dump("a", "fun s(n: String?) { Text(n ?: stringResource(R.string.fallback)) }")
+        assertEquals(listOf("Text arg0[right]"), entries.map { it.kind })
+        assertEquals(listOf("No name"), entries.map { it.skeleton })
+    }
+
+    @Test
+    fun `when branches are labelled by source order`() {
+        module("a", "com.test.a", """<string name="a">Powered on</string><string name="b">Powered off</string>""")
+        val code =
+            """
+            fun s(state: Int) {
+                val label = when (state) {
+                    1 -> stringResource(R.string.a)
+                    else -> stringResource(R.string.b)
+                }
+                Text(label)
+            }
+            """.trimIndent()
+        assertEquals(listOf("Powered on|Powered off"), dump("a", code).map { it.skeleton })
+        val direct =
+            """
+            fun s(state: Int) {
+                Text(
+                    when (state) {
+                        1 -> stringResource(R.string.a)
+                        else -> stringResource(R.string.b)
+                    },
+                )
+            }
+            """.trimIndent()
+        val entries = dump("a", direct)
+        assertEquals(listOf("Text arg0[when1]", "Text arg0[when2]"), entries.map { it.kind })
+        assertEquals(listOf("Powered on", "Powered off"), entries.map { it.skeleton })
+    }
+
+    @Test
+    fun `braced branch block contributes its final expression`() {
+        module("a", "com.test.a", """<string name="gone">Removed</string>""")
+        val code =
+            """
+            fun s(x: Boolean) {
+                Text(if (x) stringResource(R.string.gone) else { log(); "Unchanged" })
+            }
+            """.trimIndent()
+        val entries = dump("a", code)
+        assertEquals(listOf("Text arg0[then]", "Text arg0[else]"), entries.map { it.kind })
+        assertEquals(listOf("Removed", "Unchanged"), entries.map { it.skeleton })
+    }
+
+    @Test
+    fun `conditional local val tracks both branches`() {
+        module("a", "com.test.a", """<string name="open">Open</string><string name="close">Close</string>""")
+        val code =
+            """
+            fun s(b: Boolean) {
+                val cd = if (b) stringResource(R.string.open) else stringResource(R.string.close)
+                Icon(painter, contentDescription = cd)
+            }
+            """.trimIndent()
+        assertEquals(listOf("Open|Close"), dump("a", code).map { it.skeleton })
+    }
+
+    @Test
+    fun `conditional resource id keeps shared format args`() {
+        module(
+            "a",
+            "com.test.a",
+            """<string name="erasing">Erasing %1${'$'}d KB</string><string name="writing">Writing %1${'$'}d KB</string>""",
+        )
+        val code = "fun s(b: Boolean, k: Int) { Text(stringResource(if (b) R.string.erasing else R.string.writing, k)) }"
+        val entries = dump("a", code)
+        assertEquals(listOf("Text arg0[then]", "Text arg0[else]"), entries.map { it.kind })
+        assertEquals(listOf("Erasing {} KB", "Writing {} KB"), entries.map { it.skeleton })
+    }
+
+    @Test
+    fun `conditional resource id in carrier emits branch entries`() {
+        module("a", "com.test.a", """<string name="a">Not supported</string><string name="b">Unavailable</string>""")
+        val code = "fun s(flag: Boolean) { val m = UiMessage.Text(if (flag) R.string.a else R.string.b) }"
+        val entries = dump("a", code)
+        assertEquals(listOf("UiMessage.Text[then]", "UiMessage.Text[else]"), entries.map { it.kind })
+        assertEquals(listOf("Not supported", "Unavailable"), entries.map { it.skeleton })
+    }
+
+    @Test
+    fun `unknown branch stays opaque without dropping siblings`() {
+        module("a", "com.test.a", """<string name="a">Known</string>""")
+        val entries = dump("a", "fun s(x: Boolean) { Text(if (x) stringResource(R.string.a) else compute()) }")
+        assertEquals(listOf("Text arg0[then]"), entries.map { it.kind })
+        assertEquals(listOf("Known"), entries.map { it.skeleton })
+    }
+
+    @Test
+    fun `text change in any branch is detected`() {
+        module("a", "com.test.a", """<string name="a">Save</string><string name="b">Discard</string>""")
+        val code = "fun s(x: Boolean) { Text(if (x) stringResource(R.string.a) else stringResource(R.string.b)) }"
+        val before = dump("a", code).map { it.skeleton }
+        module("a", "com.test.a", """<string name="a">Save</string><string name="b">Dismiss</string>""")
+        val after = dump("a", code).map { it.skeleton }
+        assertEquals(listOf("Save", "Discard"), before)
+        assertEquals(listOf("Save", "Dismiss"), after)
+    }
 }

@@ -6,15 +6,17 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import androidx.core.app.NotificationCompat
-import network.columba.app.data.model.NotificationPrivacyLevel
-import network.columba.app.repository.SettingsRepository
-import network.columba.app.service.ActiveConversationManager
+import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import network.columba.app.data.model.NotificationPrivacyLevel
+import network.columba.app.repository.SettingsRepository
+import network.columba.app.service.ActiveConversationManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -90,6 +92,7 @@ class NotificationHelperTest {
         coEvery { settingsRepository.notificationBleConnectedFlow } returns flowOf(true)
         coEvery { settingsRepository.notificationBleDisconnectedFlow } returns flowOf(true)
         coEvery { settingsRepository.notificationPrivacyLevelFlow } returns flowOf(NotificationPrivacyLevel.FULL)
+        coEvery { settingsRepository.saveNotificationPrivacyLevel(any()) } just Runs
 
         notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager)
     }
@@ -277,10 +280,15 @@ class NotificationHelperTest {
         }
 
     @Test
-    fun `cancelMessageNotifications cancels message notifications only`() =
+    fun `setMessagePrivacyLevel tightening cancels message notifications only`() =
         runBlocking {
             coEvery { settingsRepository.notificationAnnounceDirectOnlyFlow } returns flowOf(false)
             coEvery { settingsRepository.notificationAnnounceExcludeTcpFlow } returns flowOf(false)
+            val savedLevels = mutableListOf<NotificationPrivacyLevel>()
+            coEvery { settingsRepository.saveNotificationPrivacyLevel(capture(savedLevels)) } answers {
+                // Model the DataStore write so a later post would read it.
+                Unit
+            }
 
             notificationHelper.notifyMessageReceived(
                 destinationHash = "abc123def456",
@@ -294,8 +302,13 @@ class NotificationHelperTest {
                 hops = 2,
             )
 
-            notificationHelper.cancelMessageNotifications()
+            notificationHelper.setMessagePrivacyLevel(NotificationPrivacyLevel.NONE)
 
+            assertEquals(
+                "The level must be persisted before cancelling",
+                listOf(NotificationPrivacyLevel.NONE),
+                savedLevels,
+            )
             assertNull("Message notification should be cancelled", messageNotification("abc123def456"))
             val remaining = shadowOf(notificationManager).allNotifications
             assertTrue(
@@ -303,6 +316,34 @@ class NotificationHelperTest {
                 remaining.any {
                     it.extras.getCharSequence(Notification.EXTRA_TITLE) == "Announce from Announcer"
                 },
+            )
+        }
+
+    @Test
+    fun `setMessagePrivacyLevel loosening keeps posted message notifications`() =
+        runBlocking {
+            coEvery { settingsRepository.notificationPrivacyLevelFlow } returns
+                flowOf(NotificationPrivacyLevel.NONE)
+            val savedLevels = mutableListOf<NotificationPrivacyLevel>()
+            coEvery { settingsRepository.saveNotificationPrivacyLevel(capture(savedLevels)) } answers { Unit }
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+            )
+            assertNotNull("Notification should be posted first", messageNotification("abc123def456"))
+
+            notificationHelper.setMessagePrivacyLevel(NotificationPrivacyLevel.FULL)
+
+            assertEquals(listOf(NotificationPrivacyLevel.FULL), savedLevels)
+            val after = messageNotification("abc123def456")
+            assertNotNull("Loosening must not cancel the posted notification", after)
+            assertEquals(
+                "The posted notification keeps the text it was built with",
+                "New message",
+                after!!.notification.extras.getCharSequence(Notification.EXTRA_TITLE),
             )
         }
 

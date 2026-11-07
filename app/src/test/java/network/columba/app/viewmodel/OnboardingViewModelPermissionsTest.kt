@@ -78,14 +78,13 @@ class OnboardingViewModelPermissionsTest {
         mockInterfaceConfigManager = mockk()
         mockCrashReportManager = mockk()
         mockNotificationHelper = mockk()
-        every { mockNotificationHelper.cancelMessageNotifications() } just Runs
+        coEvery { mockNotificationHelper.setMessagePrivacyLevel(any()) } just Runs
         coEvery { mockCrashReportManager.updateCrashReportingConsent(any(), any(), any()) } returns Unit
 
         coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
         coEvery { mockSettingsRepository.notificationPrivacyLevelFlow } returns MutableStateFlow(NotificationPrivacyLevel.FULL)
         coEvery { mockSettingsRepository.needsIdentityUnlockFlow } returns MutableStateFlow(false)
         coEvery { mockSettingsRepository.markOnboardingCompleted() } just Runs
-        coEvery { mockSettingsRepository.saveNotificationPrivacyLevel(any()) } just Runs
         coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
         every { mockInterfaceRepository.allInterfaceEntities } returns MutableStateFlow(emptyList())
         every { mockInterfaceRepository.allInterfaces } returns MutableStateFlow(emptyList())

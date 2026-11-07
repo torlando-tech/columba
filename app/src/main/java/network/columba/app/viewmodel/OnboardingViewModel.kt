@@ -293,12 +293,7 @@ class OnboardingViewModel
                     // Persist the message privacy choice. If onboarding is being re-run and
                     // the level got stricter, drop message notifications already in the
                     // shade — they were built with the previous level.
-                    val privacyLevel = _state.value.notificationPrivacyLevel
-                    val previousPrivacyLevel = settingsRepository.notificationPrivacyLevelFlow.first()
-                    settingsRepository.saveNotificationPrivacyLevel(privacyLevel)
-                    if (privacyLevel.isMoreRestrictiveThan(previousPrivacyLevel)) {
-                        notificationHelper.cancelMessageNotifications()
-                    }
+                    notificationHelper.setMessagePrivacyLevel(_state.value.notificationPrivacyLevel)
 
                     // Mark onboarding as completed - this is critical and will throw if it fails
                     settingsRepository.markOnboardingCompleted()
@@ -490,6 +485,10 @@ class OnboardingViewModel
                         )
                         Log.d(TAG, "Created default AutoInterface for skip")
                     }
+
+                    // Persist the message privacy choice. Skip is a reachable exit from the
+                    // Permissions page, so the choice made there must not be discarded.
+                    notificationHelper.setMessagePrivacyLevel(_state.value.notificationPrivacyLevel)
 
                     // Mark onboarding as completed
                     settingsRepository.markOnboardingCompleted()

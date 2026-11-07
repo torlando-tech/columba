@@ -426,6 +426,40 @@ fun AnnounceStreamScreen(
     }
 }
 
+/**
+ * Floating affordance shown while the announce stream is frozen and announces arrived.
+ * Tapping it reloads from the newest row and returns the viewport to the top.
+ */
+@Composable
+private fun NewAnnouncesFab(
+    count: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowUp,
+                contentDescription = stringResource(R.string.announce_scroll_to_top),
+            )
+            Text(
+                text = "$count",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
 @androidx.compose.runtime.Stable
 @Composable
 fun AnnounceCard(
@@ -912,38 +946,4 @@ fun ClearAllAnnouncesDialog(
             }
         },
     )
-}
-
-/**
- * Floating affordance shown while the announce stream is frozen and announces arrived.
- * Tapping it reloads from the newest row and returns the viewport to the top.
- */
-@Composable
-private fun NewAnnouncesFab(
-    count: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    FloatingActionButton(
-        onClick = onClick,
-        modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowUp,
-                contentDescription = stringResource(R.string.announce_scroll_to_top),
-            )
-            Text(
-                text = "$count",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-    }
 }

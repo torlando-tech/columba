@@ -49,12 +49,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -62,7 +60,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import kotlinx.coroutines.launch
 import network.columba.app.data.repository.Announce
@@ -134,20 +131,22 @@ fun AnnounceStreamScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Track new announces that appear while scrolled down
-    var newAnnouncesCount by remember { mutableIntStateOf(0) }
+    // Track announces that arrived after the loaded stream was started. The list is frozen
+    // while scrolled (GH #1166); the count drives the "new announces" affordance.
+    val newAnnouncesCount by viewModel.newAnnounceCount.collectAsState()
+    val windowRefreshPending by viewModel.windowRefreshPending.collectAsState()
 
     // Check if we're at the top of the list
-    val isAtTop by remember {
+    val isAtTop by remember(listState) {
         derivedStateOf {
             listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
         }
     }
 
-    // Reset new announces count when scrolling to top
-    LaunchedEffect(isAtTop) {
-        if (isAtTop) {
-            newAnnouncesCount = 0
+    // Reloading replaces every loaded page, so only do it while the viewport is at the top.
+    LaunchedEffect(isAtTop, newAnnouncesCount, windowRefreshPending) {
+        if (isAtTop && (newAnnouncesCount > 0 || windowRefreshPending)) {
+            viewModel.refreshAnnounces()
         }
     }
 
@@ -281,7 +280,7 @@ fun AnnounceStreamScreen(
                     ) {
                         items(
                             count = pagingItems.itemCount,
-                            key = pagingItems.stableKey(),
+                            key = { index -> pagingItems.peek(index)?.destinationHash ?: "loading_$index" },
                         ) { index ->
                             val announce = pagingItems[index]
                             if (announce != null) {
@@ -332,37 +331,18 @@ fun AnnounceStreamScreen(
                     }
 
                     // New announces indicator button
-                    if (newAnnouncesCount > 0) {
-                        FloatingActionButton(
+                    if (!isAtTop && newAnnouncesCount > 0) {
+                        NewAnnouncesFab(
+                            count = newAnnouncesCount,
                             onClick = {
-                                coroutineScope.launch {
-                                    listState.animateScrollToItem(0)
-                                    newAnnouncesCount = 0
-                                }
+                                viewModel.refreshAnnounces()
+                                coroutineScope.launch { listState.animateScrollToItem(0) }
                             },
                             modifier =
                                 Modifier
                                     .align(Alignment.TopCenter)
                                     .padding(top = 8.dp),
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowUp,
-                                    contentDescription = "Scroll to top",
-                                )
-                                Text(
-                                    text = "$newAnnouncesCount",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
+                        )
                     }
                 }
             }
@@ -557,48 +537,28 @@ fun AnnounceStreamContent(
     // Scroll state
     val listState = rememberLazyListState()
 
-    // Scroll position anchor — tracks which item the user is viewing by identity (not index).
-    // When Room invalidates the PagingSource and items shift positions, we find our anchor
-    // item in the new data and scroll back to it.
-    var anchorHash by remember { mutableStateOf<String?>(null) }
-    var anchorOffset by remember { mutableStateOf(0) }
+    // Track announces that arrived after the loaded stream was started. The list is frozen
+    // while scrolled (GH #1166); the count drives the "new announces" affordance.
+    val newAnnouncesCount by viewModel.newAnnounceCount.collectAsState()
+    val windowRefreshPending by viewModel.windowRefreshPending.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
-        snapshotFlow {
-            val index = listState.firstVisibleItemIndex
-            val offset = listState.firstVisibleItemScrollOffset
-            val hash =
-                if (index < pagingItems.itemCount) {
-                    pagingItems.peek(index)?.destinationHash
-                } else {
-                    null
-                }
-            Triple(index, offset, hash)
-        }.collect { (index, offset, currentHash) ->
-            if (currentHash == null) return@collect
-            val savedHash = anchorHash
-
-            if (savedHash != null && savedHash != currentHash && index > 0) {
-                // The item at our position changed identity — data refreshed under us.
-                // Find where our anchor item moved to and restore position.
-                val newIndex =
-                    pagingItems.itemSnapshotList.items
-                        .indexOfFirst { it.destinationHash == savedHash }
-                if (newIndex >= 0) {
-                    listState.scrollToItem(newIndex, anchorOffset)
-                    return@collect // Don't update anchor yet — next emission will confirm
-                }
-            }
-
-            // Normal tracking: save current position
-            anchorHash = currentHash
-            anchorOffset = offset
+    val isAtTop by remember(listState) {
+        derivedStateOf {
+            listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
         }
     }
 
     // Check loading state - only show spinner for initial load when list is empty
     // This prevents flickering when new announces arrive and trigger a refresh
     val isLoading = pagingItems.loadState.refresh is androidx.paging.LoadState.Loading
+
+    // Reloading replaces every loaded page, so only do it while the viewport is at the top.
+    LaunchedEffect(isAtTop, newAnnouncesCount, windowRefreshPending) {
+        if (isAtTop && (newAnnouncesCount > 0 || windowRefreshPending)) {
+            viewModel.refreshAnnounces()
+        }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         AnnounceFilterChips(
@@ -619,64 +579,80 @@ fun AnnounceStreamContent(
                 EmptyAnnounceState(modifier = Modifier.fillMaxSize())
             }
             else -> {
-                LazyColumn(
-                    state = listState,
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .simpleVerticalScrollbar(listState),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(
-                        count = pagingItems.itemCount,
-                        key = pagingItems.stableKey(),
-                    ) { index ->
-                        val announce = pagingItems[index]
-                        if (announce != null) {
-                            Box {
-                                AnnounceCard(
-                                    announce = announce,
-                                    onClick = {
-                                        onPeerClick(announce.destinationHash, announce.peerName)
-                                    },
-                                    onFavoriteClick = {
-                                        viewModel.toggleContact(announce.destinationHash)
-                                    },
-                                    onLongPress = {
-                                        contextMenuAnnounce = announce
-                                        showContextMenu = true
-                                    },
-                                )
-
-                                // Show context menu for this announce
-                                if (showContextMenu && contextMenuAnnounce == announce) {
-                                    PeerContextMenu(
-                                        expanded = true,
-                                        onDismiss = { showContextMenu = false },
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        state = listState,
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .simpleVerticalScrollbar(listState),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(
+                            count = pagingItems.itemCount,
+                            key = { index -> pagingItems.peek(index)?.destinationHash ?: "loading_$index" },
+                        ) { index ->
+                            val announce = pagingItems[index]
+                            if (announce != null) {
+                                Box {
+                                    AnnounceCard(
                                         announce = announce,
-                                        onToggleFavorite = {
-                                            viewModel.toggleContact(announce.destinationHash)
-                                        },
-                                        onStartChat = {
-                                            onStartChat(announce.destinationHash, announce.peerName)
-                                        },
-                                        onViewDetails = {
+                                        onClick = {
                                             onPeerClick(announce.destinationHash, announce.peerName)
                                         },
-                                        onDeleteAnnounce = {
-                                            announceToDelete = announce
-                                            showDeleteDialog = true
+                                        onFavoriteClick = {
+                                            viewModel.toggleContact(announce.destinationHash)
+                                        },
+                                        onLongPress = {
+                                            contextMenuAnnounce = announce
+                                            showContextMenu = true
                                         },
                                     )
+
+                                    // Show context menu for this announce
+                                    if (showContextMenu && contextMenuAnnounce == announce) {
+                                        PeerContextMenu(
+                                            expanded = true,
+                                            onDismiss = { showContextMenu = false },
+                                            announce = announce,
+                                            onToggleFavorite = {
+                                                viewModel.toggleContact(announce.destinationHash)
+                                            },
+                                            onStartChat = {
+                                                onStartChat(announce.destinationHash, announce.peerName)
+                                            },
+                                            onViewDetails = {
+                                                onPeerClick(announce.destinationHash, announce.peerName)
+                                            },
+                                            onDeleteAnnounce = {
+                                                announceToDelete = announce
+                                                showDeleteDialog = true
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
+
+                        // Bottom spacing for navigation bar
+                        item {
+                            Spacer(modifier = Modifier.height(100.dp))
+                        }
                     }
 
-                    // Bottom spacing for navigation bar
-                    item {
-                        Spacer(modifier = Modifier.height(100.dp))
+                    if (!isAtTop && newAnnouncesCount > 0) {
+                        NewAnnouncesFab(
+                            count = newAnnouncesCount,
+                            onClick = {
+                                viewModel.refreshAnnounces()
+                                coroutineScope.launch { listState.animateScrollToItem(0) }
+                            },
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = 8.dp),
+                        )
                     }
                 }
             }
@@ -835,23 +811,35 @@ fun ClearAllAnnouncesDialog(
 }
 
 /**
- * Stable key function for announce paging lists.
- *
- * Uses [network.columba.app.data.repository.Announce.destinationHash] as the primary key so Compose can track
- * items across list re-sorts (e.g., when new announces insert at the top).
- * Falls back to appending a disambiguator only for transient Paging3 duplicates
- * (issue #542) to avoid a duplicate-key crash.
+ * Floating affordance shown while the announce stream is frozen and announces arrived.
+ * Tapping it reloads from the newest row and returns the viewport to the top.
  */
-private fun LazyPagingItems<network.columba.app.data.repository.Announce>.stableKey(): (index: Int) -> Any {
-    val seen = mutableSetOf<String>()
-    val keys =
-        Array<Any>(itemCount) { index ->
-            val hash = peek(index)?.destinationHash
-            if (hash != null) {
-                if (seen.add(hash)) hash else "${hash}_dup$index"
-            } else {
-                "placeholder_$index"
-            }
+@Composable
+private fun NewAnnouncesFab(
+    count: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowUp,
+                contentDescription = "Show new announces",
+            )
+            Text(
+                text = "$count",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
         }
-    return { index -> keys[index] }
+    }
 }

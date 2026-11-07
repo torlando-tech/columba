@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -177,15 +178,58 @@ class AnnounceStreamViewModel
                 _showAudioAnnounces,
                 _selectedInterfaceTypes,
                 refreshGeneration,
-            ) { query, selectedTypes, showAudio, selectedInterfaces, generation ->
-                FilterParams(query, selectedTypes, showAudio, selectedInterfaces, generation)
+            ) { query, selectedTypes, showAudio, selectedInterfaces, refreshCount ->
+                FilterParams(query, selectedTypes, showAudio, selectedInterfaces, refreshCount)
             }
 
-        // Announces with pagination support, filtered by node types, audio filter,
-        // interface types, AND search query
-        val announces: Flow<PagingData<network.columba.app.data.repository.Announce>> =
+        /** One paging generation: its filters and the arrival floor. */
+        private data class Generation(
+            val params: FilterParams,
+            val floor: Long?,
+        )
+
+        /**
+         * The current paging generation. [Generation.floor] is the newest matching timestamp,
+         * captured *before* the first page is read: an announce saved between the two reads is
+         * then newer than the floor, so it is both counted as new and shown once reloaded. It
+         * is computed once per generation (not per subscription), so leaving the Network tab
+         * and returning still counts the peers discovered while away.
+         */
+        private val generation: StateFlow<Generation?> =
             filterParams()
                 .flatMapLatest { params ->
+                    val typeStrings = countTypes(params.selectedTypes, params.showAudio)
+                    if (typeStrings.isEmpty()) {
+                        flowOf(Generation(params, null))
+                    } else {
+                        flow {
+                            emit(
+                                Generation(
+                                    params = params,
+                                    floor =
+                                        announceRepository.getNewestAnnounceTimestamp(
+                                            nodeTypes = typeStrings,
+                                            searchQuery = params.query.trim(),
+                                            interfaceTypes = params.selectedInterfaces.map { it.storageName },
+                                        ),
+                                ),
+                            )
+                        }
+                    }
+                }.stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.Eagerly,
+                    initialValue = null,
+                )
+
+        // Announces with pagination support, filtered by node types, audio filter,
+        // interface types, AND search query. Each generation waits for [generation] so the
+        // arrival floor is captured before the first page is read.
+        val announces: Flow<PagingData<network.columba.app.data.repository.Announce>> =
+            generation
+                .filterNotNull()
+                .flatMapLatest { gen ->
+                    val params = gen.params
                     val selectedTypes = params.selectedTypes
                     val showAudio = params.showAudio
                     val typeStrings = pagingTypes(selectedTypes, showAudio)
@@ -223,48 +267,18 @@ class AnnounceStreamViewModel
                 }.cachedIn(viewModelScope)
 
         /**
-         * Newest matching announce at the moment a paging generation started, tagged with the
-         * generation it belongs to. It is computed once per generation (not per subscription),
-         * so leaving the Network tab and returning still counts the peers discovered while
-         * away, and an initially empty stream keeps counting arrivals.
-         */
-        private val generationStart: StateFlow<Pair<FilterParams, Long?>?> =
-            filterParams()
-                .flatMapLatest { params ->
-                    val typeStrings = countTypes(params.selectedTypes, params.showAudio)
-                    if (typeStrings.isEmpty()) {
-                        flowOf<Pair<FilterParams, Long?>>(params to null)
-                    } else {
-                        flow {
-                            emit(
-                                params to
-                                    announceRepository.getNewestAnnounceTimestamp(
-                                        nodeTypes = typeStrings,
-                                        searchQuery = params.query.trim(),
-                                        interfaceTypes = params.selectedInterfaces.map { it.storageName },
-                                    ),
-                            )
-                        }
-                    }
-                }.stateIn(
-                    scope = viewModelScope,
-                    started = SharingStarted.Eagerly,
-                    initialValue = null,
-                )
-
-        /**
          * Announces that arrived after the currently loaded stream was started. Re-emits on
          * every announce write; drives the "N new announces" affordance while frozen.
          */
         val newAnnounceCount: StateFlow<Int> =
-            combine(filterParams(), generationStart) { params, start ->
-                // Only count against the mark of this generation; filters may have changed.
-                if (start?.first == params) params to start.second else null
-            }.flatMapLatest { counted ->
-                if (counted == null) {
+            combine(filterParams(), generation) { params, gen ->
+                // Only count against the floor of this generation; filters may have changed.
+                if (gen?.params == params) gen else null
+            }.flatMapLatest { gen ->
+                if (gen == null) {
                     flowOf(0)
                 } else {
-                    val params = counted.first
+                    val params = gen.params
                     val typeStrings = countTypes(params.selectedTypes, params.showAudio)
                     if (typeStrings.isEmpty()) {
                         flowOf(0)
@@ -272,7 +286,7 @@ class AnnounceStreamViewModel
                         // An empty (or not yet loaded) stream has no floor: counting every
                         // matching row lets arrivals make the list fill itself.
                         announceRepository.observeAnnounceCountNewerThan(
-                            since = counted.second ?: 0L,
+                            since = gen.floor ?: 0L,
                             nodeTypes = typeStrings,
                             searchQuery = params.query.trim(),
                             interfaceTypes = params.selectedInterfaces.map { it.storageName },

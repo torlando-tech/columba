@@ -776,6 +776,33 @@ class AnnounceStreamViewModelTest {
         }
 
     @Test
+    fun arrivalFloor_isReadBeforeTheFirstPage() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            val order = mutableListOf<String>()
+            coEvery { announceRepository.getNewestAnnounceTimestamp(any(), any(), any()) } coAnswers {
+                order += "floor"
+                null
+            }
+            every { announceRepository.getAnnouncesPaged(any(), any(), any()) } answers {
+                order += "page"
+                flowOf(PagingData.empty())
+            }
+
+            viewModel = newViewModel()
+            runCurrent()
+
+            val collection = launch { viewModel.announces.collect {} }
+            runCurrent()
+            collection.cancel()
+            runCurrent()
+
+            // An announce saved between the two reads must be newer than the floor, so the
+            // floor has to be captured before the first page is read (GH #1166 review).
+            assertEquals(listOf("floor", "page"), order)
+        }
+
+    @Test
     fun rowEdits_showFavoriteAndDeletedRowsUntilTheNextGeneration() =
         runTest {
             networkStatusFlow.value = NetworkStatus.READY

@@ -137,6 +137,11 @@ class AnnounceStreamViewModelTest {
         coEvery { reticulumProtocol.getPathTableHashes() } returns emptyList()
         coEvery { announceRepository.setFavorite(any(), any()) } just Runs
         coEvery { announceRepository.getAnnounce(any()) } returns null
+        coEvery { announceRepository.getNewestAnnounceTimestamp(any(), any(), any()) } returns null
+        every {
+            announceRepository.observeAnnounceCountNewerThan(any(), any(), any(), any())
+        } returns flowOf(0)
+        coEvery { announceRepository.deleteAnnounce(any()) } just Runs
         coEvery { contactRepository.hasContact(any()) } returns false
         coEvery { contactRepository.deleteContact(any()) } just Runs
         coEvery { contactRepository.addContactFromAnnounce(any(), any()) } returns Result.success(Unit)
@@ -736,6 +741,103 @@ class AnnounceStreamViewModelTest {
                 announceRepository.observeAnnounceCountNewerThan(1_000L, listOf("PEER"), "", emptyList())
             }
         }
+
+    @Test
+    fun newAnnounceCount_emptyStream_countsArrivals() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            coEvery { announceRepository.getNewestAnnounceTimestamp(any(), any(), any()) } returns null
+            every {
+                announceRepository.observeAnnounceCountNewerThan(any(), any(), any(), any())
+            } returns flowOf(2)
+
+            viewModel = newViewModel()
+
+            viewModel.newAnnounceCount.test {
+                assertEquals(0, awaitItem())
+                assertEquals(2, awaitItem())
+                cancelAndConsumeRemainingEvents()
+            }
+
+            verify {
+                announceRepository.observeAnnounceCountNewerThan(0L, listOf("PEER"), "", emptyList())
+            }
+        }
+
+    @Test
+    fun arrivalFloor_keepsCountingAfterLeavingTheScreen() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            // First read captures the floor; any later read would see the newer announce.
+            coEvery { announceRepository.getNewestAnnounceTimestamp(any(), any(), any()) } returnsMany
+                listOf(500L, 1_200L)
+            every {
+                announceRepository.observeAnnounceCountNewerThan(eq(500L), any(), any(), any())
+            } returns flowOf(4)
+            every {
+                announceRepository.observeAnnounceCountNewerThan(eq(1_200L), any(), any(), any())
+            } returns flowOf(0)
+
+            viewModel = newViewModel()
+
+            viewModel.newAnnounceCount.test {
+                assertEquals(0, awaitItem()) // initial value before the first query resolves
+                assertEquals(4, awaitItem())
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Peers announced while the Network tab was closed still count as new: the
+            // floor is the one captured when the paging generation started.
+            viewModel.newAnnounceCount.test {
+                assertEquals(4, awaitItem())
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun rowEdits_showFavoriteAndDeletedRowsUntilTheNextGeneration() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            coEvery { contactRepository.hasContact("hashfavorite") } returns false
+            coEvery { announceRepository.getAnnounce("hashfavorite") } returns
+                Announce(
+                    destinationHash = "hashfavorite",
+                    peerName = "Peer",
+                    publicKey = ByteArray(32),
+                    appData = null,
+                    hops = 1,
+                    lastSeenTimestamp = 1_000L,
+                    nodeType = "PEER",
+                )
+
+            viewModel = newViewModel()
+
+            viewModel.toggleContact("hashfavorite")
+            runCurrent()
+            assertEquals(true, viewModel.rowEdits.value["hashfavorite"]?.isFavorite)
+
+            viewModel.deleteAnnounce("hashfavorite")
+            runCurrent()
+            assertEquals(true, viewModel.rowEdits.value["hashfavorite"]?.isDeleted)
+
+            viewModel.refreshAnnounces()
+            val collection = launch { viewModel.announces.collect {} }
+            runCurrent()
+            assertTrue(viewModel.rowEdits.value.isEmpty())
+            collection.cancel()
+            runCurrent()
+        }
+
+    private fun newViewModel(): AnnounceStreamViewModel =
+        AnnounceStreamViewModel(
+            reticulumProtocol,
+            announceRepository,
+            contactRepository,
+            propagationNodeManager,
+            identityRepository,
+            mockk(),
+            identityResolutionManager,
+        )
 
     @Test
     fun `empty filter returns empty announces`() =

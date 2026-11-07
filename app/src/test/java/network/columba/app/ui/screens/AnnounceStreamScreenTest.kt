@@ -24,6 +24,7 @@ import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.repository.Announce
 import network.columba.app.rns.api.model.NodeType
 import network.columba.app.test.RegisterComponentActivityRule
+import network.columba.app.viewmodel.AnnounceRowEdit
 import network.columba.app.viewmodel.AnnounceStreamViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -597,6 +598,44 @@ class AnnounceStreamScreenTest {
     // on the real ViewModel. Grouping these into a config object would obscure
     // that mirror; @Suppress is the right call per the no-baseline-bumps rule.
     @Suppress("detekt:LongParameterList")
+    @Test
+    fun announceStreamScreen_hidesRowsMarkedDeleted() {
+        val announces = (0 until 3).map { index -> testAnnounce(index) }
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                pagingData = PagingData.from(announces),
+                rowEdits = mapOf(announces[1].destinationHash to AnnounceRowEdit(isDeleted = true)),
+            )
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("Peer 0").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Peer 1").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Peer 2").assertIsDisplayed()
+    }
+
+    @Test
+    fun announceStreamScreen_allRowsDeleted_showsEmptyState() {
+        val announcements = (0 until 2).map { index -> testAnnounce(index) }
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                pagingData = PagingData.from(announcements),
+                rowEdits =
+                    announcements.associate {
+                        it.destinationHash to AnnounceRowEdit(isDeleted = true)
+                    },
+            )
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("No nodes discovered yet").assertIsDisplayed()
+    }
+
+    @Suppress("LongParameterList")
     private fun createMockAnnounceStreamViewModel(
         reachableCount: Int = 0,
         isAnnouncing: Boolean = false,
@@ -611,6 +650,7 @@ class AnnounceStreamScreenTest {
         selectedInterfaceTypes: Set<InterfaceType> = emptySet(),
         searchQuery: String = "",
         pagingData: PagingData<Announce> = PagingData.empty(),
+        rowEdits: Map<String, AnnounceRowEdit> = emptyMap(),
     ): AnnounceStreamViewModel {
         val mockViewModel = mockk<AnnounceStreamViewModel>()
 
@@ -626,6 +666,7 @@ class AnnounceStreamScreenTest {
         every { mockViewModel.announceError } returns MutableStateFlow(announceError)
         every { mockViewModel.newAnnounceCount } returns MutableStateFlow(0)
         every { mockViewModel.windowRefreshPending } returns MutableStateFlow(false)
+        every { mockViewModel.rowEdits } returns MutableStateFlow(rowEdits)
 
         // Stub action methods that may be called
         every { mockViewModel.triggerAnnounce() } just Runs

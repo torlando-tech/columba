@@ -29,13 +29,25 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
+
+/**
+ * Optimistic edit applied to a loaded announce row. The frozen stream does not reload on
+ * database writes, so user actions (favorite, delete) are reflected locally until the next
+ * paging generation re-reads the database.
+ */
+data class AnnounceRowEdit(
+    val isFavorite: Boolean? = null,
+    val isDeleted: Boolean = false,
+)
 
 internal fun matchesRecentInterfaceFilter(
     announce: Announce,
@@ -116,6 +128,13 @@ class AnnounceStreamViewModel
         private val _windowRefreshPending = MutableStateFlow(false)
         val windowRefreshPending: StateFlow<Boolean> = _windowRefreshPending.asStateFlow()
 
+        /**
+         * Optimistic edits for loaded rows, so favorite/delete actions show immediately
+         * while the stream is frozen. Cleared whenever a new paging generation arrives.
+         */
+        private val _rowEdits = MutableStateFlow<Map<String, AnnounceRowEdit>>(emptyMap())
+        val rowEdits: StateFlow<Map<String, AnnounceRowEdit>> = _rowEdits.asStateFlow()
+
         // Total announce count for tab label
         val announceCount: StateFlow<Int> =
             announceRepository
@@ -126,9 +145,7 @@ class AnnounceStreamViewModel
                     initialValue = 0,
                 )
 
-        // Announces with pagination support, filtered by node types, audio filter,
-        // interface types, AND search query
-        val announces: Flow<PagingData<network.columba.app.data.repository.Announce>> =
+        private fun filterParams(): Flow<FilterParams> =
             combine(
                 searchQuery,
                 _selectedNodeTypes,
@@ -137,76 +154,103 @@ class AnnounceStreamViewModel
                 refreshGeneration,
             ) { query, selectedTypes, showAudio, selectedInterfaces, generation ->
                 FilterParams(query, selectedTypes, showAudio, selectedInterfaces, generation)
-            }.flatMapLatest { params ->
-                val query = params.query.trim()
-                val selectedTypes = params.selectedTypes
-                val showAudio = params.showAudio
-                val interfaceNames = params.selectedInterfaces.map { it.storageName }
-                val typeStrings = pagingTypes(selectedTypes, showAudio)
+            }
 
-                if (typeStrings.isEmpty()) {
-                    // If no types selected, return empty flow
-                    flowOf(PagingData.empty())
-                } else {
-                    // Get paginated announces from repository
-                    announceRepository
-                        .getAnnouncesPaged(
-                            nodeTypes = typeStrings,
-                            searchQuery = query,
-                            interfaceTypes = interfaceNames,
-                        ).map { pagingData ->
-                            // Interface filtering is handled in SQL so Paging can fill pages correctly.
-                            // Keep only the audio/node-type compatibility filter in memory.
-                            pagingData.filter { announce ->
-                                // Filter by nodeType
-                                // (exclude PEER if user didn't select it and we only added it for audio)
-                                val matchesNodeType =
-                                    selectedTypes.map { it.name }.contains(announce.nodeType)
-                                val isAudioAnnounce = announce.nodeType == NodeType.PHONE.name
+        // Announces with pagination support, filtered by node types, audio filter,
+        // interface types, AND search query
+        val announces: Flow<PagingData<network.columba.app.data.repository.Announce>> =
+            filterParams()
+                .flatMapLatest { params ->
+                    val selectedTypes = params.selectedTypes
+                    val showAudio = params.showAudio
+                    val typeStrings = pagingTypes(selectedTypes, showAudio)
 
-                                val matchesTypeOrAudio =
-                                    (matchesNodeType && (showAudio || !isAudioAnnounce)) || (isAudioAnnounce && showAudio)
+                    if (typeStrings.isEmpty()) {
+                        // If no types selected, return empty flow
+                        flowOf(PagingData.empty())
+                    } else {
+                        // Get paginated announces from repository
+                        announceRepository
+                            .getAnnouncesPaged(
+                                nodeTypes = typeStrings,
+                                searchQuery = params.query.trim(),
+                                interfaceTypes = params.selectedInterfaces.map { it.storageName },
+                            ).map { pagingData ->
+                                // A new generation re-reads the database for every loaded page,
+                                // so optimistic edits are no longer needed.
+                                _rowEdits.value = emptyMap()
+                                // Interface filtering is handled in SQL so Paging can fill pages correctly.
+                                // Keep only the audio/node-type compatibility filter in memory.
+                                pagingData.filter { announce ->
+                                    // Filter by nodeType
+                                    // (exclude PEER if user didn't select it and we only added it for audio)
+                                    val matchesNodeType =
+                                        selectedTypes.map { it.name }.contains(announce.nodeType)
+                                    val isAudioAnnounce = announce.nodeType == NodeType.PHONE.name
 
-                                matchesTypeOrAudio
+                                    val matchesTypeOrAudio =
+                                        (matchesNodeType && (showAudio || !isAudioAnnounce)) || (isAudioAnnounce && showAudio)
+
+                                    matchesTypeOrAudio
+                                }
                             }
+                    }
+                }.cachedIn(viewModelScope)
+
+        /**
+         * Newest matching announce at the moment a paging generation started, tagged with the
+         * generation it belongs to. It is computed once per generation (not per subscription),
+         * so leaving the Network tab and returning still counts the peers discovered while
+         * away, and an initially empty stream keeps counting arrivals.
+         */
+        private val generationStart: StateFlow<Pair<FilterParams, Long?>?> =
+            filterParams()
+                .flatMapLatest { params ->
+                    val typeStrings = countTypes(params.selectedTypes, params.showAudio)
+                    if (typeStrings.isEmpty()) {
+                        flowOf<Pair<FilterParams, Long?>>(params to null)
+                    } else {
+                        flow {
+                            emit(
+                                params to
+                                    announceRepository.getNewestAnnounceTimestamp(
+                                        nodeTypes = typeStrings,
+                                        searchQuery = params.query.trim(),
+                                        interfaceTypes = params.selectedInterfaces.map { it.storageName },
+                                    ),
+                            )
                         }
-                }
-            }.cachedIn(viewModelScope)
+                    }
+                }.stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.Eagerly,
+                    initialValue = null,
+                )
 
         /**
          * Announces that arrived after the currently loaded stream was started. Re-emits on
          * every announce write; drives the "N new announces" affordance while frozen.
          */
         val newAnnounceCount: StateFlow<Int> =
-            combine(
-                searchQuery,
-                _selectedNodeTypes,
-                _showAudioAnnounces,
-                _selectedInterfaceTypes,
-                refreshGeneration,
-            ) { query, selectedTypes, showAudio, selectedInterfaces, _ ->
-                FilterParams(query, selectedTypes, showAudio, selectedInterfaces, 0L)
-            }.flatMapLatest { params ->
-                val typeStrings = countTypes(params.selectedTypes, params.showAudio)
-                val query = params.query.trim()
-                val interfaceNames = params.selectedInterfaces.map { it.storageName }
-                if (typeStrings.isEmpty()) {
+            combine(filterParams(), generationStart) { params, start ->
+                // Only count against the mark of this generation; filters may have changed.
+                if (start?.first == params) params to start.second else null
+            }.flatMapLatest { counted ->
+                if (counted == null) {
                     flowOf(0)
                 } else {
-                    val since =
-                        announceRepository.getNewestAnnounceTimestamp(
-                            nodeTypes = typeStrings,
-                            searchQuery = query,
-                            interfaceTypes = interfaceNames,
-                        )
-                    if (since == null) {
+                    val params = counted.first
+                    val typeStrings = countTypes(params.selectedTypes, params.showAudio)
+                    if (typeStrings.isEmpty()) {
                         flowOf(0)
                     } else {
+                        // An empty (or not yet loaded) stream has no floor: counting every
+                        // matching row lets arrivals make the list fill itself.
                         announceRepository.observeAnnounceCountNewerThan(
-                            since = since,
+                            since = counted.second ?: 0L,
                             nodeTypes = typeStrings,
-                            searchQuery = query,
-                            interfaceTypes = interfaceNames,
+                            searchQuery = params.query.trim(),
+                            interfaceTypes = params.selectedInterfaces.map { it.storageName },
                         )
                     }
                 }
@@ -223,6 +267,25 @@ class AnnounceStreamViewModel
         fun refreshAnnounces() {
             _windowRefreshPending.value = false
             refreshGeneration.value += 1
+        }
+
+        private fun updateRowFavorite(
+            destinationHash: String,
+            isFavorite: Boolean,
+        ) {
+            val hash = destinationHash.lowercase()
+            _rowEdits.update { edits ->
+                val edit = edits[hash] ?: AnnounceRowEdit()
+                edits + (hash to edit.copy(isFavorite = isFavorite))
+            }
+        }
+
+        private fun markRowDeleted(destinationHash: String) {
+            val hash = destinationHash.lowercase()
+            _rowEdits.update { edits ->
+                val edit = edits[hash] ?: AnnounceRowEdit()
+                edits + (hash to edit.copy(isDeleted = true))
+            }
         }
 
         /** Types for the SQL query; audio rows are fetched even when only their chip is on. */
@@ -446,6 +509,7 @@ class AnnounceStreamViewModel
                         // Remove from contacts
                         contactRepository.deleteContact(destinationHash)
                         announceRepository.setFavorite(destinationHash, false)
+                        updateRowFavorite(destinationHash, isFavorite = false)
                         Log.d(TAG, "Removed contact: $destinationHash")
                     } else {
                         // Add to contacts - need to get announce data first
@@ -456,6 +520,7 @@ class AnnounceStreamViewModel
                                 publicKey = announce.publicKey,
                             )
                             announceRepository.setFavorite(destinationHash, true)
+                            updateRowFavorite(destinationHash, isFavorite = true)
                             Log.d(TAG, "Added contact from announce: $destinationHash")
                             // Request path for the newly added contact (with hasPath guard)
                             viewModelScope.launch(Dispatchers.IO) {
@@ -680,6 +745,7 @@ class AnnounceStreamViewModel
             viewModelScope.launch {
                 try {
                     announceRepository.deleteAnnounce(destinationHash)
+                    markRowDeleted(destinationHash)
                     Log.d(TAG, "Deleted announce: $destinationHash")
                 } catch (e: CancellationException) {
                     throw e
@@ -706,6 +772,9 @@ class AnnounceStreamViewModel
                         announceRepository.deleteAllAnnounces()
                         Log.d(TAG, "Deleted all announces (no active identity)")
                     }
+                    // Bulk delete invalidates every loaded row: re-read from the top.
+                    _rowEdits.value = emptyMap()
+                    refreshAnnounces()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

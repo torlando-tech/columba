@@ -72,7 +72,7 @@ fun NavController.openNomadNetPage(
     restoreSession: Boolean = false,
     requestData: String? = null,
 ) {
-    if (isShowingBrowserEntity(nodeHash, path)) {
+    if (isShowingBrowserEntity(nodeHash, path, requestData)) {
         return
     }
     if (currentDestination?.route?.startsWith("nomadnet") == true) {
@@ -106,13 +106,22 @@ fun NavController.openNomadNetPage(
     )
 }
 
-/** True when the top entry is the browser showing exactly this node and path. */
+/**
+ * True when the top entry is the browser showing exactly this node, path and
+ * request.
+ *
+ * The request is part of "the same page": two pinned shortcuts for one search
+ * path with different inputs must reload instead of stranding the browser on
+ * the results of the other search.
+ */
 private fun NavController.isShowingBrowserEntity(
     nodeHash: String,
     path: String,
+    requestData: String?,
 ): Boolean {
     val arguments = currentBackStackEntry?.arguments
     return currentBackStackEntry?.destination?.route == AppDestination.NOMADNET_BROWSER.routePattern &&
         arguments?.getString("destinationHash") == nodeHash &&
-        arguments?.getString("path") == path
+        arguments?.getString("path") == path &&
+        arguments?.getString("requestData").orEmpty() == requestData.orEmpty()
 }

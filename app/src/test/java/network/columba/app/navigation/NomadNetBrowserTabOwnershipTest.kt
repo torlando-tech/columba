@@ -236,6 +236,52 @@ class NomadNetBrowserTabOwnershipTest {
     }
 
     @Test
+    fun `a shortcut with different request data reloads the page instead of reusing it`() {
+        val searchPath = "/page/search.mu`query"
+        val firstRequest = "{\"query\":\"one\"}"
+        val secondRequest = "{\"query\":\"two\"}"
+
+        runOnMainThread { navController.openNomadNetPage(NODE_A, searchPath, requestData = firstRequest) }
+        idleMainLooper()
+        composeRule.waitForIdle()
+
+        runOnMainThread { navController.openNomadNetPage(NODE_A, searchPath, requestData = secondRequest) }
+        idleMainLooper()
+        composeRule.waitForIdle()
+
+        assertEquals(
+            "a different request is a different page: the entry must be replaced, not reused",
+            secondRequest,
+            navController.currentBackStackEntry?.arguments?.getString("requestData"),
+        )
+        assertEquals(
+            1,
+            backStackRoutes().count { it == AppDestination.NOMADNET_BROWSER.routePattern },
+        )
+    }
+
+    @Test
+    fun `re-opening the same page with the same request data is a no-op`() {
+        val searchPath = "/page/search.mu`query"
+        val request = "{\"query\":\"one\"}"
+
+        runOnMainThread { navController.openNomadNetPage(NODE_A, searchPath, requestData = request) }
+        idleMainLooper()
+        composeRule.waitForIdle()
+        val vmBefore = currentBrowserVm
+
+        runOnMainThread { navController.openNomadNetPage(NODE_A, searchPath, requestData = request) }
+        idleMainLooper()
+        composeRule.waitForIdle()
+
+        assertSame("the same entity and request must not recreate the session", vmBefore, currentBrowserVm)
+        assertEquals(
+            1,
+            backStackRoutes().count { it == AppDestination.NOMADNET_BROWSER.routePattern },
+        )
+    }
+
+    @Test
     fun `opening a different site replaces the session instead of stacking`() {
         openSiteFromContacts(NODE_A)
 

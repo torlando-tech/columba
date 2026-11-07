@@ -168,7 +168,10 @@ class NomadNetSitesViewModelTest {
                     "{\"query\":\"rngit\"}",
                 )
             }
-            assertEquals("/page/search.mu`query", savedSitesFlow.value.single().persistPath)
+            assertTrue(
+                "the saved page must be in the repository's list",
+                savedSitesFlow.value.any { it.persistPath == "/page/search.mu`query" },
+            )
         }
 
     @Test

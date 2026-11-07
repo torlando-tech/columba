@@ -5,7 +5,6 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import network.columba.app.data.repository.CustomThemeRepository
-import network.columba.app.nomadnet.NomadNetSavedSite
 import network.columba.app.ui.theme.ThemeMode
 import io.mockk.clearAllMocks
 import io.mockk.every
@@ -18,6 +17,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import network.columba.app.nomadnet.NomadNetSavedSite
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

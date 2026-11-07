@@ -342,9 +342,12 @@
     <string name="copy_interface_config">Copy config</string>
     <string name="share_interface_config">Share config</string>
     <string name="interface_config_copied">Config copied to clipboard</string>
+    <string name="interface_config_clip_label">Reticulum interface %1$s</string>
     <string name="interface_config_import_title">Paste interface config</string>
     <string name="interface_config_import_explainer">Paste a Reticulum interface section. Works with snippets copied from rns.fyi, rns.recipes, or a friend.</string>
     <string name="interface_config_import_field_label">Interface config</string>
+    <!-- Sample INI syntax shown as the empty-field hint; never translated. -->
+    <string name="interface_config_import_placeholder" translatable="false">[[My Node]]\n  type = TCPClientInterface\n  target_host = example.com\n  target_port = 4242</string>
     <string name="interface_config_import_paste_clipboard">Paste from clipboard</string>
     <string name="interface_config_import_checking">Checking existing interfaces…</string>
     <string name="interface_config_import_found_one">1 interface found</string>
@@ -781,6 +784,8 @@
     <string name="tcp_wizard_tor_desc">Route through SOCKS5 proxy. Required for .onion addresses. Orbot must be installed and connected.</string>
     <string name="tcp_wizard_socks_host">SOCKS5 Proxy Host</string>
     <string name="tcp_wizard_socks_port">SOCKS5 Proxy Port</string>
+    <string name="tcp_wizard_kiss_framing_title">KISS Framing (TNC / Modem)</string>
+    <string name="tcp_wizard_kiss_framing_description">Use only when connecting to a software TNC or soundmodem that exposes KISS-over-TCP. Do NOT enable for Reticulum TCPServerInterface or Backbone connections — it disables the internal reliability and recovery mechanisms.</string>
     <string name="flasher_usb_permission_denied">USB permission denied</string>
     <string name="flasher_load_firmware_failed">Failed to load firmware: %1$s</string>
     <string name="tcp_client_save_failed">Failed to save configuration</string>
@@ -1838,6 +1843,7 @@
     <string name="messaging_sync_downloading">Downloading...</string>
     <string name="messaging_sync_processing">Processing...</string>
     <string name="messaging_sync_download_complete">Download complete</string>
+    <string name="messaging_unverified_sender_chip">Unverified sender — may be forged</string>
     <!-- MessageDetailScreen -->
     <string name="message_detail_title">Message Details</string>
     <string name="message_detail_loading">Loading...</string>
@@ -1878,6 +1884,11 @@
         <item quantity="one">Message traveled through %1$d relay</item>
         <item quantity="other">Message traveled through %1$d relays</item>
     </plurals>
+    <string name="message_detail_signature_title">Signature</string>
+    <string name="message_detail_signature_verified">Verified</string>
+    <string name="message_detail_signature_verified_detail">The sender\'s identity was confirmed against their announce.</string>
+    <string name="message_detail_signature_unverified">Unverified</string>
+    <string name="message_detail_signature_unverified_detail">The sender\'s signature could not be verified. Their identity may be unknown to your node, or the signature check may have failed. The message could be forged. Treat with caution.</string>
     <!-- ChatsScreen -->
     <string name="chats_saved_contact">Saved contact</string>
     <string name="chats_removed_contact">Removed contact</string>

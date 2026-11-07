@@ -18,16 +18,19 @@ import kotlinx.coroutines.launch
 import network.columba.app.micron.MicronDocument
 import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronParser
+import network.columba.app.nomadnet.DEFAULT_PAGE_PATH
 import network.columba.app.nomadnet.ImageLoadingMode
 import network.columba.app.nomadnet.NomadNetImageCache
 import network.columba.app.nomadnet.PageImageLoader
 import network.columba.app.nomadnet.PageImageState
 import network.columba.app.nomadnet.ParsedImageRef
 import network.columba.app.nomadnet.NomadNetPageCache
+import network.columba.app.nomadnet.NomadNetAddressTarget
 import network.columba.app.nomadnet.PartialManager
 import network.columba.app.nomadnet.buildNomadNetPersistPath
 import network.columba.app.nomadnet.buildNomadNetRequestData
 import network.columba.app.nomadnet.pageImageKey
+import network.columba.app.nomadnet.parseNomadNetAddress
 import network.columba.app.nomadnet.splitNomadNetPathFields
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsCore
@@ -48,7 +51,6 @@ class NomadNetBrowserViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "NomadNetBrowserVM"
-            private const val DEFAULT_PATH = "/page/index.mu"
             private const val PAGE_TIMEOUT_SECONDS = 60f
             private const val MAX_HISTORY_SIZE = 50
         }
@@ -65,6 +67,13 @@ class NomadNetBrowserViewModel
                 val path: String,
                 val nodeHash: String,
                 val fieldTokens: List<String> = emptyList(),
+                /**
+                 * Request data (JSON) the node answered with if this page was
+                 * fetched by submitting a form; null for a plain GET. Saved
+                 * with a bookmark or a launcher shortcut so the page can be
+                 * reproduced instead of re-fetched with empty form values.
+                 */
+                val requestData: String? = null,
             ) : BrowserState()
 
             data class Error(
@@ -180,7 +189,7 @@ class NomadNetBrowserViewModel
         @Volatile
         private var currentNodeHash = ""
         private var lastFetchNodeHash = ""
-        private var lastFetchPath = DEFAULT_PATH
+        private var lastFetchPath = DEFAULT_PAGE_PATH
         private var lastFetchFormDataJson: String? = null
         /** Link-field tokens (backtick block) for the last fetch, for persist-path reconstruction. */
         private var lastFetchFieldTokens: List<String> = emptyList()
@@ -445,42 +454,24 @@ class NomadNetBrowserViewModel
          * - "lxmf@hash" (emit OpenConversation event)
          */
         fun navigateToUrl(input: String) {
-            val trimmed = input.trim()
-            if (trimmed.isEmpty()) return
-
-            // Strip nomadnetwork:// scheme if present
-            val raw =
-                if (trimmed.startsWith("nomadnetwork://")) {
-                    trimmed.removePrefix("nomadnetwork://")
-                } else {
-                    trimmed
+            when (val target = parseNomadNetAddress(input)) {
+                null -> return
+                is NomadNetAddressTarget.Conversation -> {
+                    viewModelScope.launch { _navigationEvent.emit(NavigationEvent.OpenConversation(target.nodeHash)) }
                 }
-
-            // Handle lxmf@ links
-            if (raw.startsWith("lxmf@")) {
-                val hash = raw.removePrefix("lxmf@")
-                viewModelScope.launch { _navigationEvent.emit(NavigationEvent.OpenConversation(hash)) }
-                return
+                is NomadNetAddressTarget.Page -> {
+                    // Push current page to history so back button works after URL bar navigation
+                    pushCurrentPageToHistory()
+                    loadPage(target.nodeHash, target.path)
+                }
             }
-
-            // Split on first colon: "hash:/path" or just "hash"
-            val colonIdx = raw.indexOf(':')
-            val (nodeHash, path) =
-                if (colonIdx > 0) {
-                    raw.substring(0, colonIdx) to raw.substring(colonIdx + 1)
-                } else {
-                    raw to DEFAULT_PATH
-                }
-
-            // Push current page to history so back button works after URL bar navigation
-            pushCurrentPageToHistory()
-            loadPage(nodeHash.lowercase(), path)
         }
 
         fun loadPage(
             destinationHash: String,
-            path: String = DEFAULT_PATH,
+            path: String = DEFAULT_PAGE_PATH,
             fromSessionRestore: Boolean = false,
+            requestDataJson: String? = null,
         ) {
             partialManager.clear()
             if (destinationHash != currentNodeHash) {
@@ -500,18 +491,21 @@ class NomadNetBrowserViewModel
             // requested path, and route them through the same submission path
             // an in-page link tap uses.
             val (parsedPath, fieldNames) = splitNomadNetPathFields(path)
-            val requestPath = parsedPath.ifEmpty { DEFAULT_PATH }
-            val formDataJson = buildNomadNetRequestData(fieldNames, _formFields.value)
+            val requestPath = parsedPath.ifEmpty { DEFAULT_PAGE_PATH }
+            // A saved page or its pinned shortcut carries the request data its
+            // page was fetched with: replay it verbatim instead of rebuilding
+            // from the backtick tokens, whose values are not in the path (a
+            // saved search would otherwise re-submit with empty fields).
+            val formDataJson = requestDataJson ?: buildNomadNetRequestData(fieldNames, _formFields.value)
 
-            // Restoring the NomadNet tab session shows the page the user was
-            // looking at, immediately, from the in-memory session store -
-            // even a `#!c=0` page, which no file cache ever holds - and
-            // re-attaches the session's in-page history and form-field
-            // drafts, so Back keeps returning to earlier pages and
-            // half-typed forms come back with the page. Ordinary navigation
-            // (link taps, deep links, URL bar, pull-to-refresh) never sets
-            // [fromSessionRestore] and so still honours the site's freshness
-            // directive.
+            // The tab home's Continue row reopens the page the user was
+            // looking at from the in-memory session store - immediately, and
+            // re-attaching the session's in-page history and form-field
+            // drafts, so Back keeps returning to earlier pages and half-typed
+            // forms come back with the page. Every other entry point (link
+            // taps, deep links, URL bar, saved sites, pull-to-refresh) leaves
+            // [fromSessionRestore] false and so still honours the site's
+            // freshness directive.
             //
             // Restoring must never re-submit a var-bearing request: a site
             // whose submission changes data would redo the action without a
@@ -721,7 +715,15 @@ class NomadNetBrowserViewModel
                             // never reaches the file cache, yet a tab restore
                             // must still show it without re-submitting.
                             pageCache.putSession(nodeHash, persistPath, document, lastFetchFieldTokens)
-                            emitPageLoaded(document, pageResult.path, nodeHash, lastFetchFieldTokens)
+                            // The request that produced this page, so a bookmark
+                            // or a pinned shortcut can replay it later.
+                            emitPageLoaded(
+                                document = document,
+                                path = pageResult.path,
+                                nodeHash = nodeHash,
+                                fieldTokens = lastFetchFieldTokens,
+                                requestData = formDataJson,
+                            )
                         },
                         onFailure = { error ->
                             _browserState.value =
@@ -1072,9 +1074,9 @@ class NomadNetBrowserViewModel
 
         /**
          * Hand the live session - page, form-field drafts, and in-page
-         * history - to the singleton store so returning to the NomadNet tab
+         * history - to the singleton store so the tab home's Continue row
          * restores everything the entry-scoped ViewModel would otherwise
-         * lose when the tab's entries are dropped. Internal for tests,
+         * lose when the browser entry is destroyed. Internal for tests,
          * which cannot invoke the protected lifecycle callback.
          */
         internal fun saveSessionSnapshot() {
@@ -1142,6 +1144,7 @@ class NomadNetBrowserViewModel
             path: String,
             nodeHash: String,
             fieldTokens: List<String> = emptyList(),
+            requestData: String? = null,
         ) {
             _isPullRefreshing.value = false
             _formFields.update { current -> seedFieldDefaults(document, current) }
@@ -1170,6 +1173,7 @@ class NomadNetBrowserViewModel
                     path = path,
                     nodeHash = nodeHash,
                     fieldTokens = fieldTokens,
+                    requestData = requestData,
                 )
             // Remember where the user is so the bottom-nav NomadNet tab can
             // reopen the exact page the user left on (node + deep path) instead

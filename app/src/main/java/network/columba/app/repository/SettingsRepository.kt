@@ -8,6 +8,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -30,6 +31,8 @@ import kotlinx.coroutines.flow.map
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.model.MapStylePreference
 import network.columba.app.data.repository.CustomThemeRepository
+import network.columba.app.nomadnet.NomadNetSavedSite
+import network.columba.app.nomadnet.NomadNetSavedSites
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import network.columba.app.ui.theme.AppTheme
@@ -165,6 +168,7 @@ class SettingsRepository
             val NOMADNET_LAST_NODE = stringPreferencesKey("nomadnet_last_node")
             val NOMADNET_LAST_PATH = stringPreferencesKey("nomadnet_last_path")
             val NOMADNET_AUTO_IDENTIFY_NODES = stringSetPreferencesKey("nomadnet_auto_identify_nodes")
+            val NOMADNET_SAVED_SITES = stringPreferencesKey("nomadnet_saved_sites")
             val BOTTOM_NAV_TABS = stringPreferencesKey("bottom_nav_tabs")
             val HTTP_ENABLED_FOR_DOWNLOAD = booleanPreferencesKey("http_enabled_for_download")
 
@@ -1718,15 +1722,135 @@ class SettingsRepository
         }
 
         /**
-         * Forget the last-browsed NomadNet page (Close Site). The bottom-nav
-         * NomadNet tab then reopens at the address-entry prompt instead of the
-         * closed site. Both the node and path keys are cleared so a stale deep
-         * path can never resurrect the closed site.
+         * Forget the last-browsed NomadNet page (Close Site). The NomadNet tab
+         * home then offers only its address field and saved sites; the closed
+         * site loses its "Continue" row instead of reopening. Both the node and
+         * path keys are cleared so a stale deep path can never resurrect the
+         * closed site.
          */
         suspend fun clearNomadNetLastNodeHash() {
             context.dataStore.edit { preferences ->
                 preferences.remove(PreferencesKeys.NOMADNET_LAST_NODE)
                 preferences.remove(PreferencesKeys.NOMADNET_LAST_PATH)
+            }
+        }
+
+        /**
+         * Flow of the user's saved NomadNet pages, most recent first. Emits an
+         * empty list for unset or corrupt storage (see
+         * [NomadNetSavedSites.decode]) so the tab home always renders.
+         */
+        val nomadNetSavedSitesFlow: Flow<List<NomadNetSavedSite>> =
+            context.dataStore.data
+                .map { preferences -> NomadNetSavedSites.decode(preferences[PreferencesKeys.NOMADNET_SAVED_SITES]) }
+                .distinctUntilChanged()
+
+        /**
+         * Save a page, or refresh its stored label if it is already saved.
+         * Read-modify-write inside ONE [edit] transaction so a concurrent
+         * save/remove cannot drop an entry. Rejected when the node hash is not
+         * a browsable 32-char hex address or the path is blank.
+         */
+        suspend fun saveNomadNetSavedSite(
+            nodeHash: String,
+            persistPath: String,
+            label: String? = null,
+            requestData: String? = null,
+        ) {
+            val normalizedHash = NomadNetSavedSites.normalizeNodeHash(nodeHash) ?: return
+            val path = persistPath.trim()
+            if (path.isEmpty()) return
+            context.dataStore.edit { preferences ->
+                val current = NomadNetSavedSites.decode(preferences[PreferencesKeys.NOMADNET_SAVED_SITES])
+                putNomadNetSavedSites(
+                    preferences,
+                    NomadNetSavedSites.upsert(
+                        current,
+                        NomadNetSavedSite(normalizedHash, path, label, System.currentTimeMillis(), requestData),
+                    ),
+                )
+            }
+        }
+
+        /**
+         * Re-inserts an already-normalized [site] with its original
+         * [NomadNetSavedSite.savedAt], so the snackbar's Undo puts the page
+         * back in the order it was in instead of at the top.
+         */
+        suspend fun restoreNomadNetSavedSite(site: NomadNetSavedSite) {
+            val normalizedHash = NomadNetSavedSites.normalizeNodeHash(site.nodeHash) ?: return
+            val path = site.persistPath.trim()
+            if (path.isEmpty()) return
+            context.dataStore.edit { preferences ->
+                val current = NomadNetSavedSites.decode(preferences[PreferencesKeys.NOMADNET_SAVED_SITES])
+                putNomadNetSavedSites(
+                    preferences,
+                    NomadNetSavedSites.upsert(current, site.copy(nodeHash = normalizedHash, persistPath = path)),
+                )
+            }
+        }
+
+        /** Remove a saved page. No-op when it is not saved. */
+        suspend fun removeNomadNetSavedSite(
+            nodeHash: String,
+            persistPath: String,
+        ) {
+            val normalizedHash = NomadNetSavedSites.normalizeNodeHash(nodeHash) ?: return
+            context.dataStore.edit { preferences ->
+                val current = NomadNetSavedSites.decode(preferences[PreferencesKeys.NOMADNET_SAVED_SITES])
+                putNomadNetSavedSites(preferences, NomadNetSavedSites.remove(current, normalizedHash, persistPath.trim()))
+            }
+        }
+
+        /**
+         * Save the page when it is not saved and remove it when it is, in one
+         * [edit] transaction so a rapid double tap cannot leave a half-applied
+         * state.
+         *
+         * @return true when the page is saved afterwards.
+         */
+        suspend fun toggleNomadNetSavedSite(
+            nodeHash: String,
+            persistPath: String,
+            label: String? = null,
+            requestData: String? = null,
+        ): Boolean {
+            val normalizedHash = NomadNetSavedSites.normalizeNodeHash(nodeHash) ?: return false
+            val path = persistPath.trim()
+            if (path.isEmpty()) return false
+            var saved = false
+            context.dataStore.edit { preferences ->
+                val current = NomadNetSavedSites.decode(preferences[PreferencesKeys.NOMADNET_SAVED_SITES])
+                saved =
+                    if (NomadNetSavedSites.contains(current, normalizedHash, path)) {
+                        putNomadNetSavedSites(
+                            preferences,
+                            NomadNetSavedSites.remove(current, normalizedHash, path),
+                        )
+                        false
+                    } else {
+                        putNomadNetSavedSites(
+                            preferences,
+                            NomadNetSavedSites.upsert(
+                                current,
+                                NomadNetSavedSite(normalizedHash, path, label, System.currentTimeMillis(), requestData),
+                            ),
+                        )
+                        true
+                    }
+            }
+            return saved
+        }
+
+        /** Writes the encoded list, dropping the key entirely when it is empty. */
+        private fun putNomadNetSavedSites(
+            preferences: MutablePreferences,
+            sites: List<NomadNetSavedSite>,
+        ) {
+            if (sites.isEmpty()) {
+                preferences.remove(PreferencesKeys.NOMADNET_SAVED_SITES)
+            } else {
+                preferences[PreferencesKeys.NOMADNET_SAVED_SITES] = NomadNetSavedSites.encode(sites)
             }
         }
 

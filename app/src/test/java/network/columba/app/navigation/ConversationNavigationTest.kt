@@ -116,6 +116,34 @@ class ConversationNavigationTest {
     }
 
     @Test
+    fun `notification route carries the thread of the tapped message`() {
+        val route =
+            ConversationNavigation.routeFor(
+                encodedDestinationHash = "abc123",
+                encodedPeerName = "Alice",
+                fromNotification = true,
+                notificationEventId = 7L,
+                threadId = "02000000000000000000000000000002",
+            )
+
+        assertTrue(route, route.contains("threadId=02000000000000000000000000000002"))
+    }
+
+    @Test
+    fun `thread route without notification provenance keeps the plain query`() {
+        val route =
+            ConversationNavigation.routeFor(
+                encodedDestinationHash = "abc123",
+                encodedPeerName = "Alice",
+                fromNotification = false,
+                notificationEventId = 0L,
+                threadId = "02000000000000000000000000000002",
+            )
+
+        assertEquals("messaging/abc123/Alice?threadId=02000000000000000000000000000002", route)
+    }
+
+    @Test
     fun `notification for different conversation pushes a new entry`() {
         val action = ConversationNavigation.actionFor(
             currentRoute = "messaging/{destinationHash}/{peerName}?fromNotification={fromNotification}",

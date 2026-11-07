@@ -30,7 +30,6 @@
     <ID>ReturnCount:IdentityQrCodeUtils.kt$IdentityQrCodeUtils$fun decodeFromQrString(qrString: String): IdentityData?</ID>
     <ID>ReturnCount:InputValidator.kt$InputValidator$fun String.safeHexToBytes(): Result&lt;ByteArray&gt;</ID>
     <ID>ReturnCount:InputValidator.kt$InputValidator$fun validateIdentityString(identityString: String): ValidationResult&lt;Pair&lt;ByteArray, ByteArray&gt;&gt;</ID>
-    <ID>ReturnCount:NotificationHelper.kt$NotificationHelper$suspend fun notifyMessageReceived( destinationHash: String, peerName: String, messagePreview: String, isFavorite: Boolean, )</ID>
     <ID>SwallowedException:ColumbaApplication.kt$ColumbaApplication$e: ClassNotFoundException</ID>
     <ID>SwallowedException:IdentityManagerViewModel.kt$IdentityManagerViewModel$e: Exception</ID>
     <ID>SwallowedException:IdentityQrCodeUtils.kt$IdentityQrCodeUtils$e: Exception</ID>

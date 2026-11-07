@@ -7,6 +7,7 @@ import org.json.JSONObject
 import androidx.annotation.StringRes
 import androidx.annotation.VisibleForTesting
 import androidx.core.content.FileProvider
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
@@ -49,6 +50,25 @@ import network.columba.app.ui.model.loadImageBytes
 import network.columba.app.ui.model.loadImageData
 import network.columba.app.ui.model.parseAudioAttachment
 import network.columba.app.ui.model.toMessageUi
+import network.columba.app.data.db.dao.ThreadFirstMessage
+import network.columba.app.data.db.dao.ThreadLastMessage
+import network.columba.app.data.db.dao.ThreadMessageCount
+import network.columba.app.data.db.dao.ThreadUnreadCount
+import network.columba.app.data.db.entity.ThreadEntity
+import network.columba.app.data.repository.toDomainMessage
+import network.columba.app.data.util.ThreadPolicy
+import network.columba.app.rns.api.util.hexToBytes
+import network.columba.app.rns.api.util.toHex
+import network.columba.app.ui.model.ThreadComposerPrefill
+import network.columba.app.ui.model.ThreadHeaderUi
+import network.columba.app.ui.model.ThreadHookUi
+import network.columba.app.ui.model.ThreadMainRowUi
+import network.columba.app.ui.model.ThreadRowSource
+import network.columba.app.ui.model.ThreadPillUi
+import network.columba.app.ui.model.ThreadSheetUiState
+import network.columba.app.ui.model.ThreadUiDerivation
+import network.columba.app.ui.model.ThreadViewUi
+import kotlinx.coroutines.flow.emitAll
 import network.columba.app.util.FileAttachment
 import network.columba.app.util.FileUtils
 import network.columba.app.util.ImageUtils
@@ -82,6 +102,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
@@ -97,6 +118,8 @@ data class ComposerSendResult(
     val destinationHash: String,
     val submittedText: String,
     val clearComposer: Boolean,
+    /** Hex id of the thread the send targeted (null = Main / threads off). */
+    val threadId: String? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -124,10 +147,20 @@ class MessagingViewModel
         private val notificationHelper: network.columba.app.notifications.NotificationHelper,
         private val rnsTelephony: RnsTelephony,
         private val microphoneArbiter: MicrophoneAdmissionArbiter = MicrophoneAdmissionArbiter(),
+        private val savedState: SavedStateHandle = SavedStateHandle(),
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
             private const val DRAFT_SAVE_DEBOUNCE_MS = 500L
+
+            /**
+             * Composer target across process death (D11): a target with no
+             * thread row exists only while it is selected, so a recreation
+             * must restore the selection instead of dropping its draft.
+             */
+            private const val SAVED_CONVERSATION = "messaging.target.conversation"
+            private const val SAVED_THREAD = "messaging.target.thread"
+            private const val SAVED_ROOT = "messaging.target.root"
 
             /**
              * Sanitize a filename to prevent path traversal attacks.
@@ -152,6 +185,429 @@ class MessagingViewModel
         // The "unknown peer" fallback is resolved at the render site, never stored.
         private var currentPeerName: String? = null
 
+        // ── Threads P2 (threads-spec §6.2/§6.4/§6.5/§6.6) ──────────────────
+
+        /** Selected chip: null = Main, otherwise lowercase-hex thread id. */
+        private val _selectedThread = MutableStateFlow<String?>(null)
+        val selectedThread: StateFlow<String?> = _selectedThread.asStateFlow()
+
+        // Archive moved the list away from the thread the user was reading:
+        // (displaced thread, the target it switched to). Cleared by the undo.
+        private var threadDisplacedByArchive: String? = null
+        private var threadDisplacementTarget: String? = null
+
+        /** `threads_enabled` feature flag (default off; gates all P2 surfaces). */
+        val threadsEnabled: StateFlow<Boolean> =
+            settingsRepository
+                .threadsEnabledFlow
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = false,
+                )
+
+        /** One-shot composer prefill for "Thread from here" (editable quote of the root). */
+        private val _threadComposerPrefill = MutableSharedFlow<ThreadComposerPrefill>(extraBufferCapacity = 1)
+        val threadComposerPrefill: SharedFlow<ThreadComposerPrefill> = _threadComposerPrefill.asSharedFlow()
+
+        /** Case-2 root for a not-yet-sent thread: attached as `0x30` on the first send only. */
+        private val _pendingThreadRoot = MutableStateFlow<String?>(null)
+
+        // Thread rows / unread / previews / reply counts for the current
+        // conversation (archived included — the sheet partitions them).
+        // Gated on `threads_enabled`: with the flag off the thread DAO is never queried.
+        private fun <T> gatedThreadQuery(query: suspend (String) -> Flow<List<T>>): Flow<List<T>> =
+            combine(_currentConversation, threadsEnabled) { peerHash, enabled -> peerHash to enabled }
+                .flatMapLatest { (peerHash, enabled) ->
+                    if (peerHash == null || !enabled) {
+                        flowOf(emptyList())
+                    } else {
+                        flow { emitAll(query(peerHash)) }
+                    }
+                }
+
+        private val threadRowsFlow: Flow<List<ThreadEntity>> =
+            gatedThreadQuery { conversationRepository.threadsForConversation(it, includeArchived = true) }
+
+        private val threadUnreadFlow: Flow<List<ThreadUnreadCount>> =
+            gatedThreadQuery { conversationRepository.observeUnreadCountsPerThread(it) }
+
+        private val threadLastFlow: Flow<List<ThreadLastMessage>> =
+            gatedThreadQuery { conversationRepository.observeLastMessagesPerThread(it) }
+
+        private val threadCountsFlow: Flow<List<ThreadMessageCount>> =
+            gatedThreadQuery { conversationRepository.observeMessageCountsPerThread(it) }
+
+        private val threadFirstFlow: Flow<List<ThreadFirstMessage>> =
+            gatedThreadQuery { conversationRepository.observeFirstMessagesPerThread(it) }
+
+        /** Main's own last message and unread count — the sheet's pinned Main row. */
+        private val threadMainFlow: Flow<ThreadLastMessage?> =
+            combine(_currentConversation, threadsEnabled) { peerHash, enabled -> peerHash to enabled }
+                .flatMapLatest { (peerHash, enabled) ->
+                    if (peerHash == null || !enabled) {
+                        flowOf(null)
+                    } else {
+                        flow { emitAll(conversationRepository.observeMainLastMessage(peerHash)) }
+                    }
+                }
+
+        /**
+         * Thread sheet contents (Active / Dormant / Archived + pinned Main and
+         * the open target). One projection drives both sheet presentations and
+         * the pill (threads-spec D10).
+         */
+        val threadSheetState: StateFlow<ThreadSheetUiState> =
+            combine(
+                combine(threadRowsFlow, threadUnreadFlow, threadLastFlow, threadFirstFlow) { rows, unread, last, first ->
+                    ThreadSheetInputs(
+                        rows = rows,
+                        unreadByHex = ThreadUiDerivation.unreadByThread(unread),
+                        lastByHex = ThreadUiDerivation.lastMessageByThread(last),
+                        firstByHex = ThreadUiDerivation.firstMessageByThread(first),
+                        mainUnreadCount = ThreadUiDerivation.mainUnreadCount(unread),
+                    )
+                },
+                threadMainFlow,
+                _selectedThread,
+            ) { inputs, main, selected ->
+                ThreadUiDerivation.buildSheetState(
+                    threads = inputs.rows,
+                    source =
+                        ThreadRowSource(
+                            unreadByHex = inputs.unreadByHex,
+                            lastByHex = inputs.lastByHex,
+                            firstByHex = inputs.firstByHex,
+                        ),
+                    now = System.currentTimeMillis(),
+                    currentThreadIdHex = selected,
+                    main = ThreadMainRowUi(
+                        preview = main?.content.orEmpty(),
+                        timestamp = main?.timestamp ?: 0L,
+                        unreadCount = inputs.mainUnreadCount,
+                    ),
+                )
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000L),
+                initialValue = ThreadSheetUiState(),
+            )
+
+        /** Header pill: the open target's title + unread (spec §5.1). */
+        val threadPill: StateFlow<ThreadPillUi> =
+            combine(threadSheetState, _selectedThread) { sheet, selected ->
+                ThreadUiDerivation.buildPill(sheet, selected)
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000L),
+                initialValue = ThreadPillUi(),
+            )
+
+        /** Intermediate projection for [threadSheetState] (kept typed instead of indexing a flow array). */
+        private data class ThreadSheetInputs(
+            val rows: List<ThreadEntity>,
+            val unreadByHex: Map<String, Int>,
+            val lastByHex: Map<String, ThreadLastMessage>,
+            val firstByHex: Map<String, ThreadFirstMessage>,
+            val mainUnreadCount: Int,
+        )
+
+        /** "N replies" hooks for Main root bubbles, keyed by root message id. */
+        val threadHooks: StateFlow<Map<String, ThreadHookUi>> =
+            combine(threadRowsFlow, threadCountsFlow, threadUnreadFlow) { rows, counts, unread ->
+                ThreadUiDerivation.buildHookMap(
+                    rows,
+                    ThreadUiDerivation.countsByThread(counts),
+                    ThreadUiDerivation.unreadByThread(unread),
+                )
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000L),
+                initialValue = emptyMap(),
+            )
+
+        /** Pinned root header + reply count for the selected thread. */
+        private val _threadView = MutableStateFlow<ThreadViewUi?>(null)
+        val threadView: StateFlow<ThreadViewUi?> = _threadView.asStateFlow()
+
+        init {
+            // Re-derive the thread-view header whenever the selection changes
+            // or the thread row updates (e.g. a late announce resolves the
+            // case-2 root -> placeholder swaps for the pinned root card).
+            viewModelScope.launch {
+                combine(threadRowsFlow, threadCountsFlow, _selectedThread) { rows, counts, selected ->
+                    Triple(rows, counts, selected)
+                }.collect { (rows, counts, selected) ->
+                    val peerHash = _currentConversation.value
+                    if (selected == null || peerHash == null) {
+                        _threadView.value = null
+                        return@collect
+                    }
+                    val bytes = selected.hexToBytesOrNull()
+                    if (bytes == null) {
+                        _threadView.value = null
+                        return@collect
+                    }
+                    val thread =
+                        rows.firstOrNull { it.threadId.toHex() == selected }
+                            ?: conversationRepository.getThread(peerHash, bytes)
+                    // LIMIT 1 read: the header shows only the oldest reply; a
+                    // full-history Flow would grow with the thread.
+                    val firstMessage = conversationRepository.firstMessageInThread(peerHash, bytes)
+                    val rootMessage = thread?.rootMessageId?.let { conversationRepository.getMessageById(it) }
+                    _threadView.value =
+                        ThreadViewUi(
+                            header = ThreadUiDerivation.deriveHeader(thread, firstMessage, rootMessage),
+                            replyCount = ThreadUiDerivation.countsByThread(counts)[selected] ?: 0,
+                        )
+                }
+            }
+        }
+
+        /**
+         * Snapshot the composer target for process death. `SavedStateHandle`
+         * survives recreation of the ViewModel; an explicit switch away is a
+         * cancel and clears the snapshot via the same call.
+         */
+        private fun rememberTarget() {
+            savedState[SAVED_CONVERSATION] = _currentConversation.value
+            savedState[SAVED_THREAD] = _selectedThread.value
+            savedState[SAVED_ROOT] = _pendingThreadRoot.value
+        }
+
+        /** Switch the message list + composer to a thread (null = Main), in place. */
+        fun selectThread(threadIdHex: String?) {
+            if (_selectedThread.value == threadIdHex) return
+            viewModelScope.launch { switchThread(threadIdHex) }
+        }
+
+        private suspend fun switchThread(threadIdHex: String?) {
+            val peerHash = _currentConversation.value ?: return
+            threadSwitchMutex.withLock {
+                // Read the starting target inside the lock: on two quick chip
+                // taps the second switch must flush what the FIRST switch
+                // left in the composer, not the stale pre-first target (that
+                // saved an empty lastDraftText over Main's real draft).
+                val fromThreadHex = _selectedThread.value
+                _pendingThreadRoot.value = null
+                // The pending reply belongs to the target being left; carrying
+                // it across would attach the old thread message's quote and
+                // hash to the next send.
+                _pendingReplyTo.value = null
+                try {
+                    // A thread can be selected immediately after loadMessages
+                    // (opening from a chat card); wait for that Main-draft
+                    // restore to finish, otherwise the flush below would save
+                    // the still-empty lastDraftText over the real Main draft.
+                    draftRestoreJob?.join()
+                    // Flush the composer draft to the thread being left
+                    // (empty text deletes the draft row).
+                    draftSaveJob?.cancel()
+                    val fromThreadBytes = fromThreadHex.hexToBytesOrNull()
+                    conversationRepository.saveDraft(peerHash, lastDraftText, fromThreadBytes)
+                    // Leaving a target that never became a thread is a
+                    // cancel: it has no row, so its draft goes with it rather
+                    // than lingering unreachable (spec §5).
+                    conversationRepository.discardDraftIfUnsent(peerHash, fromThreadBytes)
+                    lastDraftText = ""
+                    // Swap the draft BEFORE announcing the new selection: the
+                    // screen retargets its composer when `selectedThread`
+                    // changes, so the new target's draft must already be
+                    // visible at that point.
+                    val draft = conversationRepository.getDraft(peerHash, threadIdHex.hexToBytesOrNull())
+                    lastDraftText = draft.orEmpty()
+                    _draftText.value = draft
+                    _selectedThread.value = threadIdHex
+                    // Thread-aware read path: opening a target clears only its unread.
+                    val threadBytes = threadIdHex.hexToBytesOrNull()
+                    if (threadBytes != null) {
+                        conversationRepository.markThreadAsRead(peerHash, threadBytes)
+                    } else {
+                        conversationRepository.markMainAsRead(peerHash)
+                    }
+                    rememberTarget()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error switching thread", e)
+                }
+            }
+        }
+
+        /**
+         * Case 1: "+ New" — unnamed thread from scratch, selected immediately.
+         *
+         * @return the new thread's id, so a caller can re-select it after an
+         *   activity/process restore instead of creating a second thread.
+         */
+        fun startNewThread(): String {
+            val newThreadHex = ThreadPolicy.newThreadId().toHex()
+            selectThread(newThreadHex)
+            return newThreadHex
+        }
+
+        /**
+         * Case 2: "Thread from here" — Slack-style thread off a Main message.
+         * The root stays in Main; the first reply carries `0x30` = root id
+         * (threads-spec §4.2). Composer gets an editable quote of the root.
+         */
+        fun startThreadFromMessage(
+            rootMessageId: String,
+            rootContent: String,
+        ) {
+            viewModelScope.launch {
+                val newThreadHex = ThreadPolicy.newThreadId().toHex()
+                switchThread(newThreadHex)
+                // No row yet: a "thread from here" becomes a thread on its
+                // first send (ThreadGrouping then creates the row and attaches
+                // the root), so canceling it leaves no hook behind. Until that
+                // send the root lives only while this target stays selected.
+                val stillTargeted = threadSwitchMutex.withLock { _selectedThread.value == newThreadHex }
+                if (stillTargeted) {
+                    _pendingThreadRoot.value = rootMessageId
+                    rememberTarget()
+                    // Emit the quote only after the switch completed: the
+                    // switch swaps the composer draft, so a prefill emitted
+                    // before it can be replaced by the new target's (empty)
+                    // draft.
+                    _threadComposerPrefill.tryEmit(
+                        ThreadComposerPrefill(
+                            threadIdHex = newThreadHex,
+                            text = "> ${ThreadPolicy.quoteExcerpt(rootContent)}\n",
+                        ),
+                    )
+                }
+            }
+        }
+
+        // Thread sheet management (spec §6.3) — local-only, never wire traffic.
+
+        /**
+         * Rename / reset the open or a listed thread. A null [title] writes
+         * SQL NULL, which is the "automatic excerpt" state (threads-spec D8);
+         * sanitizing happens in the repository so every caller gets the same
+         * cap/flatten rules.
+         */
+        fun renameThread(
+            threadIdHex: String,
+            title: String?,
+        ) {
+            val peerHash = _currentConversation.value ?: return
+            val bytes = threadIdHex.hexToBytesOrNull() ?: return
+            viewModelScope.launch {
+                try {
+                    conversationRepository.renameThread(peerHash, bytes, title, peerName = currentPeerName)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error renaming thread", e)
+                }
+            }
+        }
+
+        /**
+         * Archive a batch (swipe on one row, or the selection bar's `Archive`).
+         *
+         * The open thread is switched away *before* the archive is written:
+         * the message list then moves to the most recent unarchived thread (or
+         * Main) while the thread is still present, so it never renders an
+         * archived target or flashes Main (threads-spec §5.3). One repository
+         * call = one atomic UPDATE, so a batch cannot half-archive.
+         */
+        fun archiveThreads(threadIdHexes: List<String>) {
+            if (threadIdHexes.isEmpty()) return
+            val peerHash = _currentConversation.value ?: return
+            viewModelScope.launch {
+                try {
+                    val archivedIds = threadIdHexes.mapNotNull { it.hexToBytesOrNull() }.toSet()
+                    val open = _selectedThread.value
+                    if (open != null && threadIdHexes.contains(open)) {
+                        val next =
+                            threadRowsFlow.first()
+                                .firstOrNull {
+                                    it.archivedAt == null && it.threadId.toHex() !in threadIdHexes
+                                }
+                        val nextHex = next?.threadId?.toHex()
+                        // Remember where the archive moved the user from, so the
+                        // immediate Undo can put them back (spec §5.3).
+                        threadDisplacedByArchive = open
+                        threadDisplacementTarget = nextHex
+                        switchThread(nextHex)
+                    }
+                    conversationRepository.setThreadsArchived(peerHash, archivedIds.toList(), archived = true)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error archiving threads", e)
+                }
+            }
+        }
+
+        /** Un-archive a batch — the sheet's `Undo` and the Archived section's swipe. */
+        fun unarchiveThreads(threadIdHexes: List<String>) {
+            if (threadIdHexes.isEmpty()) return
+            val peerHash = _currentConversation.value ?: return
+            viewModelScope.launch {
+                try {
+                    val ids = threadIdHexes.mapNotNull { it.hexToBytesOrNull() }
+                    conversationRepository.setThreadsArchived(peerHash, ids, archived = false)
+                    // Undo of the archive that moved the list away returns to the
+                    // thread the user was reading, unless they moved on since.
+                    val displaced = threadDisplacedByArchive
+                    if (displaced != null &&
+                        threadIdHexes.contains(displaced) &&
+                        _selectedThread.value == threadDisplacementTarget
+                    ) {
+                        switchThread(displaced)
+                    }
+                    threadDisplacedByArchive = null
+                    threadDisplacementTarget = null
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error un-archiving threads", e)
+                }
+            }
+        }
+
+        /** Clear one thread's unread (sheet `⋮ → Mark read`); received rows only. */
+        fun markThreadRead(threadIdHex: String) {
+            val peerHash = _currentConversation.value ?: return
+            val bytes = threadIdHex.hexToBytesOrNull() ?: return
+            viewModelScope.launch {
+                try {
+                    conversationRepository.markThreadAsRead(peerHash, bytes)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error marking thread read", e)
+                }
+            }
+        }
+
+        fun deleteThread(threadIdHex: String) {
+            val peerHash = _currentConversation.value ?: return
+            viewModelScope.launch {
+                try {
+                    conversationRepository.deleteThread(peerHash, threadIdHex.hexToBytes())
+                    // Decide INSIDE the switch mutex: a queued switch may
+                    // complete while deletion waits, and its freshly loaded
+                    // draft must not be cleared as if it were the deleted
+                    // thread's (that saved an empty text over the other
+                    // thread's real draft). Clearing the deleted thread's own
+                    // composer keeps the later Main-flush harmless (empty
+                    // flush cannot recreate the deleted rows).
+                    val wasOpen = threadSwitchMutex.withLock {
+                        if (_selectedThread.value == threadIdHex) {
+                            draftSaveJob?.cancel()
+                            lastDraftText = ""
+                            _draftText.value = null
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    if (wasOpen) selectThread(null)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error deleting thread", e)
+                }
+            }
+        }
+
+        /** Hex -> bytes, null on malformed input (thread ids come from navigation args). */
+        private fun String?.hexToBytesOrNull(): ByteArray? =
+            this?.let { runCatching { it.hexToBytes() }.getOrNull() }
+
         // Messages automatically update when conversation changes OR database changes
         // Uses Paging3 for efficient infinite scroll: loads 30 messages initially,
         // then loads more in background as user scrolls up
@@ -165,23 +621,55 @@ class MessagingViewModel
                 .combine(
                     _currentConversation,
                     settingsRepository.sortMessagesBySentTime,
-                ) { peerHash, sortBySent -> peerHash to sortBySent }
-                .flatMapLatest { (peerHash, sortBySent) ->
-                    Log.d(TAG, "Flow: Switching to conversation $peerHash (sortBySent=$sortBySent)")
-                    if (peerHash != null) {
-                        val pagedFlow =
-                            if (sortBySent) {
-                                conversationRepository.getMessagesPagedBySentTime(peerHash)
+                    _selectedThread,
+                    threadsEnabled,
+                ) { peerHash, sortBySent, selectedThread, threadsOn ->
+                    MessageFlowKey(peerHash, sortBySent, selectedThread, threadsOn)
+                }.flatMapLatest { key ->
+                    Log.d(TAG, "Flow: Switching to conversation ${key.peerHash} (sortBySent=${key.sortBySent}, thread=${key.selectedThread?.take(8)})")
+                    when {
+                        key.peerHash == null -> flowOf(PagingData.empty())
+                        // Thread chip: thread-scoped list, oldest-first view
+                        // assembled by the screen (pinned root on top).
+                        key.threadsEnabled && key.selectedThread != null -> {
+                            val bytes = key.selectedThread.hexToBytesOrNull()
+                            if (bytes == null) {
+                                flowOf(PagingData.empty())
                             } else {
-                                conversationRepository.getMessagesPaged(peerHash)
+                                conversationRepository
+                                    .getThreadMessagesPaged(key.peerHash, bytes, key.sortBySent)
+                                    .map { pagingData ->
+                                        pagingData.map { entity -> entity.toDomainMessage().toMessageUi() }
+                                    }
                             }
-                        pagedFlow.map { pagingData ->
-                            pagingData.map { it.toMessageUi() }
                         }
-                    } else {
-                        flowOf(PagingData.empty())
+                        // Main chip with threads on: Main rows only.
+                        key.threadsEnabled ->
+                            conversationRepository
+                                .getMainMessagesPaged(key.peerHash, key.sortBySent)
+                                .map { pagingData -> pagingData.map { it.toMessageUi() } }
+                        // Flag off: legacy flat list (unchanged behavior).
+                        else -> {
+                            val pagedFlow =
+                                if (key.sortBySent) {
+                                    conversationRepository.getMessagesPagedBySentTime(key.peerHash)
+                                } else {
+                                    conversationRepository.getMessagesPaged(key.peerHash)
+                                }
+                            pagedFlow.map { pagingData ->
+                                pagingData.map { it.toMessageUi() }
+                            }
+                        }
                     }
                 }.cachedIn(viewModelScope)
+
+        /** Combine key for the paged message flow. */
+        private data class MessageFlowKey(
+            val peerHash: String?,
+            val sortBySent: Boolean,
+            val selectedThread: String?,
+            val threadsEnabled: Boolean,
+        )
 
         // Announce info for online status - updates in real-time when new announces arrive
         val announceInfo: StateFlow<network.columba.app.data.repository.Announce?> =
@@ -526,6 +1014,12 @@ class MessagingViewModel
 
         // Debounce job for draft saving - cancels previous save when new text arrives
         private var draftSaveJob: kotlinx.coroutines.Job? = null
+        // Serializes thread switches so quick taps cannot interleave draft
+        // flush/restore (see switchThread).
+        private val threadSwitchMutex = kotlinx.coroutines.sync.Mutex()
+        // Draft-restore coroutine of loadMessages; selectThread joins it
+        // before flushing so a fast thread-open cannot erase the Main draft.
+        private var draftRestoreJob: kotlinx.coroutines.Job? = null
 
         // Tracks the latest text from onDraftTextChanged so loadMessages can flush it on switch
         private var lastDraftText: String = ""
@@ -1313,20 +1807,41 @@ class MessagingViewModel
             peerName: String? = null,
         ) {
             // Flush any pending draft save for the previous conversation
+            // (keyed to the thread that composer was targeting).
             val previousHash = _currentConversation.value
+            val previousThreadHex = _selectedThread.value
             draftSaveJob?.cancel()
             draftSaveJob = null
             if (previousHash != null && previousHash != destinationHash) {
                 viewModelScope.launch {
                     // lastDraftText holds the most recent text from onDraftTextChanged
-                    saveDraftNow(previousHash, lastDraftText)
+                    saveDraftNow(previousHash, lastDraftText, previousThreadHex.hexToBytesOrNull())
                 }
+                // Leaving the chat ends its composing target: the snapshot is
+                // for recreation, not for a later open, which starts on Main.
+                savedState[SAVED_THREAD] = null
+                savedState[SAVED_ROOT] = null
+                savedState[SAVED_CONVERSATION] = null
             }
 
             // Set current conversation - this triggers the reactive Flow to load messages
             currentPeerName = peerName
             _currentConversation.value = destinationHash
             lastDraftText = ""
+            // Threads P2: a conversation opens on Main (spec §6.2), except when
+            // the process restored a target the user was composing in: a
+            // recreation is not a cancel, so that target (and its draft) comes
+            // back. The snapshot stays valid for this chat (a second death
+            // restores again) and is dropped when the chat is left, so a later
+            // open still starts on Main.
+            val restoredThreadHex =
+                savedState.get<String>(SAVED_THREAD)
+                    ?.takeIf { savedState.get<String>(SAVED_CONVERSATION) == destinationHash }
+            val restoredRoot = restoredThreadHex?.let { savedState.get<String>(SAVED_ROOT) }
+            _selectedThread.value = restoredThreadHex
+            _pendingThreadRoot.value = restoredRoot
+            _threadView.value = null
+            rememberTarget()
 
             // Enable fast polling (1s) for active conversation
             rnsLxmf.setConversationActive(true)
@@ -1337,10 +1852,15 @@ class MessagingViewModel
             }
 
             // Restore draft for this conversation
-            viewModelScope.launch {
+            draftRestoreJob = viewModelScope.launch {
                 try {
-                    val draft = conversationRepository.getDraft(destinationHash)
+                    val draft =
+                        conversationRepository.getDraft(
+                            destinationHash,
+                            restoredThreadHex.hexToBytesOrNull(),
+                        )
                     _draftText.value = draft
+                    lastDraftText = draft.orEmpty()
                     Log.d(TAG, "Restored draft for $destinationHash: ${draft?.take(30) ?: "none"}")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error restoring draft", e)
@@ -1371,15 +1891,17 @@ class MessagingViewModel
          */
         fun onDraftTextChanged(text: String) {
             val peerHash = _currentConversation.value ?: return
+            val threadIdHex = _selectedThread.value
             lastDraftText = text
             draftSaveJob?.cancel()
             draftSaveJob =
                 viewModelScope.launch {
                     kotlinx.coroutines.delay(DRAFT_SAVE_DEBOUNCE_MS)
-                    // Re-check: only save if still in the same conversation
-                    if (_currentConversation.value == peerHash) {
+                    // Re-check: only save if still in the same conversation AND
+                    // chip (per-thread drafts, spec §6.7).
+                    if (_currentConversation.value == peerHash && _selectedThread.value == threadIdHex) {
                         try {
-                            conversationRepository.saveDraft(peerHash, text)
+                            conversationRepository.saveDraft(peerHash, text, threadIdHex.hexToBytesOrNull())
                         } catch (e: Exception) {
                             Log.e(TAG, "Error saving draft", e)
                         }
@@ -1389,14 +1911,15 @@ class MessagingViewModel
 
         /**
          * Save draft immediately without debounce.
-         * Used when navigating away from a conversation.
+         * Used when navigating away from a conversation (or switching chips).
          */
         private suspend fun saveDraftNow(
             peerHash: String,
             text: String,
+            threadId: ByteArray? = null,
         ) {
             try {
-                conversationRepository.saveDraft(peerHash, text)
+                conversationRepository.saveDraft(peerHash, text, threadId)
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving draft immediately", e)
             }
@@ -1412,7 +1935,20 @@ class MessagingViewModel
         fun markAsRead(destinationHash: String) {
             viewModelScope.launch {
                 try {
-                    conversationRepository.markConversationAsRead(destinationHash)
+                    if (threadsEnabled.value) {
+                        // Mark the DISPLAYED target: while a thread is open,
+                        // replies arriving there must clear their unread flag;
+                        // marking Main instead leaves the thread unread while
+                        // silently reading messages the user never saw.
+                        val threadHex = _selectedThread.value
+                        if (threadHex != null) {
+                            conversationRepository.markThreadAsRead(destinationHash, threadHex.hexToBytes())
+                        } else {
+                            conversationRepository.markMainAsRead(destinationHash)
+                        }
+                    } else {
+                        conversationRepository.markConversationAsRead(destinationHash)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error marking conversation as read", e)
                 }
@@ -1434,6 +1970,16 @@ class MessagingViewModel
                     val voiceState = voiceMessageRecorder.state.value
                     val voiceRecording = voiceState.selectedRecording
                     val voiceMode = voiceState.selectedFormat?.wireMode
+                    // Threads P2: capture the send target NOW, before the first
+                    // suspension point (the voice-file read below). A chip tap
+                    // during that IO must not re-route this send to the newly
+                    // selected thread. The composer sends to the selected thread
+                    // (null = Main). The first message of a case-2 thread carries
+                    // the thread root as `0x30` structurally (threads-spec §4.2),
+                    // taking precedence over any pending reply chip.
+                    val threadIdBytes = _selectedThread.value.hexToBytesOrNull()
+                    val pendingThreadRoot = _pendingThreadRoot.value.takeIf { threadIdBytes != null }
+                    val replyToId = pendingThreadRoot ?: _pendingReplyTo.value?.messageId
                     val voiceBytes =
                         voiceRecording?.let {
                             withContext(Dispatchers.IO) { it.file.readBytes() }
@@ -1469,7 +2015,6 @@ class MessagingViewModel
                     }
 
                     val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes) ?: return@launch
-                    val replyToId = _pendingReplyTo.value?.messageId
 
                     executeLxmfSend(
                         destinationHash = destinationHash,
@@ -1482,6 +2027,8 @@ class MessagingViewModel
                         voiceBytes = voiceBytes,
                         voiceMode = voiceMode,
                         voiceRecording = voiceRecording,
+                        threadId = threadIdBytes,
+                        threadRootSend = pendingThreadRoot != null,
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Error sending message", e)
@@ -1513,6 +2060,8 @@ class MessagingViewModel
             voiceBytes: ByteArray?,
             voiceMode: Int?,
             voiceRecording: tech.torlando.lxst.recording.RecordedAudio?,
+            threadId: ByteArray? = null,
+            threadRootSend: Boolean = false,
         ) {
             val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes) ?: return
             val destHashBytes = validateDestinationHash(destinationHash) ?: return
@@ -1579,19 +2128,10 @@ class MessagingViewModel
                             )
                         },
                     replyToMessageId = replyToId,
-                    // MeshChatX-interop reply format ships the
-                    // quoted content inline (fields[0x31]) so
-                    // recipients render the preview even when
-                    // they don't have the original in their
-                    // local store (cross-app interop, or peer
-                    // history aged out). We pull it from local
-                    // DB at send time the same way MeshChatX
-                    // does.
-                    replyQuotedContent = replyToId?.let { id ->
-                        runCatching {
-                            conversationRepository.getMessageById(id)?.content?.takeIf { it.isNotEmpty() }
-                        }.getOrNull()
-                    },
+                    threadId = threadId,
+                    // MeshChatX-interop reply format ships the quoted
+                    // content inline (fields[0x31]); thread sends excerpt it.
+                    replyQuotedContent = wireReplyQuote(replyToId, threadId),
                     iconAppearance = iconAppearance,
                 )
 
@@ -1642,11 +2182,18 @@ class MessagingViewModel
                             voiceRecording,
                             voiceBytes,
                             voiceMode,
+                            threadId = threadId,
                         )
                     if (persisted) {
-                        clearSubmittedDraft(destinationHash, submittedText, replyToId)
+                        clearSubmittedDraft(destinationHash, submittedText, replyToId, threadId)
+                        if (threadRootSend) {
+                            _pendingThreadRoot.value = null
+                            rememberTarget()
+                        }
                     }
-                    composerSendResults.send(ComposerSendResult(destinationHash, submittedText, persisted))
+                    composerSendResults.send(
+                        ComposerSendResult(destinationHash, submittedText, persisted, threadId?.toHex()),
+                    )
                 }.onFailure { error ->
                     val persisted =
                         handleSendFailure(
@@ -1661,9 +2208,12 @@ class MessagingViewModel
                             voiceBytes = voiceBytes,
                             voiceMode = voiceMode,
                             voiceRecording = voiceRecording,
+                            threadId = threadId,
                         )
-                    if (persisted) clearSubmittedDraft(destinationHash, submittedText, replyToId)
-                    composerSendResults.send(ComposerSendResult(destinationHash, submittedText, persisted))
+                    if (persisted) clearSubmittedDraft(destinationHash, submittedText, replyToId, threadId)
+                    composerSendResults.send(
+                        ComposerSendResult(destinationHash, submittedText, persisted, threadId?.toHex()),
+                    )
                 }
         }
 
@@ -1680,6 +2230,7 @@ class MessagingViewModel
             voiceRecording: tech.torlando.lxst.recording.RecordedAudio? = null,
             voiceBytes: ByteArray? = null,
             voiceMode: Int? = null,
+            threadId: ByteArray? = null,
         ): Boolean {
             Log.d(TAG, "Message sent successfully${if (replyToMessageId != null) " (reply to ${replyToMessageId.take(16)})" else ""}")
             var attachmentFieldsPersisted = true
@@ -1753,6 +2304,7 @@ class MessagingViewModel
                     replyToMessageId = replyToMessageId,
                     receivedAt = receipt.timestamp, // For sent messages, receivedAt = our timestamp
                     sentInterface = sentInterface,
+                    threadId = threadId,
                 )
             val persisted = saveMessageToDatabase(actualDestHash, currentPeerName, message)
             val composerCanClear = persisted && attachmentFieldsPersisted
@@ -1775,6 +2327,7 @@ class MessagingViewModel
             voiceBytes: ByteArray?,
             voiceMode: Int? = null,
             voiceRecording: tech.torlando.lxst.recording.RecordedAudio? = null,
+            threadId: ByteArray? = null,
         ): Boolean {
             Log.e(TAG, "Failed to send message: ${error.message}", error)
             val now = System.currentTimeMillis()
@@ -1815,6 +2368,13 @@ class MessagingViewModel
                     deliveryMethod = deliveryMethodString,
                     errorMessage = friendlyOutboundError(error.message),
                     receivedAt = now,
+                    threadId = threadId,
+                    // Persist the reply target too: a failed first message of a
+                    // case-2 thread must re-drive WITH its 0x30 root (reDrive
+                    // reads this field; the fieldsJson copy alone is not read
+                    // back on retry), or the thread loses its pinned root and
+                    // Main its replies hook.
+                    replyToMessageId = replyToMessageId,
                 )
             val persisted = saveMessageToDatabase(destinationHash, currentPeerName, message)
             val hasRetryableVoicePayload =
@@ -1832,18 +2392,53 @@ class MessagingViewModel
             destinationHash: String,
             submittedText: String,
             replyToMessageId: String?,
+            threadId: ByteArray? = null,
         ) {
-            if (
-                _currentConversation.value == destinationHash &&
-                lastDraftText == submittedText
-            ) {
-                draftSaveJob?.cancel()
-                lastDraftText = ""
-                conversationRepository.clearDraft(destinationHash)
-                _draftText.value = null
+            threadSwitchMutex.withLock {
+                // Read the target inside the lock: a switch waiting on this
+                // mutex may restore another thread's draft first, and a stale
+                // comparison here would then clear that thread's draft.
+                val onSubmittedTarget =
+                    _currentConversation.value == destinationHash &&
+                        _selectedThread.value == threadId?.toHex() &&
+                        lastDraftText == submittedText
+                if (onSubmittedTarget) {
+                    draftSaveJob?.cancel()
+                    lastDraftText = ""
+                    conversationRepository.clearDraft(destinationHash, threadId)
+                    _draftText.value = null
+                } else if (
+                    threadId != null &&
+                    conversationRepository.getDraft(destinationHash, threadId) == submittedText
+                ) {
+                    // The user left the submitted target while the send was in
+                    // flight; the switch flushed the composer to that target's
+                    // draft row. Drop the row only when it still holds exactly
+                    // the submitted text — never touch the newly displayed
+                    // target's draft or text typed after the send button.
+                    conversationRepository.clearDraft(destinationHash, threadId)
+                }
             }
             if (_pendingReplyTo.value?.messageId == replyToMessageId) clearReplyTo()
         }
+
+        /**
+         * Inline quoted content (0x31) for a send: the quoted message's
+         * local content so recipients without the original still render the
+         * preview (MeshChatX interop). Thread sends carry the spec's bounded
+         * 120-char excerpt, never the full root.
+         */
+        private suspend fun wireReplyQuote(
+            replyToId: String?,
+            threadId: ByteArray?,
+        ): String? =
+            replyToId?.let { id ->
+                runCatching {
+                    conversationRepository.getMessageById(id)?.content?.takeIf { it.isNotEmpty() }
+                }.getOrNull()?.let {
+                    if (threadId != null) ThreadPolicy.quoteExcerpt(it) else it
+                }
+            }
 
         private suspend fun clearSubmittedAttachments(
             imageData: ByteArray?,
@@ -3118,16 +3713,16 @@ class MessagingViewModel
                                     listOf(checkNotNull(payload.voiceMode), it),
                             )
                         },
-                    // Preserve reply on re-drive
+                    // Preserve reply + thread membership on re-drive
                     replyToMessageId = message.replyToMessageId,
+                    threadId = message.threadId?.takeIf { it.isNotEmpty() },
                     // Preserve the quoted reply preview too: a recipient without the quoted
                     // message in their local store (cross-app, or their history aged out) would
                     // otherwise lose its preview when the re-send ships.
-                    replyQuotedContent = message.replyToMessageId?.let { id ->
-                        runCatching {
-                            conversationRepository.getMessageById(id)?.content?.takeIf { it.isNotEmpty() }
-                        }.getOrNull()
-                    },
+                    replyQuotedContent = wireReplyQuote(
+                        message.replyToMessageId,
+                        message.threadId?.takeIf { it.isNotEmpty() },
+                    ),
                 )
 
             return result.fold(

@@ -148,6 +148,7 @@ class MessagingViewModelImageLoadingTest {
         contactRepository = mockk()
         activeConversationManager = mockk()
         settingsRepository = mockk()
+        every { settingsRepository.threadsEnabledFlow } returns flowOf(false)
         propagationNodeManager = mockk()
         locationSharingManager = mockk()
         identityRepository = mockk()

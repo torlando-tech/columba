@@ -92,7 +92,7 @@ class MigrationExporter
                     Log.d(TAG, "Found ${identities.size} identities to export")
                     onProgress(0.1f)
 
-                    val (conversations, messages, contacts) = collectUserData(identities, onProgress)
+                    val userData = collectUserData(identities, onProgress)
                     onProgress(0.5f)
 
                     val identityExports = exportIdentities(identities, exportPassword)
@@ -128,9 +128,10 @@ class MigrationExporter
                     val bundle =
                         MigrationBundle(
                             identities = identityExports,
-                            conversations = conversations,
-                            messages = messages,
-                            contacts = contacts,
+                            conversations = userData.conversations,
+                            messages = userData.messages,
+                            threads = userData.threads,
+                            contacts = userData.contacts,
                             announces = announceExports,
                             peerIdentities = peerIdentityExports,
                             interfaces = interfaceExports,
@@ -170,6 +171,7 @@ class MigrationExporter
         private data class UserData(
             val conversations: List<ConversationExport>,
             val messages: List<MessageExport>,
+            val threads: List<ThreadExport>,
             val contacts: List<ContactExport>,
         )
 
@@ -179,11 +181,13 @@ class MigrationExporter
         ): UserData {
             val allConversations = mutableListOf<ConversationExport>()
             val allMessages = mutableListOf<MessageExport>()
+            val allThreads = mutableListOf<ThreadExport>()
             val allContacts = mutableListOf<ContactExport>()
 
             for ((index, identity) in identities.withIndex()) {
                 allConversations.addAll(exportConversationsForIdentity(identity.identityHash))
                 allMessages.addAll(exportMessagesForIdentity(identity.identityHash))
+                allThreads.addAll(exportThreadsForIdentity(identity.identityHash))
                 allContacts.addAll(exportContactsForIdentity(identity.identityHash))
 
                 val progress = 0.1f + (0.4f * (index + 1) / identities.size)
@@ -195,7 +199,7 @@ class MigrationExporter
                 "Collected ${allConversations.size} conversations, " +
                     "${allMessages.size} messages, ${allContacts.size} contacts",
             )
-            return UserData(allConversations, allMessages, allContacts)
+            return UserData(allConversations, allMessages, allThreads, allContacts)
         }
 
         private suspend fun exportConversationsForIdentity(identityHash: String): List<ConversationExport> =
@@ -225,8 +229,26 @@ class MigrationExporter
                     isRead = msg.isRead,
                     fieldsJson = msg.fieldsJson,
                     reactionsJson = msg.reactionsJson,
+                    threadId = msg.threadId?.toHexBackup(),
                 )
             }
+
+        private suspend fun exportThreadsForIdentity(identityHash: String): List<ThreadExport> =
+            database.threadDao().getAllThreadsList(identityHash).map { thread ->
+                ThreadExport(
+                    threadId = thread.threadId.toHexBackup(),
+                    conversationHash = thread.conversationHash,
+                    identityHash = thread.identityHash,
+                    rootMessageId = thread.rootMessageId,
+                    title = thread.title,
+                    createdAt = thread.createdAt,
+                    lastActivityAt = thread.lastActivityAt,
+                    archivedAt = thread.archivedAt,
+                )
+            }
+
+        /** Lowercase hex for backup JSON (thread ids are opaque wire bytes). */
+        private fun ByteArray.toHexBackup(): String = joinToString("") { "%02x".format(it) }
 
         private suspend fun exportContactsForIdentity(identityHash: String): List<ContactExport> =
             database.contactDao().getAllContactsSync(identityHash).map { contact ->

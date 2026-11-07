@@ -58,6 +58,7 @@ class NotificationHelper
             // Intent extras
             const val EXTRA_DESTINATION_HASH = "destination_hash"
             const val EXTRA_PEER_NAME = "peer_name"
+            const val EXTRA_THREAD_ID = "thread_id"
 
             @VisibleForTesting
             internal fun messageNotificationTag(destinationHash: String): String =
@@ -150,31 +151,9 @@ class NotificationHelper
             peerName: String,
             messagePreview: String,
             isFavorite: Boolean,
+            threadIdHex: String? = null,
         ) {
-            // Check master notification toggle
-            if (!settingsRepository.notificationsEnabledFlow.first()) return
-
-            // Check specific notification preference
-            val generalMessageNotifications = settingsRepository.notificationReceivedMessageFlow.first()
-            val favoriteMessageNotifications = settingsRepository.notificationReceivedMessageFavoriteFlow.first()
-
-            val messageNotificationsEnabled =
-                if (isFavorite) {
-                    // If it's a favorite, check both general messages and favorite messages
-                    generalMessageNotifications || favoriteMessageNotifications
-                } else {
-                    generalMessageNotifications
-                }
-
-            if (!messageNotificationsEnabled) return
-
-            // Check permission
-            if (!hasNotificationPermission()) return
-
-            // Suppress notification only if this conversation is active AND the app is in the
-            // foreground. When the screen is off or the app is backgrounded, the user can't see
-            // the conversation, so they should still receive the notification.
-            if (isAppInForeground() && activeConversationManager.activeConversation.value == destinationHash) return
+            if (!shouldNotifyMessage(destinationHash, isFavorite)) return
 
             // Create intent to open the conversation
             // Use SINGLE_TOP to reuse existing activity via onNewIntent (avoids splash screen flash)
@@ -191,6 +170,8 @@ class NotificationHelper
                             .build()
                     putExtra(EXTRA_DESTINATION_HASH, destinationHash)
                     putExtra(EXTRA_PEER_NAME, peerName)
+                    // Tapping a thread message must land in that thread, not Main.
+                    if (threadIdHex != null) putExtra(EXTRA_THREAD_ID, threadIdHex)
                 }
 
             val openPendingIntent =
@@ -242,6 +223,35 @@ class NotificationHelper
                 }
             }
             return interfaceType.displayLabel
+        }
+
+        /**
+         * Notification gates for an incoming message: master toggle, per-type
+         * preference, runtime permission, and foreground suppression. Suppression
+         * applies only when this conversation is active AND the app is in the
+         * foreground; with the screen off or the app backgrounded the user cannot
+         * see the conversation, so the notification must still show.
+         */
+        private suspend fun shouldNotifyMessage(
+            destinationHash: String,
+            isFavorite: Boolean,
+        ): Boolean {
+            if (!settingsRepository.notificationsEnabledFlow.first()) return false
+            if (!hasNotificationPermission()) return false
+
+            val generalMessageNotifications = settingsRepository.notificationReceivedMessageFlow.first()
+            val favoriteMessageNotifications = settingsRepository.notificationReceivedMessageFavoriteFlow.first()
+            // A favorite is covered by either preference.
+            val preferenceAllows =
+                if (isFavorite) {
+                    generalMessageNotifications || favoriteMessageNotifications
+                } else {
+                    generalMessageNotifications
+                }
+            val foregroundSuppressed =
+                isAppInForeground() &&
+                    activeConversationManager.activeConversation.value == destinationHash
+            return preferenceAllows && !foregroundSuppressed
         }
 
         /**

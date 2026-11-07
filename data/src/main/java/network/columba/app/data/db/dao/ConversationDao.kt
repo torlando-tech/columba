@@ -133,6 +133,18 @@ interface ConversationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertConversation(conversation: ConversationEntity)
 
+    /**
+     * Insert a conversation only when it does not exist yet.
+     *
+     * Used before creating a `threads` row on a peer that has no conversation
+     * yet (`Start Chat` opens the message screen without one, and `threads`
+     * has a composite FK onto `conversations`). IGNORE — not REPLACE — so a
+     * message landing at the same time keeps its name, preview and unread
+     * count instead of being overwritten by the placeholder row.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertConversationIgnore(conversation: ConversationEntity)
+
     @Update
     suspend fun updateConversation(conversation: ConversationEntity)
 

@@ -23,6 +23,8 @@ import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,6 +40,14 @@ class NotificationHelper
         private val settingsRepository: SettingsRepository,
         private val activeConversationManager: network.columba.app.service.ActiveConversationManager,
     ) {
+        /**
+         * Serialises reading the message privacy level and building/posting a message
+         * notification against saving a stricter level and dropping message notifications
+         * already posted. Without it, a post that read `FULL` could land in the shade after
+         * the user tightened the level and cancelled everything.
+         */
+        private val messagePrivacyLock = Mutex()
+
         companion object {
             // Notification channel IDs
             private const val CHANNEL_ID_MESSAGES = "messages"
@@ -148,6 +158,7 @@ class NotificationHelper
          * @param peerName The display name of the sender
          * @param messagePreview Preview text of the message
          * @param isFavorite Whether the sender is a saved peer
+         * @param threadIdHex Thread the message belongs to, so tapping opens that thread
          */
         suspend fun notifyMessageReceived(
             destinationHash: String,
@@ -158,6 +169,21 @@ class NotificationHelper
         ) {
             if (!shouldNotifyMessage(destinationHash, isFavorite, threadIdHex)) return
 
+            messagePrivacyLock.withLock {
+                postMessageNotification(destinationHash, peerName, messagePreview, threadIdHex)
+            }
+        }
+
+        /**
+         * Build and post the message notification while [messagePrivacyLock] is held, so the
+         * level read here cannot be overtaken by a tightening that lands after it.
+         */
+        private suspend fun postMessageNotification(
+            destinationHash: String,
+            peerName: String,
+            messagePreview: String,
+            threadIdHex: String?,
+        ) {
             // Read once per post so a settings change applies to the next notification.
             val privacyLevel = settingsRepository.notificationPrivacyLevelFlow.first()
 
@@ -528,14 +554,31 @@ class NotificationHelper
         }
 
         /**
-         * Cancel every posted message notification.
+         * Persist [level] and, when it is stricter than the previous level, drop every message
+         * notification already in the shade.
          *
-         * Called when the message privacy level is tightened. A notification already in the
-         * shade keeps whatever text it was built with until it is dismissed, and the
-         * system's notification history cannot be rewritten from here. Announce, BLE and
-         * foreground-service notifications are untouched.
+         * Runs under [messagePrivacyLock] so it cannot interleave with a post that already read
+         * the looser level: either that post finishes first and is cancelled here, or it starts
+         * afterwards and reads the new level. The system's notification history is append-only
+         * and cannot be rewritten from here.
          */
-        fun cancelMessageNotifications() {
+        suspend fun setMessagePrivacyLevel(level: NotificationPrivacyLevel) {
+            messagePrivacyLock.withLock {
+                val previousLevel = settingsRepository.notificationPrivacyLevelFlow.first()
+                settingsRepository.saveNotificationPrivacyLevel(level)
+                if (level.isMoreRestrictiveThan(previousLevel)) {
+                    cancelMessageNotificationsLocked()
+                }
+            }
+        }
+
+        /**
+         * Cancel every posted message notification. Callers must hold [messagePrivacyLock].
+         *
+         * A notification already in the shade keeps whatever text it was built with until it
+         * is dismissed. Announce, BLE and foreground-service notifications are untouched.
+         */
+        private fun cancelMessageNotificationsLocked() {
             notificationManager.activeNotifications
                 .filter { it.tag?.startsWith(NOTIFICATION_TAG_MESSAGE_PREFIX) == true }
                 .forEach { notificationManager.cancel(it.tag, it.id) }

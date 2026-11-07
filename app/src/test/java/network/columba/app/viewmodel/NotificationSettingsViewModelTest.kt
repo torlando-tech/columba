@@ -13,7 +13,6 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,7 +68,7 @@ class NotificationSettingsViewModelTest {
 
         settingsRepository = mockk()
         notificationHelper = mockk()
-        every { notificationHelper.cancelMessageNotifications() } just Runs
+        coEvery { notificationHelper.setMessagePrivacyLevel(any()) } just Runs
 
         // Setup repository flow mocks
         every { settingsRepository.notificationsEnabledFlow } returns notificationsEnabledFlow
@@ -94,7 +93,6 @@ class NotificationSettingsViewModelTest {
         coEvery { settingsRepository.saveNotificationBleConnected(any()) } just Runs
         coEvery { settingsRepository.saveNotificationBleDisconnected(any()) } just Runs
         coEvery { settingsRepository.markNotificationPermissionRequested() } just Runs
-        coEvery { settingsRepository.saveNotificationPrivacyLevel(any()) } just Runs
     }
 
     @After
@@ -442,39 +440,37 @@ class NotificationSettingsViewModelTest {
     // ========== Message Privacy Tests ==========
 
     @Test
-    fun `tightening privacy level cancels stale message notifications`() =
+    fun `setNotificationPrivacyLevel hands the level to the helper`() =
         runTest {
-            // Given - existing level is the permissive default
+            // Given
             notificationPrivacyLevelFlow.value = NotificationPrivacyLevel.FULL
-            val savedLevel = slot<NotificationPrivacyLevel>()
-            coEvery { settingsRepository.saveNotificationPrivacyLevel(capture(savedLevel)) } just Runs
+            val requestedLevel = slot<NotificationPrivacyLevel>()
+            coEvery { notificationHelper.setMessagePrivacyLevel(capture(requestedLevel)) } just Runs
             viewModel = createViewModel()
 
             // When
             viewModel.setNotificationPrivacyLevel(NotificationPrivacyLevel.NONE)
 
             // Then
-            assertEquals(NotificationPrivacyLevel.NONE, savedLevel.captured)
-            verify(exactly = 1) { notificationHelper.cancelMessageNotifications() }
+            assertEquals(NotificationPrivacyLevel.NONE, requestedLevel.captured)
         }
 
     @Test
-    fun `loosening privacy level keeps existing notifications`() =
+    fun `setNotificationPrivacyLevel surfaces the saved level in state`() =
         runTest {
-            // Given - existing level hides everything
-            notificationPrivacyLevelFlow.value = NotificationPrivacyLevel.NONE
-            val savedLevel = slot<NotificationPrivacyLevel>()
-            coEvery { settingsRepository.saveNotificationPrivacyLevel(capture(savedLevel)) } just Runs
+            // Given
+            notificationPrivacyLevelFlow.value = NotificationPrivacyLevel.FULL
+            coEvery { notificationHelper.setMessagePrivacyLevel(NotificationPrivacyLevel.NONE) } answers {
+                notificationPrivacyLevelFlow.value = NotificationPrivacyLevel.NONE
+            }
             viewModel = createViewModel()
-            val startState = viewModel.state.first { it.privacyLevel == NotificationPrivacyLevel.NONE }
-            assertEquals(NotificationPrivacyLevel.NONE, startState.privacyLevel)
 
             // When
-            viewModel.setNotificationPrivacyLevel(NotificationPrivacyLevel.FULL)
+            viewModel.setNotificationPrivacyLevel(NotificationPrivacyLevel.NONE)
 
             // Then
-            assertEquals(NotificationPrivacyLevel.FULL, savedLevel.captured)
-            verify(exactly = 0) { notificationHelper.cancelMessageNotifications() }
+            val state = viewModel.state.first { it.privacyLevel == NotificationPrivacyLevel.NONE }
+            assertEquals(NotificationPrivacyLevel.NONE, state.privacyLevel)
         }
 
     // ========== State Equality Tests ==========

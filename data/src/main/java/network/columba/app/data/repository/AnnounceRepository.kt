@@ -177,21 +177,25 @@ class AnnounceRepository
             }
 
         /**
-         * Get announces with pagination support. Combines node type filtering and search query.
-         * Initial load: 30 items, Page size: 30 items, Prefetch distance: 10 items.
-         * Includes icon data from peer_icons table.
+         * Get announces with pagination support, combining node type filtering, search
+         * query, and interface filtering. Initial load: 30 items, page size: 30 items,
+         * prefetch distance: 10 items. Includes icon data from peer_icons table.
+         *
+         * Backed by [AnnouncePagingSource], which does not self-invalidate: the list only
+         * reloads when the caller starts a new generation. That keeps the loaded pages
+         * (and therefore the scroll position) intact while announces keep arriving.
          *
          * @param nodeTypes List of node types to filter by (empty = all types)
          * @param searchQuery Search query (empty = no search filter)
+         * @param interfaceTypes Interface storage names to filter by (empty = no filter)
          * @return Flow of PagingData for infinite scroll
          */
         fun getAnnouncesPaged(
             nodeTypes: List<String>,
             searchQuery: String,
             interfaceTypes: List<String> = emptyList(),
-        ): Flow<PagingData<Announce>> {
-            val interfaceTypeCount = interfaceTypes.size
-            return Pager(
+        ): Flow<PagingData<Announce>> =
+            Pager(
                 config =
                     PagingConfig(
                         pageSize = 30,
@@ -200,41 +204,52 @@ class AnnounceRepository
                         enablePlaceholders = false,
                     ),
                 pagingSourceFactory = {
-                    when {
-                        // Filter by node types AND search query
-                        nodeTypes.isNotEmpty() && searchQuery.isNotEmpty() ->
-                            announceDao.getEnrichedAnnouncesByTypesAndSearchPaged(
-                                nodeTypes,
-                                searchQuery,
-                                interfaceTypes,
-                                interfaceTypeCount,
-                            )
-                        // Filter by node types only
-                        nodeTypes.isNotEmpty() ->
-                            announceDao.getEnrichedAnnouncesByTypesPaged(
-                                nodeTypes,
-                                interfaceTypes,
-                                interfaceTypeCount,
-                            )
-                        // Filter by search query only
-                        searchQuery.isNotEmpty() ->
-                            announceDao.searchEnrichedAnnouncesPaged(
-                                searchQuery,
-                                interfaceTypes,
-                                interfaceTypeCount,
-                            )
-                        // No filters
-                        else ->
-                            announceDao.getEnrichedAnnouncesPaged(
-                                interfaceTypes,
-                                interfaceTypeCount,
-                            )
-                    }
+                    AnnouncePagingSource(
+                        announceDao = announceDao,
+                        nodeTypes = nodeTypes,
+                        searchQuery = searchQuery,
+                        interfaceTypes = interfaceTypes,
+                    )
                 },
             ).flow.map { pagingData ->
                 pagingData.map { enriched -> enriched.toAnnounce() }
             }
-        }
+
+        /**
+         * Newest `lastSeenTimestamp` the current filters can show, used as the floor for
+         * the "N new announces" counter. Null when the filtered stream is empty.
+         */
+        suspend fun getNewestAnnounceTimestamp(
+            nodeTypes: List<String>,
+            searchQuery: String,
+            interfaceTypes: List<String>,
+        ): Long? =
+            announceDao.getNewestAnnounceTimestamp(
+                nodeTypes = nodeTypes,
+                nodeTypeCount = nodeTypes.size,
+                query = searchQuery,
+                interfaceTypes = interfaceTypes,
+                interfaceTypeCount = interfaceTypes.size,
+            )
+
+        /**
+         * Live count of announces newer than [since] that the current filters can show.
+         * Re-emits on announce writes so the UI can advertise arrivals while frozen.
+         */
+        fun observeAnnounceCountNewerThan(
+            since: Long,
+            nodeTypes: List<String>,
+            searchQuery: String,
+            interfaceTypes: List<String>,
+        ): Flow<Int> =
+            announceDao.observeAnnounceCountNewerThan(
+                since = since,
+                nodeTypes = nodeTypes,
+                nodeTypeCount = nodeTypes.size,
+                query = searchQuery,
+                interfaceTypes = interfaceTypes,
+                interfaceTypeCount = interfaceTypes.size,
+            )
 
         /**
          * Get a specific announce by destination hash

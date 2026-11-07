@@ -587,7 +587,7 @@ class AnnounceStreamViewModelTest {
         }
 
     @Test
-    fun interfaceFilterPager_isRecreatedWhenRetentionWindowAdvances() =
+    fun interfaceRetentionWindow_marksRefreshPendingWithoutRebuildingPager() =
         runTest {
             AnnounceStreamViewModel.updateIntervalMs = 1_000L
             networkStatusFlow.value = NetworkStatus.READY
@@ -618,7 +618,23 @@ class AnnounceStreamViewModelTest {
                 advanceTimeBy(1_000L)
                 runCurrent()
                 assertEquals(setOf(InterfaceType.RNODE), viewModel.selectedInterfaceTypes.value)
-                verify(atLeast = 2) {
+                assertTrue(
+                    "Window expiry must be surfaced as a pending refresh",
+                    viewModel.windowRefreshPending.value,
+                )
+                // Frozen stream: no rebuild while the user may be scrolled.
+                verify(exactly = 1) {
+                    announceRepository.getAnnouncesPaged(
+                        listOf("PEER"),
+                        "",
+                        listOf(InterfaceType.RNODE.storageName),
+                    )
+                }
+
+                viewModel.refreshAnnounces()
+                runCurrent()
+                assertFalse("Consuming the pending refresh clears it", viewModel.windowRefreshPending.value)
+                verify(exactly = 2) {
                     announceRepository.getAnnouncesPaged(
                         listOf("PEER"),
                         "",
@@ -631,6 +647,74 @@ class AnnounceStreamViewModelTest {
                 collection.cancel()
                 viewModel.viewModelScope.cancel()
                 runCurrent()
+            }
+        }
+
+    @Test
+    fun refreshAnnounces_startsANewPagingGeneration() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
+            val emissions = mutableListOf<PagingData<Announce>>()
+            val collection = launch { viewModel.announces.collect { emissions.add(it) } }
+            try {
+                runCurrent()
+                // One page generation for the initial stream.
+                assertEquals(1, emissions.size)
+
+                viewModel.refreshAnnounces()
+                runCurrent()
+                // A refresh must emit a new page generation.
+                assertEquals(2, emissions.size)
+            } finally {
+                collection.cancel()
+                viewModel.viewModelScope.cancel()
+                runCurrent()
+            }
+        }
+
+    @Test
+    fun newAnnounceCount_countsRowsAfterTheLoadedStreamStart() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            coEvery {
+                announceRepository.getNewestAnnounceTimestamp(any(), any(), any())
+            } returns 1_000L
+            every {
+                announceRepository.observeAnnounceCountNewerThan(any(), any(), any(), any())
+            } returns flowOf(3)
+
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
+
+            viewModel.newAnnounceCount.test {
+                assertEquals(0, awaitItem()) // initial value before the first query resolves
+                assertEquals(3, awaitItem())
+                cancelAndConsumeRemainingEvents()
+            }
+
+            coVerify {
+                announceRepository.getNewestAnnounceTimestamp(listOf("PEER"), "", emptyList())
+            }
+            verify {
+                announceRepository.observeAnnounceCountNewerThan(1_000L, listOf("PEER"), "", emptyList())
             }
         }
 

@@ -391,7 +391,7 @@ class UiTextDumperTest {
                 Text(label)
             }
             """.trimIndent()
-        assertEquals(listOf("Powered on|Powered off"), dump("a", code).map { it.skeleton })
+        assertEquals(listOf("[when1] Powered on|[when2] Powered off"), dump("a", code).map { it.skeleton })
         val direct =
             """
             fun s(state: Int) {
@@ -432,7 +432,7 @@ class UiTextDumperTest {
                 Icon(painter, contentDescription = cd)
             }
             """.trimIndent()
-        assertEquals(listOf("Open|Close"), dump("a", code).map { it.skeleton })
+        assertEquals(listOf("[then] Open|[else] Close"), dump("a", code).map { it.skeleton })
     }
 
     @Test
@@ -474,5 +474,16 @@ class UiTextDumperTest {
         val after = dump("a", code).map { it.skeleton }
         assertEquals(listOf("Save", "Discard"), before)
         assertEquals(listOf("Save", "Dismiss"), after)
+    }
+
+    @Test
+    fun `branch text containing the separator cannot imitate another branch`() {
+        module("a", "com.test.a")
+        val first =
+            dump("a", """fun s(x: Boolean) { val label = if (x) "A|B" else "C"; Text(label) }""").map { it.skeleton }
+        val second =
+            dump("a", """fun s(x: Boolean) { val label = if (x) "A" else "B|C"; Text(label) }""").map { it.skeleton }
+        assertEquals(listOf("[then] A\\|B|[else] C"), first)
+        assertEquals(listOf("[then] A|[else] B\\|C"), second)
     }
 }

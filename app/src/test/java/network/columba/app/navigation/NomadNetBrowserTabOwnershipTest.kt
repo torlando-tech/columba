@@ -6,7 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.material3.Text
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -36,13 +35,11 @@ import org.robolectric.annotation.Config
  * `nomadnetwork://` deep link) must switch into the NomadNet tab with the
  * page loaded, leaving the Contacts flow (node detail on top) saved under the
  * Contacts tab. Tapping Contacts then reveals the node detail page the site
- * was opened from; tapping NomadNet returns to the tab home, which reopens
- * the session's page from persisted state (the NomadNet stack is never
- * saved, so a stale session can never resurface under a newer one); and
- * closing the site pops to the NomadNet tab home, not into another tab's
- * screens. Ending the session (Back or Close Site) marks the home entry, so
- * the revealed home shows the address-entry prompt instead of auto-reloading
- * the site that was just ended.
+ * was opened from; tapping NomadNet returns to the tab home — a hub that
+ * never loads a page by itself — with the browser entry gone (the NomadNet
+ * stack is never saved, so a stale session can never resurface under a newer
+ * one); and leaving the browser (Back or Close Site) pops onto that same
+ * home, not into another tab's screens.
  *
  * A plain [ViewModel] with a mutable field stands in for the entry-scoped
  * [network.columba.app.viewmodel.NomadNetBrowserViewModel] (same
@@ -86,15 +83,10 @@ class NomadNetBrowserTabOwnershipTest {
                     AppDestination.ANNOUNCE_DETAIL,
                     arguments = listOf(navArgument("destinationHash") { type = NavType.StringType }),
                 ) { }
-                appComposable(AppDestination.NOMADNET_HOME) { entry ->
-                    // Mirrors the production home: reopens the last-browsed
-                    // site unless the session was explicitly ended.
-                    val sessionEnded =
-                        entry.savedStateHandle
-                            .getStateFlow(KEY_NOMADNET_SESSION_ENDED, false)
-                            .collectAsState()
-                            .value
-                    Text(if (sessionEnded) ADDRESS_PROMPT else LAST_SITE)
+                appComposable(AppDestination.NOMADNET_HOME) {
+                    // Mirrors the production home: a hub that renders a list
+                    // and never loads a page on its own.
+                    Text(TAB_HOME)
                 }
                 appComposable(
                     AppDestination.NOMADNET_BROWSER,
@@ -104,6 +96,10 @@ class NomadNetBrowserTabOwnershipTest {
                             navArgument("path") {
                                 type = NavType.StringType
                                 defaultValue = "/page/index.mu"
+                            },
+                            navArgument("restoreSession") {
+                                type = NavType.BoolType
+                                defaultValue = false
                             },
                         ),
                 ) {
@@ -149,7 +145,7 @@ class NomadNetBrowserTabOwnershipTest {
     }
 
     @Test
-    fun `tapping NomadNet shows the tab home which reopens the session`() {
+    fun `tapping NomadNet shows the tab home hub`() {
         openSiteFromContacts(NODE_A)
 
         runOnMainThread { navController.navigateToTab(NavTab.CONTACTS) }
@@ -159,7 +155,7 @@ class NomadNetBrowserTabOwnershipTest {
         composeRule.waitForIdle()
 
         assertEquals(
-            "the tab must land on its home, which reopens the session's page from persisted state",
+            "the tab must land on its home, which lists saved sites instead of reopening the session",
             AppDestination.NOMADNET_HOME.routePattern,
             navController.currentDestination?.route,
         )
@@ -168,21 +164,36 @@ class NomadNetBrowserTabOwnershipTest {
             0,
             backStackRoutes().count { it == AppDestination.NOMADNET_BROWSER.routePattern },
         )
-        composeRule.onNodeWithText(LAST_SITE).assertIsDisplayed()
+        composeRule.onNodeWithText(TAB_HOME).assertIsDisplayed()
     }
 
     @Test
-    fun `closing the site pops to the nomadnet home showing the address prompt`() {
+    fun `leaving the browser pops onto the nomadnet home`() {
         openSiteFromContacts(NODE_A)
 
-        // onCloseSite for the browser entry is endNomadNetSessionAndPop().
-        runOnMainThread { navController.endNomadNetSessionAndPop() }
+        // Both Back and Close Site on the browser entry are a plain pop.
+        runOnMainThread { navController.popBackStack() }
         idleMainLooper()
         composeRule.waitForIdle()
 
         assertEquals(AppDestination.NOMADNET_HOME.routePattern, navController.currentDestination?.route)
-        composeRule.onNodeWithText(ADDRESS_PROMPT).assertIsDisplayed()
-        composeRule.onNodeWithText(LAST_SITE).assertDoesNotExist()
+        composeRule.onNodeWithText(TAB_HOME).assertIsDisplayed()
+    }
+
+    @Test
+    fun `re-tapping NomadNet while browsing returns to the tab home`() {
+        openSiteFromContacts(NODE_A)
+
+        runOnMainThread { navController.navigateToTab(NavTab.NOMADNET) }
+        idleMainLooper()
+        composeRule.waitForIdle()
+
+        assertEquals(
+            "the tab icon must go to its root instead of sitting on the browser",
+            AppDestination.NOMADNET_HOME.routePattern,
+            navController.currentDestination?.route,
+        )
+        composeRule.onNodeWithText(TAB_HOME).assertIsDisplayed()
     }
 
     @Test
@@ -252,8 +263,10 @@ class NomadNetBrowserTabOwnershipTest {
         composeRule.waitForIdle()
     }
 
-    private fun backStackRoutes(): List<String?> =
-        navController.currentBackStack.value?.map { entry -> entry.destination.route } ?: emptyList()
+    private fun backStackRoutes(): List<String?> {
+        val stack = navController.currentBackStack.value ?: return emptyList()
+        return stack.map { entry -> entry.destination.route }
+    }
 
     private fun idleMainLooper() {
         shadowOf(Looper.getMainLooper()).idle()
@@ -267,7 +280,6 @@ class NomadNetBrowserTabOwnershipTest {
         const val NODE_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         const val NODE_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         const val INDEX_PATH = "/page/index.mu"
-        const val ADDRESS_PROMPT = "address-entry-prompt"
-        const val LAST_SITE = "last-browsed-site"
+        const val TAB_HOME = "nomadnet-tab-home"
     }
 }

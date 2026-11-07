@@ -18,16 +18,19 @@ import kotlinx.coroutines.launch
 import network.columba.app.micron.MicronDocument
 import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronParser
+import network.columba.app.nomadnet.DEFAULT_PAGE_PATH
 import network.columba.app.nomadnet.ImageLoadingMode
 import network.columba.app.nomadnet.NomadNetImageCache
 import network.columba.app.nomadnet.PageImageLoader
 import network.columba.app.nomadnet.PageImageState
 import network.columba.app.nomadnet.ParsedImageRef
 import network.columba.app.nomadnet.NomadNetPageCache
+import network.columba.app.nomadnet.NomadNetAddressTarget
 import network.columba.app.nomadnet.PartialManager
 import network.columba.app.nomadnet.buildNomadNetPersistPath
 import network.columba.app.nomadnet.buildNomadNetRequestData
 import network.columba.app.nomadnet.pageImageKey
+import network.columba.app.nomadnet.parseNomadNetAddress
 import network.columba.app.nomadnet.splitNomadNetPathFields
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsCore
@@ -48,7 +51,6 @@ class NomadNetBrowserViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "NomadNetBrowserVM"
-            private const val DEFAULT_PATH = "/page/index.mu"
             private const val PAGE_TIMEOUT_SECONDS = 60f
             private const val MAX_HISTORY_SIZE = 50
         }
@@ -180,7 +182,7 @@ class NomadNetBrowserViewModel
         @Volatile
         private var currentNodeHash = ""
         private var lastFetchNodeHash = ""
-        private var lastFetchPath = DEFAULT_PATH
+        private var lastFetchPath = DEFAULT_PAGE_PATH
         private var lastFetchFormDataJson: String? = null
         /** Link-field tokens (backtick block) for the last fetch, for persist-path reconstruction. */
         private var lastFetchFieldTokens: List<String> = emptyList()
@@ -445,41 +447,22 @@ class NomadNetBrowserViewModel
          * - "lxmf@hash" (emit OpenConversation event)
          */
         fun navigateToUrl(input: String) {
-            val trimmed = input.trim()
-            if (trimmed.isEmpty()) return
-
-            // Strip nomadnetwork:// scheme if present
-            val raw =
-                if (trimmed.startsWith("nomadnetwork://")) {
-                    trimmed.removePrefix("nomadnetwork://")
-                } else {
-                    trimmed
+            when (val target = parseNomadNetAddress(input)) {
+                null -> return
+                is NomadNetAddressTarget.Conversation -> {
+                    viewModelScope.launch { _navigationEvent.emit(NavigationEvent.OpenConversation(target.nodeHash)) }
                 }
-
-            // Handle lxmf@ links
-            if (raw.startsWith("lxmf@")) {
-                val hash = raw.removePrefix("lxmf@")
-                viewModelScope.launch { _navigationEvent.emit(NavigationEvent.OpenConversation(hash)) }
-                return
+                is NomadNetAddressTarget.Page -> {
+                    // Push current page to history so back button works after URL bar navigation
+                    pushCurrentPageToHistory()
+                    loadPage(target.nodeHash, target.path)
+                }
             }
-
-            // Split on first colon: "hash:/path" or just "hash"
-            val colonIdx = raw.indexOf(':')
-            val (nodeHash, path) =
-                if (colonIdx > 0) {
-                    raw.substring(0, colonIdx) to raw.substring(colonIdx + 1)
-                } else {
-                    raw to DEFAULT_PATH
-                }
-
-            // Push current page to history so back button works after URL bar navigation
-            pushCurrentPageToHistory()
-            loadPage(nodeHash.lowercase(), path)
         }
 
         fun loadPage(
             destinationHash: String,
-            path: String = DEFAULT_PATH,
+            path: String = DEFAULT_PAGE_PATH,
             fromSessionRestore: Boolean = false,
         ) {
             partialManager.clear()
@@ -500,18 +483,17 @@ class NomadNetBrowserViewModel
             // requested path, and route them through the same submission path
             // an in-page link tap uses.
             val (parsedPath, fieldNames) = splitNomadNetPathFields(path)
-            val requestPath = parsedPath.ifEmpty { DEFAULT_PATH }
+            val requestPath = parsedPath.ifEmpty { DEFAULT_PAGE_PATH }
             val formDataJson = buildNomadNetRequestData(fieldNames, _formFields.value)
 
-            // Restoring the NomadNet tab session shows the page the user was
-            // looking at, immediately, from the in-memory session store -
-            // even a `#!c=0` page, which no file cache ever holds - and
-            // re-attaches the session's in-page history and form-field
-            // drafts, so Back keeps returning to earlier pages and
-            // half-typed forms come back with the page. Ordinary navigation
-            // (link taps, deep links, URL bar, pull-to-refresh) never sets
-            // [fromSessionRestore] and so still honours the site's freshness
-            // directive.
+            // The tab home's Continue row reopens the page the user was
+            // looking at from the in-memory session store - immediately, and
+            // re-attaching the session's in-page history and form-field
+            // drafts, so Back keeps returning to earlier pages and half-typed
+            // forms come back with the page. Every other entry point (link
+            // taps, deep links, URL bar, saved sites, pull-to-refresh) leaves
+            // [fromSessionRestore] false and so still honours the site's
+            // freshness directive.
             //
             // Restoring must never re-submit a var-bearing request: a site
             // whose submission changes data would redo the action without a
@@ -1072,9 +1054,9 @@ class NomadNetBrowserViewModel
 
         /**
          * Hand the live session - page, form-field drafts, and in-page
-         * history - to the singleton store so returning to the NomadNet tab
+         * history - to the singleton store so the tab home's Continue row
          * restores everything the entry-scoped ViewModel would otherwise
-         * lose when the tab's entries are dropped. Internal for tests,
+         * lose when the browser entry is destroyed. Internal for tests,
          * which cannot invoke the protected lifecycle callback.
          */
         internal fun saveSessionSnapshot() {

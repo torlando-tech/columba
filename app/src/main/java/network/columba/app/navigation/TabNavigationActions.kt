@@ -70,6 +70,7 @@ fun NavController.openNomadNetPage(
     nodeHash: String,
     path: String,
     restoreSession: Boolean = false,
+    requestData: String? = null,
 ) {
     if (isShowingBrowserEntity(nodeHash, path)) {
         return
@@ -88,12 +89,15 @@ fun NavController.openNomadNetPage(
             launchSingleTop = true
         }
     }
+    // restoreSession and requestData are not part of the entity identity (a
+    // page is the same page either way): restoreSession asks the browser to
+    // serve the in-memory session snapshot instead of re-fetching, and
+    // requestData replays the exact request a saved form-result page was
+    // fetched with.
+    val requestDataArg = Uri.encode(requestData.orEmpty())
     navigateToEntity(
         destination = AppDestination.NOMADNET_BROWSER,
-        // restoreSession is not part of the entity identity (a page is the same
-        // page either way): it only asks the browser to serve the in-memory
-        // session snapshot instead of re-fetching.
-        route = "nomadnet_browser/${Uri.encode(nodeHash)}?path=${Uri.encode(path)}&restoreSession=$restoreSession",
+        route = "nomadnet_browser/${Uri.encode(nodeHash)}?path=${Uri.encode(path)}&restoreSession=$restoreSession&requestData=$requestDataArg",
         identityArguments =
             mapOf(
                 "destinationHash" to nodeHash,

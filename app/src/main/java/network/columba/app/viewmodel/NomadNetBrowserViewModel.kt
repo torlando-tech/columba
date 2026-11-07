@@ -67,6 +67,13 @@ class NomadNetBrowserViewModel
                 val path: String,
                 val nodeHash: String,
                 val fieldTokens: List<String> = emptyList(),
+                /**
+                 * Request data (JSON) the node answered with if this page was
+                 * fetched by submitting a form; null for a plain GET. Saved
+                 * with a bookmark or a launcher shortcut so the page can be
+                 * reproduced instead of re-fetched with empty form values.
+                 */
+                val requestData: String? = null,
             ) : BrowserState()
 
             data class Error(
@@ -464,6 +471,7 @@ class NomadNetBrowserViewModel
             destinationHash: String,
             path: String = DEFAULT_PAGE_PATH,
             fromSessionRestore: Boolean = false,
+            requestDataJson: String? = null,
         ) {
             partialManager.clear()
             if (destinationHash != currentNodeHash) {
@@ -484,7 +492,11 @@ class NomadNetBrowserViewModel
             // an in-page link tap uses.
             val (parsedPath, fieldNames) = splitNomadNetPathFields(path)
             val requestPath = parsedPath.ifEmpty { DEFAULT_PAGE_PATH }
-            val formDataJson = buildNomadNetRequestData(fieldNames, _formFields.value)
+            // A saved page or its pinned shortcut carries the request data its
+            // page was fetched with: replay it verbatim instead of rebuilding
+            // from the backtick tokens, whose values are not in the path (a
+            // saved search would otherwise re-submit with empty fields).
+            val formDataJson = requestDataJson ?: buildNomadNetRequestData(fieldNames, _formFields.value)
 
             // The tab home's Continue row reopens the page the user was
             // looking at from the in-memory session store - immediately, and
@@ -703,7 +715,15 @@ class NomadNetBrowserViewModel
                             // never reaches the file cache, yet a tab restore
                             // must still show it without re-submitting.
                             pageCache.putSession(nodeHash, persistPath, document, lastFetchFieldTokens)
-                            emitPageLoaded(document, pageResult.path, nodeHash, lastFetchFieldTokens)
+                            // The request that produced this page, so a bookmark
+                            // or a pinned shortcut can replay it later.
+                            emitPageLoaded(
+                                document = document,
+                                path = pageResult.path,
+                                nodeHash = nodeHash,
+                                fieldTokens = lastFetchFieldTokens,
+                                requestData = formDataJson,
+                            )
                         },
                         onFailure = { error ->
                             _browserState.value =
@@ -1124,6 +1144,7 @@ class NomadNetBrowserViewModel
             path: String,
             nodeHash: String,
             fieldTokens: List<String> = emptyList(),
+            requestData: String? = null,
         ) {
             _isPullRefreshing.value = false
             _formFields.update { current -> seedFieldDefaults(document, current) }
@@ -1152,6 +1173,7 @@ class NomadNetBrowserViewModel
                     path = path,
                     nodeHash = nodeHash,
                     fieldTokens = fieldTokens,
+                    requestData = requestData,
                 )
             // Remember where the user is so the bottom-nav NomadNet tab can
             // reopen the exact page the user left on (node + deep path) instead

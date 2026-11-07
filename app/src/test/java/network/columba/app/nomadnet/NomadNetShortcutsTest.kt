@@ -49,6 +49,31 @@ class NomadNetShortcutsTest {
     }
 
     @Test
+    fun `shortcut id is a strong digest, so hashCode collisions stay distinct pages`() {
+        // "/page/Aa.mu" and "/page/BB.mu" share a String.hashCode(); an id built
+        // from it would make them one page for both the launcher and bookmarks.
+        assertEquals("/page/Aa.mu".hashCode(), "/page/BB.mu".hashCode())
+        assertNotEquals(
+            NomadNetShortcuts.shortcutId(node, "/page/Aa.mu"),
+            NomadNetShortcuts.shortcutId(node, "/page/BB.mu"),
+        )
+    }
+
+    @Test
+    fun `spec carries the request data of a form-result page`() {
+        val spec =
+            NomadNetShortcuts.spec(
+                nodeHash = node,
+                persistPath = "/page/search.mu`query",
+                pageTitle = "Search",
+                requestData = "{\"query\":\"rngit\"}",
+            )
+        assertEquals("{\"query\":\"rngit\"}", spec.requestData)
+        // Plain pages have nothing to replay.
+        assertEquals(null, NomadNetShortcuts.spec(node, "/page/index.mu").requestData)
+    }
+
+    @Test
     fun `spec uses the page heading as the short label`() {
         val spec =
             NomadNetShortcuts.spec(

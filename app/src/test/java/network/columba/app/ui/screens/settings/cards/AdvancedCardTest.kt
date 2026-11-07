@@ -4,8 +4,8 @@ import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
-import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import network.columba.app.test.RegisterComponentActivityRule
@@ -81,7 +81,7 @@ class AdvancedCardTest {
                 transportNodeEnabled = true,
             )
         }
-        composeTestRule.onNode(isToggleable()).assertIsOn()
+        composeTestRule.onNodeWithTag("transport-node-switch").assertIsOn()
     }
 
     @Test
@@ -93,7 +93,7 @@ class AdvancedCardTest {
                 transportNodeEnabled = false,
             )
         }
-        composeTestRule.onNode(isToggleable()).assertIsOff()
+        composeTestRule.onNodeWithTag("transport-node-switch").assertIsOff()
     }
 
     @Test
@@ -107,7 +107,7 @@ class AdvancedCardTest {
                 onTransportNodeToggle = { receivedValue = it },
             )
         }
-        composeTestRule.onNode(isToggleable()).performClick()
+        composeTestRule.onNodeWithTag("transport-node-switch").performClick()
         assertEquals(false, receivedValue)
     }
 
@@ -122,7 +122,7 @@ class AdvancedCardTest {
                 onTransportNodeToggle = { receivedValue = it },
             )
         }
-        composeTestRule.onNode(isToggleable()).performClick()
+        composeTestRule.onNodeWithTag("transport-node-switch").performClick()
         assertEquals(true, receivedValue)
     }
 
@@ -137,7 +137,7 @@ class AdvancedCardTest {
                 onTransportNodeToggle = { callCount++ },
             )
         }
-        composeTestRule.onNode(isToggleable()).performClick()
+        composeTestRule.onNodeWithTag("transport-node-switch").performClick()
         assertEquals("Callback should be called exactly once", 1, callCount)
     }
 }

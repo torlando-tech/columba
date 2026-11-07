@@ -108,7 +108,7 @@ class AnnounceStreamViewModel
             val selectedTypes: Set<NodeType>,
             val showAudio: Boolean,
             val selectedInterfaces: Set<InterfaceType>,
-            val interfaceWindowGeneration: Long,
+            val refreshGeneration: Long,
         )
 
         // Search query state
@@ -125,7 +125,21 @@ class AnnounceStreamViewModel
         // Interface type filter state - empty set means show all (no interface filter)
         private val _selectedInterfaceTypes = MutableStateFlow<Set<InterfaceType>>(emptySet())
         val selectedInterfaceTypes: StateFlow<Set<InterfaceType>> = _selectedInterfaceTypes.asStateFlow()
-        private val interfaceWindowGeneration = MutableStateFlow(0L)
+
+        /**
+         * Bumped by [refreshAnnounces] to start a new paging generation. The announce stream
+         * is frozen while the user is scrolled: Room writes must not reload the list, because
+         * a Paging refresh restarts at the first row and replaces every loaded page (GH #1166).
+         */
+        private val refreshGeneration = MutableStateFlow(0L)
+
+        /**
+         * True once the 30-day interface-sighting window may have expired while an interface
+         * filter was active. The UI consumes this through [refreshAnnounces] only when the
+         * viewport is at the top, so it never yanks a scrolled list.
+         */
+        private val _windowRefreshPending = MutableStateFlow(false)
+        val windowRefreshPending: StateFlow<Boolean> = _windowRefreshPending.asStateFlow()
 
         // Total announce count for tab label
         val announceCount: StateFlow<Int> =
@@ -145,23 +159,15 @@ class AnnounceStreamViewModel
                 _selectedNodeTypes,
                 _showAudioAnnounces,
                 _selectedInterfaceTypes,
-                interfaceWindowGeneration,
+                refreshGeneration,
             ) { query, selectedTypes, showAudio, selectedInterfaces, generation ->
                 FilterParams(query, selectedTypes, showAudio, selectedInterfaces, generation)
             }.flatMapLatest { params ->
-                val query = params.query
+                val query = params.query.trim()
                 val selectedTypes = params.selectedTypes
                 val showAudio = params.showAudio
-                val selectedInterfaces = params.selectedInterfaces
-                // Build type list for database query
-                // If showAudio is true but PHONE is not selected, include PHONE in DB query
-                val typesForQuery =
-                    if (showAudio && !selectedTypes.contains(NodeType.PHONE)) {
-                        selectedTypes + NodeType.PHONE
-                    } else {
-                        selectedTypes
-                    }
-                val typeStrings = typesForQuery.map { it.name }
+                val interfaceNames = params.selectedInterfaces.map { it.storageName }
+                val typeStrings = pagingTypes(selectedTypes, showAudio)
 
                 if (typeStrings.isEmpty()) {
                     // If no types selected, return empty flow
@@ -171,8 +177,8 @@ class AnnounceStreamViewModel
                     announceRepository
                         .getAnnouncesPaged(
                             nodeTypes = typeStrings,
-                            searchQuery = query.trim(),
-                            interfaceTypes = selectedInterfaces.map { it.storageName },
+                            searchQuery = query,
+                            interfaceTypes = interfaceNames,
                         ).map { pagingData ->
                             // Interface filtering is handled in SQL so Paging can fill pages correctly.
                             // Keep only the audio/node-type compatibility filter in memory.
@@ -191,6 +197,80 @@ class AnnounceStreamViewModel
                         }
                 }
             }.cachedIn(viewModelScope)
+
+        /**
+         * Announces that arrived after the currently loaded stream was started. Re-emits on
+         * every announce write; drives the "N new announces" affordance while frozen.
+         */
+        val newAnnounceCount: StateFlow<Int> =
+            combine(
+                searchQuery,
+                _selectedNodeTypes,
+                _showAudioAnnounces,
+                _selectedInterfaceTypes,
+                refreshGeneration,
+            ) { query, selectedTypes, showAudio, selectedInterfaces, _ ->
+                FilterParams(query, selectedTypes, showAudio, selectedInterfaces, 0L)
+            }.flatMapLatest { params ->
+                val typeStrings = countTypes(params.selectedTypes, params.showAudio)
+                val query = params.query.trim()
+                val interfaceNames = params.selectedInterfaces.map { it.storageName }
+                if (typeStrings.isEmpty()) {
+                    flowOf(0)
+                } else {
+                    val since =
+                        announceRepository.getNewestAnnounceTimestamp(
+                            nodeTypes = typeStrings,
+                            searchQuery = query,
+                            interfaceTypes = interfaceNames,
+                        )
+                    if (since == null) {
+                        flowOf(0)
+                    } else {
+                        announceRepository.observeAnnounceCountNewerThan(
+                            since = since,
+                            nodeTypes = typeStrings,
+                            searchQuery = query,
+                            interfaceTypes = interfaceNames,
+                        )
+                    }
+                }
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000L),
+                initialValue = 0,
+            )
+
+        /**
+         * Reload the announce stream from the newest row. Call only when the viewport is at
+         * the top (or when the user asks): a reload replaces every loaded page.
+         */
+        fun refreshAnnounces() {
+            _windowRefreshPending.value = false
+            refreshGeneration.value += 1
+        }
+
+        /** Types for the SQL query; audio rows are fetched even when only their chip is on. */
+        private fun pagingTypes(
+            selectedTypes: Set<NodeType>,
+            showAudio: Boolean,
+        ): List<String> =
+            if (showAudio && !selectedTypes.contains(NodeType.PHONE)) {
+                (selectedTypes + NodeType.PHONE).map { it.name }
+            } else {
+                selectedTypes.map { it.name }
+            }
+
+        /** Types whose rows actually stay visible after the in-memory compatibility filter. */
+        private fun countTypes(
+            selectedTypes: Set<NodeType>,
+            showAudio: Boolean,
+        ): List<String> =
+            if (showAudio) {
+                (selectedTypes + NodeType.PHONE).map { it.name }
+            } else {
+                selectedTypes.filterNot { it == NodeType.PHONE }.map { it.name }
+            }
 
         // Count of reachable announces (nodes with active paths in RNS path table)
         private val _reachableAnnounceCount = MutableStateFlow(0)
@@ -230,11 +310,12 @@ class AnnounceStreamViewModel
                         if (reachableCountDirty.getAndSet(false)) {
                             updateReachableCount()
                         }
-                        // Wall-clock advancement does not invalidate Room PagingSources.
-                        // Recreate active interface-filtered pagers so 30-day expirations
-                        // become visible without waiting for another database write.
+                        // Wall-clock advancement does not invalidate the keyset source.
+                        // When an interface filter is active, flag the 30-day sighting window
+                        // as possibly expired; the UI applies the reload at the top of the
+                        // list only, so a scrolled viewport is never yanked (GH #1166).
                         if (_selectedInterfaceTypes.value.isNotEmpty()) {
-                            interfaceWindowGeneration.value += 1
+                            _windowRefreshPending.value = true
                         }
                         kotlinx.coroutines.delay(updateIntervalMs)
                     }
@@ -460,14 +541,18 @@ class AnnounceStreamViewModel
          */
         fun updateSelectedNodeTypes(types: Set<NodeType>) {
             _selectedNodeTypes.value = types
+            // A filter change starts a new paging generation, so the sighting window is re-read.
+            _windowRefreshPending.value = false
         }
 
         fun updateShowAudioAnnounces(show: Boolean) {
             _showAudioAnnounces.value = show
+            _windowRefreshPending.value = false
         }
 
         fun updateSelectedInterfaceTypes(types: Set<InterfaceType>) {
             _selectedInterfaceTypes.value = types
+            _windowRefreshPending.value = false
         }
 
         /**

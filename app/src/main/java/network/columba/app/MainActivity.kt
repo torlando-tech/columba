@@ -815,8 +815,17 @@ fun ColumbaNavigation(
         }
     }
 
+    // Cold start (launcher shortcut or nomadnetwork:// VIEW intent) can set
+    // pendingNavigation before the NavHost attaches its graph, where navigating
+    // throws (COLUMBA-8Y). Re-running the effect when the back stack appears lets
+    // the failed navigation be retried instead of silently dropped.
+    val pendingNavBackStackEntry by navController.currentBackStackEntryAsState()
+
     // Handle pending navigation from intents
-    LaunchedEffect(pendingNavigation.value) {
+    LaunchedEffect(pendingNavigation.value, startDestination, pendingNavBackStackEntry) {
+        // The NavHost is not rendered until its start destination resolves, and
+        // entries navigated before that first setGraph() are discarded with it.
+        if (startDestination == null) return@LaunchedEffect
         pendingNavigation.value?.let { navigation ->
             try {
                 when (navigation) {
@@ -1018,11 +1027,17 @@ fun ColumbaNavigation(
                         Log.d("ColumbaNavigation", "Navigated to flasher (direct): ${navigation.usbDeviceId}")
                     }
                     is PendingNavigation.NomadNetBrowser -> {
-                        navController.openNomadNetPage(
-                            navigation.nodeHash,
-                            navigation.path,
-                            requestData = navigation.requestData,
-                        )
+                        // False when the graph is still attaching: keep the
+                        // request pending; the effect re-runs once the back
+                        // stack exists.
+                        if (!navController.openNomadNetPage(
+                                navigation.nodeHash,
+                                navigation.path,
+                                requestData = navigation.requestData,
+                            )
+                        ) {
+                            return@LaunchedEffect
+                        }
                         Log.d("ColumbaNavigation", "Navigated to NomadNet browser: ${navigation.nodeHash}")
                     }
                 }

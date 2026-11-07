@@ -65,15 +65,28 @@ fun NavController.navigateToTab(tab: NavTab) {
  * One site per tab, like upstream NomadNet: opening a page replaces the
  * previous session rather than stacking under it, and re-opening the exact
  * same entity is a no-op on the live session (no reload, no new entry).
+ *
+ * @return true once the page is showing (including the already-showing no-op),
+ *   false when the NavHost has not attached its graph yet — a cold-start deep
+ *   link races the graph (COLUMBA-8Y) and the caller must keep the request
+ *   pending and retry when the back stack exists.
  */
 fun NavController.openNomadNetPage(
     nodeHash: String,
     path: String,
     restoreSession: Boolean = false,
     requestData: String? = null,
-) {
+): Boolean {
     if (isShowingBrowserEntity(nodeHash, path, requestData)) {
-        return
+        return true
+    }
+    // A cold-start deep link (launcher shortcut, nomadnetwork:// VIEW intent) can
+    // arrive before the NavHost attaches its graph, where navigating throws
+    // "You must call setGraph() before calling getGraph()" (see COLUMBA-8Y).
+    // Report that instead of navigating, so the caller keeps the request
+    // pending and retries once the back stack exists.
+    if (currentDestination == null) {
+        return false
     }
     if (currentDestination?.route?.startsWith("nomadnet") == true) {
         // Already on the NomadNet stack: drop the current site, keep the home root.
@@ -104,6 +117,7 @@ fun NavController.openNomadNetPage(
                 "path" to path,
             ),
     )
+    return true
 }
 
 /**

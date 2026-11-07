@@ -661,6 +661,37 @@ class AnnounceStreamScreenTest {
 
     private fun str(id: Int): String = ApplicationProvider.getApplicationContext<Application>().getString(id)
 
+    @Test
+    fun deletingAllCardsWhileScrolled_keepsArrivalsReloading() {
+        val counts = MutableStateFlow(0)
+        val edits = MutableStateFlow<Map<String, AnnounceRowEdit>>(emptyMap())
+        val announces = (0 until 20).map { index -> testAnnounce(index) }
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                announces = announces,
+                rowEditsState = edits,
+            )
+        every { mockViewModel.newAnnounceCount } returns counts
+
+        composeTestRule.setContent {
+            AnnounceStreamContent(viewModel = mockViewModel)
+        }
+        composeTestRule
+            .onNode(hasScrollAction() and hasAnyDescendant(hasText("Peer 0")))
+            .performScrollToIndex(5)
+        composeTestRule.waitForIdle()
+
+        edits.value = announces.associate { it.destinationHash to AnnounceRowEdit(isDeleted = true) }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("No nodes discovered yet").assertIsDisplayed()
+
+        // The list stays mounted, so the scroll position clamps to the top and a later
+        // arrival still reloads it instead of leaving the tab stuck on the empty state.
+        counts.value = 1
+        composeTestRule.waitForIdle()
+        verify { mockViewModel.refreshAnnounces() }
+    }
+
     private fun testAnnounce(index: Int) =
         Announce(
             destinationHash = "%032x".format(index.toLong()),
@@ -672,13 +703,6 @@ class AnnounceStreamScreenTest {
             nodeType = "PEER",
         )
 
-    // ========== Test Helpers ==========
-
-    // This is a mock builder that mirrors the StateFlow surface of
-    // AnnounceStreamViewModel — every parameter maps 1:1 to a public StateFlow
-    // on the real ViewModel. Grouping these into a config object would obscure
-    // that mirror; @Suppress is the right call per the no-baseline-bumps rule.
-    @Suppress("detekt:LongParameterList")
     @Test
     fun announceStreamScreen_hidesRowsMarkedDeleted() {
         val announces = (0 until 3).map { index -> testAnnounce(index) }
@@ -716,7 +740,12 @@ class AnnounceStreamScreenTest {
         composeTestRule.onNodeWithText("No nodes discovered yet").assertIsDisplayed()
     }
 
-    @Suppress("LongParameterList")
+    // ========== Test Helpers ==========
+    // This is a mock builder that mirrors the StateFlow surface of
+    // AnnounceStreamViewModel — every parameter maps 1:1 to a public StateFlow
+    // on the real ViewModel. Grouping these into a config object would obscure
+    // that mirror; @Suppress is the right call per the no-baseline-bumps rule.
+    @Suppress("detekt:LongParameterList")
     private fun createMockAnnounceStreamViewModel(
         reachableCount: Int = 0,
         isAnnouncing: Boolean = false,
@@ -732,6 +761,7 @@ class AnnounceStreamScreenTest {
         searchQuery: String = "",
         announces: List<Announce> = emptyList(),
         rowEdits: Map<String, AnnounceRowEdit> = emptyMap(),
+        rowEditsState: MutableStateFlow<Map<String, AnnounceRowEdit>>? = null,
     ): AnnounceStreamViewModel {
         val mockViewModel = mockk<AnnounceStreamViewModel>()
 
@@ -748,7 +778,7 @@ class AnnounceStreamScreenTest {
         every { mockViewModel.announceError } returns MutableStateFlow(announceError)
         every { mockViewModel.newAnnounceCount } returns MutableStateFlow(0)
         every { mockViewModel.windowRefreshPending } returns MutableStateFlow(false)
-        every { mockViewModel.rowEdits } returns MutableStateFlow(rowEdits)
+        every { mockViewModel.rowEdits } returns (rowEditsState ?: MutableStateFlow(rowEdits))
 
         // Stub action methods that may be called
         every { mockViewModel.triggerAnnounce() } just Runs

@@ -1,6 +1,7 @@
 package network.columba.app.migration
 
 import network.columba.app.data.db.entity.CustomThemeEntity
+import network.columba.app.viewmodel.UiMessage
 import kotlinx.serialization.Serializable
 import java.io.File
 
@@ -385,7 +386,7 @@ sealed class ExportResult {
     ) : ExportResult()
 
     data class Error(
-        val message: String,
+        val message: UiMessage,
         val cause: Throwable? = null,
     ) : ExportResult()
 }
@@ -407,10 +408,20 @@ sealed class ImportResult {
     ) : ImportResult()
 
     data class Error(
-        val message: String,
+        val message: UiMessage,
         val cause: Throwable? = null,
     ) : ImportResult()
 }
+
+/**
+ * Thrown when a migration failure has a localized user-facing message. The
+ * ViewModel maps [uiMessage] straight into the error state instead of
+ * wrapping the raw exception text, so the render site resolves the resource.
+ */
+class MigrationLocalizedException(
+    val uiMessage: UiMessage,
+    cause: Throwable? = null,
+) : Exception(cause)
 
 /**
  * Preview of migration data before import.

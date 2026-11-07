@@ -5,10 +5,12 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import network.columba.app.R
 import network.columba.app.migration.ExportResult
 import network.columba.app.migration.ImportResult
 import network.columba.app.migration.MigrationExporter
 import network.columba.app.migration.MigrationImporter
+import network.columba.app.migration.MigrationLocalizedException
 import network.columba.app.migration.MigrationPreview
 import network.columba.app.migration.PasswordRequiredException
 import network.columba.app.migration.PreviewWithData
@@ -155,13 +157,13 @@ class MigrationViewModel
                             Log.e(TAG, "Export failed", error)
                             _uiState.value =
                                 MigrationUiState.Error(
-                                    "Export failed: ${error.message}",
+                                    UiMessage.Text(R.string.migration_export_failed, listOf(error.message ?: "null")),
                                 )
                         },
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Export failed with exception", e)
-                    _uiState.value = MigrationUiState.Error("Export failed: ${e.message}")
+                    _uiState.value = MigrationUiState.Error(UiMessage.Text(R.string.migration_export_failed, listOf(e.message ?: "null")))
                 }
             }
         }
@@ -186,7 +188,7 @@ class MigrationViewModel
                 viewModelScope.launch {
                     try {
                         Log.i(TAG, "Previewing import: $uri")
-                        _uiState.value = MigrationUiState.Loading("Reading migration file...")
+                        _uiState.value = MigrationUiState.Loading(UiMessage.Text(R.string.migration_reading_file))
 
                         // Check if file is encrypted and we don't have a password yet
                         if (password == null && !awaitEncryptionCheck(uri, sequence)) {
@@ -214,12 +216,16 @@ class MigrationViewModel
                         Log.d(TAG, "Password required for encrypted export", e)
                         _pendingImportUri.value = uri
                         _uiState.value = MigrationUiState.PasswordRequired(uri)
+                    } catch (e: MigrationLocalizedException) {
+                        if (sequence != importSequence) return@launch
+                        Log.e(TAG, "Preview failed", e)
+                        _uiState.value = MigrationUiState.Error(e.uiMessage)
                     } catch (e: Exception) {
                         if (sequence != importSequence) return@launch
                         Log.e(TAG, "Preview failed with exception", e)
                         _uiState.value =
                             MigrationUiState.Error(
-                                "Could not read migration file: ${e.message}",
+                                UiMessage.Text(R.string.migration_could_not_read_file, listOf(e.message ?: "null")),
                             )
                     }
                 }
@@ -251,7 +257,8 @@ class MigrationViewModel
                     if (sequence != importSequence) return false
                     _uiState.value =
                         MigrationUiState.Error(
-                            "Could not read migration file: ${error.message}",
+                            (error as? MigrationLocalizedException)?.uiMessage
+                                ?: UiMessage.Text(R.string.migration_could_not_read_file, listOf(error.message ?: "null")),
                         )
                     false
                 },
@@ -291,10 +298,13 @@ class MigrationViewModel
                     _pendingImportUri.value = uri
                     _uiState.value = MigrationUiState.PasswordRequired(uri)
                 }
+                is MigrationLocalizedException -> {
+                    _uiState.value = MigrationUiState.Error(error.uiMessage)
+                }
                 else -> {
                     _uiState.value =
                         MigrationUiState.Error(
-                            "Could not read migration file: ${error.message}",
+                            UiMessage.Text(R.string.migration_could_not_read_file, listOf(error.message ?: "null")),
                         )
                 }
             }
@@ -375,7 +385,7 @@ class MigrationViewModel
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Import failed with exception", e)
-                    _uiState.value = MigrationUiState.Error("Import failed: ${e.message}")
+                    _uiState.value = MigrationUiState.Error(UiMessage.Text(R.string.migration_import_failed, listOf(e.message ?: "null")))
                 }
             }
         }
@@ -397,21 +407,30 @@ class MigrationViewModel
         ) {
             val sourceUri = _exportedFileUri.value ?: return
             viewModelScope.launch {
-                try {
-                    withContext(Dispatchers.IO) {
-                        contentResolver.openInputStream(sourceUri)?.use { input ->
-                            contentResolver.openOutputStream(destinationUri)?.use { output ->
-                                input.copyTo(output)
-                            }
-                        } ?: error("Could not open export file")
+                val copied =
+                    try {
+                        withContext(Dispatchers.IO) {
+                            contentResolver.openInputStream(sourceUri)?.use { input ->
+                                contentResolver.openOutputStream(destinationUri)?.use { output ->
+                                    input.copyTo(output)
+                                }
+                            } != null
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to save export file", e)
+                        _uiState.value =
+                            MigrationUiState.Error(
+                                UiMessage.Text(R.string.migration_save_export_failed, listOf(e.message ?: "null")),
+                            )
+                        return@launch
                     }
-                    _uiState.value = MigrationUiState.ExportSaved
-                    cleanupExportFiles()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to save export file", e)
+                if (!copied) {
                     _uiState.value =
-                        MigrationUiState.Error("Failed to save export: ${e.message}")
+                        MigrationUiState.Error(UiMessage.Text(R.string.migration_could_not_open_export_file))
+                    return@launch
                 }
+                _uiState.value = MigrationUiState.ExportSaved
+                cleanupExportFiles()
             }
         }
 
@@ -454,7 +473,7 @@ sealed class MigrationUiState {
     data object Idle : MigrationUiState()
 
     data class Loading(
-        val message: String,
+        val message: UiMessage,
     ) : MigrationUiState()
 
     data object Exporting : MigrationUiState()
@@ -492,6 +511,6 @@ sealed class MigrationUiState {
     ) : MigrationUiState()
 
     data class Error(
-        val message: String,
+        val message: UiMessage,
     ) : MigrationUiState()
 }

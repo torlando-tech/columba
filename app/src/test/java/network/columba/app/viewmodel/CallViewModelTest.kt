@@ -8,6 +8,8 @@ import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.audio.CallMicrophoneAdmissionCoordinator
 import network.columba.app.audio.MicrophoneAdmissionArbiter
+import network.columba.app.rns.api.RnsError
+import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
 import io.mockk.clearAllMocks
@@ -23,6 +25,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -233,6 +236,39 @@ class CallViewModelTest {
 
             assertTrue(connectingHashSlot.isCaptured)
             assertEquals(testHash, connectingHashSlot.captured)
+        }
+
+    @Test
+    fun `initiateCall retries while CallManagerNotInitialized then succeeds`() =
+        runTest {
+            var attempts = 0
+            coEvery { mockTelephony.initiateCall(any(), any()) } coAnswers {
+                attempts++
+                if (attempts < 3) {
+                    Result.failure(RnsException(RnsError.CallManagerNotInitialized))
+                } else {
+                    Result.success(Unit)
+                }
+            }
+
+            viewModel.initiateCall("abc123def456789012345678901234567890")
+            advanceUntilIdle()
+
+            assertEquals(3, attempts)
+            coVerify(exactly = 0) { mockTelephony.setEnded() }
+        }
+
+    @Test
+    fun `initiateCall does not retry other typed errors`() =
+        runTest {
+            coEvery { mockTelephony.initiateCall(any(), any()) } returns
+                Result.failure(RnsException(RnsError.BackendNotReady))
+
+            viewModel.initiateCall("abc123def456789012345678901234567890")
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { mockTelephony.initiateCall(any(), any()) }
+            coVerify(exactly = 1) { mockTelephony.setEnded() }
         }
 
     @Test
@@ -467,48 +503,6 @@ class CallViewModelTest {
     fun `formatDuration formats longer durations correctly`() {
         assertEquals("60:00", viewModel.formatDuration(3600))
         assertEquals("90:45", viewModel.formatDuration(5445))
-    }
-
-    // ========== Status Text Tests ==========
-
-    @Test
-    fun `getStatusText returns Connecting for Connecting state`() {
-        assertEquals("Connecting...", viewModel.getStatusText(CallState.Connecting("abc")))
-    }
-
-    @Test
-    fun `getStatusText returns Ringing for Ringing state`() {
-        assertEquals("Ringing...", viewModel.getStatusText(CallState.Ringing("abc")))
-    }
-
-    @Test
-    fun `getStatusText returns Incoming for Incoming state`() {
-        assertEquals("Incoming Call", viewModel.getStatusText(CallState.Incoming("abc")))
-    }
-
-    @Test
-    fun `getStatusText returns Connected for Active state`() {
-        assertEquals("Connected", viewModel.getStatusText(CallState.Active("abc")))
-    }
-
-    @Test
-    fun `getStatusText returns Call Ended for Ended state`() {
-        assertEquals("Call Ended", viewModel.getStatusText(CallState.Ended))
-    }
-
-    @Test
-    fun `getStatusText returns Line Busy for Busy state`() {
-        assertEquals("Line Busy", viewModel.getStatusText(CallState.Busy))
-    }
-
-    @Test
-    fun `getStatusText returns Rejected for Rejected state`() {
-        assertEquals("Call Rejected", viewModel.getStatusText(CallState.Rejected))
-    }
-
-    @Test
-    fun `getStatusText returns empty for Idle state`() {
-        assertEquals("", viewModel.getStatusText(CallState.Idle))
     }
 
     // ========== Peer Name Resolution Tests ==========

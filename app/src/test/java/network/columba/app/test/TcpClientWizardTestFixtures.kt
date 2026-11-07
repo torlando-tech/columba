@@ -3,6 +3,7 @@ package network.columba.app.test
 import network.columba.app.data.model.TcpCommunityServer
 import network.columba.app.viewmodel.TcpClientWizardState
 import network.columba.app.viewmodel.TcpClientWizardStep
+import network.columba.app.viewmodel.UiMessage
 
 /**
  * Test fixtures for TCP Client Wizard UI tests.
@@ -79,7 +80,7 @@ object TcpClientWizardTestFixtures {
             interfaceName = testServer.name,
             targetHost = testServer.host,
             targetPort = testServer.port.toString(),
-            saveError = errorMessage,
+            saveError = UiMessage.Raw(errorMessage),
         )
 
     fun successState() =

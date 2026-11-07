@@ -3,6 +3,7 @@ package network.columba.app.ui.theme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import network.columba.app.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
@@ -17,80 +18,73 @@ class AppThemeTest {
     // ========== PresetTheme Tests ==========
 
     @Test
-    fun presetTheme_vibrant_hasNonEmptyDisplayName() {
-        assertTrue(PresetTheme.VIBRANT.displayName.isNotEmpty())
-        assertEquals("Vibrant", PresetTheme.VIBRANT.displayName)
+    fun presetTheme_vibrant_hasDisplayNameRes() {
+        assertEquals(R.string.preset_theme_vibrant_label, PresetTheme.VIBRANT.displayNameRes)
     }
 
     @Test
-    fun presetTheme_vibrant_hasNonEmptyDescription() {
-        assertTrue(PresetTheme.VIBRANT.description.isNotEmpty())
+    fun presetTheme_vibrant_hasDescriptionRes() {
+        assertEquals(R.string.preset_theme_vibrant_desc, PresetTheme.VIBRANT.descriptionRes)
     }
 
     @Test
-    fun presetTheme_dynamic_hasNonEmptyDisplayName() {
-        assertTrue(PresetTheme.DYNAMIC.displayName.isNotEmpty())
-        assertEquals("Dynamic", PresetTheme.DYNAMIC.displayName)
+    fun presetTheme_dynamic_hasDisplayNameRes() {
+        assertEquals(R.string.preset_theme_dynamic_label, PresetTheme.DYNAMIC.displayNameRes)
     }
 
     @Test
-    fun presetTheme_dynamic_hasNonEmptyDescription() {
-        assertTrue(PresetTheme.DYNAMIC.description.isNotEmpty())
+    fun presetTheme_dynamic_hasDescriptionRes() {
+        assertEquals(R.string.preset_theme_dynamic_desc, PresetTheme.DYNAMIC.descriptionRes)
     }
 
     @Test
-    fun presetTheme_ocean_hasNonEmptyDisplayName() {
-        assertTrue(PresetTheme.OCEAN.displayName.isNotEmpty())
-        assertEquals("Ocean", PresetTheme.OCEAN.displayName)
+    fun presetTheme_ocean_hasDisplayNameRes() {
+        assertEquals(R.string.preset_theme_ocean_label, PresetTheme.OCEAN.displayNameRes)
     }
 
     @Test
-    fun presetTheme_ocean_hasNonEmptyDescription() {
-        assertTrue(PresetTheme.OCEAN.description.isNotEmpty())
+    fun presetTheme_ocean_hasDescriptionRes() {
+        assertEquals(R.string.preset_theme_ocean_desc, PresetTheme.OCEAN.descriptionRes)
     }
 
     @Test
-    fun presetTheme_forest_hasNonEmptyDisplayName() {
-        assertTrue(PresetTheme.FOREST.displayName.isNotEmpty())
-        assertEquals("Forest", PresetTheme.FOREST.displayName)
+    fun presetTheme_forest_hasDisplayNameRes() {
+        assertEquals(R.string.preset_theme_forest_label, PresetTheme.FOREST.displayNameRes)
     }
 
     @Test
-    fun presetTheme_forest_hasNonEmptyDescription() {
-        assertTrue(PresetTheme.FOREST.description.isNotEmpty())
+    fun presetTheme_forest_hasDescriptionRes() {
+        assertEquals(R.string.preset_theme_forest_desc, PresetTheme.FOREST.descriptionRes)
     }
 
     @Test
-    fun presetTheme_sunset_hasNonEmptyDisplayName() {
-        assertTrue(PresetTheme.SUNSET.displayName.isNotEmpty())
-        assertEquals("Sunset", PresetTheme.SUNSET.displayName)
+    fun presetTheme_sunset_hasDisplayNameRes() {
+        assertEquals(R.string.preset_theme_sunset_label, PresetTheme.SUNSET.displayNameRes)
     }
 
     @Test
-    fun presetTheme_sunset_hasNonEmptyDescription() {
-        assertTrue(PresetTheme.SUNSET.description.isNotEmpty())
+    fun presetTheme_sunset_hasDescriptionRes() {
+        assertEquals(R.string.preset_theme_sunset_desc, PresetTheme.SUNSET.descriptionRes)
     }
 
     @Test
-    fun presetTheme_monochrome_hasNonEmptyDisplayName() {
-        assertTrue(PresetTheme.MONOCHROME.displayName.isNotEmpty())
-        assertEquals("Monochrome", PresetTheme.MONOCHROME.displayName)
+    fun presetTheme_monochrome_hasDisplayNameRes() {
+        assertEquals(R.string.preset_theme_monochrome_label, PresetTheme.MONOCHROME.displayNameRes)
     }
 
     @Test
-    fun presetTheme_monochrome_hasNonEmptyDescription() {
-        assertTrue(PresetTheme.MONOCHROME.description.isNotEmpty())
+    fun presetTheme_monochrome_hasDescriptionRes() {
+        assertEquals(R.string.preset_theme_monochrome_desc, PresetTheme.MONOCHROME.descriptionRes)
     }
 
     @Test
-    fun presetTheme_expressive_hasNonEmptyDisplayName() {
-        assertTrue(PresetTheme.EXPRESSIVE.displayName.isNotEmpty())
-        assertEquals("Expressive", PresetTheme.EXPRESSIVE.displayName)
+    fun presetTheme_expressive_hasDisplayNameRes() {
+        assertEquals(R.string.preset_theme_expressive_label, PresetTheme.EXPRESSIVE.displayNameRes)
     }
 
     @Test
-    fun presetTheme_expressive_hasNonEmptyDescription() {
-        assertTrue(PresetTheme.EXPRESSIVE.description.isNotEmpty())
+    fun presetTheme_expressive_hasDescriptionRes() {
+        assertEquals(R.string.preset_theme_expressive_desc, PresetTheme.EXPRESSIVE.descriptionRes)
     }
 
     // ========== PresetTheme Identifier Tests ==========

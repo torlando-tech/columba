@@ -34,8 +34,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.ui.model.SharingDuration
 
@@ -107,7 +109,7 @@ fun ShareLocationBottomSheet(
         ) {
             // Title
             Text(
-                text = "Share your location",
+                text = stringResource(R.string.share_loc_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
@@ -118,11 +120,11 @@ fun ShareLocationBottomSheet(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search contacts") },
+                placeholder = { Text(stringResource(R.string.share_loc_search_contacts)) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
+                        contentDescription = stringResource(R.string.share_loc_search),
                     )
                 },
                 singleLine = true,
@@ -148,7 +150,7 @@ fun ShareLocationBottomSheet(
                             trailingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "Remove ${contact.displayName}",
+                                    contentDescription = stringResource(R.string.share_loc_remove_contact, contact.displayName),
                                     modifier = Modifier.height(InputChipDefaults.IconSize),
                                 )
                             },
@@ -192,7 +194,7 @@ fun ShareLocationBottomSheet(
 
             // Duration label
             Text(
-                text = "Duration:",
+                text = stringResource(R.string.share_loc_duration_label),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Medium,
             )
@@ -225,7 +227,7 @@ fun ShareLocationBottomSheet(
                 enabled = selectedContacts.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Start Sharing")
+                Text(stringResource(R.string.share_loc_start_sharing))
             }
 
             Spacer(modifier = Modifier.height(16.dp))

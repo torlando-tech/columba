@@ -38,7 +38,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -47,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import network.columba.app.R
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.repository.Announce
 import network.columba.app.ui.theme.MeshConnected
@@ -67,6 +71,7 @@ fun PeerCard(
     onLongPress: () -> Unit = {},
     badgeContent: @Composable () -> Unit = { NodeTypeBadge(nodeType = announce.nodeType) },
 ) {
+    val context = LocalContext.current
     val hapticFeedback = LocalHapticFeedback.current
 
     Card(
@@ -135,11 +140,11 @@ fun PeerCard(
                     )
 
                     // Time since last seen - update adaptively based on how recent it is
-                    var timeSinceText by remember { mutableStateOf(formatTimeSince(announce.lastSeenTimestamp)) }
+                    var timeSinceText by remember { mutableStateOf(formatTimeSince(context, announce.lastSeenTimestamp)) }
 
                     LaunchedEffect(announce.lastSeenTimestamp) {
                         // Update immediately when timestamp changes
-                        timeSinceText = formatTimeSince(announce.lastSeenTimestamp)
+                        timeSinceText = formatTimeSince(context, announce.lastSeenTimestamp)
 
                         // Adaptive update frequency: more frequent for recent times, less for old ones
                         while (true) {
@@ -160,7 +165,7 @@ fun PeerCard(
                                 }
 
                             delay(delayMs)
-                            timeSinceText = formatTimeSince(announce.lastSeenTimestamp)
+                            timeSinceText = formatTimeSince(context, announce.lastSeenTimestamp)
                         }
                     }
                     Row(
@@ -230,10 +235,14 @@ private fun InterfaceHistoryIndicator(announce: Announce) {
     val additionalCount = (recentTypes.size - 1).coerceAtLeast(0)
     val accessibilityDescription =
         if (additionalCount == 0) {
-            "Current path ${currentType.displayLabel}"
+            stringResource(R.string.peer_card_path_current, currentType.displayLabel)
         } else {
-            "Current path ${currentType.displayLabel}; also seen via $additionalCount other " +
-                "interface ${if (additionalCount == 1) "type" else "types"} in the past 30 days"
+            pluralStringResource(
+                R.plurals.peer_card_path_history,
+                additionalCount,
+                currentType.displayLabel,
+                additionalCount,
+            )
         }
 
     Row(
@@ -299,7 +308,7 @@ fun SignalStrengthIndicator(
 
         // Hop count
         Text(
-            text = "$hops ${if (hops == 1) "hop" else "hops"}",
+            text = pluralStringResource(R.plurals.notif_hops, hops, hops),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 10.sp,
@@ -326,21 +335,21 @@ data class InterfaceTypeIconData(
 @Composable
 fun interfaceTypeIconData(type: InterfaceType): InterfaceTypeIconData? =
     when (type) {
-        InterfaceType.AUTO -> InterfaceTypeIconData(Icons.Default.Wifi, "WiFi")
-        InterfaceType.TCP_CLIENT -> InterfaceTypeIconData(Icons.Default.Public, "Internet")
-        InterfaceType.TCP_SERVER -> InterfaceTypeIconData(Icons.Default.Public, "Internet")
-        InterfaceType.BLE -> InterfaceTypeIconData(Icons.Default.Bluetooth, "Bluetooth")
+        InterfaceType.AUTO -> InterfaceTypeIconData(Icons.Default.Wifi, stringResource(R.string.peer_card_iface_wifi))
+        InterfaceType.TCP_CLIENT -> InterfaceTypeIconData(Icons.Default.Public, stringResource(R.string.peer_card_iface_internet))
+        InterfaceType.TCP_SERVER -> InterfaceTypeIconData(Icons.Default.Public, stringResource(R.string.peer_card_iface_internet))
+        InterfaceType.BLE -> InterfaceTypeIconData(Icons.Default.Bluetooth, stringResource(R.string.rnode_wizard_conn_bt))
         InterfaceType.RNODE ->
             InterfaceTypeIconData(
                 ImageVector.vectorResource(com.composables.icons.lucide.R.drawable.lucide_ic_antenna),
-                "LoRa/RNode",
+                stringResource(R.string.peer_card_iface_lora_rnode),
             )
         // Hub: same icon used for Transport Node, intentional — the
         // shared-instance interface IS the loopback hub between apps on
         // this device. Material's `Hub` reads "central distribution
         // point" which matches the role.
         InterfaceType.SHARED_INSTANCE ->
-            InterfaceTypeIconData(Icons.Default.Hub, "Shared Instance")
+            InterfaceTypeIconData(Icons.Default.Hub, stringResource(R.string.peer_card_iface_shared_instance))
         InterfaceType.UNKNOWN -> null
     }
 
@@ -378,13 +387,13 @@ fun InterfaceTypeIcon(
 fun NodeTypeBadge(nodeType: String) {
     val (text, color) =
         when (nodeType) {
-            "NODE" -> "Site" to MaterialTheme.colorScheme.tertiary
-            "PEER" -> "Peer" to MaterialTheme.colorScheme.primary
-            "PROPAGATION_NODE" -> "Relay" to MaterialTheme.colorScheme.secondary
-            "PHONE" -> "Phone" to MaterialTheme.colorScheme.error
+            "NODE" -> stringResource(R.string.peer_card_node_type_site) to MaterialTheme.colorScheme.tertiary
+            "PEER" -> stringResource(R.string.peer_card_node_type_peer) to MaterialTheme.colorScheme.primary
+            "PROPAGATION_NODE" -> stringResource(R.string.peer_card_node_type_relay) to MaterialTheme.colorScheme.secondary
+            "PHONE" -> stringResource(R.string.peer_card_node_type_phone) to MaterialTheme.colorScheme.error
             // Unknown/future node types: keep protocol terminology rather than
             // silently aliasing to "Site", which is reserved for NomadNet nodes.
-            else -> "Node" to MaterialTheme.colorScheme.tertiary
+            else -> stringResource(R.string.peer_card_node_type_node) to MaterialTheme.colorScheme.tertiary
         }
 
     Surface(
@@ -410,7 +419,7 @@ fun OtherBadge() {
         color = color.copy(alpha = 0.15f),
     ) {
         Text(
-            text = "Other",
+            text = stringResource(R.string.discovered_filter_other),
             style = MaterialTheme.typography.labelSmall,
             color = color,
             fontWeight = FontWeight.SemiBold,

@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import network.columba.app.R
 import network.columba.app.data.repository.OfflineMapRegion
 import network.columba.app.data.repository.OfflineMapRegionRepository
 import network.columba.app.map.MapLibreOfflineManager
@@ -33,7 +34,7 @@ data class UpdateCheckResult(
     val currentVersion: String?,
     val latestVersion: String?,
     val isChecking: Boolean = false,
-    val error: String? = null,
+    val error: UiMessage? = null,
 ) {
     val hasUpdate: Boolean
         get() = latestVersion != null && currentVersion != null && latestVersion != currentVersion
@@ -49,8 +50,8 @@ data class OfflineMapsState(
     val isLoading: Boolean = true,
     val isDeleting: Boolean = false,
     val isImporting: Boolean = false,
-    val importSuccessMessage: String? = null,
-    val errorMessage: String? = null,
+    val importSuccessMessage: UiMessage? = null,
+    val errorMessage: UiMessage? = null,
     val updateCheckResults: Map<Long, UpdateCheckResult> = emptyMap(),
     val latestTileVersion: String? = null,
 ) {
@@ -86,10 +87,10 @@ class OfflineMapsViewModel
             private const val TAG = "OfflineMapsViewModel"
         }
 
-        private val _errorMessage = MutableStateFlow<String?>(null)
+        private val _errorMessage = MutableStateFlow<UiMessage?>(null)
         private val _isDeleting = MutableStateFlow(false)
         private val _isImporting = MutableStateFlow(false)
-        private val _importSuccessMessage = MutableStateFlow<String?>(null)
+        private val _importSuccessMessage = MutableStateFlow<UiMessage?>(null)
         private val _updateCheckResults = MutableStateFlow<Map<Long, UpdateCheckResult>>(emptyMap())
         private val _latestTileVersion = MutableStateFlow<String?>(null)
 
@@ -168,7 +169,7 @@ class OfflineMapsViewModel
                     // Delete from database
                     offlineMapRegionRepository.deleteRegion(region.id)
                 } catch (e: Exception) {
-                    _errorMessage.value = "Failed to delete region: ${e.message}"
+                    _errorMessage.value = UiMessage.Text(R.string.offline_map_delete_failed, listOf(e.message ?: "null"))
                 } finally {
                     _isDeleting.value = false
                 }
@@ -243,7 +244,7 @@ class OfflineMapsViewModel
                         // Validate the copied file
                         if (!OfflineMapStyleBuilder.isValidMBTiles(destFile.absolutePath)) {
                             destFile.delete()
-                            error("File does not appear to be a valid MBTiles file")
+                            throw InvalidMbTilesFileException()
                         }
                     }
 
@@ -256,18 +257,31 @@ class OfflineMapsViewModel
                     cacheStyleForRegion(regionId, destFile, regionName)
 
                     Log.i(TAG, "Imported MBTiles file: ${destFile.name} as region $regionId ($regionName)")
-                    _importSuccessMessage.value = "Imported \"$regionName\""
+                    _importSuccessMessage.value = UiMessage.Text(R.string.offline_map_import_success, listOf(regionName))
+                } catch (e: InvalidMbTilesFileException) {
+                    Log.e(TAG, "Failed to import MBTiles file", e)
+                    _errorMessage.value =
+                        UiMessage.Text(
+                            R.string.offline_map_import_failed,
+                            listOf(UiMessage.Text(R.string.offline_map_import_invalid_mbtiles)),
+                        )
+                    deleteImportedFileQuietly(destFile)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to import MBTiles file", e)
-                    _errorMessage.value = "Import failed: ${e.message}"
-                    // Clean up the copied file on any failure (copy or DB registration)
-                    destFile?.let { file ->
-                        if (file.exists() && !file.delete()) {
-                            Log.w(TAG, "Failed to clean up imported file: ${file.absolutePath}")
-                        }
-                    }
+                    _errorMessage.value =
+                        UiMessage.Text(R.string.offline_map_import_failed, listOf(e.message ?: "null"))
+                    deleteImportedFileQuietly(destFile)
                 } finally {
                     _isImporting.value = false
+                }
+            }
+        }
+
+        private fun deleteImportedFileQuietly(destFile: java.io.File?) {
+            // Clean up the copied file on any failure (copy or DB registration)
+            destFile?.let { file ->
+                if (file.exists() && !file.delete()) {
+                    Log.w(TAG, "Failed to clean up imported file: ${file.absolutePath}")
                 }
             }
         }
@@ -283,7 +297,7 @@ class OfflineMapsViewModel
                     Log.d(TAG, "Set default region: $regionId")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to set default region", e)
-                    _errorMessage.value = "Failed to set default region: ${e.message}"
+                    _errorMessage.value = UiMessage.Text(R.string.offline_map_set_default_failed, listOf(e.message ?: "null"))
                 }
             }
         }
@@ -360,7 +374,7 @@ class OfflineMapsViewModel
                                     currentVersion = region.tileVersion,
                                     latestVersion = null,
                                     isChecking = false,
-                                    error = "Could not reach update server",
+                                    error = UiMessage.Text(R.string.offline_map_update_server_unreachable),
                                 )
                         )
                     }
@@ -377,7 +391,7 @@ class OfflineMapsViewModel
                                 currentVersion = region.tileVersion,
                                 latestVersion = null,
                                 isChecking = false,
-                                error = "Check failed: ${e.message ?: "Unknown error"}",
+                                error = UiMessage.Text(R.string.offline_map_update_check_failed, listOf(e.toUiMessage(R.string.error_unknown))),
                             )
                     )
                 }
@@ -462,3 +476,10 @@ class OfflineMapsViewModel
             }
         }
     }
+
+/**
+ * Thrown when a file selected for import fails MBTiles validation. Carries no
+ * message: the render-facing text is owned by the localized
+ * `offline_map_import_invalid_mbtiles` resource applied at the catch site.
+ */
+private class InvalidMbTilesFileException : Exception()

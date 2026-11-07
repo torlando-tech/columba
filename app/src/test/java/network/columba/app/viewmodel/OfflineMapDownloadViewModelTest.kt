@@ -5,6 +5,7 @@ import android.location.Location
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
+import network.columba.app.R
 import network.columba.app.data.repository.OfflineMapRegion
 import network.columba.app.data.repository.OfflineMapRegionRepository
 import network.columba.app.map.MapLibreOfflineManager
@@ -890,7 +891,7 @@ class OfflineMapDownloadViewModelTest {
             coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
 
             // Capture the onError callback
-            val onErrorSlot = slot<(String) -> Unit>()
+            val onErrorSlot = slot<(UiMessage) -> Unit>()
             every {
                 mockMapLibreOfflineManager.downloadRegion(
                     name = any(),
@@ -905,7 +906,7 @@ class OfflineMapDownloadViewModelTest {
                 )
             } answers {
                 // Simulate calling the error callback
-                onErrorSlot.captured("Network error")
+                onErrorSlot.captured(UiMessage.Raw("Network error"))
             }
 
             viewModel.nextStep()
@@ -914,9 +915,11 @@ class OfflineMapDownloadViewModelTest {
 
             viewModel.state.test {
                 val state = expectMostRecentItem()
-                assertNotNull(state.errorMessage)
-                assertTrue(state.errorMessage!!.contains("Network error"))
-                assertEquals("Network error", state.downloadProgress?.errorMessage)
+                assertEquals(
+                    UiMessage.Text(R.string.offline_map_download_failed, listOf(UiMessage.Raw("Network error"))),
+                    state.errorMessage,
+                )
+                assertEquals(UiMessage.Raw("Network error"), state.downloadProgress?.errorMessage)
 
                 cancelAndConsumeRemainingEvents()
             }
@@ -1030,7 +1033,7 @@ class OfflineMapDownloadViewModelTest {
             coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 101L
 
             // Capture the onError callback
-            val onErrorSlot = slot<(String) -> Unit>()
+            val onErrorSlot = slot<(UiMessage) -> Unit>()
             every {
                 mockMapLibreOfflineManager.downloadRegion(
                     name = any(),
@@ -1045,7 +1048,7 @@ class OfflineMapDownloadViewModelTest {
                 )
             } answers {
                 // Simulate calling the error callback
-                onErrorSlot.captured("Connection timeout")
+                onErrorSlot.captured(UiMessage.Raw("Connection timeout"))
             }
 
             viewModel.nextStep()
@@ -1254,7 +1257,7 @@ class OfflineMapDownloadViewModelTest {
             // Select a result
             val result =
                 AddressSearchResult(
-                    displayName = "Dallas, TX, USA",
+                    displayName = UiMessage.Raw("Dallas, TX, USA"),
                     latitude = 32.7767,
                     longitude = -96.7970,
                 )
@@ -1296,7 +1299,7 @@ class OfflineMapDownloadViewModelTest {
 
             val result =
                 AddressSearchResult(
-                    displayName = "Los Angeles, CA, USA",
+                    displayName = UiMessage.Raw("Los Angeles, CA, USA"),
                     latitude = 34.0522,
                     longitude = -118.2437,
                 )

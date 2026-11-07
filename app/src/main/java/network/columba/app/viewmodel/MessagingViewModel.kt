@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import org.json.JSONObject
+import androidx.annotation.StringRes
 import androidx.annotation.VisibleForTesting
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
@@ -11,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
+import network.columba.app.R
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.repository.ReceivedLocationRepository
@@ -146,7 +148,9 @@ class MessagingViewModel
         // Track the currently active conversation - drives reactive message loading
         private val _currentConversation = MutableStateFlow<String?>(null)
         val currentConversationHash: StateFlow<String?> = _currentConversation.asStateFlow()
-        private var currentPeerName: String = "Unknown"
+        // Display name of the open conversation; null until a caller supplies one.
+        // The "unknown peer" fallback is resolved at the render site, never stored.
+        private var currentPeerName: String? = null
 
         // Messages automatically update when conversation changes OR database changes
         // Uses Paging3 for efficient infinite scroll: loads 30 messages initially,
@@ -279,8 +283,8 @@ class MessagingViewModel
                 )
 
         // File attachment error events for UI feedback
-        private val _fileAttachmentError = MutableSharedFlow<String>()
-        val fileAttachmentError: SharedFlow<String> = _fileAttachmentError.asSharedFlow()
+        private val _fileAttachmentError = MutableSharedFlow<UiMessage>()
+        val fileAttachmentError: SharedFlow<UiMessage> = _fileAttachmentError.asSharedFlow()
 
         private val composerSendResults = Channel<ComposerSendResult>(Channel.BUFFERED)
         val composerSendResult: Flow<ComposerSendResult> = composerSendResults.receiveAsFlow()
@@ -293,15 +297,15 @@ class MessagingViewModel
         private val retriesInProgress = ConcurrentHashMap.newKeySet<String>()
 
         // Shared image compression error events for UI feedback
-        private val _sharedImageError = MutableSharedFlow<String>()
-        val sharedImageError: SharedFlow<String> = _sharedImageError.asSharedFlow()
+        private val _sharedImageError = MutableSharedFlow<UiMessage>()
+        val sharedImageError: SharedFlow<UiMessage> = _sharedImageError.asSharedFlow()
 
         // User-facing feedback from location-sharing actions. Fires when
         // `LocationSharingManager` refuses an outbound share (master-gate
         // off, currently the only Blocked source). MessagingScreen
         // collects this and shows a Snackbar pointing back to Settings.
-        private val _locationSharingMessage = MutableSharedFlow<String>(extraBufferCapacity = 4)
-        val locationSharingMessage: SharedFlow<String> = _locationSharingMessage.asSharedFlow()
+        private val _locationSharingMessage = MutableSharedFlow<UiMessage>(extraBufferCapacity = 4)
+        val locationSharingMessage: SharedFlow<UiMessage> = _locationSharingMessage.asSharedFlow()
 
         // Image quality selection dialog state
         private val _qualitySelectionState = MutableStateFlow<QualitySelectionState?>(null)
@@ -629,7 +633,7 @@ class MessagingViewModel
         fun setReplyTo(messageId: String) {
             viewModelScope.launch {
                 try {
-                    val replyPreview = conversationRepository.getReplyPreview(messageId, currentPeerName)
+                    val replyPreview = conversationRepository.getReplyPreview(messageId, currentPeerName ?: "")
                     if (replyPreview != null) {
                         _pendingReplyTo.value =
                             network.columba.app.ui.model.ReplyPreviewUi(
@@ -803,14 +807,14 @@ class MessagingViewModel
                         } else {
                             Log.e(TAG, "Cannot add contact: public key not available for $peerHash")
                             _contactToggleResult.emit(
-                                ContactToggleResult.Error("Identity not available - peer hasn't announced"),
+                                ContactToggleResult.Error(ContactToggleErrorReason.IDENTITY_NOT_AVAILABLE),
                             )
                         }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error toggling contact status", e)
                     _contactToggleResult.emit(
-                        ContactToggleResult.Error(e.message ?: "Failed to update contact"),
+                        ContactToggleResult.Error(ContactToggleErrorReason.UPDATE_FAILED, e.message),
                     )
                 }
             }
@@ -918,7 +922,7 @@ class MessagingViewModel
                     when (event) {
                         is network.columba.app.service.SharingEvent.Blocked ->
                             _locationSharingMessage.emit(
-                                "Location sharing is off. Enable it in Settings → Location Sharing.",
+                                UiMessage.Text(R.string.location_sharing_off_settings_hint),
                             )
                         else -> Unit
                     }
@@ -1271,7 +1275,7 @@ class MessagingViewModel
 
         private suspend fun saveMessageToDatabase(
             peerHash: String,
-            peerName: String,
+            peerName: String?,
             message: DataMessage,
         ): Boolean =
             try {
@@ -1280,7 +1284,7 @@ class MessagingViewModel
                 // then the announce row for this destination.
                 val publicKey = resolvePeerPublicKey(peerHash)
 
-                conversationRepository.saveMessage(peerHash, peerName, message, publicKey)
+                conversationRepository.saveMessage(peerHash, peerName.orEmpty(), message, publicKey)
                 Log.d(TAG, "Saved message to database for conversation $peerHash")
                 true
             } catch (e: Exception) {
@@ -1306,7 +1310,7 @@ class MessagingViewModel
 
         fun loadMessages(
             destinationHash: String,
-            peerName: String = "Unknown",
+            peerName: String? = null,
         ) {
             // Flush any pending draft save for the previous conversation
             val previousHash = _currentConversation.value
@@ -1453,8 +1457,13 @@ class MessagingViewModel
                                 "(max $MAX_ATTACHMENT_TOTAL_BYTES)",
                         )
                         _fileAttachmentError.emit(
-                            "Attachment too large to send (${formatBytesHelper(totalAttachmentBytes)}). " +
-                                "Maximum is ${formatBytesHelper(MAX_ATTACHMENT_TOTAL_BYTES)}.",
+                            UiMessage.Text(
+                                R.string.attachment_too_large_to_send,
+                                listOf(
+                                    formatBytesHelper(totalAttachmentBytes),
+                                    formatBytesHelper(MAX_ATTACHMENT_TOTAL_BYTES),
+                                ),
+                            ),
                         )
                         return@launch
                     }
@@ -2302,7 +2311,7 @@ class MessagingViewModel
 
             viewModelScope.launch {
                 try {
-                    val replyPreview = conversationRepository.getReplyPreview(replyToMessageId, currentPeerName)
+                    val replyPreview = conversationRepository.getReplyPreview(replyToMessageId, currentPeerName ?: "")
                     if (replyPreview != null) {
                         val uiPreview =
                             network.columba.app.ui.model.ReplyPreviewUi(
@@ -2339,7 +2348,8 @@ class MessagingViewModel
                                 network.columba.app.ui.model.ReplyPreviewUi(
                                     messageId = replyToMessageId,
                                     senderName = "",
-                                    contentPreview = "Message deleted",
+                                    contentPreview = "",
+                                    isDeletedPlaceholder = true,
                                 )
                             }
                         _replyPreviewCache.update { it + (messageId to fallbackPreview) }
@@ -2573,13 +2583,21 @@ class MessagingViewModel
                     _isSending.value = false
                     _isProcessingImage.value = false
                     if (failedCount > 0) {
-                        val msg =
+                        val message =
                             if (failedCount == uris.size) {
-                                "All $failedCount images failed to compress"
+                                UiMessage.Plural(
+                                    R.plurals.images_all_failed_to_compress,
+                                    failedCount,
+                                    listOf(failedCount),
+                                )
                             } else {
-                                "$failedCount of ${uris.size} images failed to compress"
+                                UiMessage.Plural(
+                                    R.plurals.images_some_failed_to_compress,
+                                    failedCount,
+                                    listOf(failedCount, uris.size),
+                                )
                             }
-                        _sharedImageError.emit(msg)
+                        _sharedImageError.emit(message)
                     }
                 }
             }
@@ -3188,7 +3206,8 @@ class MessagingViewModel
                         network.columba.app.ui.model.ReplyPreviewUi(
                             messageId = messageId,
                             senderName = "",
-                            contentPreview = "Message deleted",
+                            contentPreview = "",
+                            isDeletedPlaceholder = true,
                         )
                     _replyPreviewCache.update { cache ->
                         cache.mapValues { (_, preview) ->
@@ -3313,7 +3332,7 @@ internal fun validateAndSanitizeContent(
     }
     val validationResult = InputValidator.validateMessageContent(content)
     if (validationResult is ValidationResult.Error) {
-        Log.w(HELPER_TAG, "Invalid message content: ${validationResult.message}")
+        Log.w(HELPER_TAG, "Invalid message content: ${validationResult.reason}")
         return null
     }
     return validationResult.getOrThrow()
@@ -3323,7 +3342,7 @@ private fun validateDestinationHash(destinationHash: String): ByteArray? =
     when (val result = InputValidator.validateDestinationHash(destinationHash)) {
         is ValidationResult.Success -> result.value
         is ValidationResult.Error -> {
-            Log.e(HELPER_TAG, "Invalid destination hash: ${result.message}")
+            Log.e(HELPER_TAG, "Invalid destination hash: ${result.reason}")
             null
         }
     }
@@ -3581,6 +3600,27 @@ internal fun mergeReactionIntoJson(
 }
 
 /**
+ * Why a contact add/remove failed; the UI resolves the reason to a string
+ * resource. [ContactToggleResult.Error.detail] (raw exception text) takes
+ * precedence when present.
+ */
+enum class ContactToggleErrorReason {
+    IDENTITY_NOT_AVAILABLE,
+    UPDATE_FAILED,
+    SAVE_FAILED,
+    REMOVE_FAILED,
+}
+
+@StringRes
+fun ContactToggleErrorReason.messageResource(): Int =
+    when (this) {
+        ContactToggleErrorReason.IDENTITY_NOT_AVAILABLE -> R.string.contact_toggle_identity_not_available
+        ContactToggleErrorReason.UPDATE_FAILED -> R.string.contact_toggle_update_failed
+        ContactToggleErrorReason.SAVE_FAILED -> R.string.contact_toggle_save_failed
+        ContactToggleErrorReason.REMOVE_FAILED -> R.string.contact_toggle_remove_failed
+    }
+
+/**
  * Result of a contact toggle operation.
  */
 sealed class ContactToggleResult {
@@ -3590,9 +3630,13 @@ sealed class ContactToggleResult {
     /** Contact was successfully removed */
     data object Removed : ContactToggleResult()
 
-    /** Operation failed with the given message */
+    /**
+     * Operation failed. The UI shows [detail] verbatim when present, otherwise
+     * the localized string for [reason].
+     */
     data class Error(
-        val message: String,
+        val reason: ContactToggleErrorReason,
+        val detail: String? = null,
     ) : ContactToggleResult()
 }
 

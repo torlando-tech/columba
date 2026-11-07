@@ -10,6 +10,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsNomadnet
+import network.columba.app.R
+import network.columba.app.viewmodel.UiMessage
+import network.columba.app.viewmodel.UiMessageException
+import network.columba.app.viewmodel.toUiMessage
 import java.io.File
 
 /**
@@ -85,7 +89,7 @@ class PageImageLoader(
                     PageImageState(
                         ref = ref,
                         status = PageImageStatus.MALFORMED,
-                        error = "Malformed image URL: ${ref.url}",
+                        error = UiMessage.Text(R.string.page_image_malformed_url, listOf(ref.url)),
                     ),
                 )
                 continue
@@ -324,7 +328,7 @@ class PageImageLoader(
                         .getOrThrow()
                 if (media.fileSize > NomadNetImagePolicy.MAX_IMAGE_BYTES) {
                     runCatching { java.io.File(media.filePath).delete() }
-                    error("Image too large (${media.fileSize} bytes; cap ${NomadNetImagePolicy.MAX_IMAGE_BYTES})")
+                    throw UiMessageException(UiMessage.Text(R.string.page_image_too_large, listOf(media.fileSize, NomadNetImagePolicy.MAX_IMAGE_BYTES)))
                 }
                 media
             }
@@ -349,7 +353,7 @@ class PageImageLoader(
                         }
                     } else {
                         states.update(key) {
-                            it.copy(status = PageImageStatus.FAILED, error = "Not a WebP image (rejected)")
+                            it.copy(status = PageImageStatus.FAILED, error = UiMessage.Text(R.string.page_image_not_webp))
                         }
                     }
                 },
@@ -359,7 +363,7 @@ class PageImageLoader(
                     states.update(key) {
                         it.copy(
                             status = if (denied) PageImageStatus.DENIED else PageImageStatus.FAILED,
-                            error = error.message,
+                            error = error.toUiMessage(R.string.page_image_error_loading),
                         )
                     }
                 },

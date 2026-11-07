@@ -12,7 +12,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 
 /**
  * Status chip shown on the map when actively sharing location.
@@ -33,7 +36,7 @@ fun SharingStatusChip(
         onClick = { /* Could open sharing management sheet in future */ },
         label = {
             Text(
-                text = "Sharing with $sharingWithCount ${if (sharingWithCount == 1) "person" else "people"}",
+                text = pluralStringResource(R.plurals.sharing_status_count, sharingWithCount, sharingWithCount),
             )
         },
         leadingIcon = {
@@ -51,7 +54,7 @@ fun SharingStatusChip(
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Stop sharing",
+                    contentDescription = stringResource(R.string.sharing_status_stop),
                     modifier = Modifier.size(16.dp),
                 )
             }

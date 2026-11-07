@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -82,7 +83,7 @@ import network.columba.app.viewmodel.NomadNetSitesViewModel
 fun NomadNetHomeScreen(
     lastPageNodeHash: String?,
     lastPagePath: String?,
-    onOpenPage: (nodeHash: String, path: String) -> Unit,
+    onOpenPage: (nodeHash: String, path: String, requestData: String?) -> Unit,
     onContinuePage: (nodeHash: String, path: String) -> Unit,
     onOpenConversation: (String) -> Unit,
     viewModel: NomadNetSitesViewModel = hiltViewModel(),
@@ -91,10 +92,17 @@ fun NomadNetHomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val topInset = topInsetHeight()
     val bottomBarHeight = bottomBarOverlayHeight()
 
     val pinToHomeScreen: (NomadNetSavedSite) -> Unit = { site ->
-        val spec = NomadNetShortcuts.spec(site.nodeHash, site.persistPath, site.label)
+        val spec =
+            NomadNetShortcuts.spec(
+                nodeHash = site.nodeHash,
+                persistPath = site.persistPath,
+                pageTitle = site.label,
+                requestData = site.requestData,
+            )
         if (!NomadNetShortcutPinner.requestPin(context, spec)) {
             coroutineScope.launch {
                 snackbarHostState.showSnackbar(context.getString(R.string.nomadnet_add_to_home_screen_unsupported))
@@ -126,8 +134,11 @@ fun NomadNetHomeScreen(
                 PaddingValues(
                     start = 20.dp,
                     end = 20.dp,
+                    // MainActivity draws edge-to-edge and ignores its own inner
+                    // padding, so this screen must clear the status bar itself;
+                    // 16.dp on top of it keeps the title off the top edge.
+                    top = 16.dp + topInset,
                     // Clear the bottom navigation bar that overlays tab screens.
-                    top = 16.dp,
                     bottom = 16.dp + bottomBarHeight,
                 ),
         ) {
@@ -136,7 +147,7 @@ fun NomadNetHomeScreen(
                     onSubmit = { input ->
                         when (val target = parseNomadNetAddress(input)) {
                             null -> Unit
-                            is NomadNetAddressTarget.Page -> onOpenPage(target.nodeHash, target.path)
+                            is NomadNetAddressTarget.Page -> onOpenPage(target.nodeHash, target.path, null)
                             is NomadNetAddressTarget.Conversation -> onOpenConversation(target.nodeHash)
                         }
                     },
@@ -172,7 +183,7 @@ fun NomadNetHomeScreen(
                     SavedSiteRow(
                         site = site,
                         viewModel = viewModel,
-                        onClick = { onOpenPage(site.nodeHash, site.persistPath) },
+                        onClick = { onOpenPage(site.nodeHash, site.persistPath, site.requestData) },
                         onPinToHomeScreen = { pinToHomeScreen(site) },
                         onRemove = { removeSite(site) },
                     )
@@ -462,6 +473,20 @@ private fun NodeRow(
         }
         trailing()
     }
+}
+
+/**
+ * Status-bar inset the activity does not reserve for this screen.
+ *
+ * MainActivity draws edge-to-edge and its Scaffold ignores its inner padding,
+ * so a tab screen without its own Scaffold starts at the top window edge: this
+ * screen must clear the status bar (and any display cutout in it) itself or the
+ * title sits under the clock.
+ */
+@Composable
+private fun topInsetHeight(): Dp {
+    val density = LocalDensity.current
+    return with(density) { WindowInsets.statusBars.getTop(density).toDp() }
 }
 
 /**

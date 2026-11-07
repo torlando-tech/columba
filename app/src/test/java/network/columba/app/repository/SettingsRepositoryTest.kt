@@ -1817,6 +1817,25 @@ class SettingsRepositoryTest {
         }
 
     @Test
+    fun `toggleNomadNetSavedSite stores the request data of a form-result page`() =
+        runTest {
+            clearSavedNomadNetSites()
+            val node = "abcdef01234567890abcdef012345678"
+
+            repository.toggleNomadNetSavedSite(
+                nodeHash = node,
+                persistPath = "/page/search.mu`query",
+                label = "Search",
+                requestData = "{\"query\":\"rngit\"}",
+            )
+
+            val saved = repository.nomadNetSavedSitesFlow.first().single()
+            assertEquals("/page/search.mu`query", saved.persistPath)
+            assertEquals("{\"query\":\"rngit\"}", saved.requestData)
+            clearSavedNomadNetSites()
+        }
+
+    @Test
     fun `removeNomadNetSavedSite leaves the other saved pages alone`() =
         runTest {
             clearSavedNomadNetSites()

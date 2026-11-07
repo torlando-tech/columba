@@ -22,7 +22,8 @@ class NomadNetSavedSitesTest {
         persistPath: String = indexPath,
         label: String? = "Index",
         savedAt: Long = 1_000L,
-    ) = NomadNetSavedSite(nodeHash, persistPath, label, savedAt)
+        requestData: String? = null,
+    ) = NomadNetSavedSite(nodeHash, persistPath, label, savedAt, requestData)
 
     // ── normalizeNodeHash ──
 
@@ -47,6 +48,23 @@ class NomadNetSavedSitesTest {
 
         val decoded = NomadNetSavedSites.decode(NomadNetSavedSites.encode(sites))
 
+        assertEquals(sites, decoded)
+    }
+
+    @Test
+    fun `round trip preserves the request data saved with a form-result page`() {
+        val sites =
+            listOf(
+                site(
+                    persistPath = "/page/search.mu`query",
+                    label = "Search",
+                    requestData = "{\"query\":\"rngit\"}",
+                ),
+            )
+
+        val decoded = NomadNetSavedSites.decode(NomadNetSavedSites.encode(sites))
+
+        assertEquals("{\"query\":\"rngit\"}", decoded.single().requestData)
         assertEquals(sites, decoded)
     }
 
@@ -133,6 +151,24 @@ class NomadNetSavedSitesTest {
         assertEquals(2, next.size)
         assertTrue(NomadNetSavedSites.contains(next, nodeA, threadPath))
         assertTrue(NomadNetSavedSites.contains(next, nodeA, indexPath))
+    }
+
+    @Test
+    fun `pages whose paths collide under String hashCode stay separate entries`() {
+        // "/page/Aa.mu" and "/page/BB.mu" have equal String.hashCode(); page
+        // identity must be the literal pair, or the second save replaces the first.
+        assertEquals("/page/Aa.mu".hashCode(), "/page/BB.mu".hashCode())
+        val existing = listOf(site(persistPath = "/page/Aa.mu", savedAt = 1L))
+
+        val next = NomadNetSavedSites.upsert(existing, site(persistPath = "/page/BB.mu", savedAt = 2L))
+
+        assertEquals(2, next.size)
+        assertTrue(NomadNetSavedSites.contains(next, nodeA, "/page/Aa.mu"))
+        assertTrue(NomadNetSavedSites.contains(next, nodeA, "/page/BB.mu"))
+        assertEquals(
+            listOf("/page/BB.mu"),
+            NomadNetSavedSites.remove(next, nodeA, "/page/Aa.mu").map { it.persistPath },
+        )
     }
 
     @Test

@@ -99,6 +99,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import network.columba.app.R
 import network.columba.app.nomadnet.ImageLoadingMode
+import network.columba.app.nomadnet.NomadNetSavedSites
 import network.columba.app.nomadnet.NomadNetShortcutPinner
 import network.columba.app.nomadnet.NomadNetShortcutSpec
 import network.columba.app.nomadnet.NomadNetShortcuts
@@ -120,6 +121,8 @@ fun NomadNetBrowserScreen(
     destinationHash: String,
     initialPath: String = "/page/index.mu",
     restoreSession: Boolean = false,
+    /** Request data (JSON) a saved page / pinned shortcut recorded for this page; null for plain pages. */
+    initialRequestData: String? = null,
     onBackClick: () -> Unit,
     onCloseSite: (() -> Unit)? = null,
     onOpenConversation: (String) -> Unit = {},
@@ -164,9 +167,9 @@ fun NomadNetBrowserScreen(
     // on - drafts and in-page history included - from the in-memory session
     // snapshot instead of re-fetching it. Every other entry point is ordinary
     // navigation and honours the site's freshness directive.
-    LaunchedEffect(destinationHash, initialPath, restoreSession) {
+    LaunchedEffect(destinationHash, initialPath, restoreSession, initialRequestData) {
         if (browserState is BrowserState.Initial && destinationHash.isNotEmpty()) {
-            viewModel.loadPage(destinationHash, initialPath, restoreSession)
+            viewModel.loadPage(destinationHash, initialPath, restoreSession, initialRequestData)
         }
     }
 
@@ -436,13 +439,16 @@ fun NomadNetBrowserScreen(
                         val bookmarkPath =
                             buildNomadNetPersistPath(loadedForBookmark.path, loadedForBookmark.fieldTokens)
                         val saved =
-                            NomadNetShortcuts.shortcutId(loadedForBookmark.nodeHash, bookmarkPath) in savedPageKeys
+                            NomadNetSavedSites.key(loadedForBookmark.nodeHash, bookmarkPath) in savedPageKeys
                         IconButton(
                             onClick = {
                                 sitesViewModel.toggleSaved(
                                     nodeHash = loadedForBookmark.nodeHash,
                                     persistPath = bookmarkPath,
                                     label = NomadNetShortcuts.pageTitle(loadedForBookmark.document),
+                                    // Form-result pages record the request that
+                                    // produced them, so reopening replays it.
+                                    requestData = loadedForBookmark.requestData,
                                 )
                             },
                         ) {
@@ -1028,6 +1034,10 @@ internal fun NomadNetAddToHomeScreenMenuItem(
                     nodeHash = page.nodeHash,
                     persistPath = buildNomadNetPersistPath(page.path, page.fieldTokens),
                     pageTitle = NomadNetShortcuts.pageTitle(page.document),
+                    // A form-result page's request is replayed from the
+                    // shortcut's intent extra; without it the pin re-fetches
+                    // with empty form values.
+                    requestData = page.requestData,
                 )
             if (!onAddToHomeScreen(spec)) onUnsupportedLauncher()
         },

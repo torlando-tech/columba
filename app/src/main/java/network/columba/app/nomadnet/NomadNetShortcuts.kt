@@ -1,5 +1,6 @@
 package network.columba.app.nomadnet
 
+import java.security.MessageDigest
 import network.columba.app.micron.MicronDocument
 import network.columba.app.micron.MicronElement
 
@@ -17,6 +18,13 @@ data class NomadNetShortcutSpec(
     val shortLabel: String,
     val longLabel: String,
     val deepLink: String,
+    /**
+     * Request data (JSON) that produced the page, for pages reached through a
+     * form submission; null for plain pages. Travels as an intent extra so the
+     * pinned shortcut reproduces the same request instead of re-fetching with
+     * empty form values.
+     */
+    val requestData: String? = null,
 )
 
 object NomadNetShortcuts {
@@ -35,6 +43,17 @@ object NomadNetShortcuts {
 
     /** Destination hashes are 32 hex chars; 8 is enough to identify a node by eye. */
     private const val HASH_PREFIX = 8
+
+    /** Digest bytes kept from the page identity; 16 bytes = 32 hex chars, collision-free in practice. */
+    private const val ID_DIGEST_BYTES = 16
+
+    /**
+     * Intent extra carrying [NomadNetShortcutSpec.requestData] to
+     * [network.columba.app.MainActivity]. Kept out of the deep-link URI: the
+     * `nomadnetwork://hash:/path` shape is parsed by hand and has no room for
+     * an encoded JSON payload.
+     */
+    const val EXTRA_REQUEST_DATA = "nomadnet_request_data"
 
     /**
      * "nomadnetwork://nodeHash:/path" — the exact shape
@@ -55,12 +74,12 @@ object NomadNetShortcuts {
         nodeHash: String,
         persistPath: String,
     ): String {
-        val suffix =
-            deepLink(nodeHash, persistPath)
-                .hashCode()
-                .toLong()
-                .and(0xFFFF_FFFFL)
-                .toString(16)
+        // SHA-256, not String.hashCode(): "Aa" and "BB" (and other pairs) share
+        // a hashCode, so two different pages of one node could collide and the
+        // launcher - and the saved-sites list - would treat them as the same
+        // page. The digest is of the full node + path, so identity is the pair.
+        val digest = MessageDigest.getInstance("SHA-256").digest("$nodeHash:$persistPath".toByteArray(Charsets.UTF_8))
+        val suffix = digest.take(ID_DIGEST_BYTES).joinToString("") { byte -> "%02x".format(byte.toInt() and 0xFF) }
         return "nomadnet-${nodeHash.take(HASH_PREFIX)}-$suffix"
     }
 
@@ -77,6 +96,7 @@ object NomadNetShortcuts {
         nodeHash: String,
         persistPath: String,
         pageTitle: String? = null,
+        requestData: String? = null,
     ): NomadNetShortcutSpec {
         val shortLabel = cleanLabel(pageTitle) ?: labelFromPath(persistPath)
         val barePath = persistPath.substringBefore('`')
@@ -87,6 +107,7 @@ object NomadNetShortcuts {
             shortLabel = truncate(shortLabel, MAX_SHORT_LABEL),
             longLabel = longLabel,
             deepLink = deepLink(nodeHash, persistPath),
+            requestData = requestData,
         )
     }
 

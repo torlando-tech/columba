@@ -1755,6 +1755,7 @@ class SettingsRepository
             nodeHash: String,
             persistPath: String,
             label: String? = null,
+            requestData: String? = null,
         ) {
             val normalizedHash = NomadNetSavedSites.normalizeNodeHash(nodeHash) ?: return
             val path = persistPath.trim()
@@ -1765,7 +1766,7 @@ class SettingsRepository
                     preferences,
                     NomadNetSavedSites.upsert(
                         current,
-                        NomadNetSavedSite(normalizedHash, path, label, System.currentTimeMillis()),
+                        NomadNetSavedSite(normalizedHash, path, label, System.currentTimeMillis(), requestData),
                     ),
                 )
             }
@@ -1812,6 +1813,7 @@ class SettingsRepository
             nodeHash: String,
             persistPath: String,
             label: String? = null,
+            requestData: String? = null,
         ): Boolean {
             val normalizedHash = NomadNetSavedSites.normalizeNodeHash(nodeHash) ?: return false
             val path = persistPath.trim()
@@ -1831,7 +1833,7 @@ class SettingsRepository
                             preferences,
                             NomadNetSavedSites.upsert(
                                 current,
-                                NomadNetSavedSite(normalizedHash, path, label, System.currentTimeMillis()),
+                                NomadNetSavedSite(normalizedHash, path, label, System.currentTimeMillis(), requestData),
                             ),
                         )
                         true

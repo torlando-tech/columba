@@ -13,6 +13,7 @@ import network.columba.app.MainActivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -53,6 +54,25 @@ class NomadNetShortcutPinnerTest {
         assertTrue(info.longLabel.toString().startsWith("Welcome node"))
         assertNotNull(info.icon)
         assertEquals(spec.deepLink, info.intent?.dataString)
+    }
+
+    @Test
+    fun `a form-result page carries its request data on the launch intent`() {
+        val requestData = "{\"query\":\"rngit\"}"
+        val spec =
+            NomadNetShortcuts.spec(
+                nodeHash = node,
+                persistPath = "/page/search.mu`query",
+                pageTitle = "Search",
+                requestData = requestData,
+            )
+
+        val intent = NomadNetShortcutPinner.buildShortcutInfo(context, spec).intent
+
+        assertEquals(requestData, intent?.getStringExtra(NomadNetShortcuts.EXTRA_REQUEST_DATA))
+        // A plain page adds nothing to its intent.
+        val plain = NomadNetShortcutPinner.buildShortcutInfo(context, NomadNetShortcuts.spec(node, "/page/index.mu")).intent
+        assertNull(plain?.getStringExtra(NomadNetShortcuts.EXTRA_REQUEST_DATA))
     }
 
     @Test

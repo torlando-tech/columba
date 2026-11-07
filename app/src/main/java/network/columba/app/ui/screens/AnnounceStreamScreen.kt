@@ -138,6 +138,7 @@ fun AnnounceStreamScreen(
     val newAnnouncesCount by viewModel.newAnnounceCount.collectAsState()
     val windowRefreshPending by viewModel.windowRefreshPending.collectAsState()
     val rowEdits by viewModel.rowEdits.collectAsState()
+    val hasVisibleRows = hasVisibleAnnounce(pagingItems, rowEdits)
 
     // Check if we're at the top of the list
     val isAtTop by remember(listState) {
@@ -150,6 +151,14 @@ fun AnnounceStreamScreen(
     LaunchedEffect(isAtTop, newAnnouncesCount, windowRefreshPending) {
         if (isAtTop && (newAnnouncesCount > 0 || windowRefreshPending)) {
             viewModel.refreshAnnounces()
+        }
+    }
+
+    // Removing the last visible card leaves the loaded list unchanged but renders empty;
+    // reset the viewport so later arrivals reload the list instead of arriving unseen.
+    LaunchedEffect(hasVisibleRows) {
+        if (!hasVisibleRows) {
+            listState.scrollToItem(0)
         }
     }
 
@@ -267,20 +276,20 @@ fun AnnounceStreamScreen(
             Box(
                 modifier = Modifier.fillMaxSize(),
             ) {
-                if (!hasVisibleAnnounce(pagingItems, rowEdits)) {
-                    EmptyAnnounceState(
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .simpleVerticalScrollbar(listState),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
+                LazyColumn(
+                    state = listState,
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .simpleVerticalScrollbar(listState),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (!hasVisibleRows) {
+                        item {
+                            EmptyAnnounceState(modifier = Modifier.fillParentMaxSize())
+                        }
+                    } else {
                         items(
                             count = pagingItems.itemCount,
                             key = { index -> pagingItems.peek(index)?.destinationHash ?: "loading_$index" },
@@ -330,27 +339,26 @@ fun AnnounceStreamScreen(
                                 }
                             }
                         }
-
-                        // Bottom spacing for navigation bar (fixed height since M3 NavigationBar consumes the insets)
-                        item {
-                            Spacer(modifier = Modifier.height(100.dp))
-                        }
                     }
 
-                    // New announces indicator button
-                    if (!isAtTop && newAnnouncesCount > 0) {
-                        NewAnnouncesFab(
-                            count = newAnnouncesCount,
-                            onClick = {
-                                viewModel.refreshAnnounces()
-                                coroutineScope.launch { listState.animateScrollToItem(0) }
-                            },
-                            modifier =
-                                Modifier
-                                    .align(Alignment.TopCenter)
-                                    .padding(top = 8.dp),
-                        )
+                    // Bottom spacing for navigation bar (fixed height since M3 NavigationBar consumes the insets)
+                    item {
+                        Spacer(modifier = Modifier.height(100.dp))
                     }
+                }
+
+                if (!isAtTop && newAnnouncesCount > 0) {
+                    NewAnnouncesFab(
+                        count = newAnnouncesCount,
+                        onClick = {
+                            viewModel.refreshAnnounces()
+                            coroutineScope.launch { listState.animateScrollToItem(0) }
+                        },
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 8.dp),
+                    )
                 }
             }
         }
@@ -549,6 +557,7 @@ fun AnnounceStreamContent(
     val newAnnouncesCount by viewModel.newAnnounceCount.collectAsState()
     val windowRefreshPending by viewModel.windowRefreshPending.collectAsState()
     val rowEdits by viewModel.rowEdits.collectAsState()
+    val hasVisibleRows = hasVisibleAnnounce(pagingItems, rowEdits)
     val coroutineScope = rememberCoroutineScope()
 
     val isAtTop by remember(listState) {
@@ -568,6 +577,14 @@ fun AnnounceStreamContent(
         }
     }
 
+    // Removing the last visible card leaves the loaded list unchanged but renders empty;
+    // reset the viewport so later arrivals reload the list instead of arriving unseen.
+    LaunchedEffect(hasVisibleRows) {
+        if (!hasVisibleRows) {
+            listState.scrollToItem(0)
+        }
+    }
+
     Column(modifier = modifier.fillMaxSize()) {
         AnnounceFilterChips(
             selectedNodeTypes = selectedNodeTypes,
@@ -579,24 +596,28 @@ fun AnnounceStreamContent(
             expanded = filtersExpanded,
             onExpandRequest = onExpandFiltersRequest,
         )
-        when {
-            isLoading && !hasVisibleAnnounce(pagingItems, rowEdits) -> {
-                LoadingNetworkState(modifier = Modifier.fillMaxSize())
-            }
-            !isLoading && !hasVisibleAnnounce(pagingItems, rowEdits) -> {
-                EmptyAnnounceState(modifier = Modifier.fillMaxSize())
-            }
-            else -> {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    LazyColumn(
-                        state = listState,
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .simpleVerticalScrollbar(listState),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .simpleVerticalScrollbar(listState),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                when {
+                    !hasVisibleRows && isLoading && pagingItems.itemCount == 0 -> {
+                        item {
+                            LoadingNetworkState(modifier = Modifier.fillParentMaxSize())
+                        }
+                    }
+                    !hasVisibleRows -> {
+                        item {
+                            EmptyAnnounceState(modifier = Modifier.fillParentMaxSize())
+                        }
+                    }
+                    else -> {
                         items(
                             count = pagingItems.itemCount,
                             key = { index -> pagingItems.peek(index)?.destinationHash ?: "loading_$index" },
@@ -646,27 +667,27 @@ fun AnnounceStreamContent(
                                 }
                             }
                         }
-
-                        // Bottom spacing for navigation bar
-                        item {
-                            Spacer(modifier = Modifier.height(100.dp))
-                        }
-                    }
-
-                    if (!isAtTop && newAnnouncesCount > 0) {
-                        NewAnnouncesFab(
-                            count = newAnnouncesCount,
-                            onClick = {
-                                viewModel.refreshAnnounces()
-                                coroutineScope.launch { listState.animateScrollToItem(0) }
-                            },
-                            modifier =
-                                Modifier
-                                    .align(Alignment.TopCenter)
-                                    .padding(top = 8.dp),
-                        )
                     }
                 }
+
+                // Bottom spacing for navigation bar
+                item {
+                    Spacer(modifier = Modifier.height(100.dp))
+                }
+            }
+
+            if (!isAtTop && newAnnouncesCount > 0) {
+                NewAnnouncesFab(
+                    count = newAnnouncesCount,
+                    onClick = {
+                        viewModel.refreshAnnounces()
+                        coroutineScope.launch { listState.animateScrollToItem(0) }
+                    },
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 8.dp),
+                )
             }
         }
     }

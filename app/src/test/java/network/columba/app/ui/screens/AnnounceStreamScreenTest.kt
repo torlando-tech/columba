@@ -581,6 +581,38 @@ class AnnounceStreamScreenTest {
         verify(atLeast = 1) { mockViewModel.refreshAnnounces() }
     }
 
+
+    @Test
+    fun deletingAllCardsWhileScrolled_keepsArrivalsReloading() {
+        val counts = MutableStateFlow(0)
+        val edits = MutableStateFlow<Map<String, AnnounceRowEdit>>(emptyMap())
+        val announces = (0 until 20).map { index -> testAnnounce(index) }
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                pagingData = PagingData.from(announces),
+                rowEditsState = edits,
+            )
+        every { mockViewModel.newAnnounceCount } returns counts
+
+        composeTestRule.setContent {
+            AnnounceStreamContent(viewModel = mockViewModel)
+        }
+        composeTestRule
+            .onNode(hasScrollAction() and hasAnyDescendant(hasText("Peer 0")))
+            .performScrollToIndex(5)
+        composeTestRule.waitForIdle()
+
+        edits.value = announces.associate { it.destinationHash to AnnounceRowEdit(isDeleted = true) }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("No nodes discovered yet").assertIsDisplayed()
+
+        // The list stays mounted, so the scroll position clamps to the top and a later
+        // arrival still reloads it instead of leaving the tab stuck on the empty state.
+        counts.value = 1
+        composeTestRule.waitForIdle()
+        verify { mockViewModel.refreshAnnounces() }
+    }
+
     private fun testAnnounce(index: Int) =
         Announce(
             destinationHash = "%032x".format(index.toLong()),
@@ -651,6 +683,7 @@ class AnnounceStreamScreenTest {
         searchQuery: String = "",
         pagingData: PagingData<Announce> = PagingData.empty(),
         rowEdits: Map<String, AnnounceRowEdit> = emptyMap(),
+        rowEditsState: MutableStateFlow<Map<String, AnnounceRowEdit>>? = null,
     ): AnnounceStreamViewModel {
         val mockViewModel = mockk<AnnounceStreamViewModel>()
 
@@ -666,7 +699,7 @@ class AnnounceStreamScreenTest {
         every { mockViewModel.announceError } returns MutableStateFlow(announceError)
         every { mockViewModel.newAnnounceCount } returns MutableStateFlow(0)
         every { mockViewModel.windowRefreshPending } returns MutableStateFlow(false)
-        every { mockViewModel.rowEdits } returns MutableStateFlow(rowEdits)
+        every { mockViewModel.rowEdits } returns (rowEditsState ?: MutableStateFlow(rowEdits))
 
         // Stub action methods that may be called
         every { mockViewModel.triggerAnnounce() } just Runs

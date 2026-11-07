@@ -313,6 +313,23 @@
     <string name="nomadnet_node_detail_auto_identify_subtitle">Automatically identify to this node</string>
     <string name="nomadnet_auto_identify_enabled_snackbar">Always identifying to this node</string>
     <string name="nomadnet_auto_identify_disabled_snackbar">Stopped auto-identifying to this node</string>
+    <string name="nomadnet_add_to_home_screen">Add to home screen</string>
+    <string name="nomadnet_add_to_home_screen_unsupported">Your launcher does not support home screen shortcuts</string>
+    <string name="nomadnet_home_title">NomadNet</string>
+    <string name="nomadnet_home_address_hint">&#60;hash&#62;:/page/index.mu</string>
+    <string name="nomadnet_home_address_cd">Node address</string>
+    <string name="nomadnet_home_go">Go</string>
+    <string name="nomadnet_home_continue_title">Continue</string>
+    <string name="nomadnet_saved_sites_title">Saved sites</string>
+    <string name="nomadnet_saved_sites_empty">No saved sites yet. Open a page, then tap the bookmark icon to keep it here.</string>
+    <string name="nomadnet_saved_site_open">Open</string>
+    <string name="nomadnet_saved_site_remove">Remove</string>
+    <string name="nomadnet_saved_site_removed">Removed from saved sites</string>
+    <string name="nomadnet_undo">Undo</string>
+    <string name="nomadnet_bookmark_add_cd">Save page</string>
+    <string name="nomadnet_bookmark_remove_cd">Remove saved page</string>
+    <string name="nomadnet_back_cd">Back</string>
+    <string name="nomadnet_menu_cd">Menu</string>
     <!-- New call (manual destination entry) -->
     <string name="back">Back</string>
     <string name="new_call_title">New call</string>

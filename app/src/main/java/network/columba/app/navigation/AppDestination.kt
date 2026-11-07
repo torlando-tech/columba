@@ -115,8 +115,8 @@ enum class AppDestination(
         externalNavigationPolicy = ExternalNavigationPolicy.REUSE_SAME_ENTITY,
     ),
     NOMADNET_BROWSER(
-        "nomadnet_browser/{destinationHash}?path={path}",
-        "nomadnet_browser/0123456789abcdef?path=%2Fpage%2Findex.mu",
+        "nomadnet_browser/{destinationHash}?path={path}&restoreSession={restoreSession}",
+        "nomadnet_browser/0123456789abcdef?path=%2Fpage%2Findex.mu&restoreSession=false",
         externalIdentityArguments =
             mapOf(
                 "destinationHash" to "0123456789abcdef",

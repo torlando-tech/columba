@@ -108,11 +108,11 @@ class NomadNetPageCache
         /**
          * The browser's live session, held in memory only.
          *
-         * Reopening the NomadNet tab restores the session's page, and pages
-         * marked `#!c=0` (dynamic; the majority of executable NomadNet pages)
-         * are deliberately absent from the file cache - without this store,
-         * every tab tap would re-fetch the page the user is already looking
-         * at. It also carries the session's in-page history and form-field
+         * The NomadNet tab home's Continue row restores the session's page,
+         * and pages marked `#!c=0` (dynamic; the majority of executable
+         * NomadNet pages) are deliberately absent from the file cache -
+         * without this store, continuing a session would re-fetch the page
+         * the user is already looking at. It also carries the session's in-page history and form-field
          * drafts, which the entry-scoped ViewModel otherwise loses when the
          * tab is left and its entries dropped. It is consulted ONLY for a
          * session restore, so ordinary navigation (link taps, deep links,

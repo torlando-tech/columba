@@ -1,0 +1,9 @@
+[
+  "IFAC (Network Access)",
+  "Leave blank unless the remote interface requires an IFAC network name and passphrase. Auto-filled when adding from a discovered interface.",
+  "columba-net",
+  "Network Name",
+  "hunter2-passphrase",
+  "Passphrase",
+  "Hide passphrase"
+]

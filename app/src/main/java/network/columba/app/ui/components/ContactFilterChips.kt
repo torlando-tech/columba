@@ -13,15 +13,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.rns.api.model.NodeType
 
-private val CONTACT_TYPE_OPTIONS: List<Pair<NodeType, String>> =
+private val CONTACT_TYPE_OPTIONS: List<Pair<NodeType, Int>> =
     listOf(
-        NodeType.PEER to "Peers",
-        NodeType.NODE to "Sites",
-        NodeType.PROPAGATION_NODE to "Relays",
-        NodeType.PHONE to "Audio",
+        NodeType.PEER to R.string.announce_filter_aspect_peers,
+        NodeType.NODE to R.string.announce_filter_aspect_sites,
+        NodeType.PROPAGATION_NODE to R.string.announce_filter_aspect_relays,
+        NodeType.PHONE to R.string.announce_filter_aspect_audio,
     )
 
 /**
@@ -54,7 +56,7 @@ fun ContactFilterChips(
     // (empty or a multi-type state) reads as All, matching the selection logic
     // the handlers below can produce.
     val activeType = selectedTypes.singleOrNull()
-    val activeLabel = activeType?.let { type -> CONTACT_TYPE_OPTIONS.firstOrNull { it.first == type }?.second }
+    val activeLabelRes = activeType?.let { type -> CONTACT_TYPE_OPTIONS.firstOrNull { it.first == type }?.second }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -72,10 +74,10 @@ fun ContactFilterChips(
                         FilterChip(
                             selected = activeType == null,
                             onClick = { onTypesChange(emptySet()) },
-                            label = { Text("All") },
+                            label = { Text(stringResource(R.string.announce_filter_all)) },
                         )
                     }
-                    items(CONTACT_TYPE_OPTIONS, key = { "contact-type-${it.first.name}" }) { (type, label) ->
+                    items(CONTACT_TYPE_OPTIONS, key = { "contact-type-${it.first.name}" }) { (type, labelRes) ->
                         FilterChip(
                             selected = activeType == type,
                             onClick = {
@@ -83,15 +85,15 @@ fun ContactFilterChips(
                                 // tapping any other chip replaces the selection with it.
                                 onTypesChange(if (activeType == type) emptySet() else setOf(type))
                             },
-                            label = { Text(label) },
+                            label = { Text(stringResource(labelRes)) },
                         )
                     }
                 }
             }
-            AnimatedVisibility(visible = !expanded && activeLabel != null) {
+            AnimatedVisibility(visible = !expanded && activeLabelRes != null) {
                 ActiveFilterPillRow(
-                    aspectLabel = activeLabel,
-                    interfaceLabel = null,
+                    aspectLabelRes = activeLabelRes,
+                    interfaceLabelRes = null,
                     onClick = onExpandRequest,
                 )
             }

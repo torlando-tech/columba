@@ -1,6 +1,8 @@
 package network.columba.app.data.model
 
 import android.bluetooth.BluetoothDevice
+import androidx.annotation.StringRes
+import network.columba.app.R
 import java.util.Locale
 
 /**
@@ -51,6 +53,14 @@ data class DiscoveredUsbDevice(
     /** Whether USB permission has been granted */
     val hasPermission: Boolean = false,
 ) {
+    /**
+     * Sentinel driver type for devices whose driver could not be detected.
+     * Render sites map it to a localized label instead of displaying it raw.
+     */
+    companion object {
+        const val DRIVER_TYPE_UNKNOWN = "Unknown"
+    }
+
     /** User-friendly display name */
     val displayName: String
         get() = productName ?: manufacturerName ?: "USB Serial Device ($driverType)"
@@ -94,7 +104,7 @@ data class RNodeRegionalPreset(
      * `lt_alock` field when the preset is selected.
      */
     val longTermAirtimeLimit: Int? = null,
-    val description: String,
+    @StringRes val descriptionRes: Int,
 )
 
 /**
@@ -102,74 +112,74 @@ data class RNodeRegionalPreset(
  * These define the LoRa modulation parameters (SF, BW, CR) independent of frequency.
  * Named to match Meshtastic conventions for user familiarity.
  *
- * @property displayName User-friendly name shown in UI
+ * @property displayNameRes User-friendly name shown in UI
  * @property spreadingFactor LoRa spreading factor (7-12)
  * @property bandwidth Bandwidth in Hz
  * @property codingRate Coding rate denominator (5-8, representing 4/5 to 4/8)
- * @property description Brief description of use case
+ * @property descriptionRes Brief description of use case
  */
 enum class ModemPreset(
-    val displayName: String,
+    @StringRes val displayNameRes: Int,
     val spreadingFactor: Int,
     val bandwidth: Int,
     val codingRate: Int,
-    val description: String,
+    @StringRes val descriptionRes: Int,
 ) {
     SHORT_TURBO(
-        displayName = "Short Turbo",
+        displayNameRes = R.string.modem_preset_short_turbo,
         spreadingFactor = 7,
         bandwidth = 500000,
         codingRate = 5,
-        description = "Fastest speed, very short range",
+        descriptionRes = R.string.modem_desc_short_turbo,
     ),
     SHORT_FAST(
-        displayName = "Short Fast",
+        displayNameRes = R.string.modem_preset_short_fast,
         spreadingFactor = 7,
         bandwidth = 250000,
         codingRate = 5,
-        description = "Fast speed, short range",
+        descriptionRes = R.string.modem_desc_short_fast,
     ),
     SHORT_SLOW(
-        displayName = "Short Slow",
+        displayNameRes = R.string.modem_preset_short_slow,
         spreadingFactor = 8,
         bandwidth = 250000,
         codingRate = 5,
-        description = "Moderate speed, short range",
+        descriptionRes = R.string.modem_desc_short_slow,
     ),
     MEDIUM_FAST(
-        displayName = "Medium Fast",
+        displayNameRes = R.string.modem_preset_medium_fast,
         spreadingFactor = 9,
         bandwidth = 250000,
         codingRate = 5,
-        description = "Balanced speed and range",
+        descriptionRes = R.string.modem_desc_medium_fast,
     ),
     MEDIUM_SLOW(
-        displayName = "Medium Slow",
+        displayNameRes = R.string.modem_preset_medium_slow,
         spreadingFactor = 10,
         bandwidth = 250000,
         codingRate = 5,
-        description = "Slower speed, medium range",
+        descriptionRes = R.string.modem_desc_medium_slow,
     ),
     LONG_FAST(
-        displayName = "Long Fast",
+        displayNameRes = R.string.modem_preset_long_fast,
         spreadingFactor = 11,
         bandwidth = 250000,
         codingRate = 5,
-        description = "Good balance of speed and range",
+        descriptionRes = R.string.modem_desc_long_fast,
     ),
     LONG_MODERATE(
-        displayName = "Long Moderate",
+        displayNameRes = R.string.modem_preset_long_moderate,
         spreadingFactor = 11,
         bandwidth = 125000,
         codingRate = 8,
-        description = "Better range, slower speed",
+        descriptionRes = R.string.modem_desc_long_moderate,
     ),
     LONG_SLOW(
-        displayName = "Long Slow",
+        displayNameRes = R.string.modem_preset_long_slow,
         spreadingFactor = 12,
         bandwidth = 125000,
         codingRate = 8,
-        description = "Maximum range, slowest speed",
+        descriptionRes = R.string.modem_desc_long_slow,
     ),
     ;
 
@@ -205,7 +215,7 @@ enum class ModemPreset(
  * @property maxTxPower Maximum allowed TX power in dBm (regulatory limit)
  * @property defaultTxPower Recommended default TX power in dBm
  * @property dutyCycle Duty cycle percentage (1-100). 100 = unlimited, 10 = 10% limit, 1 = 1% limit
- * @property description Brief description including regulatory notes
+ * @property descriptionRes Brief description including regulatory notes
  */
 data class FrequencyRegion(
     val id: String,
@@ -215,7 +225,7 @@ data class FrequencyRegion(
     val maxTxPower: Int,
     val defaultTxPower: Int,
     val dutyCycle: Int,
-    val description: String,
+    @StringRes val descriptionRes: Int,
 ) {
     /** Center frequency (for backwards compatibility and defaults) */
     val frequency: Long get() = (frequencyStart + frequencyEnd) / 2
@@ -272,7 +282,7 @@ object FrequencyRegions {
                 maxTxPower = 30,
                 defaultTxPower = 17,
                 dutyCycle = 100,
-                description = "902-928 MHz ISM band",
+                descriptionRes = R.string.region_desc_us_915,
             ),
             FrequencyRegion(
                 id = "br_902",
@@ -282,7 +292,7 @@ object FrequencyRegions {
                 maxTxPower = 30,
                 defaultTxPower = 17,
                 dutyCycle = 100,
-                description = "902-907.5 MHz (limited band)",
+                descriptionRes = R.string.region_desc_br_902,
             ),
             // ==================== EUROPE 868 MHz SUB-BANDS ====================
             // Per ERC 70-03: https://www.thethingsnetwork.org/docs/lorawan/regional-parameters/eu868/
@@ -296,7 +306,7 @@ object FrequencyRegions {
                 maxTxPower = 14,
                 defaultTxPower = 14,
                 dutyCycle = 1,
-                description = "Sub-band L: 1% duty cycle, 25 mW (UK, IT, NL presets)",
+                descriptionRes = R.string.region_desc_eu_868_l,
             ),
             // Sub-band M: 868-868.6 MHz (1% duty cycle) - LoRaWAN default channels
             FrequencyRegion(
@@ -307,7 +317,7 @@ object FrequencyRegions {
                 maxTxPower = 14,
                 defaultTxPower = 14,
                 dutyCycle = 1,
-                description = "Sub-band M: 1% duty cycle, 25 mW (LoRaWAN default)",
+                descriptionRes = R.string.region_desc_eu_868_m,
             ),
             // Sub-band P: 869.4-869.65 MHz (10% duty cycle, 500 mW) - Meshtastic default
             FrequencyRegion(
@@ -318,7 +328,7 @@ object FrequencyRegions {
                 maxTxPower = 27,
                 defaultTxPower = 14,
                 dutyCycle = 10,
-                description = "Sub-band P: 10% duty cycle, 500 mW (best for LoRa)",
+                descriptionRes = R.string.region_desc_eu_868_p,
             ),
             // Sub-band Q: 869.7-870 MHz (1% duty cycle)
             FrequencyRegion(
@@ -329,7 +339,7 @@ object FrequencyRegions {
                 maxTxPower = 14,
                 defaultTxPower = 14,
                 dutyCycle = 1,
-                description = "Sub-band Q: 1% duty cycle, 25 mW",
+                descriptionRes = R.string.region_desc_eu_868_q,
             ),
             FrequencyRegion(
                 id = "eu_433",
@@ -339,7 +349,7 @@ object FrequencyRegions {
                 maxTxPower = 12,
                 defaultTxPower = 10,
                 dutyCycle = 10,
-                description = "433-434 MHz ISM, 10% duty cycle",
+                descriptionRes = R.string.region_desc_eu_433,
             ),
             FrequencyRegion(
                 id = "ru_868",
@@ -349,7 +359,7 @@ object FrequencyRegions {
                 maxTxPower = 20,
                 defaultTxPower = 14,
                 dutyCycle = 100,
-                description = "868.7-869.2 MHz",
+                descriptionRes = R.string.region_desc_ru_868,
             ),
             FrequencyRegion(
                 id = "ua_868",
@@ -359,7 +369,7 @@ object FrequencyRegions {
                 maxTxPower = 14,
                 defaultTxPower = 10,
                 dutyCycle = 1,
-                description = "868-868.6 MHz, 1% duty cycle (very restrictive)",
+                descriptionRes = R.string.region_desc_ua_868,
             ),
             // ==================== ASIA-PACIFIC ====================
             FrequencyRegion(
@@ -370,7 +380,7 @@ object FrequencyRegions {
                 maxTxPower = 30,
                 defaultTxPower = 17,
                 dutyCycle = 100,
-                description = "915-928 MHz ISM band",
+                descriptionRes = R.string.region_desc_au_915,
             ),
             FrequencyRegion(
                 id = "nz_865",
@@ -380,7 +390,7 @@ object FrequencyRegions {
                 maxTxPower = 36,
                 defaultTxPower = 17,
                 dutyCycle = 100,
-                description = "864-868 MHz alternative band",
+                descriptionRes = R.string.region_desc_nz_865,
             ),
             FrequencyRegion(
                 id = "jp_920",
@@ -390,7 +400,7 @@ object FrequencyRegions {
                 maxTxPower = 16,
                 defaultTxPower = 13,
                 dutyCycle = 100,
-                description = "920.8-927.8 MHz ARIB STD-T108",
+                descriptionRes = R.string.region_desc_jp_920,
             ),
             FrequencyRegion(
                 id = "kr_920",
@@ -400,7 +410,7 @@ object FrequencyRegions {
                 maxTxPower = 14,
                 defaultTxPower = 10,
                 dutyCycle = 100,
-                description = "920-923 MHz",
+                descriptionRes = R.string.region_desc_kr_920,
             ),
             FrequencyRegion(
                 id = "tw_920",
@@ -410,7 +420,7 @@ object FrequencyRegions {
                 maxTxPower = 27,
                 defaultTxPower = 17,
                 dutyCycle = 100,
-                description = "920-925 MHz LP0002",
+                descriptionRes = R.string.region_desc_tw_920,
             ),
             FrequencyRegion(
                 id = "cn_470",
@@ -420,7 +430,7 @@ object FrequencyRegions {
                 maxTxPower = 19,
                 defaultTxPower = 17,
                 dutyCycle = 100,
-                description = "470-510 MHz",
+                descriptionRes = R.string.region_desc_cn_470,
             ),
             FrequencyRegion(
                 id = "in_865",
@@ -430,7 +440,7 @@ object FrequencyRegions {
                 maxTxPower = 30,
                 defaultTxPower = 17,
                 dutyCycle = 100,
-                description = "865-867 MHz",
+                descriptionRes = R.string.region_desc_in_865,
             ),
             // ==================== SOUTHEAST ASIA ====================
             FrequencyRegion(
@@ -441,7 +451,7 @@ object FrequencyRegions {
                 maxTxPower = 16,
                 defaultTxPower = 14,
                 dutyCycle = 100,
-                description = "920-925 MHz NBTC",
+                descriptionRes = R.string.region_desc_th_920,
             ),
             FrequencyRegion(
                 id = "sg_923",
@@ -451,7 +461,7 @@ object FrequencyRegions {
                 maxTxPower = 20,
                 defaultTxPower = 17,
                 dutyCycle = 100,
-                description = "917-925 MHz IMDA",
+                descriptionRes = R.string.region_desc_sg_923,
             ),
             FrequencyRegion(
                 id = "my_919",
@@ -461,7 +471,7 @@ object FrequencyRegions {
                 maxTxPower = 27,
                 defaultTxPower = 17,
                 dutyCycle = 100,
-                description = "919-924 MHz MCMC",
+                descriptionRes = R.string.region_desc_my_919,
             ),
             FrequencyRegion(
                 id = "ph_915",
@@ -471,7 +481,7 @@ object FrequencyRegions {
                 maxTxPower = 20,
                 defaultTxPower = 17,
                 dutyCycle = 100,
-                description = "915-918 MHz NTC",
+                descriptionRes = R.string.region_desc_ph_915,
             ),
             // ==================== 2.4 GHz WORLDWIDE ====================
             FrequencyRegion(
@@ -482,7 +492,7 @@ object FrequencyRegions {
                 maxTxPower = 10,
                 defaultTxPower = 10,
                 dutyCycle = 100,
-                description = "2.4 GHz ISM (worldwide, short range)",
+                descriptionRes = R.string.region_desc_lora_24,
             ),
         )
 
@@ -498,7 +508,7 @@ data class CommunitySlot(
     val name: String,
     val regionId: String,
     val slot: Int,
-    val description: String,
+    @StringRes val descriptionRes: Int,
 )
 
 /**
@@ -511,13 +521,13 @@ object CommunitySlots {
                 name = "Meshtastic Default",
                 regionId = "us_915",
                 slot = 20,
-                description = "⚠️ Avoid - Meshtastic interference",
+                descriptionRes = R.string.community_slot_desc_default,
             ),
             CommunitySlot(
                 name = "Meshtastic NoVa",
                 regionId = "us_915",
                 slot = 9,
-                description = "⚠️ Avoid - Northern Virginia Meshtastic mesh",
+                descriptionRes = R.string.community_slot_desc_nova,
             ),
         )
 
@@ -684,7 +694,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 9,
                 codingRate = 5,
                 txPower = 17,
-                description = "915-928 MHz AU band (default)",
+                descriptionRes = R.string.preset_desc_au_default,
             ),
             RNodeRegionalPreset(
                 id = "au_sydney",
@@ -696,7 +706,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 11,
                 codingRate = 5,
                 txPower = 17,
-                description = "Sydney long-range configuration",
+                descriptionRes = R.string.preset_desc_au_sydney,
             ),
             RNodeRegionalPreset(
                 id = "au_brisbane",
@@ -708,7 +718,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 9,
                 codingRate = 5,
                 txPower = 17,
-                description = "Brisbane configuration",
+                descriptionRes = R.string.preset_desc_au_brisbane,
             ),
             RNodeRegionalPreset(
                 id = "au_western_sydney",
@@ -720,7 +730,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 9,
                 codingRate = 5,
                 txPower = 17,
-                description = "Western Sydney configuration",
+                descriptionRes = R.string.preset_desc_au_western_sydney,
             ),
             // ==================== BELGIUM ====================
             RNodeRegionalPreset(
@@ -733,7 +743,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 9,
                 codingRate = 5,
                 txPower = 14,
-                description = "868 MHz EU band",
+                descriptionRes = R.string.preset_desc_eu868,
             ),
             RNodeRegionalPreset(
                 id = "be_duffel",
@@ -745,7 +755,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 14,
-                description = "Duffel configuration",
+                descriptionRes = R.string.preset_desc_be_duffel,
             ),
             // ==================== FINLAND ====================
             RNodeRegionalPreset(
@@ -758,7 +768,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 9,
                 codingRate = 5,
                 txPower = 14,
-                description = "868 MHz EU band",
+                descriptionRes = R.string.preset_desc_eu868,
             ),
             RNodeRegionalPreset(
                 id = "fi_turku",
@@ -770,7 +780,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 14,
-                description = "Turku configuration",
+                descriptionRes = R.string.preset_desc_fi_turku,
             ),
             // ==================== GERMANY ====================
             RNodeRegionalPreset(
@@ -783,7 +793,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 9,
                 codingRate = 5,
                 txPower = 14,
-                description = "868 MHz EU band",
+                descriptionRes = R.string.preset_desc_eu868,
             ),
             RNodeRegionalPreset(
                 id = "de_darmstadt",
@@ -795,7 +805,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 7,
                 codingRate = 5,
                 txPower = 14,
-                description = "Darmstadt configuration",
+                descriptionRes = R.string.preset_desc_de_darmstadt,
             ),
             RNodeRegionalPreset(
                 id = "de_wiesbaden",
@@ -807,7 +817,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 14,
-                description = "Wiesbaden configuration",
+                descriptionRes = R.string.preset_desc_de_wiesbaden,
             ),
             RNodeRegionalPreset(
                 id = "de_ruhrgebiet",
@@ -819,7 +829,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 longTermAirtimeLimit = 10,
-                description = "Ruhrgebiet configuration (869.4625 MHz, region-default TX, 10% LT airtime)",
+                descriptionRes = R.string.preset_desc_de_ruhrgebiet,
             ),
             // ==================== ITALY ====================
             RNodeRegionalPreset(
@@ -832,7 +842,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 9,
                 codingRate = 5,
                 txPower = 14,
-                description = "868 MHz EU band",
+                descriptionRes = R.string.preset_desc_eu868,
             ),
             RNodeRegionalPreset(
                 id = "it_salerno",
@@ -844,7 +854,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 14,
-                description = "Salerno configuration",
+                descriptionRes = R.string.preset_desc_it_salerno,
             ),
             RNodeRegionalPreset(
                 id = "it_brescia",
@@ -856,7 +866,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 7,
                 codingRate = 5,
                 txPower = 14,
-                description = "Brescia configuration",
+                descriptionRes = R.string.preset_desc_it_brescia,
             ),
             RNodeRegionalPreset(
                 id = "it_treviso",
@@ -868,7 +878,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 7,
                 codingRate = 5,
                 txPower = 14,
-                description = "Treviso configuration",
+                descriptionRes = R.string.preset_desc_it_treviso,
             ),
             RNodeRegionalPreset(
                 id = "it_genova",
@@ -880,7 +890,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 12,
                 codingRate = 5,
                 txPower = 14,
-                description = "Genova 433 MHz configuration",
+                descriptionRes = R.string.preset_desc_it_genova,
             ),
             // ==================== MALAYSIA ====================
             RNodeRegionalPreset(
@@ -893,7 +903,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 17,
-                description = "920 MHz AS923 band",
+                descriptionRes = R.string.preset_desc_as923,
             ),
             // ==================== NETHERLANDS ====================
             RNodeRegionalPreset(
@@ -906,7 +916,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 9,
                 codingRate = 5,
                 txPower = 14,
-                description = "868 MHz EU band",
+                descriptionRes = R.string.preset_desc_eu868,
             ),
             RNodeRegionalPreset(
                 id = "nl_rotterdam",
@@ -918,7 +928,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 14,
-                description = "Rotterdam Nesselande configuration",
+                descriptionRes = R.string.preset_desc_nl_rotterdam,
             ),
             RNodeRegionalPreset(
                 id = "be_brugge",
@@ -930,7 +940,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 14,
-                description = "Brugge (Bruges) configuration",
+                descriptionRes = R.string.preset_desc_be_brugge,
             ),
             // ==================== NORWAY ====================
             RNodeRegionalPreset(
@@ -943,7 +953,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 7,
                 codingRate = 5,
                 txPower = 14,
-                description = "Norway narrowband",
+                descriptionRes = R.string.preset_desc_no_default,
             ),
             // ==================== SINGAPORE ====================
             RNodeRegionalPreset(
@@ -956,7 +966,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 17,
-                description = "920 MHz AS923 band",
+                descriptionRes = R.string.preset_desc_as923,
             ),
             // ==================== SPAIN ====================
             RNodeRegionalPreset(
@@ -969,7 +979,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 14,
-                description = "869 MHz EU band",
+                descriptionRes = R.string.preset_desc_es_default,
             ),
             RNodeRegionalPreset(
                 id = "es_madrid",
@@ -981,7 +991,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 14,
-                description = "Madrid configuration",
+                descriptionRes = R.string.preset_desc_es_madrid,
             ),
             // ==================== SWEDEN ====================
             RNodeRegionalPreset(
@@ -994,7 +1004,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 9,
                 codingRate = 5,
                 txPower = 14,
-                description = "868 MHz EU band",
+                descriptionRes = R.string.preset_desc_eu868,
             ),
             RNodeRegionalPreset(
                 id = "se_gothenburg",
@@ -1006,7 +1016,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 10,
                 codingRate = 5,
                 txPower = 14,
-                description = "Gothenburg area configuration",
+                descriptionRes = R.string.preset_desc_se_gothenburg,
             ),
             RNodeRegionalPreset(
                 id = "se_433",
@@ -1018,7 +1028,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 12,
-                description = "433 MHz band shared by Gothenburg, Borås, Älvsered",
+                descriptionRes = R.string.preset_desc_se_433,
             ),
             RNodeRegionalPreset(
                 id = "se_morbylanga",
@@ -1030,7 +1040,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 14,
-                description = "Mörbylånga/Bredinge configuration",
+                descriptionRes = R.string.preset_desc_se_morbylanga,
             ),
             // ==================== SWITZERLAND ====================
             RNodeRegionalPreset(
@@ -1043,7 +1053,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 9,
                 codingRate = 5,
                 txPower = 14,
-                description = "868 MHz EU band",
+                descriptionRes = R.string.preset_desc_eu868,
             ),
             RNodeRegionalPreset(
                 id = "ch_bern",
@@ -1055,7 +1065,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 14,
-                description = "Bern configuration",
+                descriptionRes = R.string.preset_desc_ch_bern,
             ),
             // ==================== THAILAND ====================
             RNodeRegionalPreset(
@@ -1068,7 +1078,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 17,
-                description = "920 MHz AS923 band",
+                descriptionRes = R.string.preset_desc_as923,
             ),
             // ==================== UNITED KINGDOM ====================
             RNodeRegionalPreset(
@@ -1081,7 +1091,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 9,
                 codingRate = 5,
                 txPower = 14,
-                description = "868 MHz UK band",
+                descriptionRes = R.string.preset_desc_gb_default,
             ),
             RNodeRegionalPreset(
                 id = "gb_st_helens",
@@ -1093,7 +1103,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 9,
                 codingRate = 5,
                 txPower = 14,
-                description = "St. Helens configuration",
+                descriptionRes = R.string.preset_desc_gb_st_helens,
             ),
             RNodeRegionalPreset(
                 id = "gb_edinburgh",
@@ -1105,7 +1115,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 9,
                 codingRate = 5,
                 txPower = 14,
-                description = "Edinburgh 868 MHz configuration",
+                descriptionRes = R.string.preset_desc_gb_edinburgh,
             ),
             RNodeRegionalPreset(
                 id = "gb_edinburgh_2g4",
@@ -1117,7 +1127,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 7,
                 codingRate = 5,
                 txPower = 14,
-                description = "Edinburgh 2.4 GHz configuration",
+                descriptionRes = R.string.preset_desc_gb_edinburgh_2g4,
             ),
             // ==================== UNITED STATES ====================
             RNodeRegionalPreset(
@@ -1130,7 +1140,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 17,
-                description = "915 MHz ISM band (default)",
+                descriptionRes = R.string.preset_desc_us_default,
             ),
             RNodeRegionalPreset(
                 id = "us_portsmouth",
@@ -1142,7 +1152,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 17,
-                description = "Portsmouth, NH configuration",
+                descriptionRes = R.string.preset_desc_us_portsmouth,
             ),
             RNodeRegionalPreset(
                 id = "us_olympia",
@@ -1154,7 +1164,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 17,
-                description = "Olympia, WA configuration",
+                descriptionRes = R.string.preset_desc_us_olympia,
             ),
             RNodeRegionalPreset(
                 id = "us_chicago",
@@ -1166,7 +1176,7 @@ object RNodeRegionalPresets {
                 spreadingFactor = 8,
                 codingRate = 5,
                 txPower = 17,
-                description = "Chicago, IL configuration",
+                descriptionRes = R.string.preset_desc_us_chicago,
             ),
         )
 

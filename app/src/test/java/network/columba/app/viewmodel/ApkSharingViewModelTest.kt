@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import network.columba.app.R
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -153,12 +154,12 @@ class ApkSharingViewModelTest {
     fun `ApkSharingState with error`() {
         val state =
             ApkSharingState(
-                errorMessage = "No WiFi connection",
+                errorMessage = UiMessage.Raw("No WiFi connection"),
             )
 
         assertFalse(state.isServerRunning)
         assertNull(state.downloadUrl)
-        assertEquals("No WiFi connection", state.errorMessage)
+        assertEquals(UiMessage.Raw("No WiFi connection"), state.errorMessage)
     }
 
     @Test
@@ -193,11 +194,10 @@ class ApkSharingViewModelTest {
                 // Under Robolectric, APK preparation fails, so we expect either
                 // an error message about APK or about WiFi
                 if (state.errorMessage != null) {
-                    assertTrue(
-                        "Error should mention APK or WiFi",
-                        state.errorMessage!!.contains("APK") ||
-                            state.errorMessage!!.contains("WiFi") ||
-                            state.errorMessage!!.contains("sharing server"),
+                    assertEquals(
+                        "Under Robolectric, APK preparation fails",
+                        R.string.apk_sharing_prepare_failed,
+                        (state.errorMessage as UiMessage.Text).id,
                     )
                 }
                 cancelAndIgnoreRemainingEvents()

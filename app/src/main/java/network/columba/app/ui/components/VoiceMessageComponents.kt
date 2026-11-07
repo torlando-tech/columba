@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -180,7 +181,7 @@ fun VoiceRecordingControls(
                         Text(stringResource(R.string.attachment_voice_panel_ready), style = MaterialTheme.typography.labelLarge)
                         state.errorMessage?.let {
                             Text(
-                                stringResource(R.string.attachment_voice_panel_error, it),
+                                stringResource(R.string.attachment_voice_panel_error, it.resolve(LocalContext.current)),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
                             )

@@ -19,6 +19,7 @@ import network.columba.app.rns.ipc.BundleKeys
 import network.columba.app.rns.ipc.IRnsTelephony
 import network.columba.app.rns.ipc.callback.IRnsBoolEventCallback
 import network.columba.app.rns.ipc.callback.IRnsCallStateCallback
+import network.columba.app.rns.ipc.callback.IRnsNullableIntEventCallback
 import network.columba.app.rns.ipc.callback.IRnsNullableStringEventCallback
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
@@ -47,17 +48,17 @@ internal class ClientRnsTelephony(
     private val isSpeakerOnState = MutableStateFlow(false)
     private val isPttModeState = MutableStateFlow(false)
     private val isPttActiveState = MutableStateFlow(false)
-    private val activeProfileState = MutableStateFlow<String?>(null)
+    private val activeProfileCodeState = MutableStateFlow<Int?>(null)
     private val callModeState = MutableStateFlow<String?>(null)
 
-    // The init snapshot races the activeProfile observer's first emission.
+    // The init snapshot races the activeProfileCode observer's first emission.
     // The profile can transition to null when the call ends, so a snapshot
     // captured mid-call must not restore a stale non-null profile after the
     // observer has already reported the newer value. Set to true on the
     // observer's first emission; the snapshot only assigns while this is
     // still false (observer always wins once it has fired).
     @Volatile
-    private var activeProfileObserverStarted = false
+    private var activeProfileCodeObserverStarted = false
 
     // Same snapshot-vs-observer race for callMode (transitions to null on
     // call-end). Set to true on the callMode observer's first emission; the
@@ -90,16 +91,16 @@ internal class ClientRnsTelephony(
             awaitClose { runCatching { remote.unregisterRemoteIdentityObserver(cb) } }
         }.onEach { remoteIdentityState.value = it }.launchIn(scope)
 
-        // Nullable-string observer: activeProfile (null when no call active).
-        callbackFlow<String?> {
-            val cb = object : IRnsNullableStringEventCallback.Stub() {
-                override fun onString(value: String?) { trySend(value) }
+        // Nullable-int observer: activeProfileCode (null when no call active).
+        callbackFlow<Int?> {
+            val cb = object : IRnsNullableIntEventCallback.Stub() {
+                override fun onInt(value: Int, hasValue: Boolean) { trySend(if (hasValue) value else null) }
             }
-            if (!registerObserverOrClose { remote.registerActiveProfileObserver(cb) }) return@callbackFlow
-            awaitClose { runCatching { remote.unregisterActiveProfileObserver(cb) } }
+            if (!registerObserverOrClose { remote.registerActiveProfileCodeObserver(cb) }) return@callbackFlow
+            awaitClose { runCatching { remote.unregisterActiveProfileCodeObserver(cb) } }
         }.onEach {
-            activeProfileObserverStarted = true
-            activeProfileState.value = it
+            activeProfileCodeObserverStarted = true
+            activeProfileCodeState.value = it
         }.launchIn(scope)
 
         // Nullable-string observer: callMode (null when no call active).
@@ -134,15 +135,15 @@ internal class ClientRnsTelephony(
             // yet emitted; once the observer has fired it is authoritative (the
             // profile can transition to null on call-end, so a late snapshot
             // must not restore a stale non-null profile).
-            if (!activeProfileObserverStarted) {
+            if (!activeProfileCodeObserverStarted) {
                 val snapshot =
-                    runCatching { awaitNullableStringEvent { cb -> remote.getCurrentActiveProfile(cb) } }
+                    runCatching { awaitNullableIntEvent { cb -> remote.getCurrentActiveProfileCode(cb) } }
                         .getOrNull()
                 // Re-check after the async fetch: the observer may have started
                 // while the binder call was in flight, in which case it is now
                 // authoritative and must win.
-                if (!activeProfileObserverStarted) {
-                    snapshot?.let { activeProfileState.value = it }
+                if (!activeProfileCodeObserverStarted) {
+                    snapshot?.let { activeProfileCodeState.value = it }
                 }
             }
             // callMode snapshot: same observer-started guard (the mode can
@@ -165,7 +166,7 @@ internal class ClientRnsTelephony(
     override val isSpeakerOn: StateFlow<Boolean> get() = isSpeakerOnState.asStateFlow()
     override val isPttMode: StateFlow<Boolean> get() = isPttModeState.asStateFlow()
     override val isPttActive: StateFlow<Boolean> get() = isPttActiveState.asStateFlow()
-    override val activeProfile: StateFlow<String?> get() = activeProfileState.asStateFlow()
+    override val activeProfileCode: StateFlow<Int?> get() = activeProfileCodeState.asStateFlow()
     override val callMode: StateFlow<String?> get() = callModeState.asStateFlow()
 
     private fun registerBoolObserver(
@@ -220,8 +221,8 @@ internal class ClientRnsTelephony(
         awaitResult { cb -> remote.setCallSpeaker(speakerOn, cb) }
     }
 
-    override suspend fun cycleCallProfile() {
-        awaitResult { cb -> remote.cycleCallProfile(cb) }
+    override suspend fun switchCallProfile(profileCode: Int) {
+        awaitResult { cb -> remote.switchCallProfile(profileCode, cb) }
     }
 
     override suspend fun cycleCallMode() {
@@ -302,6 +303,23 @@ private suspend inline fun awaitBoolEvent(
         call(cb)
     } catch (e: android.os.RemoteException) {
         if (delivered.compareAndSet(false, true)) cont.resume(false)
+    }
+}
+
+/** Snapshot read for a nullable-Int StateFlow (IRnsNullableIntEventCallback variant). */
+private suspend inline fun awaitNullableIntEvent(
+    crossinline call: (IRnsNullableIntEventCallback) -> Unit,
+): Int? = suspendCancellableCoroutine { cont ->
+    val delivered = AtomicBoolean(false)
+    val cb = object : IRnsNullableIntEventCallback.Stub() {
+        override fun onInt(value: Int, hasValue: Boolean) {
+            if (delivered.compareAndSet(false, true)) cont.resume(if (hasValue) value else null)
+        }
+    }
+    try {
+        call(cb)
+    } catch (e: android.os.RemoteException) {
+        if (delivered.compareAndSet(false, true)) cont.resume(null)
     }
 }
 

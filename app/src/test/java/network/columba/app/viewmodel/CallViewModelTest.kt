@@ -10,6 +10,7 @@ import network.columba.app.audio.CallMicrophoneAdmissionCoordinator
 import network.columba.app.audio.MicrophoneAdmissionArbiter
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
+import network.columba.app.ui.model.CodecProfile
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -62,7 +63,7 @@ class CallViewModelTest {
     private lateinit var isPttModeFlow: MutableStateFlow<Boolean>
     private lateinit var isPttActiveFlow: MutableStateFlow<Boolean>
     private lateinit var remoteIdentityFlow: MutableStateFlow<String?>
-    private lateinit var activeProfileFlow: MutableStateFlow<String?>
+    private lateinit var activeProfileCodeFlow: MutableStateFlow<Int?>
     private lateinit var callModeFlow: MutableStateFlow<String?>
 
     // Slots to capture arguments passed to mocks
@@ -86,7 +87,7 @@ class CallViewModelTest {
         isPttModeFlow = MutableStateFlow(false)
         isPttActiveFlow = MutableStateFlow(false)
         remoteIdentityFlow = MutableStateFlow<String?>(null)
-        activeProfileFlow = MutableStateFlow<String?>(null)
+        activeProfileCodeFlow = MutableStateFlow<Int?>(null)
         callModeFlow = MutableStateFlow<String?>(null)
 
         // RnsTelephony surface
@@ -96,7 +97,7 @@ class CallViewModelTest {
         every { mockTelephony.isPttMode } returns isPttModeFlow
         every { mockTelephony.isPttActive } returns isPttActiveFlow
         every { mockTelephony.remoteIdentity } returns remoteIdentityFlow
-        every { mockTelephony.activeProfile } returns activeProfileFlow
+        every { mockTelephony.activeProfileCode } returns activeProfileCodeFlow
         every { mockTelephony.callMode } returns callModeFlow
         every { mockTelephony.hasActiveCall() } answers {
             when (callStateFlow.value) {
@@ -138,7 +139,7 @@ class CallViewModelTest {
         coEvery { mockTelephony.declineCall() } answers { }
         coEvery { mockTelephony.setCallMuted(any()) } answers { }
         coEvery { mockTelephony.setCallSpeaker(any()) } answers { }
-        coEvery { mockTelephony.cycleCallProfile() } answers { }
+        coEvery { mockTelephony.switchCallProfile(any()) } answers { }
         coEvery { mockTelephony.cycleCallMode() } answers { }
         coEvery { mockTelephony.setPttActive(any()) } answers { }
 
@@ -319,34 +320,52 @@ class CallViewModelTest {
             assertEquals(true, speakerSlot.captured)
         }
 
-    // ========== LXST Profile Cycling Tests ==========
+    // ========== LXST Profile Switching Tests ==========
 
     @Test
-    fun `cycleProfile invokes telephony when call is active`() =
+    fun `switchProfile sends the requested profile id when call is active`() =
         runTest {
             callStateFlow.value = CallState.Active("abc123")
-            activeProfileFlow.value = "MQ"
+            activeProfileCodeFlow.value = CodecProfile.QUALITY_MEDIUM.code
 
-            viewModel.cycleProfile()
+            viewModel.switchProfile(CodecProfile.QUALITY_HIGH)
             // Bounded advance: the Active duration timer reschedules forever,
             // so advanceUntilIdle() would never settle - one tick is enough to
             // flush the launched telephony call on the unconfined dispatcher.
             testDispatcher.scheduler.advanceTimeBy(1000L)
 
-            coVerify(exactly = 1) { mockTelephony.cycleCallProfile() }
+            coVerify(exactly = 1) { mockTelephony.switchCallProfile(CodecProfile.QUALITY_HIGH.code) }
             callStateFlow.value = CallState.Idle // Stop duration timer
         }
 
     @Test
-    fun `cycleProfile is a no-op when no call is active`() =
+    fun `switchProfile forwards a selection the stale mirror still calls active`() =
+        runTest {
+            // The peer moved off QUALITY_HIGH, but activeProfileCode is polled
+            // (~500 ms) and still reports it. Choosing the row the UI shows as
+            // active must still reach the backend: LXST is the only place that
+            // can compare against the live Telephone.activeProfile, and a
+            // drop here would silently discard the user's choice.
+            callStateFlow.value = CallState.Active("abc123")
+            activeProfileCodeFlow.value = CodecProfile.QUALITY_HIGH.code
+
+            viewModel.switchProfile(CodecProfile.QUALITY_HIGH)
+            testDispatcher.scheduler.advanceTimeBy(1000L)
+
+            coVerify(exactly = 1) { mockTelephony.switchCallProfile(CodecProfile.QUALITY_HIGH.code) }
+            callStateFlow.value = CallState.Idle // Stop duration timer
+        }
+
+    @Test
+    fun `switchProfile is a no-op when no call is active`() =
         runTest {
             // Initial state is Idle; nothing established to switch on.
             callStateFlow.value = CallState.Idle
 
-            viewModel.cycleProfile()
+            viewModel.switchProfile(CodecProfile.BANDWIDTH_LOW)
             testDispatcher.scheduler.advanceTimeBy(1000L)
 
-            coVerify(exactly = 0) { mockTelephony.cycleCallProfile() }
+            coVerify(exactly = 0) { mockTelephony.switchCallProfile(any()) }
         }
 
     // ========== hasActiveCall Tests ==========

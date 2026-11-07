@@ -205,7 +205,7 @@ object InterfaceConfigCodec {
         val nameResult = InputValidator.validateInterfaceName(section.name)
         val name =
             requireNotNull((nameResult as? ValidationResult.Success)?.value) {
-                (nameResult as ValidationResult.Error).message
+                "Invalid interface name '${section.name}'"
             }
         val rawType = section.params["type"]
             ?: throw IllegalArgumentException("Missing required setting 'type'")
@@ -709,7 +709,7 @@ object InterfaceConfigCodec {
     ): String =
         when (val result = InputValidator.validateHostname(raw)) {
             is ValidationResult.Success -> result.value
-            is ValidationResult.Error -> throw IllegalArgumentException("Invalid $key '$raw': ${result.message}")
+            is ValidationResult.Error -> throw IllegalArgumentException("Invalid $key '$raw'")
         }
 
     private fun yesNo(value: Boolean): String = if (value) "yes" else "no"
@@ -788,7 +788,7 @@ object InterfaceConfigCodec {
             val value = param(key) ?: return null
             return when (val result = InputValidator.validatePort(value)) {
                 is ValidationResult.Success -> result.value
-                is ValidationResult.Error -> throw IllegalArgumentException("Invalid $key '$value': ${result.message}")
+                is ValidationResult.Error -> throw IllegalArgumentException("Invalid $key '$value'")
             }
         }
 

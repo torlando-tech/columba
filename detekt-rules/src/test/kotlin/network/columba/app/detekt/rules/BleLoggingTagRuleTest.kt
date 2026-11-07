@@ -12,7 +12,7 @@ class BleLoggingTagRuleTest {
     @Test
     fun `valid TAG pattern passes`() {
         val code = """
-            package network.columba.app.reticulum.ble.client
+            package network.columba.app.rns.host.ble.client
 
             class BleScanner {
                 companion object {
@@ -28,7 +28,7 @@ class BleLoggingTagRuleTest {
     @Test
     fun `invalid TAG pattern reports issue`() {
         val code = """
-            package network.columba.app.reticulum.ble.client
+            package network.columba.app.rns.host.ble.client
 
             class BleScanner {
                 companion object {
@@ -45,7 +45,7 @@ class BleLoggingTagRuleTest {
     @Test
     fun `missing TAG reports issue`() {
         val code = """
-            package network.columba.app.reticulum.ble.client
+            package network.columba.app.rns.host.ble.client
 
             class BleScanner {
                 companion object {
@@ -62,7 +62,7 @@ class BleLoggingTagRuleTest {
     @Test
     fun `missing companion object reports issue`() {
         val code = """
-            package network.columba.app.reticulum.ble.client
+            package network.columba.app.rns.host.ble.client
 
             class BleScanner {
                 private val someField = "value"
@@ -90,7 +90,7 @@ class BleLoggingTagRuleTest {
     @Test
     fun `data class is ignored`() {
         val code = """
-            package network.columba.app.reticulum.ble.model
+            package network.columba.app.rns.host.ble.model
 
             data class BleDevice(val address: String, val name: String)
         """.trimIndent()
@@ -102,7 +102,7 @@ class BleLoggingTagRuleTest {
     @Test
     fun `enum class is ignored`() {
         val code = """
-            package network.columba.app.reticulum.ble.model
+            package network.columba.app.rns.host.ble.model
 
             enum class BleConnectionState { CONNECTED, DISCONNECTED }
         """.trimIndent()
@@ -114,7 +114,7 @@ class BleLoggingTagRuleTest {
     @Test
     fun `exception class is ignored`() {
         val code = """
-            package network.columba.app.reticulum.ble.util
+            package network.columba.app.rns.host.ble.util
 
             class TimeoutException(message: String) : Exception(message)
         """.trimIndent()
@@ -126,7 +126,7 @@ class BleLoggingTagRuleTest {
     @Test
     fun `interface is ignored`() {
         val code = """
-            package network.columba.app.reticulum.ble.client
+            package network.columba.app.rns.host.ble.client
 
             interface BleCallback {
                 fun onConnected()
@@ -140,7 +140,7 @@ class BleLoggingTagRuleTest {
     @Test
     fun `sealed class is ignored`() {
         val code = """
-            package network.columba.app.reticulum.ble.util
+            package network.columba.app.rns.host.ble.util
 
             sealed class BleOperation {
                 data class Connect(val address: String) : BleOperation()
@@ -154,7 +154,7 @@ class BleLoggingTagRuleTest {
     @Test
     fun `model package is ignored`() {
         val code = """
-            package network.columba.app.reticulum.ble.model
+            package network.columba.app.rns.host.ble.model
 
             class BleConfig {
                 val timeout = 5000
@@ -180,7 +180,7 @@ class BleLoggingTagRuleTest {
 
         for (tag in validTags) {
             val code = """
-                package network.columba.app.reticulum.ble.service
+                package network.columba.app.rns.host.ble.service
 
                 class TestComponent {
                     companion object {
@@ -207,7 +207,7 @@ class BleLoggingTagRuleTest {
 
         for (tag in invalidTags) {
             val code = """
-                package network.columba.app.reticulum.ble.service
+                package network.columba.app.rns.host.ble.service
 
                 class TestComponent {
                     companion object {

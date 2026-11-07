@@ -6,6 +6,7 @@ import android.hardware.usb.UsbManager
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import network.columba.app.R
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.rns.api.RnsTransportAdmin
@@ -143,7 +144,7 @@ class InterfaceStatsViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertFalse(state.isLoading)
-                assertEquals("Invalid interface ID", state.errorMessage)
+                assertEquals(UiMessage.Text(R.string.iface_stats_invalid_id), state.errorMessage)
             }
         }
 
@@ -178,7 +179,7 @@ class InterfaceStatsViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertFalse(state.isLoading)
-                assertEquals("Interface not found", state.errorMessage)
+                assertEquals(UiMessage.Text(R.string.iface_stats_not_found), state.errorMessage)
             }
         }
 
@@ -193,7 +194,10 @@ class InterfaceStatsViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertFalse(state.isLoading)
-                assertTrue(state.errorMessage?.contains("Database error") == true)
+                assertEquals(
+                    UiMessage.Text(R.string.iface_stats_load_failed, listOf("Database error")),
+                    state.errorMessage,
+                )
             }
         }
 

@@ -454,7 +454,7 @@ class BleGattServer(
 
                 if (targets.isEmpty()) {
                     return@withContext Result.failure(
-                        IllegalStateException("No connected centrals to notify"),
+                        NoConnectedCentralsException(),
                     )
                 }
 
@@ -1061,8 +1061,7 @@ class BleGattServer(
                             if (result.isSuccess) {
                                 Log.v(TAG, "Peripheral keepalive sent to $address")
                             } else {
-                                val error = result.exceptionOrNull()?.message ?: "unknown"
-                                if (error.contains("No connected centrals")) {
+                                if (result.exceptionOrNull() is NoConnectedCentralsException) {
                                     Log.w(TAG, "Keepalive for $address: target no longer tracked, stopping")
                                     break // Exit loop, job ends naturally
                                 }
@@ -1105,3 +1104,11 @@ class BleGattServer(
         scope.cancel()
     }
 }
+
+/**
+ * No central is connected (or tracked) to receive a notification. Callers match
+ * on this type — never on the message text — to distinguish "peer went away"
+ * from transient notify failures (i18n ticket 02: control flow must not depend
+ * on display text).
+ */
+class NoConnectedCentralsException : IllegalStateException("No connected centrals to notify")

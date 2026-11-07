@@ -1,5 +1,6 @@
 package network.columba.app.ui.screens
 
+import network.columba.app.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
@@ -15,12 +16,12 @@ class ContactsTabTest {
 
     @Test
     fun `MY_CONTACTS has correct display name`() {
-        assertEquals("My Contacts", ContactsTab.MY_CONTACTS.displayName)
+        assertEquals(R.string.contacts_tab_my_contacts_title, ContactsTab.MY_CONTACTS.displayNameRes)
     }
 
     @Test
     fun `NETWORK has correct display name`() {
-        assertEquals("Network", ContactsTab.NETWORK.displayName)
+        assertEquals(R.string.settings_network_title, ContactsTab.NETWORK.displayNameRes)
     }
 
     @Test
@@ -33,8 +34,8 @@ class ContactsTabTest {
     @Test
     fun `tabs have distinct display names`() {
         assertNotEquals(
-            ContactsTab.MY_CONTACTS.displayName,
-            ContactsTab.NETWORK.displayName,
+            ContactsTab.MY_CONTACTS.displayNameRes,
+            ContactsTab.NETWORK.displayNameRes,
         )
     }
 

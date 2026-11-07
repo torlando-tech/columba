@@ -5,6 +5,7 @@ package network.columba.app.viewmodel
 import android.net.Uri
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
+import network.columba.app.R
 import network.columba.app.migration.ExportResult
 import network.columba.app.migration.ImportResult
 import network.columba.app.migration.MigrationExporter
@@ -191,7 +192,10 @@ class MigrationViewModelTest {
             viewModel.uiState.test {
                 val state = awaitItem()
                 assertTrue("Expected Error but was $state", state is MigrationUiState.Error)
-                assertTrue((state as MigrationUiState.Error).message.contains("disk full"))
+                assertEquals(
+                    UiMessage.Text(R.string.migration_export_failed, listOf(errorMessage)),
+                    (state as MigrationUiState.Error).message,
+                )
             }
         }
 
@@ -262,7 +266,10 @@ class MigrationViewModelTest {
             viewModel.uiState.test {
                 val state = awaitItem()
                 assertTrue("Expected Error but was $state", state is MigrationUiState.Error)
-                assertTrue((state as MigrationUiState.Error).message.contains("Invalid migration file"))
+                assertEquals(
+                    UiMessage.Text(R.string.migration_could_not_read_file, listOf(errorMessage)),
+                    (state as MigrationUiState.Error).message,
+                )
             }
         }
 
@@ -305,7 +312,7 @@ class MigrationViewModelTest {
     fun `importData sets state to Error on failure`() =
         runTest {
             val mockUri = mockk<Uri>()
-            val errorResult = ImportResult.Error("Database error during import")
+            val errorResult = ImportResult.Error(UiMessage.Raw("Database error during import"))
             coEvery { migrationImporter.importData(mockUri, any(), any(), any()) } returns errorResult
 
             viewModel.importData(mockUri)
@@ -314,7 +321,10 @@ class MigrationViewModelTest {
             viewModel.uiState.test {
                 val state = awaitItem()
                 assertTrue("Expected Error but was $state", state is MigrationUiState.Error)
-                assertTrue((state as MigrationUiState.Error).message.contains("Database error"))
+                assertEquals(
+                    UiMessage.Raw("Database error during import"),
+                    (state as MigrationUiState.Error).message,
+                )
             }
         }
 

@@ -25,6 +25,7 @@ import network.columba.app.data.repository.CallHistoryRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
+import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
@@ -94,8 +95,15 @@ class ChatsVoiceHistoryViewModelTest {
             propagationNodeManager,
             receivedLocationRepository,
             identityResolutionManager,
+            mockSettingsRepository(),
         )
     }
+
+    private fun mockSettingsRepository(): SettingsRepository =
+        mockk {
+            every { threadsEnabledFlow } returns flowOf(false)
+            every { expandedChatCardsFlow } returns flowOf(emptySet())
+        }
 
     @After
     fun tearDown() {
@@ -249,6 +257,7 @@ class ChatsVoiceHistoryViewModelTest {
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
+                    mockSettingsRepository(),
                     handle,
                 )
 

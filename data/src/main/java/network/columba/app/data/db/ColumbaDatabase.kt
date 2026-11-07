@@ -24,6 +24,7 @@ import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.dao.RmspServerDao
 import network.columba.app.data.db.dao.CallHistoryDao
 import network.columba.app.data.db.dao.CallHistoryDeletionDao
+import network.columba.app.data.db.dao.ThreadDao
 import network.columba.app.data.db.entity.CallHistoryDeletionEntity
 import network.columba.app.data.db.entity.CallHistoryEntity
 import network.columba.app.data.db.entity.AnnounceEntity
@@ -45,6 +46,7 @@ import network.columba.app.data.db.entity.PendingDeliveryStatusEntity
 import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import network.columba.app.data.db.entity.ReceivedLocationEntity
 import network.columba.app.data.db.entity.RmspServerEntity
+import network.columba.app.data.db.entity.ThreadEntity
 
 @Database(
     entities = [
@@ -69,10 +71,13 @@ import network.columba.app.data.db.entity.RmspServerEntity
         PeerActivityEventEntity::class,
         PendingDeliveryStatusEntity::class,
         PreferredPropagationNodeEntity::class,
+        ThreadEntity::class,
     ],
-    version = 10,
+    version = 12,
     exportSchema = true,
 )
+// Room DB facade: one accessor per DAO; count grows with every new table, not complexity.
+@Suppress("TooManyFunctions")
 abstract class ColumbaDatabase : RoomDatabase() {
     companion object {
         /**
@@ -268,17 +273,6 @@ abstract class ColumbaDatabase : RoomDatabase() {
             )
         }
 
-        /**
-         * Extract the `fields[16].reactions` blob out of a legacy
-         * `fieldsJson`, returning `(newFieldsJson, reactionsJson)`.
-         * Returns null if there is no reactions blob to extract or if
-         * `fieldsJson` is unparseable.
-         *
-         * Public so [MigrationImporter] (in `:app`) can reuse it when
-         * importing pre-v2 backup bundles whose messages still carry
-         * the legacy overload.
-         */
-
         /** Add the reduced call-history tables. */
         val MIGRATION_4_5: Migration =
             object : Migration(4, 5) {
@@ -423,6 +417,147 @@ abstract class ColumbaDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * v10 → v11: threads P1 (threads-spec §5) — new `threads` table plus
+         * two nullable columns on `messages` / `drafts`. Strictly additive:
+         * no data rewrite, every pre-existing message keeps
+         * `threadId = NULL` (Main). Ships ahead of the `threads_enabled`
+         * feature flag on purpose (additive migrations land early).
+         *
+         * Renumbered from the P1 branch's v4 → v5 when rebasing onto main
+         * (main's v5-v10 landed independently).
+         *
+         * Index names follow Room's `index_<table>_<columns>` convention so
+         * `runMigrationsAndValidate` against the exported v11 schema passes.
+         */
+        val MIGRATION_10_11: Migration =
+            object : Migration(10, 11) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `threads` (
+                            `threadId` BLOB NOT NULL,
+                            `conversationHash` TEXT NOT NULL,
+                            `identityHash` TEXT NOT NULL,
+                            `rootMessageId` TEXT,
+                            `title` TEXT,
+                            `createdAt` INTEGER NOT NULL,
+                            `lastActivityAt` INTEGER NOT NULL,
+                            `archivedAt` INTEGER,
+                            PRIMARY KEY(`conversationHash`, `identityHash`, `threadId`),
+                            FOREIGN KEY(`conversationHash`, `identityHash`)
+                                REFERENCES `conversations`(`peerHash`, `identityHash`)
+                                ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_threads_identityHash_conversationHash_lastActivityAt` " +
+                            "ON `threads` (`identityHash`, `conversationHash`, `lastActivityAt`)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_threads_rootMessageId` " +
+                            "ON `threads` (`rootMessageId`)",
+                    )
+                    db.execSQL("ALTER TABLE `messages` ADD COLUMN `threadId` BLOB")
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_messages_conversationHash_identityHash_threadId_timestamp` " +
+                            "ON `messages` (`conversationHash`, `identityHash`, `threadId`, `timestamp`)",
+                    )
+                    db.execSQL("ALTER TABLE `drafts` ADD COLUMN `threadId` BLOB")
+                }
+            }
+
+        /**
+         * v11 → v12: per-thread drafts (threads-spec §5, P2). The `drafts`
+         * primary key gains `threadId` so Main and each thread keep their own
+         * unsent composer text. SQLite cannot add a PK column in place, so
+         * this is the standard Room table-rebuild: create the new shape, copy
+         * rows with `COALESCE(threadId, X'')` (pre-thread drafts belong to
+         * Main — the empty-blob sentinel, since PK columns must be NOT NULL),
+         * drop, rename, recreate the index. No draft is lost.
+         *
+         * Renumbered from the P2 branch's v5 → v6 when rebasing onto main.
+         *
+         * Table/index names and column order follow Room's generated schema
+         * so `runMigrationsAndValidate` against the exported v12 schema passes.
+         */
+        val MIGRATION_11_12: Migration =
+            object : Migration(11, 12) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE `drafts_new` (
+                            `conversationHash` TEXT NOT NULL,
+                            `identityHash` TEXT NOT NULL,
+                            `content` TEXT NOT NULL,
+                            `updatedTimestamp` INTEGER NOT NULL,
+                            `threadId` BLOB NOT NULL,
+                            PRIMARY KEY(`conversationHash`, `identityHash`, `threadId`),
+                            FOREIGN KEY(`conversationHash`, `identityHash`)
+                                REFERENCES `conversations`(`peerHash`, `identityHash`)
+                                ON UPDATE NO ACTION ON DELETE CASCADE,
+                            FOREIGN KEY(`identityHash`)
+                                REFERENCES `local_identities`(`identityHash`)
+                                ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        """
+                        INSERT INTO `drafts_new`
+                            (conversationHash, identityHash, content, updatedTimestamp, threadId)
+                        SELECT conversationHash, identityHash, content, updatedTimestamp,
+                               COALESCE(threadId, X'')
+                        FROM `drafts`
+                        """.trimIndent(),
+                    )
+                    db.execSQL("DROP TABLE `drafts`")
+                    db.execSQL("ALTER TABLE `drafts_new` RENAME TO `drafts`")
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_drafts_identityHash` " +
+                            "ON `drafts` (`identityHash`)",
+                    )
+                }
+            }
+
+        /**
+         * Every migration this database version requires, in ascending order.
+         *
+         * **Both** processes install this whole array: [DatabaseModule]
+         * (app process, Hilt) and `ServiceDatabaseProvider` (the `:reticulum`
+         * service process, which cannot use Hilt). Hand-maintained per-process
+         * lists drifted and left the service unable to open a database the app
+         * process had already upgraded (missing `MIGRATION_11_12` — the
+         * Greptile P1 on PR #1224). One list, no drift.
+         *
+         * Contiguity and completeness are pinned by `MigrationChainTest`.
+         */
+        val MIGRATIONS: Array<Migration> =
+            arrayOf(
+                MIGRATION_1_2,
+                MIGRATION_2_3,
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6,
+                MIGRATION_6_7,
+                MIGRATION_7_8,
+                MIGRATION_8_9,
+                MIGRATION_9_10,
+                MIGRATION_10_11,
+                MIGRATION_11_12,
+            )
+
+        /**
+         * Extract the `fields[16].reactions` blob out of a legacy
+         * `fieldsJson`, returning `(newFieldsJson, reactionsJson)`.
+         * Returns null if there is no reactions blob to extract or if
+         * `fieldsJson` is unparseable.
+         *
+         * Public so [MigrationImporter] (in `:app`) can reuse it when
+         * importing pre-v2 backup bundles whose messages still carry
+         * the legacy overload.
+         */
         @Suppress("ReturnCount")
         fun splitReactionsOutOfFieldsJson(fieldsJson: String): Pair<String, String>? =
             try {
@@ -478,4 +613,5 @@ abstract class ColumbaDatabase : RoomDatabase() {
     abstract fun pendingDeliveryStatusDao(): PendingDeliveryStatusDao
 
     abstract fun preferredPropagationNodeDao(): PreferredPropagationNodeDao
+    abstract fun threadDao(): ThreadDao
 }

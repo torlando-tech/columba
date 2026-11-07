@@ -5,14 +5,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import androidx.paging.PagingData
+import androidx.test.core.app.ApplicationProvider
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -20,6 +23,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import network.columba.app.R
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.repository.Announce
 import network.columba.app.rns.api.model.NodeType
@@ -605,6 +609,68 @@ class AnnounceStreamScreenTest {
         )
     }
 
+    // ========== Frozen-stream new-announce behavior (GH #1166) ==========
+
+    @Test
+    fun newAnnounces_whileAtTop_reloadOnceWithoutWaitingBanner() {
+        val counts = MutableStateFlow(0)
+        val mockViewModel = createMockAnnounceStreamViewModel()
+        every { mockViewModel.newAnnounceCount } returns counts
+
+        composeTestRule.setContent {
+            AnnounceStreamContent(viewModel = mockViewModel)
+        }
+        composeTestRule.waitForIdle()
+
+        counts.value = 2
+        composeTestRule.waitForIdle()
+
+        // The reload happens on the count change; a static non-zero count must not spin it.
+        verify(exactly = 1) { mockViewModel.refreshAnnounces() }
+        composeTestRule.onNodeWithContentDescription(str(R.string.announce_scroll_to_top)).assertDoesNotExist()
+    }
+
+    @Test
+    fun newAnnounces_whileScrolled_showBannerAndReloadOnlyOnRequest() {
+        val counts = MutableStateFlow(0)
+        val announces = (0 until 20).map { index -> testAnnounce(index) }
+        val mockViewModel = createMockAnnounceStreamViewModel(announces = announces)
+        every { mockViewModel.newAnnounceCount } returns counts
+
+        composeTestRule.setContent {
+            AnnounceStreamContent(viewModel = mockViewModel)
+        }
+        composeTestRule
+            .onNode(hasScrollAction() and hasAnyDescendant(hasText("Peer 0")))
+            .performScrollToIndex(5)
+        composeTestRule.waitForIdle()
+
+        counts.value = 3
+        composeTestRule.waitForIdle()
+
+        // Scrolled viewport: new announces must not replace loaded pages.
+        verify(exactly = 0) { mockViewModel.refreshAnnounces() }
+        composeTestRule.onNodeWithContentDescription(str(R.string.announce_scroll_to_top)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("3").assertIsDisplayed()
+
+        composeTestRule.onNodeWithContentDescription(str(R.string.announce_scroll_to_top)).performClick()
+        composeTestRule.waitForIdle()
+        verify(atLeast = 1) { mockViewModel.refreshAnnounces() }
+    }
+
+    private fun str(id: Int): String = ApplicationProvider.getApplicationContext<Application>().getString(id)
+
+    private fun testAnnounce(index: Int) =
+        Announce(
+            destinationHash = "%032x".format(index.toLong()),
+            peerName = "Peer $index",
+            publicKey = ByteArray(32),
+            appData = null,
+            hops = 1,
+            lastSeenTimestamp = 1_000L + index,
+            nodeType = "PEER",
+        )
+
     // ========== Test Helpers ==========
 
     // This is a mock builder that mirrors the StateFlow surface of
@@ -640,12 +706,15 @@ class AnnounceStreamScreenTest {
         every { mockViewModel.isAnnouncing } returns MutableStateFlow(isAnnouncing)
         every { mockViewModel.announceSuccess } returns MutableStateFlow(announceSuccess)
         every { mockViewModel.announceError } returns MutableStateFlow(announceError)
+        every { mockViewModel.newAnnounceCount } returns MutableStateFlow(0)
+        every { mockViewModel.windowRefreshPending } returns MutableStateFlow(false)
 
         // Stub action methods that may be called
         every { mockViewModel.triggerAnnounce() } just Runs
         every { mockViewModel.updateSelectedNodeTypes(any()) } just Runs
         every { mockViewModel.updateShowAudioAnnounces(any()) } just Runs
         every { mockViewModel.updateSelectedInterfaceTypes(any()) } just Runs
+        every { mockViewModel.refreshAnnounces() } just Runs
         every { mockViewModel.clearAnnounceStatus() } just Runs
 
         return mockViewModel

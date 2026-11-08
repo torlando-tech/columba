@@ -3224,4 +3224,11 @@
         <item quantity="other">%1$d threads restored</item>
     </plurals>
     <string name="thread_rename_reset">Reset to automatic</string>
+
+    <!-- In-call audio profile picker -->
+    <string name="call_profile_title">Audio profile</string>
+    <string name="call_profile_subtitle">Switches the active call for both ends</string>
+    <string name="call_profile_experimental">Experimental</string>
+    <string name="call_profile_control">Audio</string>
+    <string name="call_profile_control_content_description">Audio profile</string>
 </resources>

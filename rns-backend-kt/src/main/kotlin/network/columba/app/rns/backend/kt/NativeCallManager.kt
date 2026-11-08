@@ -325,38 +325,44 @@ class NativeCallManager(
     }
 
     /**
-     * The active LXST codec-profile abbreviation, or `null` when the
-     * [telephone] hasn't been constructed yet (before `setup()` runs).
+     * The active LXST codec-profile id, or `null` when the [telephone] hasn't
+     * been constructed yet (before `setup()` runs).
      *
      * The `lateinit` backing field is only referenceable inside this class,
      * so the backend's profile poller reads through this accessor rather than
-     * reaching for `::telephone.isInitialized` from the module seam.
+     * reaching for `::telephone.isInitialized` from the module seam. The id is
+     * what the UI needs to preselect the current profile in the picker; the
+     * display abbreviation lives in the app's `CodecProfile` enum.
      */
-    fun activeProfileAbbreviation(): String? {
+    fun activeProfileCode(): Int? {
         if (!::telephone.isInitialized) return null
-        return telephone.activeProfile.abbreviation
+        return telephone.activeProfile.id
     }
 
     /**
-     * Cycle to the next LXST audio profile and signal it to the remote peer
-     * (LXST Profile Negotiation). Invoked by [NativeRnsBackendImpl]'s
-     * `cycleCallProfile`.
+     * Switch to the LXST audio profile [profileCode] and signal it to the
+     * remote peer (LXST Profile Negotiation). Invoked by
+     * [NativeRnsBackendImpl]'s `switchCallProfile`.
      *
      * `Telephone.switchProfile` is a no-op when there is no established call
      * (the transmit pipeline is not configured), so this is safe to call any
-     * time. It picks the next profile from the current active one via
-     * [Profile.next] and routes the switch through the LXST-kt stack, which
-     * sends the `PREFERRED_PROFILE` signalling frame and reconfigures the
-     * transmit pipeline.
+     * time. Unknown ids are dropped rather than defaulted: silently switching
+     * a live call to a profile the caller did not ask for is worse than
+     * ignoring the request.
      */
-    fun cycleProfile() {
+    fun switchProfile(profileCode: Int) {
         if (!::telephone.isInitialized || !telephone.isCallActive()) {
-            Log.w(TAG, "cycleProfile() before telephone is active — ignoring")
+            Log.w(TAG, "switchProfile(0x${profileCode.toString(16)}) before telephone is active — ignoring")
             return
         }
-        val next = Profile.next(telephone.activeProfile)
-        telephone.switchProfile(next)
-        Log.i(TAG, "Cycled LXST profile to ${next.abbreviation}")
+        val profile =
+            Profile.fromId(profileCode)
+                ?: run {
+                    Log.w(TAG, "Unknown LXST profile code 0x${profileCode.toString(16)} — ignoring")
+                    return
+                }
+        telephone.switchProfile(profile)
+        Log.i(TAG, "Switched LXST profile to ${profile.abbreviation}")
     }
 
     // ===== LXST Call Mode Negotiation (full/half duplex) =====
@@ -367,7 +373,7 @@ class NativeCallManager(
      *
      * The `lateinit` backing field is only referenceable inside this class, so
      * the backend's mode poller reads through this accessor (mirrors
-     * [activeProfileAbbreviation]).
+     * [activeProfileCode]).
      */
     fun callModeAbbreviation(): String? {
         if (!::telephone.isInitialized) return null

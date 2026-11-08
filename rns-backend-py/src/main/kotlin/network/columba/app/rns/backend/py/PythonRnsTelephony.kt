@@ -89,21 +89,21 @@ class PythonRnsTelephony(
         get() = callCoordinator.isPttActive
 
     /**
-     * Bounded poller that mirrors the active LXST codec-profile abbreviation
-     * while a call is in progress. Backed by [activeProfileReadHook] which
+     * Bounded poller that mirrors the active LXST codec-profile id while a
+     * call is in progress. Backed by [activeProfileCodeReadHook] which
      * [PythonCallManager] wires to its `telephone` (the coordinator on this
      * backend holds no `telephone` field of its own). Emits `null` when no
      * call is active.
      */
-    private val activeProfileObserver =
-        PeriodicStateObserver<String?>(
+    private val activeProfileCodeObserver =
+        PeriodicStateObserver<Int?>(
             scope = telephonyRelayScope,
             pollIntervalMs = 500L,
             isCallInProgress = { callCoordinator.hasActiveCall() },
-            reader = { activeProfileReadHook?.invoke() },
+            reader = { activeProfileCodeReadHook?.invoke() },
         )
-    override val activeProfile: StateFlow<String?>
-        get() = activeProfileObserver.state
+    override val activeProfileCode: StateFlow<Int?>
+        get() = activeProfileCodeObserver.state
 
     /**
      * Bounded poller mirroring the active LXST call-mode abbreviation (FDX/HDX)
@@ -122,20 +122,29 @@ class PythonRnsTelephony(
         get() = callModeObserver.state
 
     /**
-     * Wired by [PythonCallManager]'s init block to read the current active
-     * profile abbreviation from its `telephone`. Null-safe: returns `null`
-     * until the manager has been set up (telephone is `lateinit`).
+     * Wired by [PythonCallManager]'s init block to read the active profile
+     * abbreviation from its `telephone` for the legacy [VoiceCallState]
+     * shape. Null-safe: returns `null` until the manager has been set up
+     * (telephone is `lateinit`).
      */
     @Volatile
-    var activeProfileReadHook: (() -> String?)? = null
+    var activeProfileAbbreviationReadHook: (() -> String?)? = null
 
     /**
-     * Wired by [PythonCallManager]'s init block to cycle to the next LXST
+     * Wired by [PythonCallManager]'s init block to read the active profile id
+     * from its `telephone`. Feeds [activeProfileCode]; null-safe (returns
+     * `null` before the manager has been set up).
+     */
+    @Volatile
+    var activeProfileCodeReadHook: (() -> Int?)? = null
+
+    /**
+     * Wired by [PythonCallManager]'s init block to switch to a given LXST
      * audio profile and signal it to the remote peer. Null-safe: a null hook
      * (before setup) is a logged no-op, matching the other `*Hook`s here.
      */
     @Volatile
-    var cycleCallProfileHook: (() -> Unit)? = null
+    var switchCallProfileHook: ((Int) -> Unit)? = null
 
     /**
      * Wired by [PythonCallManager]'s init block to read the current active
@@ -232,13 +241,13 @@ class PythonRnsTelephony(
         }
     }
 
-    override suspend fun cycleCallProfile() {
-        val hook = cycleCallProfileHook
+    override suspend fun switchCallProfile(profileCode: Int) {
+        val hook = switchCallProfileHook
         if (hook == null) {
-            Log.w(TAG, "cycleCallProfile() before PythonCallManager wired hook")
+            Log.w(TAG, "switchCallProfile() before PythonCallManager wired hook")
         } else {
-            runCatching { hook() }.onFailure {
-                Log.w(TAG, "Ignored error cycling LXST profile: $it")
+            runCatching { hook(profileCode) }.onFailure {
+                Log.w(TAG, "Ignored error switching LXST profile to 0x${profileCode.toString(16)}: $it")
             }
         }
     }
@@ -356,9 +365,11 @@ class PythonRnsTelephony(
                         isActive = true,
                         isMuted = isMuted,
                         remoteIdentity = remoteIdentity,
-                        // Active codec profile via the read hook PythonCallManager
-                        // wires to its Telephone (the shared LXST audio stack).
-                        profile = activeProfileReadHook?.invoke(),
+                        // Active codec profile abbreviation via the read hook
+                        // PythonCallManager wires to its Telephone (the shared
+                        // LXST audio stack). The typed IPC surface exposes the
+                        // profile id separately through activeProfileCode.
+                        profile = activeProfileAbbreviationReadHook?.invoke(),
                     )
             }
         }

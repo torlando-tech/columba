@@ -11,6 +11,7 @@ import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTelemetry
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.util.toHex
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.test.DatabaseTest
 import io.mockk.clearAllMocks
@@ -967,6 +968,83 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             assertNotNull(activity)
             assertTrue(activity!!.lastReceivedAt in before..after)
             assertEquals("MESSAGE", activity.activityType)
+        }
+
+    @Test
+    fun `persistReceivedMessage stores icon and pending state without a UI observer`() =
+        testScope.runTest {
+            val destination = ByteArray(16) { (it + 40).toByte() }
+            val destinationHex = destination.toHex()
+            localIdentityDao.insert(
+                network.columba.app.data.db.entity.LocalIdentityEntity(
+                    identityHash = "service-identity",
+                    displayName = "Service Identity",
+                    destinationHash = destinationHex,
+                    filePath = "/data/service-identity.key",
+                    keyData = null,
+                    createdTimestamp = 1L,
+                    lastUsedTimestamp = 1L,
+                    isActive = true,
+                ),
+            )
+            val source = ByteArray(16) { (it + 60).toByte() }
+            val sourceHex = source.toHex()
+
+            assertTrue(
+                persistenceManager.persistReceivedMessage(
+                    network.columba.app.rns.api.model.ReceivedMessage(
+                        messageHash = "service-icon-message",
+                        content = "Icon arrives with the message",
+                        sourceHash = source,
+                        destinationHash = destination,
+                        timestamp = 1_000L,
+                        iconAppearance =
+                            network.columba.app.rns.api.model.IconAppearance(
+                                iconName = "account",
+                                foregroundColor = "00FF00",
+                                backgroundColor = "000000",
+                            ),
+                    ),
+                ),
+            )
+
+            val stored =
+                requireNotNull(
+                    messageDao.getMessageById("service-icon-message", "service-identity"),
+                )
+            assertFalse("new inbound rows must start pending", stored.notificationHandled)
+            assertEquals(
+                "the service write alone must leave one pending delivery",
+                1,
+                messageDao.observePendingNotificationCount("service-identity").first(),
+            )
+            val icon = requireNotNull(database.peerIconDao().getIcon(sourceHex))
+            assertEquals("account", icon.iconName)
+            assertEquals("00FF00", icon.foregroundColor)
+            assertEquals("000000", icon.backgroundColor)
+
+            assertTrue(
+                persistenceManager.persistReceivedMessage(
+                    network.columba.app.rns.api.model.ReceivedMessage(
+                        messageHash = "service-empty-icon",
+                        content = "No icon on this one",
+                        sourceHash = source,
+                        destinationHash = destination,
+                        timestamp = 2_000L,
+                        iconAppearance =
+                            network.columba.app.rns.api.model.IconAppearance(
+                                iconName = "",
+                                foregroundColor = "",
+                                backgroundColor = "",
+                            ),
+                    ),
+                ),
+            )
+            assertEquals(
+                "invalid appearance must not overwrite the stored icon",
+                "account",
+                database.peerIconDao().getIcon(sourceHex)?.iconName,
+            )
         }
 
     @Test

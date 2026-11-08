@@ -130,6 +130,8 @@ object DatabaseModule {
                     ColumbaDatabase.MIGRATION_7_8,
                     ColumbaDatabase.MIGRATION_8_9,
                     ColumbaDatabase.MIGRATION_9_10,
+                    ColumbaDatabase.MIGRATION_10_11,
+                    ColumbaDatabase.MIGRATION_11_12,
                 ).openHelperFactory(
                     BusyRetryingOpenHelperFactory(FrameworkSQLiteOpenHelperFactory()),
                 ).addCallback(DURABILITY_CALLBACK)

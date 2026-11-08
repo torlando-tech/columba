@@ -66,6 +66,8 @@ import org.msgpack.core.MessagePack
 import network.columba.app.rns.api.model.Destination as ColumbaDestination
 import network.columba.app.rns.api.model.Identity as ColumbaIdentity
 import network.columba.app.rns.api.model.Link as ColumbaLink
+import network.columba.app.domain.model.SignatureStatus
+import network.columba.app.rns.api.util.lxmfSignatureStatus
 
 /**
  * Internal worker class for [NativeRnsBackend].
@@ -496,21 +498,14 @@ class NativeRnsBackendImpl(
                 displayName = config.displayName,
             )
 
-        // Surface the LXMF signature-verification state to the UI. LXMF-kt's
-        // router has already dropped SIGNATURE_INVALID deliveries (tampered
-        // payloads claiming a known sender) before this callback fires, so an
-        // unverified message here is the SOURCE_UNKNOWN case: we don't yet
-        // hold the sender's identity, so the signature can't be checked — it
-        // could be a legitimate first-contact OR a forgery. We ingest it
-        // anyway (Sideband-style warn-and-ingest, so genuine first-contact
-        // isn't lost). `buildReceivedMessage` reads `message.signatureValidated`
-        // onto the ReceivedMessage so the UI can warn.
+        // Preserve the upstream verification result, including unknown-source
+        // evidence. LXMF-kt rejects known-invalid signatures before this callback.
         router!!.registerDeliveryCallback { message ->
             if (!message.signatureValidated) {
                 Log.w(
                     TAG,
                     "Unverified inbound message from ${message.sourceHash.toHex()} " +
-                        "(${message.unverifiedReason}) — ingesting with warning per Sideband-style policy",
+                        "(${message.unverifiedReason})",
                 )
             }
             handleIncomingMessage(message)
@@ -1122,6 +1117,7 @@ class NativeRnsBackendImpl(
             message.receivingInterfaceHash?.let { hash ->
                 Transport.getInterfaces().firstOrNull { it.hash.contentEquals(hash) }?.name
             }
+        val signatureStatus = lxmfSignatureStatus(message.signatureValidated, message.unverifiedReason?.value)
         return ReceivedMessage(
             messageHash = message.hash?.let { it.toHex() } ?: "",
             content = content,
@@ -1136,10 +1132,8 @@ class NativeRnsBackendImpl(
             receivedRssi = message.receivedRssi,
             receivedSnr = message.receivedSnr,
             deliveryMethod = nativeDeliveryMethodName(message.method),
-            // Read directly off the message — LXMF-kt sets `signatureValidated`
-            // false only for SOURCE_UNKNOWN here (SIGNATURE_INVALID is dropped
-            // at the router). Surfaced so the UI can warn on unverified senders.
-            signatureVerified = message.signatureValidated,
+            signatureStatus = signatureStatus,
+            signatureEvidence = message.packed.takeIf { signatureStatus == SignatureStatus.SOURCE_UNKNOWN },
         )
     }
 

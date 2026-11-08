@@ -2,6 +2,7 @@ package network.columba.app.rns.api.model
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
+import network.columba.app.domain.model.SignatureStatus
 
 /**
  * A received LXMF message.
@@ -33,17 +34,48 @@ data class ReceivedMessage(
     // Mirrors the string vocabulary already used for outbound on
     // `MessageEntity.deliveryMethod` and `MessageDetailScreen.getDeliveryMethodInfo`.
     val deliveryMethod: String? = null,
-    // Whether the LXMF signature was verified against the sender's known
-    // identity at receive time. Surfaces LXMF-kt's `LXMessage.signatureValidated`
-    // so the UI can warn on unverified senders.
-    //   true  = signature checked against a known source identity, valid.
-    //   false = the sender's signature could not be verified — the message is
-    //           forgeable/untrusted and the UI warns. On the Kotlin backend
-    //           this is always SOURCE_UNKNOWN (we don't yet hold the sender's
-    //           identity; LXMF-kt drops SIGNATURE_INVALID at the router). On
-    //           the Python backend it may additionally be a failed signature
-    //           check, since python LXMF's `lxmf_delivery` delivers those too.
-    //   null  = the backend couldn't determine it, or a pre-feature path.
-    //           Treated as "no warning".
-    val signatureVerified: Boolean? = null,
-) : Parcelable
+    // Null is a legacy message with no recorded verification result.
+    val signatureStatus: SignatureStatus? = null,
+    // Original packed LXMF bytes, retained only for SOURCE_UNKNOWN so an
+    // announce can later resolve the signature without reconstructing content.
+    val signatureEvidence: ByteArray? = null,
+) : Parcelable {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is ReceivedMessage) return false
+        return messageHash == other.messageHash &&
+            content == other.content &&
+            sourceHash.contentEquals(other.sourceHash) &&
+            destinationHash.contentEquals(other.destinationHash) &&
+            timestamp == other.timestamp &&
+            fieldsJson == other.fieldsJson &&
+            publicKey.contentEquals(other.publicKey) &&
+            iconAppearance == other.iconAppearance &&
+            receivedHopCount == other.receivedHopCount &&
+            receivedInterface == other.receivedInterface &&
+            receivedRssi == other.receivedRssi &&
+            receivedSnr == other.receivedSnr &&
+            deliveryMethod == other.deliveryMethod &&
+            signatureStatus == other.signatureStatus &&
+            signatureEvidence.contentEquals(other.signatureEvidence)
+    }
+
+    override fun hashCode(): Int {
+        var result = messageHash.hashCode()
+        result = 31 * result + content.hashCode()
+        result = 31 * result + sourceHash.contentHashCode()
+        result = 31 * result + destinationHash.contentHashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + (fieldsJson?.hashCode() ?: 0)
+        result = 31 * result + publicKey.contentHashCode()
+        result = 31 * result + (iconAppearance?.hashCode() ?: 0)
+        result = 31 * result + (receivedHopCount ?: 0)
+        result = 31 * result + (receivedInterface?.hashCode() ?: 0)
+        result = 31 * result + (receivedRssi ?: 0)
+        result = 31 * result + (receivedSnr?.hashCode() ?: 0)
+        result = 31 * result + (deliveryMethod?.hashCode() ?: 0)
+        result = 31 * result + (signatureStatus?.hashCode() ?: 0)
+        result = 31 * result + signatureEvidence.contentHashCode()
+        return result
+    }
+}

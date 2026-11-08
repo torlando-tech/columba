@@ -133,6 +133,12 @@ class NomadNetPageCache
             val document: MicronDocument,
             val fieldTokens: List<String> = emptyList(),
             val formFields: Map<String, String> = emptyMap(),
+            /**
+             * Request data (JSON) that produced this page, so a restored page
+             * still knows which saved bookmark/shortcut it belongs to; null for
+             * a plain GET.
+             */
+            val requestData: String? = null,
         )
 
         data class SessionSnapshot(
@@ -155,8 +161,9 @@ class NomadNetPageCache
             document: MicronDocument,
             fieldTokens: List<String> = emptyList(),
             formFields: Map<String, String> = emptyMap(),
+            requestData: String? = null,
         ) {
-            sessionSnapshot = SessionSnapshot(SessionPage(nodeHash, path, document, fieldTokens, formFields))
+            sessionSnapshot = SessionSnapshot(SessionPage(nodeHash, path, document, fieldTokens, formFields, requestData))
         }
 
         /** Record the full live session (page + drafts + in-page history). */

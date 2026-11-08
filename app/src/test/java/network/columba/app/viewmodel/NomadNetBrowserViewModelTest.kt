@@ -84,6 +84,7 @@ class NomadNetBrowserViewModelTest {
         val docSlot = slot<network.columba.app.micron.MicronDocument>()
         val tokensSlot = slot<List<String>>()
         val fieldsSlot = slot<Map<String, String>>()
+        val requestSlot = slot<String?>()
         every {
             pageCache.putSession(
                 capture(nodeSlot),
@@ -91,6 +92,7 @@ class NomadNetBrowserViewModelTest {
                 capture(docSlot),
                 capture(tokensSlot),
                 capture(fieldsSlot),
+                captureNullable(requestSlot),
             )
         } answers {
             sessionSnapshot.set(
@@ -101,6 +103,7 @@ class NomadNetBrowserViewModelTest {
                         docSlot.captured,
                         tokensSlot.captured,
                         fieldsSlot.captured,
+                        requestSlot.captured,
                     ),
                 ),
             )
@@ -455,6 +458,51 @@ class NomadNetBrowserViewModelTest {
                 restoredVm.formFields.value["name"] == "draft-value",
             )
             // Only the initial load requested anything; the restore was free.
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `the session keeps the request of a form-result page across a tab switch`() =
+        runTest(testDispatcher) {
+            // Continue restores the stored page; it must remember the request it
+            // was fetched with, or the bookmark star would report the saved
+            // search as not saved and tapping it would add a second bookmark.
+            every { pageCache.get(any(), any()) } returns null
+            val request = "{\"query\":\"rngit\"}"
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
+                Result.success(NomadnetPageResult(simplePage, "/page/search.mu"))
+
+            viewModel.loadPage(
+                destinationHash = nodeHash,
+                path = "/page/search.mu`query",
+                requestDataJson = request,
+            )
+            advanceUntilIdle()
+            Thread.sleep(200)
+            advanceUntilIdle()
+            assertEquals(
+                request,
+                (viewModel.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded).requestData,
+            )
+            viewModel.saveSessionSnapshot()
+
+            val restoredVm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+            restoredVm.loadPage(
+                nodeHash,
+                path = "/page/search.mu`query",
+                fromSessionRestore = true,
+            )
+            advanceUntilIdle()
+            Thread.sleep(200)
+            advanceUntilIdle()
+
+            assertEquals(
+                "Continue must restore the saved request, was ${restoredVm.browserState.value}",
+                request,
+                (restoredVm.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded).requestData,
+            )
+            // Restore is free: only the initial request was made.
             coVerify(exactly = 1) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
         }
 

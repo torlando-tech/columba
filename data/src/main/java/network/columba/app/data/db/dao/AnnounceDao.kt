@@ -1,6 +1,5 @@
 package network.columba.app.data.db.dao
 
-import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -662,10 +661,23 @@ interface AnnounceDao {
     )
     fun getEnrichedSavedPropagationNodes(identityHash: String): Flow<List<EnrichedAnnounce>>
 
-    // Paging3 methods for infinite scroll (with peer_icons JOIN)
+    // Announce stream paging (keyset/seek pagination)
+    //
+    // Room-generated PagingSources invalidate themselves on every write to the observed
+    // tables, and a Paging refresh always restarts at row 0 and replaces every loaded page.
+    // For the announce stream that meant any incoming announce collapsed a deeply scrolled
+    // list (GH issue #1166). These queries back the app-owned
+    // [network.columba.app.data.repository.AnnouncePagingSource]: paging is keyset-based on
+    // the list's total order (lastSeenTimestamp DESC, destinationHash ASC) and only re-runs
+    // when the ViewModel explicitly starts a new generation.
 
     /**
-     * Get all announces with icon data and pagination support.
+     * One page below the cursor (older rows), in list order (newest first). A null cursor
+     * is the first page.
+     *
+     * Keyset paging, not a Room `@Query` PagingSource: Room invalidates generated paging
+     * sources on every announce write, which replaces all presented pages and loses the
+     * viewport (GH #1166). Here rows that arrive at the top cannot move loaded pages.
      */
     @Query(
         """
@@ -697,7 +709,9 @@ interface AnnounceDao {
             pi.backgroundColor as iconBackgroundColor
         FROM announces a
         LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
+        WHERE (:nodeTypeCount = 0 OR a.nodeType IN (:nodeTypes))
+        AND (:query = '' OR a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
+        AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
         AND (
             :interfaceTypeCount = 0 OR
             a.receivingInterfaceType IN (:interfaceTypes) OR EXISTS (
@@ -707,16 +721,30 @@ interface AnnounceDao {
                 AND filter_sighting.lastSeenTimestamp >= (strftime('%s', 'now') * 1000) - 2592000000
             )
         )
+        AND (
+            :cursorTimestamp IS NULL
+            OR a.lastSeenTimestamp < :cursorTimestamp
+            OR (a.lastSeenTimestamp = :cursorTimestamp AND a.destinationHash > :cursorHash)
+        )
         ORDER BY a.lastSeenTimestamp DESC, a.destinationHash ASC
+        LIMIT :limit
         """,
     )
-    fun getEnrichedAnnouncesPaged(
+    @Suppress("LongParameterList") // SQL keyset filter and cursor halves are all bind params
+    suspend fun getAnnouncesOlderPage(
+        nodeTypes: List<String>,
+        nodeTypeCount: Int,
+        query: String,
         interfaceTypes: List<String>,
         interfaceTypeCount: Int,
-    ): PagingSource<Int, EnrichedAnnounce>
+        cursorTimestamp: Long?,
+        cursorHash: String?,
+        limit: Int,
+    ): List<EnrichedAnnounce>
 
     /**
-     * Get announces filtered by node types with icon data and pagination support.
+     * One page above the cursor (newer rows), nearest first, so the LIMIT keeps the rows
+     * adjacent to the cursor. The paging source reverses the page into list order.
      */
     @Query(
         """
@@ -748,7 +776,51 @@ interface AnnounceDao {
             pi.backgroundColor as iconBackgroundColor
         FROM announces a
         LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE a.nodeType IN (:nodeTypes)
+        WHERE (:nodeTypeCount = 0 OR a.nodeType IN (:nodeTypes))
+        AND (:query = '' OR a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
+        AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
+        AND (
+            :interfaceTypeCount = 0 OR
+            a.receivingInterfaceType IN (:interfaceTypes) OR EXISTS (
+                SELECT 1 FROM announce_interface_sightings filter_sighting
+                WHERE filter_sighting.destinationHash = a.destinationHash
+                AND filter_sighting.interfaceType IN (:interfaceTypes)
+                AND filter_sighting.lastSeenTimestamp >= (strftime('%s', 'now') * 1000) - 2592000000
+            )
+        )
+        AND (
+            a.lastSeenTimestamp > :cursorTimestamp
+            OR (a.lastSeenTimestamp = :cursorTimestamp AND a.destinationHash < :cursorHash)
+        )
+        ORDER BY a.lastSeenTimestamp ASC, a.destinationHash DESC
+        LIMIT :limit
+        """,
+    )
+    @Suppress("LongParameterList") // SQL keyset filter and cursor halves are all bind params
+    suspend fun getAnnouncesNewerPage(
+        nodeTypes: List<String>,
+        nodeTypeCount: Int,
+        query: String,
+        interfaceTypes: List<String>,
+        interfaceTypeCount: Int,
+        cursorTimestamp: Long,
+        cursorHash: String,
+        limit: Int,
+    ): List<EnrichedAnnounce>
+
+
+    /**
+     * The row that sorts first among the rows the current filters can show: the boundary of
+     * the first page, using the paging order (`lastSeenTimestamp DESC, destinationHash ASC`).
+     * Null when the filtered stream is empty. The "N new announces" counter compares against
+     * this key, so every counted row provably belongs above it on the reloaded first page.
+     */
+    @Query(
+        """
+        SELECT a.lastSeenTimestamp AS lastSeenTimestamp, a.destinationHash AS destinationHash
+        FROM announces a
+        WHERE (:nodeTypeCount = 0 OR a.nodeType IN (:nodeTypes))
+        AND (:query = '' OR a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
         AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
         AND (
             :interfaceTypeCount = 0 OR
@@ -760,48 +832,32 @@ interface AnnounceDao {
             )
         )
         ORDER BY a.lastSeenTimestamp DESC, a.destinationHash ASC
+        LIMIT 1
         """,
     )
-    fun getEnrichedAnnouncesByTypesPaged(
+    suspend fun getArrivalFloor(
         nodeTypes: List<String>,
+        nodeTypeCount: Int,
+        query: String,
         interfaceTypes: List<String>,
         interfaceTypeCount: Int,
-    ): PagingSource<Int, EnrichedAnnounce>
+    ): AnnounceArrivalMarker?
 
     /**
-     * Search announces with icon data and pagination support.
+     * Live count of rows the current filters can show that sort strictly above the generation's
+     * floor key. Same comparison as the paging order, so the count is exactly the set of cards
+     * revealed at the top by a reload. Backs the "N new announces" affordance while frozen.
      */
     @Query(
         """
-        SELECT
-            a.destinationHash,
-            a.peerName,
-            a.publicKey,
-            a.appData,
-            a.hops,
-            a.lastSeenTimestamp,
-            a.nodeType,
-            a.receivingInterface,
-            a.receivingInterfaceType,
-            a.aspect,
-            a.isFavorite,
-            a.favoritedTimestamp,
-            a.stampCost,
-            a.stampCostFlexibility,
-            a.peeringCost,
-            a.propagationTransferLimitKb,
-            (
-                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
-                FROM announce_interface_sightings s
-                WHERE s.destinationHash = a.destinationHash
-                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
-            ) AS recentInterfaceTypes,
-            pi.iconName as iconName,
-            pi.foregroundColor as iconForegroundColor,
-            pi.backgroundColor as iconBackgroundColor
+        SELECT COUNT(*)
         FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE (a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
+        WHERE (
+            a.lastSeenTimestamp > :sinceTimestamp
+            OR (a.lastSeenTimestamp = :sinceTimestamp AND a.destinationHash < :sinceHash)
+        )
+        AND (:nodeTypeCount = 0 OR a.nodeType IN (:nodeTypes))
+        AND (:query = '' OR a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
         AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
         AND (
             :interfaceTypeCount = 0 OR
@@ -812,140 +868,17 @@ interface AnnounceDao {
                 AND filter_sighting.lastSeenTimestamp >= (strftime('%s', 'now') * 1000) - 2592000000
             )
         )
-        ORDER BY a.lastSeenTimestamp DESC, a.destinationHash ASC
         """,
     )
-    fun searchEnrichedAnnouncesPaged(
+    fun observeAnnounceCountNewerThan(
+        sinceTimestamp: Long,
+        sinceHash: String,
+        nodeTypes: List<String>,
+        nodeTypeCount: Int,
         query: String,
         interfaceTypes: List<String>,
         interfaceTypeCount: Int,
-    ): PagingSource<Int, EnrichedAnnounce>
-
-    /**
-     * Get announces filtered by node types AND search query with icon data and pagination.
-     */
-    @Query(
-        """
-        SELECT
-            a.destinationHash,
-            a.peerName,
-            a.publicKey,
-            a.appData,
-            a.hops,
-            a.lastSeenTimestamp,
-            a.nodeType,
-            a.receivingInterface,
-            a.receivingInterfaceType,
-            a.aspect,
-            a.isFavorite,
-            a.favoritedTimestamp,
-            a.stampCost,
-            a.stampCostFlexibility,
-            a.peeringCost,
-            a.propagationTransferLimitKb,
-            (
-                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
-                FROM announce_interface_sightings s
-                WHERE s.destinationHash = a.destinationHash
-                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
-            ) AS recentInterfaceTypes,
-            pi.iconName as iconName,
-            pi.foregroundColor as iconForegroundColor,
-            pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE a.nodeType IN (:nodeTypes)
-        AND (a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
-        AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
-        AND (
-            :interfaceTypeCount = 0 OR
-            a.receivingInterfaceType IN (:interfaceTypes) OR EXISTS (
-                SELECT 1 FROM announce_interface_sightings filter_sighting
-                WHERE filter_sighting.destinationHash = a.destinationHash
-                AND filter_sighting.interfaceType IN (:interfaceTypes)
-                AND filter_sighting.lastSeenTimestamp >= (strftime('%s', 'now') * 1000) - 2592000000
-            )
-        )
-        ORDER BY a.lastSeenTimestamp DESC, a.destinationHash ASC
-        """,
-    )
-    fun getEnrichedAnnouncesByTypesAndSearchPaged(
-        nodeTypes: List<String>,
-        query: String,
-        interfaceTypes: List<String>,
-        interfaceTypeCount: Int,
-    ): PagingSource<Int, EnrichedAnnounce>
-
-    // Paging3 methods for infinite scroll
-
-    /**
-     * Get all announces with pagination support, sorted by most recently seen (descending).
-     * Returns a PagingSource for use with Paging 3 library.
-     *
-     * Note: Deprecated propagation nodes (stampCostFlexibility IS NULL) are filtered out
-     * for consistency with relay selection. These nodes have outdated announce formats
-     * that cause sync failures.
-     */
-    @Query(
-        """
-        SELECT * FROM announces
-        WHERE (nodeType != 'PROPAGATION_NODE' OR stampCostFlexibility IS NOT NULL)
-        ORDER BY lastSeenTimestamp DESC
-        """,
-    )
-    fun getAllAnnouncesPaged(): PagingSource<Int, AnnounceEntity>
-
-    /**
-     * Get announces filtered by node types with pagination support.
-     * Returns a PagingSource for use with Paging 3 library.
-     */
-    @Query(
-        """
-        SELECT * FROM announces
-        WHERE nodeType IN (:nodeTypes)
-        AND (nodeType != 'PROPAGATION_NODE' OR stampCostFlexibility IS NOT NULL)
-        ORDER BY lastSeenTimestamp DESC
-        """,
-    )
-    fun getAnnouncesByTypesPaged(nodeTypes: List<String>): PagingSource<Int, AnnounceEntity>
-
-    /**
-     * Search announces by peer name or destination hash with pagination support.
-     * Returns a PagingSource for use with Paging 3 library.
-     *
-     * Note: Deprecated propagation nodes (stampCostFlexibility IS NULL) are filtered out
-     * for consistency with relay selection.
-     */
-    @Query(
-        """
-        SELECT * FROM announces
-        WHERE (peerName LIKE '%' || :query || '%' OR destinationHash LIKE '%' || :query || '%')
-        AND (nodeType != 'PROPAGATION_NODE' OR stampCostFlexibility IS NOT NULL)
-        ORDER BY lastSeenTimestamp DESC
-        """,
-    )
-    fun searchAnnouncesPaged(query: String): PagingSource<Int, AnnounceEntity>
-
-    /**
-     * Get announces filtered by node types AND search query with pagination support.
-     * Returns a PagingSource for use with Paging 3 library.
-     *
-     * Note: Deprecated propagation nodes (stampCostFlexibility IS NULL) are filtered out
-     * for consistency with relay selection.
-     */
-    @Query(
-        """
-        SELECT * FROM announces
-        WHERE nodeType IN (:nodeTypes)
-        AND (peerName LIKE '%' || :query || '%' OR destinationHash LIKE '%' || :query || '%')
-        AND (nodeType != 'PROPAGATION_NODE' OR stampCostFlexibility IS NOT NULL)
-        ORDER BY lastSeenTimestamp DESC
-        """,
-    )
-    fun getAnnouncesByTypesAndSearchPaged(
-        nodeTypes: List<String>,
-        query: String,
-    ): PagingSource<Int, AnnounceEntity>
+    ): Flow<Int>
 
     // Debug methods for troubleshooting
 
@@ -964,4 +897,13 @@ interface AnnounceDao {
 data class NodeTypeCount(
     val nodeType: String,
     val count: Int,
+)
+
+/**
+ * Arrival floor of a paging generation: the sort key of the row at the top of the filtered
+ * stream, i.e. the boundary of its first page.
+ */
+data class AnnounceArrivalMarker(
+    val lastSeenTimestamp: Long,
+    val destinationHash: String,
 )

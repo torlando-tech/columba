@@ -50,12 +50,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -70,6 +68,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import kotlinx.coroutines.launch
 import network.columba.app.R
 import network.columba.app.data.repository.Announce
+import network.columba.app.viewmodel.AnnounceRowEdit
 import network.columba.app.rns.api.model.NodeType
 import network.columba.app.ui.components.AnnounceFilterChips
 import network.columba.app.ui.components.LocalWindowSize
@@ -145,20 +144,32 @@ fun AnnounceStreamScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Track new announces that appear while scrolled down
-    var newAnnouncesCount by remember { mutableIntStateOf(0) }
+    // Track announces that arrived after the loaded stream was started. The list is frozen
+    // while scrolled (GH #1166); the count drives the "new announces" affordance.
+    val newAnnouncesCount by viewModel.newAnnounceCount.collectAsState()
+    val windowRefreshPending by viewModel.windowRefreshPending.collectAsState()
+    val rowEdits by viewModel.rowEdits.collectAsState()
+    val hasVisibleRows = hasVisibleAnnounce(pagingItems, rowEdits)
 
     // Check if we're at the top of the list
-    val isAtTop by remember {
+    val isAtTop by remember(listState) {
         derivedStateOf {
             listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
         }
     }
 
-    // Reset new announces count when scrolling to top
-    LaunchedEffect(isAtTop) {
-        if (isAtTop) {
-            newAnnouncesCount = 0
+    // Reloading replaces every loaded page, so only do it while the viewport is at the top.
+    LaunchedEffect(isAtTop, newAnnouncesCount, windowRefreshPending) {
+        if (isAtTop && (newAnnouncesCount > 0 || windowRefreshPending)) {
+            viewModel.refreshAnnounces()
+        }
+    }
+
+    // Removing the last visible card leaves the loaded list unchanged but renders empty;
+    // reset the viewport so later arrivals reload the list instead of arriving unseen.
+    LaunchedEffect(hasVisibleRows) {
+        if (!hasVisibleRows) {
+            listState.scrollToItem(0)
         }
     }
 
@@ -287,67 +298,71 @@ fun AnnounceStreamScreen(
             Box(
                 modifier = Modifier.fillMaxSize(),
             ) {
-                if (pagingItems.itemCount == 0) {
-                    if (searchQuery.isNotBlank()) {
-                        SearchNoResultsState(
-                            query = searchQuery.trim(),
-                            titleRes = R.string.search_no_results_title_nodes,
-                            onClearSearch = { viewModel.searchQuery.value = "" },
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                LazyColumn(
+                    state = listState,
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .simpleVerticalScrollbar(listState),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (!hasVisibleRows) {
+                        item {
+                            if (searchQuery.isNotBlank()) {
+                                SearchNoResultsState(
+                                    query = searchQuery.trim(),
+                                    titleRes = R.string.search_no_results_title_nodes,
+                                    onClearSearch = { viewModel.searchQuery.value = "" },
+                                    modifier = Modifier.fillParentMaxSize(),
+                                )
+                            } else {
+                                EmptyAnnounceState(modifier = Modifier.fillParentMaxSize())
+                            }
+                        }
                     } else {
-                        EmptyAnnounceState(
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .simpleVerticalScrollbar(listState),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
                         items(
                             count = pagingItems.itemCount,
-                            key = pagingItems.stableKey(),
+                            key = { index -> pagingItems.peek(index)?.destinationHash ?: "loading_$index" },
                         ) { index ->
                             val announce = pagingItems[index]
-                            if (announce != null) {
+                            val rowEdit = announce?.let { rowEdits[it.destinationHash] }
+                            if (announce != null && rowEdit?.isDeleted != true) {
+                                val favorite = rowEdit?.isFavorite
+                                val displayed =
+                                    if (favorite != null) announce.copy(isFavorite = favorite) else announce
                                 Box {
                                     AnnounceCard(
-                                        announce = announce,
+                                        announce = displayed,
                                         onClick = {
-                                            onPeerClick(announce.destinationHash, announce.peerName)
+                                            onPeerClick(displayed.destinationHash, displayed.peerName)
                                         },
                                         onFavoriteClick = {
-                                            viewModel.toggleContact(announce.destinationHash)
+                                            viewModel.toggleContact(displayed.destinationHash)
                                         },
                                         onLongPress = {
-                                            contextMenuAnnounce = announce
+                                            contextMenuAnnounce = displayed
                                             showContextMenu = true
                                         },
                                     )
 
                                     // Show context menu for this announce
-                                    if (showContextMenu && contextMenuAnnounce == announce) {
+                                    if (showContextMenu && contextMenuAnnounce == displayed) {
                                         PeerContextMenu(
                                             expanded = true,
                                             onDismiss = { showContextMenu = false },
-                                            announce = announce,
+                                            announce = displayed,
                                             onToggleFavorite = {
-                                                viewModel.toggleContact(announce.destinationHash)
+                                                viewModel.toggleContact(displayed.destinationHash)
                                             },
                                             onStartChat = {
-                                                onStartChat(announce.destinationHash, announce.peerName)
+                                                onStartChat(displayed.destinationHash, displayed.peerName)
                                             },
                                             onViewDetails = {
-                                                onPeerClick(announce.destinationHash, announce.peerName)
+                                                onPeerClick(displayed.destinationHash, displayed.peerName)
                                             },
                                             onDeleteAnnounce = {
-                                                announceToDelete = announce
+                                                announceToDelete = displayed
                                                 showDeleteDialog = true
                                             },
                                         )
@@ -355,46 +370,26 @@ fun AnnounceStreamScreen(
                                 }
                             }
                         }
-
-                        // Bottom spacing for navigation bar (fixed height since M3 NavigationBar consumes the insets)
-                        item {
-                            Spacer(modifier = Modifier.height(100.dp))
-                        }
                     }
 
-                    // New announces indicator button
-                    if (newAnnouncesCount > 0) {
-                        FloatingActionButton(
-                            onClick = {
-                                coroutineScope.launch {
-                                    listState.animateScrollToItem(0)
-                                    newAnnouncesCount = 0
-                                }
-                            },
-                            modifier =
-                                Modifier
-                                    .align(Alignment.TopCenter)
-                                    .padding(top = 8.dp),
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowUp,
-                                    contentDescription = stringResource(R.string.announce_scroll_to_top),
-                                )
-                                Text(
-                                    text = "$newAnnouncesCount",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
+                    // Bottom spacing for navigation bar (fixed height since M3 NavigationBar consumes the insets)
+                    item {
+                        Spacer(modifier = Modifier.height(100.dp))
                     }
+                }
+
+                if (!isAtTop && newAnnouncesCount > 0) {
+                    NewAnnouncesFab(
+                        count = newAnnouncesCount,
+                        onClick = {
+                            viewModel.refreshAnnounces()
+                            coroutineScope.launch { listState.animateScrollToItem(0) }
+                        },
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 8.dp),
+                    )
                 }
             }
         }
@@ -428,6 +423,40 @@ fun AnnounceStreamScreen(
                 showClearAllDialog = false
             },
         )
+    }
+}
+
+/**
+ * Floating affordance shown while the announce stream is frozen and announces arrived.
+ * Tapping it reloads from the newest row and returns the viewport to the top.
+ */
+@Composable
+private fun NewAnnouncesFab(
+    count: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowUp,
+                contentDescription = stringResource(R.string.announce_scroll_to_top),
+            )
+            Text(
+                text = "$count",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }
 
@@ -593,48 +622,38 @@ fun AnnounceStreamContent(
     // Scroll state
     val listState = rememberLazyListState()
 
-    // Scroll position anchor — tracks which item the user is viewing by identity (not index).
-    // When Room invalidates the PagingSource and items shift positions, we find our anchor
-    // item in the new data and scroll back to it.
-    var anchorHash by remember { mutableStateOf<String?>(null) }
-    var anchorOffset by remember { mutableStateOf(0) }
+    // Track announces that arrived after the loaded stream was started. The list is frozen
+    // while scrolled (GH #1166); the count drives the "new announces" affordance.
+    val newAnnouncesCount by viewModel.newAnnounceCount.collectAsState()
+    val windowRefreshPending by viewModel.windowRefreshPending.collectAsState()
+    val rowEdits by viewModel.rowEdits.collectAsState()
+    val hasVisibleRows = hasVisibleAnnounce(pagingItems, rowEdits)
+    val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
-        snapshotFlow {
-            val index = listState.firstVisibleItemIndex
-            val offset = listState.firstVisibleItemScrollOffset
-            val hash =
-                if (index < pagingItems.itemCount) {
-                    pagingItems.peek(index)?.destinationHash
-                } else {
-                    null
-                }
-            Triple(index, offset, hash)
-        }.collect { (index, offset, currentHash) ->
-            if (currentHash == null) return@collect
-            val savedHash = anchorHash
-
-            if (savedHash != null && savedHash != currentHash && index > 0) {
-                // The item at our position changed identity — data refreshed under us.
-                // Find where our anchor item moved to and restore position.
-                val newIndex =
-                    pagingItems.itemSnapshotList.items
-                        .indexOfFirst { it.destinationHash == savedHash }
-                if (newIndex >= 0) {
-                    listState.scrollToItem(newIndex, anchorOffset)
-                    return@collect // Don't update anchor yet — next emission will confirm
-                }
-            }
-
-            // Normal tracking: save current position
-            anchorHash = currentHash
-            anchorOffset = offset
+    val isAtTop by remember(listState) {
+        derivedStateOf {
+            listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
         }
     }
 
     // Check loading state - only show spinner for initial load when list is empty
     // This prevents flickering when new announces arrive and trigger a refresh
     val isLoading = pagingItems.loadState.refresh is androidx.paging.LoadState.Loading
+
+    // Reloading replaces every loaded page, so only do it while the viewport is at the top.
+    LaunchedEffect(isAtTop, newAnnouncesCount, windowRefreshPending) {
+        if (isAtTop && (newAnnouncesCount > 0 || windowRefreshPending)) {
+            viewModel.refreshAnnounces()
+        }
+    }
+
+    // Removing the last visible card leaves the loaded list unchanged but renders empty;
+    // reset the viewport so later arrivals reload the list instead of arriving unseen.
+    LaunchedEffect(hasVisibleRows) {
+        if (!hasVisibleRows) {
+            listState.scrollToItem(0)
+        }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         if (showSearchFilter) {
@@ -656,82 +675,108 @@ fun AnnounceStreamContent(
             expanded = filtersExpanded,
             onExpandRequest = onExpandFiltersRequest,
         )
-        when {
-            isLoading && pagingItems.itemCount == 0 -> {
-                LoadingNetworkState(modifier = Modifier.fillMaxSize())
-            }
-            !isLoading && pagingItems.itemCount == 0 && searchQuery.isNotBlank() -> {
-                SearchNoResultsState(
-                    query = searchQuery.trim(),
-                    titleRes = R.string.search_no_results_title_nodes,
-                    onClearSearch = { viewModel.searchQuery.value = "" },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            !isLoading && pagingItems.itemCount == 0 -> {
-                EmptyAnnounceState(modifier = Modifier.fillMaxSize())
-            }
-            else -> {
-                LazyColumn(
-                    state = listState,
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .simpleVerticalScrollbar(listState),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(
-                        count = pagingItems.itemCount,
-                        key = pagingItems.stableKey(),
-                    ) { index ->
-                        val announce = pagingItems[index]
-                        if (announce != null) {
-                            Box {
-                                AnnounceCard(
-                                    announce = announce,
-                                    onClick = {
-                                        onPeerClick(announce.destinationHash, announce.peerName)
-                                    },
-                                    onFavoriteClick = {
-                                        viewModel.toggleContact(announce.destinationHash)
-                                    },
-                                    onLongPress = {
-                                        contextMenuAnnounce = announce
-                                        showContextMenu = true
-                                    },
-                                )
-
-                                // Show context menu for this announce
-                                if (showContextMenu && contextMenuAnnounce == announce) {
-                                    PeerContextMenu(
-                                        expanded = true,
-                                        onDismiss = { showContextMenu = false },
-                                        announce = announce,
-                                        onToggleFavorite = {
-                                            viewModel.toggleContact(announce.destinationHash)
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .simpleVerticalScrollbar(listState),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                when {
+                    !hasVisibleRows && isLoading && pagingItems.itemCount == 0 -> {
+                        item {
+                            LoadingNetworkState(modifier = Modifier.fillParentMaxSize())
+                        }
+                    }
+                    !hasVisibleRows && searchQuery.isNotBlank() -> {
+                        item {
+                            SearchNoResultsState(
+                                query = searchQuery.trim(),
+                                titleRes = R.string.search_no_results_title_nodes,
+                                onClearSearch = { viewModel.searchQuery.value = "" },
+                                modifier = Modifier.fillParentMaxSize(),
+                            )
+                        }
+                    }
+                    !hasVisibleRows -> {
+                        item {
+                            EmptyAnnounceState(modifier = Modifier.fillParentMaxSize())
+                        }
+                    }
+                    else -> {
+                        items(
+                            count = pagingItems.itemCount,
+                            key = { index -> pagingItems.peek(index)?.destinationHash ?: "loading_$index" },
+                        ) { index ->
+                            val announce = pagingItems[index]
+                            val rowEdit = announce?.let { rowEdits[it.destinationHash] }
+                            if (announce != null && rowEdit?.isDeleted != true) {
+                                val favorite = rowEdit?.isFavorite
+                                val displayed =
+                                    if (favorite != null) announce.copy(isFavorite = favorite) else announce
+                                Box {
+                                    AnnounceCard(
+                                        announce = displayed,
+                                        onClick = {
+                                            onPeerClick(displayed.destinationHash, displayed.peerName)
                                         },
-                                        onStartChat = {
-                                            onStartChat(announce.destinationHash, announce.peerName)
+                                        onFavoriteClick = {
+                                            viewModel.toggleContact(displayed.destinationHash)
                                         },
-                                        onViewDetails = {
-                                            onPeerClick(announce.destinationHash, announce.peerName)
-                                        },
-                                        onDeleteAnnounce = {
-                                            announceToDelete = announce
-                                            showDeleteDialog = true
+                                        onLongPress = {
+                                            contextMenuAnnounce = displayed
+                                            showContextMenu = true
                                         },
                                     )
+
+                                    // Show context menu for this announce
+                                    if (showContextMenu && contextMenuAnnounce == displayed) {
+                                        PeerContextMenu(
+                                            expanded = true,
+                                            onDismiss = { showContextMenu = false },
+                                            announce = displayed,
+                                            onToggleFavorite = {
+                                                viewModel.toggleContact(displayed.destinationHash)
+                                            },
+                                            onStartChat = {
+                                                onStartChat(displayed.destinationHash, displayed.peerName)
+                                            },
+                                            onViewDetails = {
+                                                onPeerClick(displayed.destinationHash, displayed.peerName)
+                                            },
+                                            onDeleteAnnounce = {
+                                                announceToDelete = displayed
+                                                showDeleteDialog = true
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-
-                    // Bottom spacing for navigation bar
-                    item {
-                        Spacer(modifier = Modifier.height(100.dp))
-                    }
                 }
+
+                // Bottom spacing for navigation bar
+                item {
+                    Spacer(modifier = Modifier.height(100.dp))
+                }
+            }
+
+            if (!isAtTop && newAnnouncesCount > 0) {
+                NewAnnouncesFab(
+                    count = newAnnouncesCount,
+                    onClick = {
+                        viewModel.refreshAnnounces()
+                        coroutineScope.launch { listState.animateScrollToItem(0) }
+                    },
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 8.dp),
+                )
             }
         }
     }
@@ -799,6 +844,22 @@ fun EmptyAnnounceState(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
         )
     }
+}
+
+/**
+ * Whether any loaded row is still visible. Rows removed by the user are kept in the paged
+ * window (the stream is frozen) and only hidden, so itemCount alone cannot tell if the
+ * list is empty.
+ */
+private fun hasVisibleAnnounce(
+    pagingItems: LazyPagingItems<Announce>,
+    rowEdits: Map<String, AnnounceRowEdit>,
+): Boolean {
+    for (index in 0 until pagingItems.itemCount) {
+        val hash = pagingItems.peek(index)?.destinationHash
+        if (hash == null || rowEdits[hash]?.isDeleted != true) return true
+    }
+    return false
 }
 
 private fun formatHash(hash: ByteArray): String {
@@ -885,26 +946,4 @@ fun ClearAllAnnouncesDialog(
             }
         },
     )
-}
-
-/**
- * Stable key function for announce paging lists.
- *
- * Uses [network.columba.app.data.repository.Announce.destinationHash] as the primary key so Compose can track
- * items across list re-sorts (e.g., when new announces insert at the top).
- * Falls back to appending a disambiguator only for transient Paging3 duplicates
- * (issue #542) to avoid a duplicate-key crash.
- */
-private fun LazyPagingItems<network.columba.app.data.repository.Announce>.stableKey(): (index: Int) -> Any {
-    val seen = mutableSetOf<String>()
-    val keys =
-        Array<Any>(itemCount) { index ->
-            val hash = peek(index)?.destinationHash
-            if (hash != null) {
-                if (seen.add(hash)) hash else "${hash}_dup$index"
-            } else {
-                "placeholder_$index"
-            }
-        }
-    return { index -> keys[index] }
 }

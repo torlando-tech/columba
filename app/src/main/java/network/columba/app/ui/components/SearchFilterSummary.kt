@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import network.columba.app.R
 
@@ -66,9 +67,19 @@ fun SearchFilterSummary(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         InputChip(
+            // Weighted with fill = false so a long query cannot push the match
+            // count off the row; the label itself stays one ellipsized line so a
+            // pasted multi-kilobyte query cannot grow the fixed header.
+            modifier = Modifier.weight(1f, fill = false),
             selected = false,
             onClick = onClearSearch,
-            label = { Text(stringResource(R.string.search_filter_chip, query)) },
+            label = {
+                Text(
+                    text = stringResource(R.string.search_filter_chip, query),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
             trailingIcon = {
                 Icon(
                     imageVector = Icons.Default.Close,
@@ -82,6 +93,7 @@ fun SearchFilterSummary(
                 text = pluralStringResource(R.plurals.search_filter_match_count, matchCount, matchCount),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
             )
         }
     }

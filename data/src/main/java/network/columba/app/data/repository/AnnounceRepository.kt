@@ -4,6 +4,7 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.map
+import network.columba.app.data.db.dao.AnnounceArrivalMarker
 import network.columba.app.data.db.dao.AnnounceDao
 import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
@@ -216,15 +217,15 @@ class AnnounceRepository
             }
 
         /**
-         * Newest `lastSeenTimestamp` the current filters can show, used as the floor for
-         * the "N new announces" counter. Null when the filtered stream is empty.
+         * Arrival floor the current filters can show, used as the floor for the "N new
+         * announces" counter. Both halves are null when the filtered stream is empty.
          */
-        suspend fun getNewestAnnounceTimestamp(
+        suspend fun getArrivalFloor(
             nodeTypes: List<String>,
             searchQuery: String,
             interfaceTypes: List<String>,
-        ): Long? =
-            announceDao.getNewestAnnounceTimestamp(
+        ): AnnounceArrivalMarker =
+            announceDao.getArrivalFloor(
                 nodeTypes = nodeTypes,
                 nodeTypeCount = nodeTypes.size,
                 query = searchQuery,
@@ -233,17 +234,20 @@ class AnnounceRepository
             )
 
         /**
-         * Live count of announces newer than [since] that the current filters can show.
-         * Re-emits on announce writes so the UI can advertise arrivals while frozen.
+         * Live count of announces that arrived past the floor and that the current filters
+         * can show. Re-emits on announce writes so the UI can advertise arrivals while frozen.
          */
+        @Suppress("LongParameterList") // Filter halves plus both floor halves are bind params
         fun observeAnnounceCountNewerThan(
-            since: Long,
+            sinceTimestamp: Long,
+            sinceRowId: Long,
             nodeTypes: List<String>,
             searchQuery: String,
             interfaceTypes: List<String>,
         ): Flow<Int> =
             announceDao.observeAnnounceCountNewerThan(
-                since = since,
+                sinceTimestamp = sinceTimestamp,
+                sinceRowId = sinceRowId,
                 nodeTypes = nodeTypes,
                 nodeTypeCount = nodeTypes.size,
                 query = searchQuery,

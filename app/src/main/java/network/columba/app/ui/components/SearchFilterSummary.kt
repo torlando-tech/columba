@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import network.columba.app.R
+import network.columba.app.ui.screens.bottomBarClearance
 
 /**
  * Out-of-bar indicator for a search filter that outlives its search surface.
@@ -152,5 +153,10 @@ fun SearchNoResultsState(
         TextButton(onClick = onClearSearch) {
             Text(stringResource(R.string.search_no_results_clear))
         }
+        // The app's NavigationBar is drawn over tab content, so scrollable
+        // content must reserve its height itself (see bottomBarClearance): the
+        // clearance belongs at the end of the scroll content, never as padding
+        // on the bounds. Last so the centred group still clears the bar.
+        Spacer(modifier = Modifier.height(bottomBarClearance()))
     }
 }

@@ -173,6 +173,17 @@ class SettingsRepository
             val ALLOW_CALLS_FROM_CONTACTS_ONLY = booleanPreferencesKey("allow_calls_from_contacts_only")
             val ALLOW_VOICE_CALLS = booleanPreferencesKey("allow_voice_calls")
 
+            // Threads feature flag (threads-spec rollout): default OFF through
+            // one beta cycle. The v4→v5 DB migration is additive and ships
+            // ahead of this flag on purpose; the flag gates the P2 UI, not
+            // persistence.
+            val THREADS_ENABLED = booleanPreferencesKey("threads_enabled")
+
+            // Per-card expansion state in the chat list (threads-spec §6.1:
+            // "expansion state is per-card local preference"). Set of expanded
+            // peer hashes.
+            val EXPANDED_CHAT_CARDS = stringSetPreferencesKey("expanded_chat_cards")
+
             // Telemetry collector preferences
             val TELEMETRY_COLLECTOR_ADDRESS = stringPreferencesKey("telemetry_collector_address")
             val TELEMETRY_COLLECTOR_ENABLED = booleanPreferencesKey("telemetry_collector_enabled")
@@ -2400,6 +2411,55 @@ class SettingsRepository
                 .edit()
                 .putBoolean(KEY_BLOCK_UNKNOWN_SENDERS, enabled)
                 .apply()
+        }
+
+        // Threads feature flag
+
+        /**
+         * Flow of the `threads_enabled` feature flag. Default false: threads
+         * ship behind this flag through one beta cycle (threads-spec
+         * rollout). Wire parsing + persistence are flag-independent by design
+         * (additive migration lands ahead of the UI); this gates the P2 UI.
+         */
+        val threadsEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.THREADS_ENABLED] ?: false
+                }.distinctUntilChanged()
+
+        /** Get the `threads_enabled` feature flag (non-flow). */
+        suspend fun getThreadsEnabled(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.THREADS_ENABLED] ?: false
+                }.first()
+
+        /** Save the `threads_enabled` feature flag. */
+        suspend fun saveThreadsEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.THREADS_ENABLED] = enabled
+            }
+        }
+
+        // Chat-list expanding cards (threads-spec §6.1)
+
+        /** Peer hashes whose chat card is expanded. Per-card local preference. */
+        val expandedChatCardsFlow: Flow<Set<String>> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.EXPANDED_CHAT_CARDS] ?: emptySet()
+                }.distinctUntilChanged()
+
+        /** Expand/collapse one chat card (persisted local preference). */
+        suspend fun setChatCardExpanded(
+            peerHash: String,
+            expanded: Boolean,
+        ) {
+            context.dataStore.edit { preferences ->
+                val current = preferences[PreferencesKeys.EXPANDED_CHAT_CARDS] ?: emptySet()
+                preferences[PreferencesKeys.EXPANDED_CHAT_CARDS] =
+                    if (expanded) current + peerHash else current - peerHash
+            }
         }
 
         /**

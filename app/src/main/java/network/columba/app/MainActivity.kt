@@ -596,6 +596,8 @@ sealed class PendingNavigation {
         val peerName: String,
         val fromNotification: Boolean = false,
         val notificationEventId: Long = 0L,
+        /** Thread the notification's message belongs to; null = Main. */
+        val threadIdHex: String? = null,
     ) : PendingNavigation()
 
     data class AddContact(
@@ -850,6 +852,7 @@ fun ColumbaNavigation(
                             encodedPeerName = encodedName,
                             fromNotification = navigation.fromNotification,
                             notificationEventId = navigation.notificationEventId,
+                            threadId = navigation.threadIdHex,
                         )
 
                         if (navigationAction == ConversationNavigation.Action.REUSE_CURRENT) {
@@ -1260,6 +1263,17 @@ fun ColumbaNavigation(
                 val encodedHash = Uri.encode(destinationHash)
                 val encodedName = Uri.encode(peerName)
                 navController.navigate("messaging/$encodedHash/$encodedName")
+            },
+            onThreadClick = { destinationHash, peerName, threadIdHex ->
+                navController.navigate(
+                    network.columba.app.navigation.ConversationNavigation.routeFor(
+                        encodedDestinationHash = Uri.encode(destinationHash),
+                        encodedPeerName = Uri.encode(peerName),
+                        fromNotification = false,
+                        notificationEventId = 0L,
+                        threadId = threadIdHex,
+                    ),
+                )
             },
             onViewPeerDetails = { peerHash ->
                 val encodedHash = Uri.encode(peerHash)
@@ -2292,6 +2306,11 @@ fun ColumbaNavigation(
                                             type = NavType.LongType
                                             defaultValue = 0L
                                         },
+                                        navArgument("threadId") {
+                                            type = NavType.StringType
+                                            nullable = true
+                                            defaultValue = null
+                                        },
                                     ),
                             ) { backStackEntry ->
                                 val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
@@ -2299,12 +2318,15 @@ fun ColumbaNavigation(
                                 val fromNotification = backStackEntry.arguments?.getBoolean("fromNotification") == true
                                 val notificationEventId =
                                     backStackEntry.arguments?.getLong("notificationEventId") ?: 0L
+                                val initialThreadId =
+                                    backStackEntry.arguments?.getString("threadId")?.takeIf { it.isNotEmpty() }
 
                                 MessagingScreen(
                                     destinationHash = destinationHash,
                                     peerName = peerName,
                                     fromNotification = fromNotification,
                                     notificationEventId = notificationEventId,
+                                    initialThreadId = initialThreadId,
                                     onBackClick = { navController.popBackStack() },
                                     onPeerClick = {
                                         val encodedHash = Uri.encode(destinationHash)

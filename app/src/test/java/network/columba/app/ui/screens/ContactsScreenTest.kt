@@ -1,15 +1,19 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import network.columba.app.data.db.entity.ContactStatus
@@ -45,7 +49,7 @@ import org.robolectric.shadows.ShadowToast
 @Config(sdk = [34], application = Application::class)
 class ContactsScreenTest {
     private val registerActivityRule = RegisterComponentActivityRule()
-    private val composeRule = createComposeRule()
+    private val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
@@ -213,6 +217,65 @@ class ContactsScreenTest {
 
         // Search bar is hidden
         composeTestRule.onNodeWithText("Search by name, hash, or tag...").assertDoesNotExist()
+    }
+
+    @Test
+    fun contactsScreen_dismissedSearch_withNonBlankQuery_keepsFilterVisible() {
+        val mockViewModel = createMockContactsViewModel(searchQuery = "Alice")
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        composeTestRule.onNodeWithContentDescription("Close search").performClick()
+
+        // The live filter must stay visible outside the dismissed bar
+        composeTestRule.onNodeWithText("Filtering: \"Alice\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun contactsScreen_backWhileSearchOpen_collapsesSearchInsteadOfPoppingTheTab() {
+        var hostBackInvoked = false
+        val mockViewModel = createMockContactsViewModel(searchQuery = "Alice")
+
+        composeTestRule.setContent {
+            BackHandler { hostBackInvoked = true }
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        // The screen's BackHandler only becomes enabled once the toggle recomposes
+        composeTestRule.waitForIdle()
+        composeTestRule.runOnUiThread { composeTestRule.activity.onBackPressedDispatcher.onBackPressed() }
+
+        assertEquals(false, hostBackInvoked)
+        assertEquals("Alice", mockViewModel.searchQuery.value)
+        composeTestRule.onNodeWithText("Filtering: \"Alice\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun contactsScreen_longCollapsedQuery_keepsMatchCountVisible() {
+        // A pasted query must not grow the fixed header or squeeze the count
+        // out of the row: the chip label stays one ellipsized line.
+        val longQuery = "q".repeat(400)
+        val contacts =
+            listOf(
+                TestFactories.createEnrichedContact(destinationHash = "hash1"),
+            )
+        val mockViewModel =
+            createMockContactsViewModel(
+                groupedContacts = ContactGroups(null, emptyList(), contacts),
+                contactCount = 1,
+            )
+        bindFilters(mockViewModel, initialQuery = longQuery)
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        composeTestRule.onNodeWithText("Filtering: \"$longQuery\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("1 match").assertIsDisplayed()
     }
 
     @Test
@@ -1444,7 +1507,7 @@ class ContactsScreenTest {
     }
 
     @Test
-    fun contactsScreen_searchQueryHidesAllContacts_showsFilterEmptyState() {
+    fun contactsScreen_searchQueryHidesAllContacts_showsSearchEmptyState() {
         // Search alone can empty the list; that must not read as an empty
         // address book, and the recovery action must clear the query too.
         val mockViewModel =
@@ -1457,7 +1520,8 @@ class ContactsScreenTest {
             ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
-        composeTestRule.onNodeWithText("No contacts match your filters").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No contacts match \"zzz\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No contacts match your filters").assertDoesNotExist()
         composeTestRule.onNodeWithText("No contacts yet").assertDoesNotExist()
     }
 
@@ -1474,6 +1538,14 @@ class ContactsScreenTest {
             ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
+        // The query outranks the type filter: its state names what failed to match.
+        composeTestRule.onNodeWithText("No contacts match \"zzz\"").assertIsDisplayed()
+
+        // Short test viewport: the state scrolls so its action stays reachable.
+        composeTestRule.onNodeWithText("Clear search").performScrollTo().performClick()
+        composeTestRule.waitForIdle()
+
+        // The type filter alone still hides every contact.
         composeTestRule.onNodeWithText("No contacts match your filters").assertIsDisplayed()
 
         composeTestRule.onNodeWithText("Clear filters").performClick()

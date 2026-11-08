@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import network.columba.app.data.db.entity.ContactStatus
@@ -1528,7 +1529,8 @@ class ContactsScreenTest {
         // The query outranks the type filter: its state names what failed to match.
         composeTestRule.onNodeWithText("No contacts match \"zzz\"").assertIsDisplayed()
 
-        composeTestRule.onNodeWithText("Clear search").performClick()
+        // Short test viewport: the state scrolls so its action stays reachable.
+        composeTestRule.onNodeWithText("Clear search").performScrollTo().performClick()
         composeTestRule.waitForIdle()
 
         // The type filter alone still hides every contact.

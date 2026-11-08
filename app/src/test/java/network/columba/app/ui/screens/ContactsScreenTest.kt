@@ -255,15 +255,27 @@ class ContactsScreenTest {
     }
 
     @Test
-    fun contactsScreen_filteredEmpty_showsQueryAwareEmptyState() {
-        val mockViewModel = createMockContactsViewModel(searchQuery = "Alice", isLoading = false)
+    fun contactsScreen_longCollapsedQuery_keepsMatchCountVisible() {
+        // A pasted query must not grow the fixed header or squeeze the count
+        // out of the row: the chip label stays one ellipsized line.
+        val longQuery = "q".repeat(400)
+        val contacts =
+            listOf(
+                TestFactories.createEnrichedContact(destinationHash = "hash1"),
+            )
+        val mockViewModel =
+            createMockContactsViewModel(
+                groupedContacts = ContactGroups(null, emptyList(), contacts),
+                contactCount = 1,
+            )
+        bindFilters(mockViewModel, initialQuery = longQuery)
 
         composeTestRule.setContent {
             ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
-        composeTestRule.onNodeWithText("No contacts match \"Alice\"").assertIsDisplayed()
-        composeTestRule.onNodeWithText("No contacts yet").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Filtering: \"$longQuery\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("1 match").assertIsDisplayed()
     }
 
     @Test

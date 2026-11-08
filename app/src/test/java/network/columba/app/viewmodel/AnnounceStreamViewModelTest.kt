@@ -140,8 +140,7 @@ class AnnounceStreamViewModelTest {
         coEvery { reticulumProtocol.getPathTableHashes() } returns emptyList()
         coEvery { announceRepository.setFavorite(any(), any()) } just Runs
         coEvery { announceRepository.getAnnounce(any()) } returns null
-        coEvery { announceRepository.getArrivalFloor(any(), any(), any()) } returns
-            AnnounceArrivalMarker(lastSeenTimestamp = null, rowId = null)
+        coEvery { announceRepository.getArrivalFloor(any(), any(), any()) } returns null
         every {
             announceRepository.observeAnnounceCountNewerThan(any(), any(), any(), any(), any())
         } returns flowOf(0)
@@ -694,7 +693,7 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery { announceRepository.getArrivalFloor(any(), any(), any()) } returns
-                AnnounceArrivalMarker(lastSeenTimestamp = 1_000L, rowId = 12L)
+                AnnounceArrivalMarker(lastSeenTimestamp = 1_000L, destinationHash = "aa")
             every {
                 announceRepository.observeAnnounceCountNewerThan(any(), any(), any(), any(), any())
             } returns flowOf(3)
@@ -722,7 +721,7 @@ class AnnounceStreamViewModelTest {
             verify {
                 announceRepository.observeAnnounceCountNewerThan(
                     1_000L,
-                    12L,
+                    "aa",
                     listOf("PEER"),
                     "",
                     emptyList(),
@@ -734,8 +733,7 @@ class AnnounceStreamViewModelTest {
     fun newAnnounceCount_emptyStream_countsArrivals() =
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
-            coEvery { announceRepository.getArrivalFloor(any(), any(), any()) } returns
-                AnnounceArrivalMarker(lastSeenTimestamp = null, rowId = null)
+            coEvery { announceRepository.getArrivalFloor(any(), any(), any()) } returns null
             every {
                 announceRepository.observeAnnounceCountNewerThan(any(), any(), any(), any(), any())
             } returns flowOf(2)
@@ -749,7 +747,13 @@ class AnnounceStreamViewModelTest {
             }
 
             verify {
-                announceRepository.observeAnnounceCountNewerThan(0L, 0L, listOf("PEER"), "", emptyList())
+                announceRepository.observeAnnounceCountNewerThan(
+                    0L,
+                    "",
+                    listOf("PEER"),
+                    "",
+                    emptyList(),
+                )
             }
         }
 
@@ -760,14 +764,14 @@ class AnnounceStreamViewModelTest {
             // First read captures the floor; any later read would see the newer announce.
             coEvery { announceRepository.getArrivalFloor(any(), any(), any()) } returnsMany
                 listOf(
-                    AnnounceArrivalMarker(lastSeenTimestamp = 500L, rowId = 3L),
-                    AnnounceArrivalMarker(lastSeenTimestamp = 1_200L, rowId = 9L),
+                    AnnounceArrivalMarker(lastSeenTimestamp = 500L, destinationHash = "aa"),
+                    AnnounceArrivalMarker(lastSeenTimestamp = 1_200L, destinationHash = "bb"),
                 )
             every {
-                announceRepository.observeAnnounceCountNewerThan(eq(500L), eq(3L), any(), any(), any())
+                announceRepository.observeAnnounceCountNewerThan(eq(500L), eq("aa"), any(), any(), any())
             } returns flowOf(4)
             every {
-                announceRepository.observeAnnounceCountNewerThan(eq(1_200L), eq(9L), any(), any(), any())
+                announceRepository.observeAnnounceCountNewerThan(eq(1_200L), eq("bb"), any(), any(), any())
             } returns flowOf(0)
 
             viewModel = newViewModel()
@@ -793,7 +797,7 @@ class AnnounceStreamViewModelTest {
             val order = mutableListOf<String>()
             coEvery { announceRepository.getArrivalFloor(any(), any(), any()) } coAnswers {
                 order += "floor"
-                AnnounceArrivalMarker(lastSeenTimestamp = null, rowId = null)
+                null
             }
             every { announceRepository.getAnnouncesPaged(any(), any(), any()) } answers {
                 order += "page"

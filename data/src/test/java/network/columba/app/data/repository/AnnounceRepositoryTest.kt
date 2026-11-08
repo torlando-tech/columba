@@ -330,20 +330,22 @@ class AnnounceRepositoryTest {
         }
 
     @Test
-    fun newArrivalQueries_respectNodeTypeFilterAndHighWaterMark() =
+    fun newArrivalQueries_respectNodeTypeFilterAndTopOfStreamFloor() =
         runTest {
             val now = System.currentTimeMillis()
             saveTestAnnounce("peera".hash32(), "TCPClientInterface[A]", now, hops = 1)
             saveTestAnnounce("nodea".hash32(), "TCPClientInterface[A]", now + 1, hops = 1, nodeType = "NODE")
 
             val floor =
-                repository.getArrivalFloor(
-                    nodeTypes = listOf("PEER"),
-                    searchQuery = "",
-                    interfaceTypes = emptyList(),
+                requireNotNull(
+                    repository.getArrivalFloor(
+                        nodeTypes = listOf("PEER"),
+                        searchQuery = "",
+                        interfaceTypes = emptyList(),
+                    ),
                 )
             assertEquals("PEER-only floor ignores the newer NODE row", now, floor.lastSeenTimestamp)
-            assertEquals("Floor tracks the newest matching rowid", 1L, floor.rowId)
+            assertEquals("Floor is the top row's hash, the paging tie-break", "peera".hash32(), floor.destinationHash)
 
             saveTestAnnounce("peerz".hash32(), "TCPClientInterface[A]", now + 2, hops = 1)
             saveTestAnnounce("nodez".hash32(), "TCPClientInterface[A]", now + 3, hops = 1, nodeType = "NODE")
@@ -351,42 +353,75 @@ class AnnounceRepositoryTest {
             val count =
                 repository
                     .observeAnnounceCountNewerThan(
-                        sinceTimestamp = requireNotNull(floor.lastSeenTimestamp),
-                        sinceRowId = requireNotNull(floor.rowId),
+                        sinceTimestamp = floor.lastSeenTimestamp,
+                        sinceHash = floor.destinationHash,
                         nodeTypes = listOf("PEER"),
                         searchQuery = "",
                         interfaceTypes = emptyList(),
                     ).first()
-            assertEquals("Only the newer PEER row counts", 1, count)
+            assertEquals("Only the newer PEER row sorts above the floor", 1, count)
         }
 
     @Test
-    fun lateSaveWithOlderReceiveTime_countsAsArrival() =
+    fun arrivalsBelowTheFloor_areNotCounted() =
         runTest {
             val now = System.currentTimeMillis()
             saveTestAnnounce("peera".hash32(), "TCPClientInterface[A]", now, hops = 1)
-
             val floor =
-                repository.getArrivalFloor(
-                    nodeTypes = listOf("PEER"),
-                    searchQuery = "",
-                    interfaceTypes = emptyList(),
+                requireNotNull(
+                    repository.getArrivalFloor(
+                        nodeTypes = listOf("PEER"),
+                        searchQuery = "",
+                        interfaceTypes = emptyList(),
+                    ),
                 )
 
-            // Announce queued before the floor was captured, but saved after it: its receive
-            // time is at or below the floor, so only the rowid proves it is an arrival.
+            // Saved after the floor but with an older timestamp: it sorts below the top of the
+            // stream, so it never displaces a card above the anchor and owes no hint. The
+            // counter promises only rows a reload reveals at the top.
             saveTestAnnounce("peerl".hash32(), "TCPClientInterface[A]", now - 30_000, hops = 1)
 
             val count =
                 repository
                     .observeAnnounceCountNewerThan(
-                        sinceTimestamp = requireNotNull(floor.lastSeenTimestamp),
-                        sinceRowId = requireNotNull(floor.rowId),
+                        sinceTimestamp = floor.lastSeenTimestamp,
+                        sinceHash = floor.destinationHash,
                         nodeTypes = listOf("PEER"),
                         searchQuery = "",
                         interfaceTypes = emptyList(),
                     ).first()
-            assertEquals("A late save behind the floor still counts as new", 1, count)
+            assertEquals("Older-timestamp arrival sorts below the floor", 0, count)
+        }
+
+    @Test
+    fun sameTimestampSmallerHash_sortsAboveTheFloor() =
+        runTest {
+            val now = System.currentTimeMillis()
+            // CRC32 hashes: peerb c3a10228, peerd 2ac2a71d.
+            saveTestAnnounce("peerb".hash32(), "TCPClientInterface[A]", now, hops = 1)
+            val floor =
+                requireNotNull(
+                    repository.getArrivalFloor(
+                        nodeTypes = listOf("PEER"),
+                        searchQuery = "",
+                        interfaceTypes = emptyList(),
+                    ),
+                )
+
+            // Same millisecond, smaller hash: paging order puts it above the floor row, so the
+            // counter must see it and a reload must reveal it at the top.
+            saveTestAnnounce("peerd".hash32(), "TCPClientInterface[A]", now, hops = 1)
+
+            val count =
+                repository
+                    .observeAnnounceCountNewerThan(
+                        sinceTimestamp = floor.lastSeenTimestamp,
+                        sinceHash = floor.destinationHash,
+                        nodeTypes = listOf("PEER"),
+                        searchQuery = "",
+                        interfaceTypes = emptyList(),
+                    ).first()
+            assertEquals("Same-timestamp row with a smaller hash sorts above", 1, count)
         }
 
     private fun String.hash32(): String = "%032x".format(java.util.zip.CRC32().apply { update(toByteArray()) }.value)

@@ -1045,8 +1045,14 @@ fun MessagingScreen(
     var startedThreadHex by rememberSaveable(destinationHash, initialThreadId) {
         mutableStateOf<String?>(null)
     }
-    LaunchedEffect(destinationHash, initialThreadId, currentConversationHash) {
+    // Keyed on threadsEnabled too: a notification tap that lands before the
+    // setting loads must still reach its thread once the flag says threads are
+    // on. With the flag off there is one flat list, so the app shows Main -
+    // selecting a thread there would put the composer in a view no surface
+    // renders.
+    LaunchedEffect(destinationHash, initialThreadId, currentConversationHash, threadsEnabled) {
         if (currentConversationHash != destinationHash) return@LaunchedEffect
+        if (!threadsEnabled) return@LaunchedEffect
         when (initialThreadId) {
             null -> Unit
             ConversationNavigation.NEW_THREAD_ARG -> {

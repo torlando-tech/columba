@@ -91,6 +91,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -205,6 +206,17 @@ class MessagingViewModel
                     started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = false,
                 )
+
+        /**
+         * The thread the screen shows and the composer targets. A stored
+         * selection counts only while threads are enabled: with the flag off the
+         * app has one flat list, so display, draft, and send all read Main
+         * (threads-spec §6.2). Eager so `.value` is current for the
+         * non-compose call sites below.
+         */
+        private val activeThreadHex: StateFlow<String?> =
+            combine(_selectedThread, threadsEnabled) { selected, enabled -> selected.takeIf { enabled } }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, initialValue = null)
 
         /** One-shot composer prefill for "Thread from here" (editable quote of the root). */
         private val _threadComposerPrefill = MutableSharedFlow<ThreadComposerPrefill>(extraBufferCapacity = 1)
@@ -331,6 +343,30 @@ class MessagingViewModel
         val threadView: StateFlow<ThreadViewUi?> = _threadView.asStateFlow()
 
         init {
+            // Turning the flag off collapses the app to Main. Switch through the
+            // normal path so the composer's text is saved to the thread it was
+            // typed for and Main's own draft comes back; otherwise the composer
+            // would keep thread text while the list - and the send target - are
+            // Main, and the next keystroke would overwrite Main's saved draft.
+            viewModelScope.launch {
+                threadsEnabled.collect { enabled ->
+                    if (!enabled && _selectedThread.value != null) {
+                        switchThread(null)
+                    }
+                }
+            }
+
+            // The notification gate suppresses per displayed target, not per
+            // peer: a message landing in Main must still notify while the user
+            // reads one of the peer's threads. Mirror what is on screen.
+            viewModelScope.launch {
+                combine(_currentConversation, activeThreadHex) { peerHash, thread -> peerHash to thread }
+                    .distinctUntilChanged()
+                    .collect { (peerHash, thread) ->
+                        if (peerHash != null) activeConversationManager.setActive(peerHash, thread)
+                    }
+            }
+
             // Re-derive the thread-view header whenever the selection changes
             // or the thread row updates (e.g. a late announce resolves the
             // case-2 root -> placeholder swaps for the pinned root card).
@@ -1809,7 +1845,7 @@ class MessagingViewModel
             // Flush any pending draft save for the previous conversation
             // (keyed to the thread that composer was targeting).
             val previousHash = _currentConversation.value
-            val previousThreadHex = _selectedThread.value
+            val previousThreadHex = activeThreadHex.value
             draftSaveJob?.cancel()
             draftSaveJob = null
             if (previousHash != null && previousHash != destinationHash) {
@@ -1854,10 +1890,14 @@ class MessagingViewModel
             // Restore draft for this conversation
             draftRestoreJob = viewModelScope.launch {
                 try {
+                    // Gate the restore target exactly like the screen gates the
+                    // display: with the flag off the list is Main, so the draft
+                    // must be Main's too (or the composer would show the hidden
+                    // thread's text under a Main list).
                     val draft =
                         conversationRepository.getDraft(
                             destinationHash,
-                            restoredThreadHex.hexToBytesOrNull(),
+                            restoredThreadHex.takeIf { threadsEnabled.value }?.hexToBytesOrNull(),
                         )
                     _draftText.value = draft
                     lastDraftText = draft.orEmpty()
@@ -1891,7 +1931,7 @@ class MessagingViewModel
          */
         fun onDraftTextChanged(text: String) {
             val peerHash = _currentConversation.value ?: return
-            val threadIdHex = _selectedThread.value
+            val threadIdHex = activeThreadHex.value
             lastDraftText = text
             draftSaveJob?.cancel()
             draftSaveJob =
@@ -1927,7 +1967,7 @@ class MessagingViewModel
 
         /** Re-asserts user-visible conversation state on initial display and foreground return. */
         fun onConversationVisible(destinationHash: String) {
-            activeConversationManager.setActive(destinationHash)
+            activeConversationManager.setActive(destinationHash, activeThreadHex.value)
             notificationHelper.cancelNotificationForConversation(destinationHash)
             markAsRead(destinationHash)
         }
@@ -1977,7 +2017,7 @@ class MessagingViewModel
                     // (null = Main). The first message of a case-2 thread carries
                     // the thread root as `0x30` structurally (threads-spec §4.2),
                     // taking precedence over any pending reply chip.
-                    val threadIdBytes = _selectedThread.value.hexToBytesOrNull()
+                    val threadIdBytes = activeThreadHex.value.hexToBytesOrNull()
                     val pendingThreadRoot = _pendingThreadRoot.value.takeIf { threadIdBytes != null }
                     val replyToId = pendingThreadRoot ?: _pendingReplyTo.value?.messageId
                     val voiceBytes =
@@ -2029,6 +2069,7 @@ class MessagingViewModel
                         voiceRecording = voiceRecording,
                         threadId = threadIdBytes,
                         threadRootSend = pendingThreadRoot != null,
+                        threadRootHex = pendingThreadRoot,
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Error sending message", e)
@@ -2062,6 +2103,7 @@ class MessagingViewModel
             voiceRecording: tech.torlando.lxst.recording.RecordedAudio?,
             threadId: ByteArray? = null,
             threadRootSend: Boolean = false,
+            threadRootHex: String? = null,
         ) {
             val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes) ?: return
             val destHashBytes = validateDestinationHash(destinationHash) ?: return
@@ -2187,8 +2229,14 @@ class MessagingViewModel
                     if (persisted) {
                         clearSubmittedDraft(destinationHash, submittedText, replyToId, threadId)
                         if (threadRootSend) {
-                            _pendingThreadRoot.value = null
-                            rememberTarget()
+                            // Clear only the root this send carried: a concurrent
+                            // "Thread from here" (or a thread switch) owns the
+                            // pending root now, and wiping it would strip the root
+                            // off that thread's first message.
+                            if (ownsPendingRoot(threadId, threadRootHex)) {
+                                _pendingThreadRoot.value = null
+                                rememberTarget()
+                            }
                         }
                     }
                     composerSendResults.send(
@@ -2387,6 +2435,21 @@ class MessagingViewModel
             }
             return composerCanClear
         }
+
+        /**
+         * True while the send's target is still the displayed thread and the
+         * pending root is still the one that send carried. Only then may its
+         * completion clear the root - otherwise a newer "Thread from here" or a
+         * thread switch owns it.
+         */
+        private suspend fun ownsPendingRoot(
+            threadId: ByteArray?,
+            threadRootHex: String?,
+        ): Boolean =
+            threadSwitchMutex.withLock {
+                _selectedThread.value == threadId?.toHex() &&
+                    _pendingThreadRoot.value == threadRootHex
+            }
 
         private suspend fun clearSubmittedDraft(
             destinationHash: String,

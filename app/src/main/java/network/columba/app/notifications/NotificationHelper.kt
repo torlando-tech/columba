@@ -153,7 +153,7 @@ class NotificationHelper
             isFavorite: Boolean,
             threadIdHex: String? = null,
         ) {
-            if (!shouldNotifyMessage(destinationHash, isFavorite)) return
+            if (!shouldNotifyMessage(destinationHash, isFavorite, threadIdHex)) return
 
             // Create intent to open the conversation
             // Use SINGLE_TOP to reuse existing activity via onNewIntent (avoids splash screen flash)
@@ -235,6 +235,7 @@ class NotificationHelper
         private suspend fun shouldNotifyMessage(
             destinationHash: String,
             isFavorite: Boolean,
+            threadIdHex: String?,
         ): Boolean {
             if (!settingsRepository.notificationsEnabledFlow.first()) return false
             if (!hasNotificationPermission()) return false
@@ -248,9 +249,17 @@ class NotificationHelper
                 } else {
                     generalMessageNotifications
                 }
+            // Only the displayed target counts as on screen. With threads on,
+            // the user sees one thread at a time, so a message landing in Main
+            // (or in another thread) still warrants a notification; with the
+            // flag off there is one flat list and the gate stays per peer.
+            val threadsEnabledNow = settingsRepository.threadsEnabledFlow.first()
+            val visibleThread =
+                if (threadsEnabledNow) activeConversationManager.activeThread.value else null
             val foregroundSuppressed =
                 isAppInForeground() &&
-                    activeConversationManager.activeConversation.value == destinationHash
+                    activeConversationManager.activeConversation.value == destinationHash &&
+                    (!threadsEnabledNow || visibleThread == threadIdHex)
             return preferenceAllows && !foregroundSuppressed
         }
 

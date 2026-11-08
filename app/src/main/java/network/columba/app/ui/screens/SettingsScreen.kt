@@ -340,6 +340,8 @@ fun SettingsScreen(
                     onAllowCallsFromContactsOnlyChange = { viewModel.setAllowCallsFromContactsOnly(it) },
                     blockedPeerCount = blockedPeerCount,
                     onNavigateToBlockedUsers = onNavigateToBlockedUsers,
+                    notificationPrivacyLevel = state.notificationPrivacyLevel,
+                    onNotificationPrivacyLevelChange = { viewModel.setNotificationPrivacyLevel(it) },
                 )
 
                 NotificationSettingsCard(

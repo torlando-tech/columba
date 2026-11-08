@@ -101,30 +101,44 @@ object DatabaseModule {
             override fun onOpen(db: SupportSQLiteDatabase) = applyPragmas(db)
         }
 
+    /**
+     * Builds the process-wide [ColumbaDatabase].
+     *
+     * Shared by the Hilt graph (app process) and `ServiceDatabaseProvider` (`:reticulum` process)
+     * so both processes use the same migrations, durability pragmas, and invalidation settings.
+     */
+    fun buildColumbaDatabase(
+        context: Context,
+        name: String = DATABASE_NAME,
+        multiInstanceInvalidation: Boolean = true,
+    ): ColumbaDatabase {
+        val builder =
+            Room
+                .databaseBuilder(context.applicationContext, ColumbaDatabase::class.java, name)
+                .addMigrations(
+                    ColumbaDatabase.MIGRATION_1_2,
+                    ColumbaDatabase.MIGRATION_2_3,
+                    ColumbaDatabase.MIGRATION_3_4,
+                    ColumbaDatabase.MIGRATION_4_5,
+                    ColumbaDatabase.MIGRATION_5_6,
+                    ColumbaDatabase.MIGRATION_6_7,
+                    ColumbaDatabase.MIGRATION_7_8,
+                    ColumbaDatabase.MIGRATION_8_9,
+                    ColumbaDatabase.MIGRATION_9_10,
+                    ColumbaDatabase.MIGRATION_10_11,
+                    ColumbaDatabase.MIGRATION_11_12,
+                ).addCallback(DURABILITY_CALLBACK)
+        if (multiInstanceInvalidation) {
+            builder.enableMultiInstanceInvalidation()
+        }
+        return builder.build()
+    }
+
     @Provides
     @Singleton
     fun provideColumbaDatabase(
         @ApplicationContext context: Context,
-    ): ColumbaDatabase =
-        Room
-            .databaseBuilder(
-                context,
-                ColumbaDatabase::class.java,
-                DATABASE_NAME,
-            ).addMigrations(
-                ColumbaDatabase.MIGRATION_1_2,
-                ColumbaDatabase.MIGRATION_2_3,
-                ColumbaDatabase.MIGRATION_3_4,
-                ColumbaDatabase.MIGRATION_4_5,
-                ColumbaDatabase.MIGRATION_5_6,
-                ColumbaDatabase.MIGRATION_6_7,
-                ColumbaDatabase.MIGRATION_7_8,
-                ColumbaDatabase.MIGRATION_8_9,
-                ColumbaDatabase.MIGRATION_9_10,
-            )
-            .enableMultiInstanceInvalidation()
-            .addCallback(DURABILITY_CALLBACK)
-            .build()
+    ): ColumbaDatabase = buildColumbaDatabase(context)
 
     @Provides
     fun provideConversationDao(database: ColumbaDatabase): ConversationDao = database.conversationDao()

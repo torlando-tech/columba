@@ -84,7 +84,7 @@ fun Message.toMessageUi(): MessageUi {
         receivedSnr = receivedSnr,
         receivedAt = receivedAt,
         sentInterface = sentInterface,
-        signatureVerified = signatureVerified,
+        signatureStatus = signatureStatus,
     )
 }
 
@@ -295,7 +295,8 @@ internal fun parseAudioAttachment(fieldsJson: String?): AudioAttachmentUi? {
     }
 }
 
-private fun parseAudioObject(field7: JSONObject, fieldsJson: String): AudioAttachmentUi? {
+private fun parseAudioObject(field7: JSONObject, fieldsJson: String,
+): AudioAttachmentUi? {
     val mode = field7.optInt("mode", -1)
     val modeEnum = AudioAttachmentMode.fromWireValue(mode) ?: AudioAttachmentMode.UNSUPPORTED
     val payloadRef = parseAudioPayloadRef(field7)
@@ -308,7 +309,8 @@ private fun parseAudioObject(field7: JSONObject, fieldsJson: String): AudioAttac
     )
 }
 
-private fun parseAudioArray(field7: JSONArray, fieldsJson: String): AudioAttachmentUi? {
+private fun parseAudioArray(field7: JSONArray, fieldsJson: String,
+): AudioAttachmentUi? {
     if (field7.length() < 2) return AudioAttachmentUi(AudioAttachmentMode.UNSUPPORTED, fieldsJson = fieldsJson)
     val modeValue = field7.optInt(0, -1)
     val modeEnum = AudioAttachmentMode.fromWireValue(modeValue) ?: AudioAttachmentMode.UNSUPPORTED

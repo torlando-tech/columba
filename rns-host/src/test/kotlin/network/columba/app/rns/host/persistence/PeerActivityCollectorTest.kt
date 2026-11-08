@@ -56,6 +56,7 @@ class PeerActivityCollectorTest {
         every { telemetryApi.locationTelemetryFlow } returns telemetry
         every { transportAdmin.reactionReceivedFlow } returns reactions
         coEvery { persistence.recordPeerActivity(any(), any(), any()) } returns true
+        coEvery { persistence.persistReceivedMessage(any()) } returns true
         coEvery { persistence.persistIncomingMessageActivity(any(), any(), any(), any()) } returns true
         coEvery { persistence.persistReactionActivity(any(), any(), any()) } returns true
         coEvery { persistence.persistDeliveryProof(any(), any()) } returns true

@@ -1,14 +1,5 @@
 package network.columba.app.service
 
-import network.columba.app.data.db.dao.PeerIconDao
-import network.columba.app.data.repository.AnnounceRepository
-import network.columba.app.data.repository.ContactRepository
-import network.columba.app.data.repository.ConversationRepository
-import network.columba.app.data.repository.IdentityRepository
-import network.columba.app.notifications.NotificationHelper
-import network.columba.app.rns.api.RnsCore
-import network.columba.app.rns.api.RnsLxmf
-import network.columba.app.rns.api.model.ReceivedMessage
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -16,22 +7,33 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import network.columba.app.data.db.dao.MessageDao
+import network.columba.app.data.db.dao.PeerIconDao
+import network.columba.app.data.repository.AnnounceRepository
+import network.columba.app.data.repository.ContactRepository
+import network.columba.app.data.repository.ConversationRepository
+import network.columba.app.data.repository.IdentityRepository
+import network.columba.app.data.repository.Message as DataMessage
+import network.columba.app.notifications.NotificationHelper
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.model.ReceivedMessage
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
 /**
- * Unit tests for MessageCollector.
- * Tests notification behavior for messages that were persisted by ServicePersistenceManager.
- *
- * Note: MessageCollector no longer persists messages itself - all persistence happens in
- * ServicePersistenceManager which enforces privacy settings like "block unknown senders".
- * MessageCollector only shows notifications for messages that exist in the database.
+ * Contract tests for the live collector, which is now a persistence fallback and icon
+ * enricher only. Notification ownership and catch-up are covered against real Room and
+ * NotificationManager in MessageCollectorNotificationDatabaseTest.
  */
 class MessageCollectorTest {
     private lateinit var rnsCore: RnsCore
@@ -42,9 +44,9 @@ class MessageCollectorTest {
     private lateinit var identityRepository: IdentityRepository
     private lateinit var notificationHelper: NotificationHelper
     private lateinit var peerIconDao: PeerIconDao
+    private lateinit var messageDao: MessageDao
     private lateinit var messageCollector: MessageCollector
 
-    // Use extraBufferCapacity to ensure emissions aren't dropped before collector is ready
     private lateinit var messageFlow: MutableSharedFlow<ReceivedMessage>
 
     private val testSourceHash = ByteArray(16) { it.toByte() }
@@ -61,51 +63,37 @@ class MessageCollectorTest {
         identityRepository = mockk()
         notificationHelper = mockk()
         peerIconDao = mockk()
+        messageDao = mockk()
 
-        // Explicit stubs for notificationHelper (suspend function)
-        coEvery { notificationHelper.notifyMessageReceived(any(), any(), any(), any()) } returns Unit
-
-        // Explicit stubs for peerIconDao
+        coEvery { notificationHelper.notifyMessageReceived(any(), any(), any(), any()) } just Runs
         coEvery { peerIconDao.getIcon(any()) } returns null
+        coEvery { peerIconDao.upsertIcon(any()) } just Runs
 
         messageFlow = MutableSharedFlow(extraBufferCapacity = 10)
-
-        // Mock protocol flows
         every { rnsLxmf.observeMessages() } returns messageFlow
-        every { rnsCore.observeAnnounces() } returns flowOf() // Empty flow for announces
+        every { rnsCore.observeAnnounces() } returns flowOf()
 
-        // Mock conversation repository default behaviors
-        // Note: getMessageById is no longer called - MessageCollector trusts broadcasts
         coEvery { conversationRepository.getPeerPublicKey(any()) } returns null
         coEvery { conversationRepository.updatePeerPublicKey(any(), any()) } just Runs
         coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
         coEvery { conversationRepository.getConversation(any()) } returns null
         coEvery { conversationRepository.updatePeerName(any(), any()) } just Runs
         coEvery { conversationRepository.getMessageById(any()) } returns null
-
-        // Mock announce repository
         coEvery { announceRepository.getAnnounce(any()) } returns null
+        coEvery { contactRepository.hasContact(any()) } returns false
 
-        // Mock getReceivedMessageIds for pre-seeding (empty by default)
-        coEvery { conversationRepository.getReceivedMessageIds(since = any()) } returns emptyList()
-
-        // Mock identity repository - return a mock active identity matching test destination
         coEvery { identityRepository.getActiveIdentitySync() } returns
             mockk {
+                every { identityHash } returns "local-identity"
                 every { destinationHash } returns testDestHash.joinToString("") { "%02x".format(it) }
             }
+        every { identityRepository.activeIdentity } returns flowOf(null)
 
-        messageCollector =
-            MessageCollector(
-                rnsCore = rnsCore,
-                rnsLxmf = rnsLxmf,
-                conversationRepository = conversationRepository,
-                announceRepository = announceRepository,
-                contactRepository = contactRepository,
-                identityRepository = identityRepository,
-                notificationHelper = notificationHelper,
-                peerIconDao = peerIconDao,
-            )
+        every { messageDao.observePendingNotificationCount(any()) } returns flowOf(0)
+        coEvery { messageDao.getPendingNotificationMessages(any(), any()) } returns emptyList()
+        coEvery { messageDao.ackNotificationHandled(any(), any()) } returns 0
+
+        messageCollector = buildCollector()
     }
 
     @After
@@ -114,158 +102,127 @@ class MessageCollectorTest {
         clearAllMocks()
     }
 
-    // ========== De-duplication Tests ==========
-    // Note: Blocking tests are handled at the EventHandler/ServicePersistenceManager level.
-    // MessageCollector only receives broadcasts for messages that were already persisted.
+    private fun buildCollector() =
+        MessageCollector(
+            rnsCore = rnsCore,
+            rnsLxmf = rnsLxmf,
+            conversationRepository = conversationRepository,
+            announceRepository = announceRepository,
+            contactRepository = contactRepository,
+            identityRepository = identityRepository,
+            notificationHelper = notificationHelper,
+            peerIconDao = peerIconDao,
+            messageDao = messageDao,
+        )
+
+    private fun receivedMessage(
+        id: String,
+        content: String = "Hello",
+        iconName: String? = null,
+    ) = ReceivedMessage(
+        messageHash = id,
+        content = content,
+        sourceHash = testSourceHash,
+        destinationHash = testDestHash,
+        timestamp = System.currentTimeMillis(),
+        fieldsJson = null,
+        publicKey = null,
+        iconAppearance =
+            iconName?.let {
+                network.columba.app.rns.api.model.IconAppearance(
+                    iconName = it,
+                    foregroundColor = "00ff00",
+                    backgroundColor = "000000",
+                )
+            },
+    )
 
     @Test
-    fun `processMessage shows notification for broadcast message`() =
+    fun `live message is persisted as fallback without posting a notification`() =
         runBlocking {
-            // Given: A message broadcast from EventHandler (already persisted by service)
-            val testMessage =
-                ReceivedMessage(
-                    messageHash = "persisted_message",
-                    content = "This was persisted",
-                    sourceHash = testSourceHash,
-                    destinationHash = testDestHash,
-                    timestamp = System.currentTimeMillis(),
-                    fieldsJson = null,
-                    publicKey = null,
-                )
+            messageCollector.startCollecting()
+            delay(50)
+            messageFlow.emit(receivedMessage("fresh_message"))
+            delay(200)
 
-            // Mock that message already exists in database (persisted by ServicePersistenceManager)
-            // isRead = false means the user hasn't seen it yet, so notification should fire
+            val saved = slot<DataMessage>()
+            coVerify(timeout = 2000) {
+                conversationRepository.saveMessage(
+                    peerHash = testSourceHashHex,
+                    peerName = any(),
+                    message = capture(saved),
+                    peerPublicKey = any(),
+                )
+            }
+            assertFalse("fallback persistence must store the message as inbound", saved.captured.isFromMe)
+            assertEquals(1, messageCollector.messagesCollected.value)
+            coVerify(exactly = 0) {
+                notificationHelper.notifyMessageReceived(any(), any(), any(), any())
+            }
+        }
+
+    @Test
+    fun `already persisted message refreshes icon and never posts a notification`() =
+        runBlocking {
             coEvery { conversationRepository.getMessageById("persisted_message") } returns
                 mockk {
                     every { isRead } returns false
                 }
 
-            // When: Start collecting and emit message
-            val startResult = runCatching { messageCollector.startCollecting() }
-            assertTrue("startCollecting should complete without throwing", startResult.isSuccess)
-            kotlinx.coroutines.delay(50)
+            messageCollector.startCollecting()
+            delay(50)
+            messageFlow.emit(receivedMessage("persisted_message", iconName = "account"))
+            delay(200)
 
-            messageFlow.emit(testMessage)
-            kotlinx.coroutines.delay(200)
-
-            // Then: Notification should be shown
             coVerify(timeout = 2000) {
-                notificationHelper.notifyMessageReceived(
-                    destinationHash = testSourceHashHex,
-                    peerName = any(),
-                    messagePreview = any(),
-                    isFavorite = any(),
+                peerIconDao.upsertIcon(
+                    match {
+                        it.destinationHash == testSourceHashHex &&
+                            it.iconName == "account" &&
+                            it.foregroundColor == "00ff00" &&
+                            it.backgroundColor == "000000"
+                    },
                 )
             }
-
-            // And: No persistence should be attempted (service already persisted)
             coVerify(exactly = 0) {
-                conversationRepository.saveMessage(
-                    peerHash = any(),
-                    peerName = any(),
-                    message = any(),
-                    peerPublicKey = any(),
-                )
+                conversationRepository.saveMessage(any(), any(), any(), any())
             }
+            coVerify(exactly = 0) {
+                notificationHelper.notifyMessageReceived(any(), any(), any(), any())
+            }
+            assertEquals(0, messageCollector.messagesCollected.value)
         }
-
-    @Test
-    fun `processMessage skips in-memory duplicate`() =
-        runBlocking {
-            // Given: A message broadcast from EventHandler
-            val testMessage =
-                ReceivedMessage(
-                    messageHash = "duplicate_message",
-                    content = "Hello world",
-                    sourceHash = testSourceHash,
-                    destinationHash = testDestHash,
-                    timestamp = System.currentTimeMillis(),
-                    fieldsJson = null,
-                    publicKey = null,
-                )
-
-            // When: Start collecting and emit the same message twice
-            val result =
-                runCatching {
-                    messageCollector.startCollecting()
-                    kotlinx.coroutines.delay(50)
-
-                    messageFlow.emit(testMessage)
-                    kotlinx.coroutines.delay(200)
-                }
-
-            // Then: Operation should complete without throwing
-            assertTrue("Message emission should complete without throwing", result.isSuccess)
-
-            // First message should trigger notification
-            coVerify(exactly = 1, timeout = 2000) {
-                notificationHelper.notifyMessageReceived(
-                    destinationHash = testSourceHashHex,
-                    peerName = any(),
-                    messagePreview = any(),
-                    isFavorite = any(),
-                )
-            }
-
-            // Emit the same message again
-            messageFlow.emit(testMessage)
-            kotlinx.coroutines.delay(200)
-
-            // Second message should be skipped (in-memory cache) - still only 1 notification
-            coVerify(exactly = 1, timeout = 2000) {
-                notificationHelper.notifyMessageReceived(
-                    destinationHash = testSourceHashHex,
-                    peerName = any(),
-                    messagePreview = any(),
-                    isFavorite = any(),
-                )
-            }
-        }
-
-    // ========== Lifecycle Tests ==========
 
     @Test
     fun `stopCollecting clears caches`() =
         runBlocking {
-            // Given: Start collecting
             messageCollector.startCollecting()
-            kotlinx.coroutines.delay(50)
-
-            // When: Stop collecting
+            delay(50)
             messageCollector.stopCollecting()
 
-            // Then: getStats should show cleared state
             val stats = messageCollector.getStats()
-            assert(stats.contains("Known peers: 0"))
+            assertTrue(stats.contains("Known peers: 0"))
         }
 
     @Test
-    fun `startCollecting is idempotent`() =
+    fun `startCollecting is idempotent after stop`() =
         runBlocking {
-            // Given: Already started
+            messageCollector.startCollecting()
             messageCollector.startCollecting()
 
-            // When: Start again
-            messageCollector.startCollecting()
-
-            // Then: No exception, single collection running
-            // This is primarily testing no crash occurs
+            messageCollector.stopCollecting()
+            val result = runCatching { messageCollector.startCollecting() }
+            assertTrue("restart after stop must succeed", result.isSuccess)
         }
-
-    // ========== Peer Name Tests ==========
 
     @Test
     fun `updatePeerName caches peer name`() =
         runBlocking {
             val peerHash = "test_peer_hash"
 
-            // When
             val result = runCatching { messageCollector.updatePeerName(peerHash, "New Name") }
+            delay(100)
 
-            // Wait for database update
-            kotlinx.coroutines.delay(100)
-
-            // Then: Function completed and database should be updated
             assertTrue("updatePeerName should complete without throwing", result.isSuccess)
             coVerify(timeout = 1000) {
                 conversationRepository.updatePeerName(peerHash, "New Name")
@@ -275,249 +232,12 @@ class MessageCollectorTest {
     @Test
     fun `updatePeerName ignores blank names`() =
         runBlocking {
-            val peerHash = "test_peer_hash"
+            val result = runCatching { messageCollector.updatePeerName("test_peer_hash", "") }
+            delay(100)
 
-            // When
-            val result = runCatching { messageCollector.updatePeerName(peerHash, "") }
-
-            // Wait
-            kotlinx.coroutines.delay(100)
-
-            // Then: Function completed and database should NOT be updated
             assertTrue("updatePeerName should complete without throwing", result.isSuccess)
             coVerify(exactly = 0) {
                 conversationRepository.updatePeerName(any(), any())
-            }
-        }
-
-    // ========== Pre-seed Dedup Tests ==========
-
-    @Test
-    fun `pre-seeded message IDs prevent duplicate notifications on restart`() =
-        runBlocking {
-            // Given: A message that was already in the DB from a previous session
-            coEvery { conversationRepository.getReceivedMessageIds(since = any()) } returns listOf("already_notified_msg")
-
-            val testMessage =
-                ReceivedMessage(
-                    messageHash = "already_notified_msg",
-                    content = "Old message replayed",
-                    sourceHash = testSourceHash,
-                    destinationHash = testDestHash,
-                    timestamp = System.currentTimeMillis(),
-                    fieldsJson = null,
-                    publicKey = null,
-                )
-
-            // When: Start collecting (pre-seeds IDs) and replay the message
-            messageCollector.startCollecting()
-            kotlinx.coroutines.delay(100)
-            messageFlow.emit(testMessage)
-            kotlinx.coroutines.delay(200)
-
-            // Then: Message was skipped entirely - counter didn't increment
-            assertEquals(0, messageCollector.messagesCollected.value)
-
-            // And no notification was shown (message was pre-seeded as already processed)
-            coVerify(exactly = 0) {
-                notificationHelper.notifyMessageReceived(
-                    destinationHash = any(),
-                    peerName = any(),
-                    messagePreview = any(),
-                    isFavorite = any(),
-                )
-            }
-        }
-
-    // ========== Notification for Pre-Persisted Messages Tests ==========
-
-    @Test
-    fun `processMessage uses favorite status from announce for notification`() =
-        runBlocking {
-            // Given: A message from a favorite peer
-            val testMessage =
-                ReceivedMessage(
-                    messageHash = "favorite_msg",
-                    content = "Message from favorite",
-                    sourceHash = testSourceHash,
-                    destinationHash = testDestHash,
-                    timestamp = System.currentTimeMillis(),
-                    fieldsJson = null,
-                    publicKey = null,
-                )
-
-            // Peer is a favorite
-            coEvery { announceRepository.getAnnounce(testSourceHashHex) } returns
-                mockk {
-                    every { isFavorite } returns true
-                }
-
-            // When: Start collecting and emit
-            val startResult = runCatching { messageCollector.startCollecting() }
-            assertTrue("startCollecting should complete without throwing", startResult.isSuccess)
-            kotlinx.coroutines.delay(50)
-            messageFlow.emit(testMessage)
-            kotlinx.coroutines.delay(200)
-
-            // Then: Notification should be posted with isFavorite = true
-            coVerify(timeout = 2000) {
-                notificationHelper.notifyMessageReceived(
-                    destinationHash = testSourceHashHex,
-                    peerName = any(),
-                    messagePreview = any(),
-                    isFavorite = true,
-                )
-            }
-        }
-
-    @Test
-    fun `processMessage treats saved contact without favorite announce as favorite`() =
-        runBlocking {
-            // Given: A message from a peer saved via "Save to Contacts" (Chats/Messaging
-            // screens). Those flows write to the contacts table and never touch the
-            // legacy announce isFavorite flag, so the announce row reports
-            // isFavorite = false even though the peer IS a saved contact.
-            val testMessage =
-                ReceivedMessage(
-                    messageHash = "contact_msg",
-                    content = "Message from saved contact",
-                    sourceHash = testSourceHash,
-                    destinationHash = testDestHash,
-                    timestamp = System.currentTimeMillis(),
-                    fieldsJson = null,
-                    publicKey = null,
-                )
-
-            // Announce row exists but is NOT favorited (Save to Contacts never sets it)
-            coEvery { announceRepository.getAnnounce(testSourceHashHex) } returns
-                mockk {
-                    every { isFavorite } returns false
-                }
-            // But the peer IS in the contacts table
-            coEvery { contactRepository.hasContact(testSourceHashHex) } returns true
-
-            // When: Start collecting and emit
-            val startResult = runCatching { messageCollector.startCollecting() }
-            assertTrue("startCollecting should complete without throwing", startResult.isSuccess)
-            kotlinx.coroutines.delay(50)
-            messageFlow.emit(testMessage)
-            kotlinx.coroutines.delay(200)
-
-            // Then: Notification should be posted with isFavorite = true, so that
-            // "Message from Saved Peer" (with "Received Message" off) still fires.
-            coVerify(timeout = 2000) {
-                notificationHelper.notifyMessageReceived(
-                    destinationHash = testSourceHashHex,
-                    peerName = any(),
-                    messagePreview = any(),
-                    isFavorite = true,
-                )
-            }
-        }
-
-    @Test
-    fun `processMessage handles announce lookup failure gracefully for notifications`() =
-        runBlocking {
-            // Given: A message where announce lookup fails
-            val testMessage =
-                ReceivedMessage(
-                    messageHash = "announce_error_msg",
-                    content = "Announce lookup will fail",
-                    sourceHash = testSourceHash,
-                    destinationHash = testDestHash,
-                    timestamp = System.currentTimeMillis(),
-                    fieldsJson = null,
-                    publicKey = null,
-                )
-
-            // Announce lookup throws exception
-            coEvery { announceRepository.getAnnounce(testSourceHashHex) } throws RuntimeException("DB error")
-
-            // When: Start collecting and emit
-            val startResult = runCatching { messageCollector.startCollecting() }
-            assertTrue("startCollecting should complete without throwing", startResult.isSuccess)
-            kotlinx.coroutines.delay(50)
-            messageFlow.emit(testMessage)
-            kotlinx.coroutines.delay(200)
-
-            // Then: Notification should still be posted with isFavorite = false (fail-safe default)
-            coVerify(timeout = 2000) {
-                notificationHelper.notifyMessageReceived(
-                    destinationHash = testSourceHashHex,
-                    peerName = any(),
-                    messagePreview = any(),
-                    isFavorite = false,
-                )
-            }
-        }
-
-    @Test
-    fun `processMessage uses cached peer name for notification`() =
-        runBlocking {
-            // Given: Update peer name cache first
-            messageCollector.updatePeerName(testSourceHashHex, "Cached Peer Name")
-            kotlinx.coroutines.delay(100)
-
-            val testMessage =
-                ReceivedMessage(
-                    messageHash = "cached_name_msg",
-                    content = "Test with cached name",
-                    sourceHash = testSourceHash,
-                    destinationHash = testDestHash,
-                    timestamp = System.currentTimeMillis(),
-                    fieldsJson = null,
-                    publicKey = null,
-                )
-
-            // When: Start collecting and emit
-            val startResult = runCatching { messageCollector.startCollecting() }
-            assertTrue("startCollecting should complete without throwing", startResult.isSuccess)
-            kotlinx.coroutines.delay(50)
-            messageFlow.emit(testMessage)
-            kotlinx.coroutines.delay(200)
-
-            // Then: Notification should use the cached peer name
-            coVerify(timeout = 2000) {
-                notificationHelper.notifyMessageReceived(
-                    destinationHash = testSourceHashHex,
-                    peerName = "Cached Peer Name",
-                    messagePreview = any(),
-                    isFavorite = any(),
-                )
-            }
-        }
-
-    @Test
-    fun `processMessage truncates long message preview for notification`() =
-        runBlocking {
-            // Given: A message with content longer than 100 characters
-            val longContent = "A".repeat(200)
-            val testMessage =
-                ReceivedMessage(
-                    messageHash = "long_content_msg",
-                    content = longContent,
-                    sourceHash = testSourceHash,
-                    destinationHash = testDestHash,
-                    timestamp = System.currentTimeMillis(),
-                    fieldsJson = null,
-                    publicKey = null,
-                )
-
-            // When: Start collecting and emit
-            val startResult = runCatching { messageCollector.startCollecting() }
-            assertTrue("startCollecting should complete without throwing", startResult.isSuccess)
-            kotlinx.coroutines.delay(50)
-            messageFlow.emit(testMessage)
-            kotlinx.coroutines.delay(200)
-
-            // Then: Notification preview should be truncated to 100 characters
-            coVerify(timeout = 2000) {
-                notificationHelper.notifyMessageReceived(
-                    destinationHash = testSourceHashHex,
-                    peerName = any(),
-                    messagePreview = "A".repeat(100),
-                    isFavorite = any(),
-                )
             }
         }
 }

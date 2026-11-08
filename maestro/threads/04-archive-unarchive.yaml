@@ -1,0 +1,66 @@
+# 04-archive-unarchive.yaml
+#
+# Spec §5.3: the sheet row's trailing `⋮` (Rename / Mark read / Archive /
+# Delete) archives the thread; the row moves into the pinned `Archived · N`
+# footer section, which expands in place. Un-archive comes from the same menu
+# in the Archived section. All local-only (no wire traffic).
+#
+# The row menu is reached through the sheet's search field: every row has its
+# own `Thread actions` button, so only a filtered list (one match) identifies
+# this flow's row unambiguously.
+#
+# Params: APP_ID, PEER_NAME, THREAD_TOKEN.
+appId: ${APP_ID}
+---
+- runFlow:
+    file: lib/open-chat.yaml
+    env:
+      APP_ID: ${APP_ID}
+      PEER_NAME: ${PEER_NAME}
+
+# Seed a thread with one message so it has a recognizable title.
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- tapOn: "+ New"
+- tapOn: "Reply in thread…"
+- inputText: ${THREAD_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${THREAD_TOKEN}
+    timeout: 30000
+
+# Open the sheet again and filter down to this flow's row.
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- tapOn: "Search threads"
+- inputText: ${THREAD_TOKEN}
+- hideKeyboard
+- tapOn: "Thread actions"
+- tapOn: "Archive"
+
+# The row lands in the pinned `Archived · N` footer; expand it in place.
+- extendedWaitUntil:
+    visible: "Archived.*"
+    timeout: 10000
+- tapOn: "Archived.*"
+- assertVisible:
+    text: ".*${THREAD_TOKEN}.*"
+- takeScreenshot: threads-archived
+
+# Un-archive from the Archived section's row menu. The footer count stays for
+# the rows earlier flows archived, so the row's own menu is the state proof:
+# it offers Archive again once the thread is back in Active.
+- tapOn: "Thread actions"
+- tapOn: "Un-archive"
+- extendedWaitUntil:
+    visible: ".*restored.*"
+    timeout: 10000
+- tapOn: "Thread actions"
+- assertVisible: "Archive"
+- assertNotVisible: "Un-archive"
+- takeScreenshot: threads-unarchived

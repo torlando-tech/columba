@@ -1,0 +1,49 @@
+# 01-create-from-scratch.yaml
+#
+# Spec §5.1 + §6.2 case 1: the header pill opens the thread sheet; "+ New"
+# starts an unnamed thread in place; the first sent message becomes the
+# thread's first reply. A case-1 thread has NO root, so the thread view shows
+# no pinned header (the off-screen placeholder is only for case-2 threads
+# whose root was never received) and the pill takes its title from the first
+# message.
+#
+# Params: APP_ID, PEER_NAME, MSG_TOKEN.
+appId: ${APP_ID}
+---
+- runFlow:
+    file: lib/open-chat.yaml
+    env:
+      APP_ID: ${APP_ID}
+      PEER_NAME: ${PEER_NAME}
+
+# The pill names the open target (Main on entry).
+- extendedWaitUntil:
+    visible:
+      text: "Switch thread: Main"
+    timeout: 10000
+
+# Case 1: sheet "+ New" (the only thread-creation entry point, per manager
+# decision) — the composer retargets (the placeholder proves it).
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- tapOn: "+ New"
+- assertVisible: "Reply in thread…"
+
+- tapOn: "Reply in thread…"
+- inputText: ${MSG_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+
+# The reply renders in the thread view. Case-1 threads have no root: no
+# pinned header card and no off-screen placeholder — just messages in order.
+- extendedWaitUntil:
+    visible: ${MSG_TOKEN}
+    timeout: 30000
+- assertNotVisible: "Thread started off-screen"
+
+# The pill now carries the thread (title derived from the first message).
+- assertVisible:
+    text: ".*${MSG_TOKEN}.*"
+- takeScreenshot: threads-create-from-scratch

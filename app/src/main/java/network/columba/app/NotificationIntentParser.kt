@@ -30,6 +30,7 @@ object NotificationIntentParser {
 
         val destinationHash = intent.getStringExtra(NotificationHelper.EXTRA_DESTINATION_HASH)
         val peerName = intent.getStringExtra(NotificationHelper.EXTRA_PEER_NAME)
+        val threadIdHex = intent.getStringExtra(NotificationHelper.EXTRA_THREAD_ID)
 
         if (destinationHash == null || peerName == null) return null
 
@@ -38,6 +39,7 @@ object NotificationIntentParser {
             peerName = peerName,
             fromNotification = true,
             notificationEventId = notificationEventIds.incrementAndGet(),
+            threadIdHex = threadIdHex?.takeIf { it.isNotEmpty() },
         )
     }
 }

@@ -24,6 +24,7 @@ import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.CustomThemeEntity
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.db.entity.MessageEntity
+import network.columba.app.data.db.entity.ThreadEntity
 import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.util.HashUtils
@@ -351,6 +352,13 @@ class MigrationImporter
                         database.localIdentityDao().identityExists(it.identityHash)
                 }
             val messages = importMessages(validMessages, onProgress)
+
+            val validThreads =
+                bundle.threads.filter {
+                    it.identityHash in importedIdentityHashes ||
+                        database.localIdentityDao().identityExists(it.identityHash)
+                }
+            importThreads(validThreads)
             onProgress(0.7f)
 
             val validContacts =
@@ -493,6 +501,7 @@ class MigrationImporter
                         isRead = msg.isRead,
                         fieldsJson = lifedFieldsJson,
                         reactionsJson = lifedReactionsJson,
+                        threadId = msg.threadId?.hexToBytesOrNullBackup(),
                     )
                 }
             val batches = entities.chunked(100)
@@ -504,6 +513,45 @@ class MigrationImporter
             }
             Log.d(TAG, "Imported ${entities.size} messages")
             return entities.size
+        }
+
+        /**
+         * Restore thread rows (v9 bundles). IGNORE guards against a PK clash
+         * when the row survived (bundles without the parent conversation);
+         * a full re-import replaces the conversation row, whose FK cascade
+         * removes and restores the bundle's thread state — same restore
+         * semantics as messages and conversations.
+         */
+        private suspend fun importThreads(threads: List<ThreadExport>): Int {
+            val entities =
+                threads.mapNotNull { t ->
+                    val threadId = t.threadId.hexToBytesOrNullBackup()
+                    if (threadId == null) {
+                        Log.w(TAG, "Skipping thread export with malformed threadId: ${t.threadId.take(16)}")
+                        return@mapNotNull null
+                    }
+                    ThreadEntity(
+                        threadId = threadId,
+                        conversationHash = t.conversationHash.lowercase(),
+                        identityHash = t.identityHash,
+                        rootMessageId = t.rootMessageId,
+                        title = t.title,
+                        createdAt = t.createdAt,
+                        lastActivityAt = t.lastActivityAt,
+                        archivedAt = t.archivedAt,
+                    )
+                }
+            entities.forEach { database.threadDao().insertThreadIgnore(it) }
+            Log.d(TAG, "Imported ${entities.size} threads")
+            return entities.size
+        }
+
+        /** Backup hex -> raw opaque thread bytes; null on malformed input. */
+        private fun String.hexToBytesOrNullBackup(): ByteArray? {
+            if (isEmpty() || length % 2 != 0) return null
+            val parts = chunked(2).map { it.toIntOrNull(16) }
+            if (parts.any { it == null }) return null
+            return ByteArray(parts.size) { requireNotNull(parts[it]).toByte() }
         }
 
         private suspend fun importContacts(contacts: List<ContactExport>): ContactImportResult {

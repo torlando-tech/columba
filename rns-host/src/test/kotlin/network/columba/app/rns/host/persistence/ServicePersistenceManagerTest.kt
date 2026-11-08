@@ -27,6 +27,7 @@ import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.slot
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -39,7 +40,10 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -63,6 +67,7 @@ class ServicePersistenceManagerTest {
     private lateinit var localIdentityDao: LocalIdentityDao
     private lateinit var peerIdentityDao: PeerIdentityDao
     private lateinit var peerActivityDao: PeerActivityDao
+    private lateinit var threadDao: network.columba.app.data.db.dao.ThreadDao
     private lateinit var peerIconDao: PeerIconDao
     private lateinit var pendingDeliveryStatusDao: PendingDeliveryStatusDao
     private lateinit var settingsAccessor: ServiceSettingsAccessor
@@ -87,6 +92,7 @@ class ServicePersistenceManagerTest {
         localIdentityDao = mockk()
         peerIdentityDao = mockk()
         peerActivityDao = mockk()
+        threadDao = mockk()
         peerIconDao = mockk()
         pendingDeliveryStatusDao = mockk()
         settingsAccessor = mockk()
@@ -102,6 +108,7 @@ class ServicePersistenceManagerTest {
         every { database.peerActivityDao() } returns peerActivityDao
         every { database.peerIconDao() } returns peerIconDao
         every { database.pendingDeliveryStatusDao() } returns pendingDeliveryStatusDao
+        every { database.threadDao() } returns threadDao
         coEvery { peerActivityDao.recordActivity(any(), any(), any()) } just Runs
         coEvery { peerActivityDao.recordActivityOnce(any(), any(), any(), any()) } returns false
         coEvery { announceDao.upsertAnnounce(any()) } just Runs
@@ -514,6 +521,95 @@ class ServicePersistenceManagerTest {
             assertTrue("persistMessage should return true on success", result)
             coVerify { messageDao.insertMessage(any()) }
             coVerify { conversationDao.insertConversation(any()) }
+        }
+
+    @Test
+    fun `persistMessage parses field 8 into threadId and implicitly creates the thread`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+            val threadBytes = ByteArray(16) { (it + 1).toByte() }
+            val threadHex = threadBytes.joinToString("") { "%02x".format(it) }
+            val messageSlot = slot<MessageEntity>()
+            val threadSlot = slot<network.columba.app.data.db.entity.ThreadEntity>()
+
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById(any(), any()) } returns null
+            coEvery { conversationDao.getConversation(any(), any()) } returns null
+            coEvery { conversationDao.insertConversation(any()) } just Runs
+            coEvery { messageDao.insertMessage(capture(messageSlot)) } just Runs
+            coEvery { threadDao.getThread(testIdentityHash, "sender_hash", threadBytes) } returns null
+            coEvery { threadDao.insertThreadIgnore(capture(threadSlot)) } returns 1L
+
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_threaded_message_hash",
+                    content = "threaded hello",
+                    sourceHash = "sender_hash",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = """{"8": "$threadHex"}""",
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = "direct",
+                )
+
+            testScope.advanceUntilIdle()
+
+            assertTrue(result)
+            assertArrayEquals(threadBytes, messageSlot.captured.threadId)
+            assertArrayEquals(threadBytes, threadSlot.captured.threadId)
+            assertEquals("threaded hello", threadSlot.captured.title)
+            assertEquals(testIdentityHash, threadSlot.captured.identityHash)
+            assertEquals("sender_hash", threadSlot.captured.conversationHash)
+        }
+
+    @Test
+    fun `persistMessage without field 8 keeps threadId null and touches no thread dao`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+            val messageSlot = slot<MessageEntity>()
+
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById(any(), any()) } returns null
+            coEvery { conversationDao.getConversation(any(), any()) } returns null
+            coEvery { conversationDao.insertConversation(any()) } just Runs
+            coEvery { messageDao.insertMessage(capture(messageSlot)) } just Runs
+
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_main_message_hash",
+                    content = "plain hello",
+                    sourceHash = "sender_hash",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = """{"48": "abcd"}""",
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = "direct",
+                )
+
+            testScope.advanceUntilIdle()
+
+            assertTrue(result)
+            assertNull(messageSlot.captured.threadId)
+            coVerify(exactly = 0) { threadDao.insertThreadIgnore(any()) }
+            coVerify(exactly = 0) { threadDao.touchThread(any(), any(), any(), any()) }
         }
 
     @Test

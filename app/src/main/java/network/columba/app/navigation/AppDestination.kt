@@ -104,8 +104,8 @@ enum class AppDestination(
     QR_SCANNER("qr_scanner"),
     MESSAGING(
         routePattern = "messaging/{destinationHash}/{peerName}" +
-            "?fromNotification={fromNotification}&notificationEventId={notificationEventId}",
-        sampleRoute = "messaging/0123456789abcdef/Test?fromNotification=false&notificationEventId=0",
+            "?fromNotification={fromNotification}&notificationEventId={notificationEventId}&threadId={threadId}",
+        sampleRoute = "messaging/0123456789abcdef/Test?fromNotification=false&notificationEventId=0&threadId=",
     ),
     MESSAGE_DETAIL("message_detail/{messageId}", "message_detail/1"),
     ANNOUNCE_DETAIL(

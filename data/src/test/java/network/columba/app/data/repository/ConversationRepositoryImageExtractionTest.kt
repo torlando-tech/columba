@@ -56,6 +56,8 @@ class ConversationRepositoryImageExtractionTest {
                 mockk<LocalIdentityDao>(),
                 attachmentStorage,
                 mockk<DraftDao>(),
+                mockk<network.columba.app.data.db.dao.ThreadDao>(),
+                mockk<network.columba.app.data.db.ColumbaDatabase>(),
             )
     }
 

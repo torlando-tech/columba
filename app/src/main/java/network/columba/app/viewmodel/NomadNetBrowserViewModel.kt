@@ -106,6 +106,7 @@ class NomadNetBrowserViewModel
             val formFields: Map<String, String>,
             val document: MicronDocument,
             val fieldTokens: List<String> = emptyList(),
+            val requestData: String? = null,
         )
 
         private val _browserState = MutableStateFlow<BrowserState>(BrowserState.Initial)
@@ -536,6 +537,7 @@ class NomadNetBrowserViewModel
                                 formFields = entry.formFields,
                                 document = entry.document,
                                 fieldTokens = entry.fieldTokens,
+                                requestData = entry.requestData,
                             ),
                         )
                     }
@@ -549,6 +551,7 @@ class NomadNetBrowserViewModel
                         requestPath,
                         destinationHash,
                         snapshot.current.fieldTokens,
+                        requestData = snapshot.current.requestData,
                     )
                     return
                 }
@@ -591,7 +594,7 @@ class NomadNetBrowserViewModel
                 val document = MicronParser.parse(cached)
                 // Keep the session store warm so the next tab restore is
                 // instant even if this entry then expires from the file cache.
-                pageCache.putSession(destinationHash, path, document)
+                pageCache.putSession(nodeHash = destinationHash, path = path, document = document, requestData = formDataJson)
                 // Pass the field tokens through so re-persisting keeps the
                 // backtick block: the next restore must hit this same key.
                 emitPageLoaded(document, requestPath, destinationHash, fieldNames)
@@ -734,7 +737,13 @@ class NomadNetBrowserViewModel
                             // And hold it in the session store: a `#!c=0` page
                             // never reaches the file cache, yet a tab restore
                             // must still show it without re-submitting.
-                            pageCache.putSession(nodeHash, persistPath, document, lastFetchFieldTokens)
+                            pageCache.putSession(
+                                nodeHash = nodeHash,
+                                path = persistPath,
+                                document = document,
+                                fieldTokens = lastFetchFieldTokens,
+                                requestData = lastFetchFormDataJson,
+                            )
                             // The request that produced this page, so a bookmark
                             // or a pinned shortcut can replay it later.
                             emitPageLoaded(
@@ -858,7 +867,13 @@ class NomadNetBrowserViewModel
             currentNodeHash = entry.nodeHash
             _formFields.value = entry.formFields
             // Instant back-navigation using the stored document
-            emitPageLoaded(entry.document, entry.path, entry.nodeHash, entry.fieldTokens)
+            emitPageLoaded(
+                document = entry.document,
+                path = entry.path,
+                nodeHash = entry.nodeHash,
+                fieldTokens = entry.fieldTokens,
+                requestData = entry.requestData,
+            )
             // A flagged node must never display content fetched while unflagged
             // (that content is anonymous). The stored history document can be
             // exactly that: a page visited before the node was flagged, then
@@ -1110,6 +1125,7 @@ class NomadNetBrowserViewModel
                             document = state.document,
                             fieldTokens = state.fieldTokens,
                             formFields = _formFields.value.toMap(),
+                            requestData = state.requestData,
                         ),
                     history =
                         history.map { entry ->
@@ -1124,6 +1140,7 @@ class NomadNetBrowserViewModel
                                 document = entry.document,
                                 fieldTokens = entry.fieldTokens,
                                 formFields = entry.formFields,
+                                requestData = entry.requestData,
                             )
                         },
                 ),
@@ -1145,6 +1162,7 @@ class NomadNetBrowserViewModel
                         formFields = _formFields.value.toMap(),
                         document = currentState.document,
                         fieldTokens = currentState.fieldTokens,
+                        requestData = currentState.requestData,
                     ),
                 )
                 _canGoBack.value = true

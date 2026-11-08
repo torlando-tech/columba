@@ -220,7 +220,6 @@ import network.columba.app.ui.components.StarToggleButton
 import network.columba.app.ui.components.SwipeableMessageBubble
 import network.columba.app.ui.components.SyncStatusBottomSheet
 import network.columba.app.ui.components.ConversationTransferTray
-import network.columba.app.ui.components.UnverifiedSenderChip
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
@@ -239,7 +238,6 @@ import network.columba.app.util.FileUtils
 import network.columba.app.util.ImageUtils
 import network.columba.app.util.LocationPermissionManager
 import network.columba.app.util.MediaPermissionManager
-import network.columba.app.util.formatRelativeTime
 import network.columba.app.util.formatTimeSince
 import network.columba.app.util.launchSafely
 import network.columba.app.util.showNoFileManagerToast
@@ -253,6 +251,7 @@ import android.Manifest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import network.columba.app.ui.components.SignatureStatusChip
 
 private const val URL_ANNOTATION_TAG = "url"
 private const val VOICE_PREVIEW_KEY = "voice-recording-preview"
@@ -2208,16 +2207,12 @@ fun MessageBubble(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
     ) {
-        // Unverified-sender warning — mirrors Sideband's "this message is
-        // likely to be fake" banner. Rendered above every bubble type (text,
-        // media-only, attachment, pending-file notification) because a forged
-        // message could carry any payload shape. Trigger is exactly
-        // `signatureVerified == false` (an unverified sender); null (sent,
-        // legacy) and true both skip the chip. See
-        // MessageEntity.signatureVerified for the full state table.
-        if (message.signatureVerified == false) {
-            UnverifiedSenderChip(modifier = Modifier.padding(bottom = 4.dp))
-        }
+        // Keep signature status above every payload shape, including media,
+        // attachments, and pending-file notifications.
+        SignatureStatusChip(
+            status = message.signatureStatus,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
 
         // Handle pending file notifications (system messages for files arriving via relay)
         if (message.isPendingFileNotification) {

@@ -1,5 +1,6 @@
 package network.columba.app.ui.screens.onboarding.pages
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -70,7 +72,7 @@ fun WelcomePage(
             )
             Image(
                 painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                contentDescription = "Columba",
+                contentDescription = stringResource(R.string.onboarding_welcome_app_name),
                 modifier =
                     Modifier
                         .fillMaxSize()
@@ -82,7 +84,7 @@ fun WelcomePage(
 
         // Title
         Text(
-            text = "Welcome to Columba",
+            text = stringResource(R.string.onboarding_welcome_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -93,7 +95,7 @@ fun WelcomePage(
 
         // Subtitle
         Text(
-            text = "A private messenger that requires:",
+            text = stringResource(R.string.onboarding_welcome_subtitle),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -102,17 +104,17 @@ fun WelcomePage(
         Spacer(modifier = Modifier.height(24.dp))
 
         // Privacy features
-        PrivacyFeature(text = "No phone number")
+        PrivacyFeature(textRes = R.string.onboarding_welcome_no_phone)
         Spacer(modifier = Modifier.height(12.dp))
-        PrivacyFeature(text = "No email address")
+        PrivacyFeature(textRes = R.string.onboarding_welcome_no_email)
         Spacer(modifier = Modifier.height(12.dp))
-        PrivacyFeature(text = "No sign-up or accounts")
+        PrivacyFeature(textRes = R.string.onboarding_welcome_no_signup)
 
         Spacer(modifier = Modifier.height(32.dp))
 
         // Identity explanation
         Text(
-            text = "Your identity is generated and stored securely on your device. You control it completely.",
+            text = stringResource(R.string.onboarding_welcome_identity_note),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -131,7 +133,7 @@ fun WelcomePage(
             shape = RoundedCornerShape(12.dp),
         ) {
             Text(
-                text = "Get Started",
+                text = stringResource(R.string.onboarding_welcome_get_started),
                 style = MaterialTheme.typography.titleMedium,
             )
         }
@@ -143,7 +145,7 @@ fun WelcomePage(
             onClick = onRestoreFromBackup,
         ) {
             Text(
-                text = "Restore from backup",
+                text = stringResource(R.string.onboarding_welcome_restore),
                 color = MaterialTheme.colorScheme.primary,
             )
         }
@@ -154,7 +156,7 @@ fun WelcomePage(
 
 @Composable
 private fun PrivacyFeature(
-    text: String,
+    @StringRes textRes: Int,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -169,7 +171,7 @@ private fun PrivacyFeature(
         )
         Spacer(modifier = Modifier.size(8.dp))
         Text(
-            text = text,
+            text = stringResource(textRes),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,
         )

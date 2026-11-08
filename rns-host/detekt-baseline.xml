@@ -10,7 +10,6 @@
     <ID>EmptyFunctionBlock:BoundRnsBackendTest.kt$BoundRnsBackendTest.StubRnsNomadnet${}</ID>
     <ID>InstanceOfCheckForException:ServiceNotificationManager.kt$ServiceNotificationManager$e is android.app.ForegroundServiceStartNotAllowedException</ID>
     <ID>LongMethod:BleGattClient.kt$BleGattClient$private suspend fun enableNotifications( address: String, gatt: BluetoothGatt, txChar: BluetoothGattCharacteristic, )</ID>
-    <ID>LongMethod:BleGattClient.kt$BleGattClient$private suspend fun handleServicesDiscovered( address: String, gatt: BluetoothGatt, status: Int, )</ID>
     <ID>LongMethod:BleOperationQueue.kt$BleOperationQueue$private suspend fun executeOperation(operation: BleOperation): OperationResult</ID>
     <ID>LongMethod:KotlinBLEBridge.kt$KotlinBLEBridge$private suspend fun handleIdentityReceived( address: String, identityHash: String, isCentralConnection: Boolean, )</ID>
     <ID>LoopWithTooManyJumpStatements:KotlinRNodeBridge.kt$KotlinRNodeBridge$while</ID>
@@ -36,7 +35,6 @@
     <ID>TooManyFunctions:BleConnectionManager.kt$BleConnectionManager</ID>
     <ID>TooManyFunctions:BleGattClient.kt$BleGattClient</ID>
     <ID>TooManyFunctions:BleGattServer.kt$BleGattServer</ID>
-    <ID>TooManyFunctions:KotlinBLEBridge.kt$KotlinBLEBridge</ID>
     <ID>TooManyFunctions:KotlinRNodeBridge.kt$KotlinRNodeBridge</ID>
     <ID>UnusedParameter:BleGattClient.kt$BleGattClient$characteristic: BluetoothGattCharacteristic</ID>
     <ID>UnusedParameter:BleGattServer.kt$BleGattServer$preparedWrite: Boolean</ID>

@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.InterfaceConfigState
+import network.columba.app.viewmodel.UiMessage
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
@@ -233,7 +234,7 @@ class InterfaceConfigDialogTest {
                 type = "TCPServer",
                 listenIp = "invalid",
                 listenPort = "4242",
-                listenIpError = "Invalid IP address",
+                listenIpError = UiMessage.Raw("Invalid IP address"),
             )
 
         composeTestRule.setContent {
@@ -253,7 +254,7 @@ class InterfaceConfigDialogTest {
                 type = "TCPServer",
                 listenIp = "0.0.0.0",
                 listenPort = "99999",
-                listenPortError = "Port must be between 1 and 65535",
+                listenPortError = UiMessage.Raw("Port must be between 1 and 65535"),
             )
 
         composeTestRule.setContent {

@@ -13,8 +13,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.ui.components.HashSection
 import network.columba.app.ui.components.IdentityQrCodeDialogContent
 
@@ -45,7 +47,7 @@ fun IdentityQrCodeDialog(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Share Identity")
+            Text(stringResource(R.string.identity_share_identity))
         }
 
         HorizontalDivider()
@@ -53,7 +55,7 @@ fun IdentityQrCodeDialog(
         // Identity Hash
         if (identityHash != null) {
             HashSection(
-                title = "Identity Hash",
+                title = stringResource(R.string.identity_hash),
                 hash = identityHash,
                 onCopy = { clipboardManager.setText(AnnotatedString(identityHash)) },
             )
@@ -62,9 +64,9 @@ fun IdentityQrCodeDialog(
         // Destination Hash
         if (destinationHash != null) {
             HashSection(
-                title = "Destination Hash (LXMF)",
-                hash = destinationHash,
+                title = stringResource(R.string.identity_destination_hash_lxmf),
                 onCopy = { clipboardManager.setText(AnnotatedString(destinationHash)) },
+                hash = destinationHash,
             )
         }
     }

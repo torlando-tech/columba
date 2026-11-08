@@ -47,10 +47,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
 import network.columba.app.data.repository.CustomThemeData
 import network.columba.app.viewmodel.ThemeManagementViewModel
 
@@ -77,12 +79,12 @@ fun ThemeManagementScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Custom Themes") },
+                title = { Text(stringResource(R.string.theme_custom_themes_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.back),
                         )
                     }
                 },
@@ -102,7 +104,7 @@ fun ThemeManagementScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Create Theme",
+                    contentDescription = stringResource(R.string.theme_create_title),
                 )
             }
         },
@@ -127,12 +129,12 @@ fun ThemeManagementScreen(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = "No custom themes yet",
+                        text = stringResource(R.string.theme_empty_title),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = "Create your first theme",
+                        text = stringResource(R.string.theme_empty_body),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -164,9 +166,9 @@ fun ThemeManagementScreen(
     showDeleteDialog?.let { theme ->
         AlertDialog(
             onDismissRequest = { showDeleteDialog = null },
-            title = { Text("Delete Theme?") },
+            title = { Text(stringResource(R.string.theme_delete_title)) },
             text = {
-                Text("Are you sure you want to delete \"${theme.name}\"? This action cannot be undone.")
+                Text(stringResource(R.string.theme_delete_body, theme.name))
             },
             confirmButton = {
                 TextButton(
@@ -175,12 +177,12 @@ fun ThemeManagementScreen(
                         showDeleteDialog = null
                     },
                 ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             },
         )
@@ -274,7 +276,7 @@ private fun ThemeCard(
                 IconButton(onClick = { showMenu = true }) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More options",
+                        contentDescription = stringResource(R.string.theme_more_options),
                     )
                 }
 
@@ -283,7 +285,7 @@ private fun ThemeCard(
                     onDismissRequest = { showMenu = false },
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Apply Theme") },
+                        text = { Text(stringResource(R.string.theme_apply_theme)) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Check,
@@ -296,7 +298,7 @@ private fun ThemeCard(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Edit") },
+                        text = { Text(stringResource(R.string.theme_edit)) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Edit,
@@ -311,7 +313,7 @@ private fun ThemeCard(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                "Delete",
+                                stringResource(R.string.delete),
                                 color = MaterialTheme.colorScheme.error,
                             )
                         },

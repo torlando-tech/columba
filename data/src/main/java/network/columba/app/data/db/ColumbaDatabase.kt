@@ -45,11 +45,13 @@ import network.columba.app.data.db.entity.PendingDeliveryStatusEntity
 import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import network.columba.app.data.db.entity.ReceivedLocationEntity
 import network.columba.app.data.db.entity.RmspServerEntity
+import network.columba.app.data.db.entity.SignatureEvidenceChunkEntity
 
 @Database(
     entities = [
         ConversationEntity::class,
         MessageEntity::class,
+        SignatureEvidenceChunkEntity::class,
         AnnounceEntity::class,
         AnnounceInterfaceSightingEntity::class,
         PeerIdentityEntity::class,
@@ -70,7 +72,7 @@ import network.columba.app.data.db.entity.RmspServerEntity
         PendingDeliveryStatusEntity::class,
         PreferredPropagationNodeEntity::class,
     ],
-    version = 10,
+    version = 12,
     exportSchema = true,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
@@ -407,21 +409,125 @@ abstract class ColumbaDatabase : RoomDatabase() {
                 }
             }
 
-        /**
-         * v9 → v10: add nullable `messages.signatureVerified INTEGER`.
-         *
-         * Surfaces LXMF signature-verification state per received message so
-         * the UI can warn on unverified senders. Pure additive `ALTER` — no
-         * data transform. Existing rows backfill to NULL, which the UI treats
-         * as "no warning": showing every legacy message as unverified would be
-         * inaccurate (most are from peers we already had on file) and alarming.
-         */
+        /** v9 → v10: record the original nullable verification flag without backfilling legacy rows. */
         val MIGRATION_9_10: Migration =
             object : Migration(9, 10) {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("ALTER TABLE messages ADD COLUMN signatureVerified INTEGER")
                 }
             }
+
+        /**
+         * v10 → v11: distinguish unknown sources from invalid signatures.
+         * Historical false results lack the reason and signed payload, so remain UNVERIFIED.
+         * Rebuild the table to remove the obsolete column on older Android SQLite versions.
+         */
+        val MIGRATION_10_11: Migration =
+            object : Migration(10, 11) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE `messages_new` (
+                            `id` TEXT NOT NULL,
+                            `conversationHash` TEXT NOT NULL,
+                            `identityHash` TEXT NOT NULL,
+                            `content` TEXT NOT NULL,
+                            `timestamp` INTEGER NOT NULL,
+                            `isFromMe` INTEGER NOT NULL,
+                            `status` TEXT NOT NULL,
+                            `isRead` INTEGER NOT NULL,
+                            `fieldsJson` TEXT,
+                            `reactionsJson` TEXT,
+                            `deliveryMethod` TEXT,
+                            `errorMessage` TEXT,
+                            `replyToMessageId` TEXT,
+                            `receivedHopCount` INTEGER,
+                            `receivedInterface` TEXT,
+                            `receivedRssi` INTEGER,
+                            `receivedSnr` REAL,
+                            `receivedAt` INTEGER,
+                            `sentInterface` TEXT,
+                            `signatureStatus` TEXT,
+                            PRIMARY KEY(`id`, `identityHash`),
+                            FOREIGN KEY(`conversationHash`, `identityHash`)
+                                REFERENCES `conversations`(`peerHash`, `identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                            FOREIGN KEY(`identityHash`)
+                                REFERENCES `local_identities`(`identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """,
+                    )
+                    db.execSQL(
+                        """
+                        INSERT INTO `messages_new` (
+                            id, conversationHash, identityHash, content, timestamp, isFromMe, status, isRead,
+                            fieldsJson, reactionsJson, deliveryMethod, errorMessage, replyToMessageId,
+                            receivedHopCount, receivedInterface, receivedRssi, receivedSnr, receivedAt, sentInterface,
+                            signatureStatus
+                        )
+                        SELECT id, conversationHash, identityHash, content, timestamp, isFromMe, status, isRead,
+                            fieldsJson, reactionsJson, deliveryMethod, errorMessage, replyToMessageId,
+                            receivedHopCount, receivedInterface, receivedRssi, receivedSnr, receivedAt, sentInterface,
+                            CASE signatureVerified WHEN 1 THEN 'VERIFIED' WHEN 0 THEN 'UNVERIFIED' ELSE NULL END
+                        FROM `messages`
+                        """,
+                    )
+                    db.execSQL("DROP TABLE `messages`")
+                    db.execSQL("ALTER TABLE `messages_new` RENAME TO `messages`")
+                    db.execSQL(
+                        "CREATE INDEX `index_messages_conversationHash_identityHash` ON `messages` (`conversationHash`, `identityHash`)",
+                    )
+                    db.execSQL("CREATE INDEX `index_messages_identityHash` ON `messages` (`identityHash`)")
+                    db.execSQL("CREATE INDEX `index_messages_timestamp` ON `messages` (`timestamp`)")
+                    db.execSQL(
+                        "CREATE INDEX `index_messages_conversationHash_identityHash_timestamp` " +
+                            "ON `messages` (`conversationHash`, `identityHash`, `timestamp`)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX `index_messages_conversationHash_identityHash_isFromMe_isRead` " +
+                            "ON `messages` (`conversationHash`, `identityHash`, `isFromMe`, `isRead`)",
+                    )
+                    db.execSQL("CREATE INDEX `index_messages_replyToMessageId` ON `messages` (`replyToMessageId`)")
+                    db.execSQL(
+                        "CREATE INDEX `index_messages_signatureStatus_conversationHash_id_identityHash` " +
+                            "ON `messages` (`signatureStatus`, `conversationHash`, `id`, `identityHash`)",
+                    )
+                    createSignatureEvidenceTable(db)
+                }
+            }
+
+        /**
+         * v11 → v12: add durable notification completion state. Existing rows default to
+         * handled so the migration cannot replay historical alerts; new inbound inserts
+         * start pending and are reconciled by the app-side collector.
+         */
+        val MIGRATION_11_12: Migration =
+            object : Migration(11, 12) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "ALTER TABLE messages ADD COLUMN notificationHandled INTEGER NOT NULL DEFAULT 1",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS index_messages_identityHash_isFromMe_notificationHandled " +
+                            "ON messages(identityHash, isFromMe, notificationHandled)",
+                    )
+                }
+            }
+
+        private fun createSignatureEvidenceTable(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE `message_signature_evidence` (
+                    `messageId` TEXT NOT NULL,
+                    `identityHash` TEXT NOT NULL,
+                    `chunkIndex` INTEGER NOT NULL,
+                    `bytes` BLOB NOT NULL,
+                    PRIMARY KEY(`messageId`, `identityHash`, `chunkIndex`),
+                    FOREIGN KEY(`messageId`, `identityHash`)
+                        REFERENCES `messages`(`id`, `identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """,
+            )
+        }
 
         @Suppress("ReturnCount")
         fun splitReactionsOutOfFieldsJson(fieldsJson: String): Pair<String, String>? =

@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.compose.runtime.MutableState
 import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.notifications.NotificationHelper
+import network.columba.app.nomadnet.NomadNetShortcuts
 import network.columba.app.util.Base32
 import network.columba.app.util.FileUtils
 
@@ -73,8 +74,11 @@ class MainActivityIntentHandler(
                             raw to "/page/index.mu"
                         }
                     Log.d(logTag, "Opening NomadNet page: $nodeHash $path")
+                    // A pinned shortcut for a form-result page carries the
+                    // request it was saved with; the deep link itself cannot.
+                    val requestData = intent.getStringExtra(NomadNetShortcuts.EXTRA_REQUEST_DATA)
                     pendingNavigation.value =
-                        PendingNavigation.NomadNetBrowser(nodeHash.lowercase(), path)
+                        PendingNavigation.NomadNetBrowser(nodeHash.lowercase(), path, requestData)
                 }
             }
         }

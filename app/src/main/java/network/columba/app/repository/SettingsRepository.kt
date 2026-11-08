@@ -12,10 +12,10 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.model.MapStylePreference
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.data.repository.CustomThemeRepository
 import network.columba.app.nomadnet.NomadNetSavedSite
 import network.columba.app.nomadnet.NomadNetSavedSites
@@ -42,9 +43,19 @@ import network.columba.app.ui.theme.ThemeMode
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Set by [ReplaceFileCorruptionHandler], so a reader can tell "never chosen" apart from
+ * "lost when DataStore replaced a corrupt file". Privacy-sensitive settings fail closed
+ * on the latter instead of reverting to their revealing default.
+ */
+private val SETTINGS_CORRUPTION_RECOVERED = booleanPreferencesKey("settings_corruption_recovered")
+
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
     name = "settings",
-    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+    corruptionHandler =
+        ReplaceFileCorruptionHandler {
+            mutablePreferencesOf(SETTINGS_CORRUPTION_RECOVERED to true)
+        },
 )
 
 /**
@@ -79,6 +90,7 @@ class SettingsRepository
             val NOTIFICATION_ANNOUNCE_EXCLUDE_TCP = booleanPreferencesKey("notification_announce_exclude_tcp")
             val NOTIFICATION_BLE_CONNECTED = booleanPreferencesKey("notification_ble_connected")
             val NOTIFICATION_BLE_DISCONNECTED = booleanPreferencesKey("notification_ble_disconnected")
+            val NOTIFICATION_PRIVACY_LEVEL = stringPreferencesKey("notification_privacy_level")
             val HAS_REQUESTED_NOTIFICATION_PERMISSION = booleanPreferencesKey("has_requested_notification_permission")
 
             // Location permission preferences
@@ -424,6 +436,33 @@ class SettingsRepository
         suspend fun saveNotificationBleDisconnected(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.NOTIFICATION_BLE_DISCONNECTED] = enabled
+            }
+        }
+
+        /**
+         * Flow of how much a received-message notification reveals.
+         * Defaults to [NotificationPrivacyLevel.DEFAULT] when no level was ever stored;
+         * a stored but unrecognised value fails closed to [NotificationPrivacyLevel.NONE].
+         */
+        val notificationPrivacyLevelFlow: Flow<NotificationPrivacyLevel> =
+            context.dataStore.data
+                .map { preferences ->
+                    NotificationPrivacyLevel.resolve(
+                        storedName = preferences[PreferencesKeys.NOTIFICATION_PRIVACY_LEVEL],
+                        corruptionRecovered = preferences[SETTINGS_CORRUPTION_RECOVERED] == true,
+                    )
+                }.distinctUntilChanged()
+
+        /**
+         * Save the message privacy level used when building message notifications.
+         *
+         * @param level How much the notification may reveal
+         */
+        suspend fun saveNotificationPrivacyLevel(level: NotificationPrivacyLevel) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.NOTIFICATION_PRIVACY_LEVEL] = level.name
+                // An explicit choice supersedes the corruption-recovery fallback.
+                preferences.remove(SETTINGS_CORRUPTION_RECOVERED)
             }
         }
 

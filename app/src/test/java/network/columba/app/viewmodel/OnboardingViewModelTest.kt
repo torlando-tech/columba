@@ -9,6 +9,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +20,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.db.entity.LocalIdentityEntity
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.data.repository.IdentityRepository
+import network.columba.app.notifications.NotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.InterfaceConfig
@@ -48,6 +51,7 @@ class OnboardingViewModelTest {
     private lateinit var mockInterfaceRepository: InterfaceRepository
     private lateinit var mockInterfaceConfigManager: InterfaceConfigManager
     private lateinit var mockCrashReportManager: network.columba.app.util.CrashReportManager
+    private lateinit var mockNotificationHelper: NotificationHelper
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
@@ -59,10 +63,13 @@ class OnboardingViewModelTest {
         mockInterfaceRepository = mockk()
         mockInterfaceConfigManager = mockk()
         mockCrashReportManager = mockk()
+        mockNotificationHelper = mockk()
+        coEvery { mockNotificationHelper.setMessagePrivacyLevel(any()) } just Runs
         coEvery { mockCrashReportManager.updateCrashReportingConsent(any(), any(), any()) } returns Unit
 
         // Default stubs for SettingsRepository
         coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
+        coEvery { mockSettingsRepository.notificationPrivacyLevelFlow } returns MutableStateFlow(NotificationPrivacyLevel.FULL)
         coEvery { mockSettingsRepository.needsIdentityUnlockFlow } returns MutableStateFlow(false)
         coEvery { mockSettingsRepository.markOnboardingCompleted() } just Runs
         coEvery { mockSettingsRepository.markCrashReportingPromptSeen() } just Runs
@@ -99,6 +106,7 @@ class OnboardingViewModelTest {
             mockInterfaceRepository,
             mockInterfaceConfigManager,
             mockCrashReportManager,
+            mockNotificationHelper,
         )
 
     private fun createTestIdentity(
@@ -489,6 +497,77 @@ class OnboardingViewModelTest {
 
             assertTrue("Callback should be called on completion", callbackCalled)
             coVerify { mockSettingsRepository.markOnboardingCompleted() }
+        }
+
+    @Test
+    fun `completeOnboarding persists the message privacy level`() =
+        runTest {
+            val requestedLevel = slot<NotificationPrivacyLevel>()
+            coEvery { mockNotificationHelper.setMessagePrivacyLevel(capture(requestedLevel)) } just Runs
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setNotificationPrivacyLevel(NotificationPrivacyLevel.NONE)
+            viewModel.completeOnboarding { }
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals("Level must be saved on completion", NotificationPrivacyLevel.NONE, requestedLevel.captured)
+                assertEquals(NotificationPrivacyLevel.NONE, state.notificationPrivacyLevel)
+            }
+        }
+
+    @Test
+    fun `skipOnboarding persists the message privacy level`() =
+        runTest {
+            coEvery { mockInterfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            val requestedLevel = slot<NotificationPrivacyLevel>()
+            coEvery { mockNotificationHelper.setMessagePrivacyLevel(capture(requestedLevel)) } just Runs
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // The Permissions page's Skip action leaves through this path.
+            viewModel.setNotificationPrivacyLevel(NotificationPrivacyLevel.NAME_ONLY)
+            viewModel.skipOnboarding { }
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals("Skip must not discard the chosen level", NotificationPrivacyLevel.NAME_ONLY, requestedLevel.captured)
+                assertTrue(state.hasCompletedOnboarding)
+            }
+        }
+
+    @Test
+    fun `completeOnboarding keeps the stored level when the initial read failed`() =
+        runTest {
+            // A failed settings read leaves the in-memory default; writing it would
+            // re-enable message previews the user had turned off.
+            coEvery { mockSettingsRepository.notificationPrivacyLevelFlow } throws IllegalStateException("read failed")
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.completeOnboarding { }
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.hasCompletedOnboarding)
+            coVerify(exactly = 0) { mockNotificationHelper.setMessagePrivacyLevel(any()) }
+        }
+
+    @Test
+    fun `skipOnboarding keeps the stored level when the initial read failed`() =
+        runTest {
+            coEvery { mockInterfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            coEvery { mockSettingsRepository.notificationPrivacyLevelFlow } throws IllegalStateException("read failed")
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.skipOnboarding { }
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.hasCompletedOnboarding)
+            coVerify(exactly = 0) { mockNotificationHelper.setMessagePrivacyLevel(any()) }
         }
 
     @Test

@@ -10,7 +10,7 @@ class MapViewModelDedupTest {
         val oldUpper =
             ContactMarker(
                 destinationHash = "ABC123",
-                displayName = "Old",
+                displayName = UiMessage.Raw("Old"),
                 latitude = 1.0,
                 longitude = 1.0,
                 timestamp = 1000L,
@@ -18,7 +18,7 @@ class MapViewModelDedupTest {
         val newLower =
             ContactMarker(
                 destinationHash = "abc123",
-                displayName = "New",
+                displayName = UiMessage.Raw("New"),
                 latitude = 2.0,
                 longitude = 2.0,
                 timestamp = 2000L,
@@ -26,7 +26,7 @@ class MapViewModelDedupTest {
         val other =
             ContactMarker(
                 destinationHash = "def456",
-                displayName = "Other",
+                displayName = UiMessage.Raw("Other"),
                 latitude = 3.0,
                 longitude = 3.0,
                 timestamp = 1500L,

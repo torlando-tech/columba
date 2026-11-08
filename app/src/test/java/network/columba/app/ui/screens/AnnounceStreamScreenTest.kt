@@ -22,6 +22,7 @@ import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.repository.Announce
 import network.columba.app.rns.api.model.NodeType
 import network.columba.app.test.RegisterComponentActivityRule
+import network.columba.app.viewmodel.AnnounceError
 import network.columba.app.viewmodel.AnnounceStreamViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -540,7 +541,7 @@ class AnnounceStreamScreenTest {
         reachableCount: Int = 0,
         isAnnouncing: Boolean = false,
         announceSuccess: Boolean = false,
-        announceError: String? = null,
+        announceError: AnnounceError? = null,
         // Default = canonical All state under the new exclusive contract:
         // all 3 node types + audio active. Tests that need a single-chip or
         // partial state override these explicitly.

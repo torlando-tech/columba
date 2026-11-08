@@ -34,10 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import network.columba.app.R
 
 @Composable
 fun AttachmentPanel(
@@ -88,7 +90,7 @@ fun AttachmentPanel(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = "Allow access to show recent photos",
+                            text = stringResource(R.string.attach_panel_allow_access_photos),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -96,7 +98,7 @@ fun AttachmentPanel(
                             onClick = onRequestMediaPermission,
                             modifier = Modifier.padding(top = 12.dp),
                         ) {
-                            Text("Allow access")
+                            Text(stringResource(R.string.attach_panel_allow_access))
                         }
                     }
                 } else if (recentPhotos.isEmpty()) {
@@ -106,7 +108,7 @@ fun AttachmentPanel(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = "No photos found",
+                            text = stringResource(R.string.attach_panel_no_photos),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -128,7 +130,7 @@ fun AttachmentPanel(
                                         .crossfade(true)
                                         .size(256)
                                         .build(),
-                                contentDescription = "Photo",
+                                contentDescription = stringResource(R.string.attach_panel_photo_description),
                                 modifier =
                                     Modifier
                                         .aspectRatio(1f)
@@ -155,11 +157,11 @@ fun AttachmentPanel(
                 FilledTonalIconButton(onClick = onGalleryClick) {
                     Icon(
                         imageVector = Icons.Default.Image,
-                        contentDescription = "Gallery",
+                        contentDescription = stringResource(R.string.attachment_gallery),
                     )
                 }
                 Text(
-                    text = "Gallery",
+                    text = stringResource(R.string.attachment_gallery),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(end = 8.dp),
@@ -168,22 +170,22 @@ fun AttachmentPanel(
                 FilledTonalIconButton(onClick = onFileClick) {
                     Icon(
                         imageVector = Icons.Default.AttachFile,
-                        contentDescription = "File",
+                        contentDescription = stringResource(R.string.attachment_file),
                     )
                 }
                 Text(
-                    text = "File",
+                    text = stringResource(R.string.attachment_file),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 FilledTonalIconButton(onClick = onVoiceClick) {
                     Icon(
                         imageVector = Icons.Default.Mic,
-                        contentDescription = context.getString(network.columba.app.R.string.attachment_voice_description),
+                        contentDescription = stringResource(R.string.attachment_voice_description),
                     )
                 }
                 Text(
-                    text = context.getString(network.columba.app.R.string.attachment_voice),
+                    text = stringResource(R.string.attachment_voice),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

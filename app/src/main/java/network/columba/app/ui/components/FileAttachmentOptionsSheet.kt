@@ -89,8 +89,8 @@ fun FileAttachmentOptionsSheet(
 
             // Open with option
             ListItem(
-                headlineContent = { Text("Open with...") },
-                supportingContent = { Text("Open in another app") },
+                headlineContent = { Text(stringResource(R.string.file_attach_opts_open_with)) },
+                supportingContent = { Text(stringResource(R.string.file_attach_opts_open_with_description)) },
                 leadingContent = {
                     Icon(
                         Icons.Default.OpenInNew,
@@ -103,8 +103,8 @@ fun FileAttachmentOptionsSheet(
 
             // Save to device option
             ListItem(
-                headlineContent = { Text("Save to device") },
-                supportingContent = { Text("Save to a folder on your device") },
+                headlineContent = { Text(stringResource(R.string.file_attach_opts_save_to_device)) },
+                supportingContent = { Text(stringResource(R.string.file_attach_opts_save_description)) },
                 leadingContent = {
                     Icon(
                         Icons.Default.Save,

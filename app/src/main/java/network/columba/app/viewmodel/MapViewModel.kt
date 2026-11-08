@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import network.columba.app.R
 import network.columba.app.data.db.dao.AnnounceDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.model.EnrichedContact
@@ -66,7 +67,7 @@ enum class MarkerState {
 @Immutable
 data class ContactMarker(
     val destinationHash: String,
-    val displayName: String,
+    val displayName: UiMessage,
     val latitude: Double,
     val longitude: Double,
     val accuracy: Float = 0f,
@@ -342,8 +343,8 @@ class MapViewModel
         // `LocationSharingManager` refuses an outbound share (master-gate
         // off). MapScreen collects this and shows a Snackbar pointing back
         // to Settings.
-        private val _locationSharingMessage = MutableSharedFlow<String>(extraBufferCapacity = 4)
-        val locationSharingMessage: SharedFlow<String> = _locationSharingMessage.asSharedFlow()
+        private val _locationSharingMessage = MutableSharedFlow<UiMessage>(extraBufferCapacity = 4)
+        val locationSharingMessage: SharedFlow<UiMessage> = _locationSharingMessage.asSharedFlow()
 
         init {
             // Translate LocationSharingManager events into user-visible
@@ -353,7 +354,7 @@ class MapViewModel
                     when (event) {
                         is network.columba.app.service.SharingEvent.Blocked ->
                             _locationSharingMessage.emit(
-                                "Location sharing is off. Enable it in Settings → Location Sharing.",
+                                UiMessage.Text(R.string.location_sharing_off_settings_hint),
                             )
                         else -> Unit
                     }
@@ -484,17 +485,20 @@ class MapViewModel
                             //      which used to leak through and read as
                             //      "ugly hex" in the marker label.
                             val senderHashLower = loc.senderHash.lowercase()
-                            val fallbackName =
+                            val fallbackName: UiMessage =
                                 if (loc.senderHash.length >= 8) {
-                                    "Peer ${loc.senderHash.take(8).uppercase()}"
+                                    UiMessage.Text(
+                                        R.string.map_marker_peer_fallback,
+                                        listOf(loc.senderHash.take(8).uppercase()),
+                                    )
                                 } else {
-                                    "Unknown Peer"
+                                    UiMessage.Text(R.string.map_marker_unknown_peer)
                                 }
-                            val displayName =
-                                contactMap[loc.senderHash]?.displayName
-                                    ?: contactMapLower[senderHashLower]?.displayName
-                                    ?: announce?.peerName?.takeIf { it.isNotBlank() }
-                                    ?: conversationNameMapLower[senderHashLower]
+                            val displayName: UiMessage =
+                                contactMap[loc.senderHash]?.displayName?.let { UiMessage.Raw(it) }
+                                    ?: contactMapLower[senderHashLower]?.displayName?.let { UiMessage.Raw(it) }
+                                    ?: announce?.peerName?.takeIf { it.isNotBlank() }?.let { UiMessage.Raw(it) }
+                                    ?: conversationNameMapLower[senderHashLower]?.let { UiMessage.Raw(it) }
                                     ?: fallbackName
 
                             if (displayName == fallbackName) {

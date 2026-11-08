@@ -1,8 +1,10 @@
 package network.columba.app.viewmodel
 
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import network.columba.app.R
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsBackend
@@ -37,12 +39,12 @@ enum class DiscoveredInterfacesSortMode {
  * "BackboneInterface", "RNodeInterface") to UI-friendly buckets.
  */
 enum class DiscoveredInterfaceTypeFilter(
-    val label: String,
+    @StringRes val labelRes: Int,
 ) {
-    TCP("TCP"),
-    RADIO("Radio"),
-    I2P("I2P"),
-    OTHER("Other"),
+    TCP(R.string.discovered_filter_tcp),
+    RADIO(R.string.discovered_filter_radio),
+    I2P(R.string.discovered_filter_i2p),
+    OTHER(R.string.discovered_filter_other),
     ;
 
     companion object {
@@ -66,7 +68,7 @@ data class DiscoveredInterfacesState(
     // Original list from Python, sorted by availability/quality - used to restore when switching back
     val originalInterfaces: List<DiscoveredInterface> = emptyList(),
     val isLoading: Boolean = true,
-    val errorMessage: String? = null,
+    val errorMessage: UiMessage? = null,
     val availableCount: Int = 0,
     val unknownCount: Int = 0,
     val staleCount: Int = 0,
@@ -210,7 +212,7 @@ class DiscoveredInterfacesViewModel
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            errorMessage = "Failed to load discovered interfaces: ${e.message}",
+                            errorMessage = UiMessage.Text(R.string.discovered_load_failed, listOf(e.message ?: "null")),
                         )
                     }
                 }
@@ -346,7 +348,7 @@ class DiscoveredInterfacesViewModel
                     _state.update {
                         it.copy(
                             isRestarting = false,
-                            errorMessage = "Failed to update discovery settings: ${e.message}",
+                            errorMessage = UiMessage.Text(R.string.discovered_update_settings_failed, listOf(e.message ?: "null")),
                         )
                     }
                 }
@@ -405,7 +407,7 @@ class DiscoveredInterfacesViewModel
                     _state.update {
                         it.copy(
                             isRestarting = false,
-                            errorMessage = "Failed to update autoconnect count: ${e.message}",
+                            errorMessage = UiMessage.Text(R.string.discovered_update_autoconnect_failed, listOf(e.message ?: "null")),
                         )
                     }
                 }
@@ -456,7 +458,7 @@ class DiscoveredInterfacesViewModel
                     _state.update {
                         it.copy(
                             isRestarting = false,
-                            errorMessage = "Failed to update autoconnect interface mode: ${e.message}",
+                            errorMessage = UiMessage.Text(R.string.discovered_update_autoconnect_mode_failed, listOf(e.message ?: "null")),
                         )
                     }
                 }
@@ -522,7 +524,7 @@ class DiscoveredInterfacesViewModel
                     _state.update {
                         it.copy(
                             isRestarting = false,
-                            errorMessage = "Failed to apply discovery settings: ${e.message}",
+                            errorMessage = UiMessage.Text(R.string.discovered_apply_settings_failed, listOf(e.message ?: "null")),
                         )
                     }
                 }
@@ -550,7 +552,7 @@ class DiscoveredInterfacesViewModel
                     _state.update {
                         it.copy(
                             isRestarting = false,
-                            errorMessage = "Failed to update IFAC-only setting: ${e.message}",
+                            errorMessage = UiMessage.Text(R.string.discovered_update_ifac_only_failed, listOf(e.message ?: "null")),
                         )
                     }
                 }

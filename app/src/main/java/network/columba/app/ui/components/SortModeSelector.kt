@@ -10,9 +10,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.viewmodel.DiscoveredInterfacesSortMode
 
 /**
@@ -31,7 +33,7 @@ fun SortModeSelector(
     ) {
         // Availability & Quality button
         SortModeButton(
-            text = "Quality",
+            text = stringResource(R.string.sort_mode_quality),
             isSelected = currentMode == DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY,
             onClick = { onModeSelected(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY) },
             modifier = Modifier.weight(1f),
@@ -39,7 +41,7 @@ fun SortModeSelector(
 
         // Proximity button (disabled if no user location)
         SortModeButton(
-            text = "Proximity",
+            text = stringResource(R.string.sort_mode_proximity),
             isSelected = currentMode == DiscoveredInterfacesSortMode.PROXIMITY,
             enabled = hasUserLocation,
             onClick = { onModeSelected(DiscoveredInterfacesSortMode.PROXIMITY) },

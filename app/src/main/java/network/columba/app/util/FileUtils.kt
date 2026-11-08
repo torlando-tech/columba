@@ -14,6 +14,9 @@ import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.ui.graphics.vector.ImageVector
 import java.io.File
 import java.util.Locale
+import network.columba.app.R
+import network.columba.app.viewmodel.UiMessage
+import network.columba.app.viewmodel.toUiMessage
 
 /**
  * Utilities for handling file attachments in LXMF messages.
@@ -50,7 +53,7 @@ object FileUtils {
         ) : FileReadResult()
 
         data class Error(
-            val message: String,
+            val message: UiMessage,
         ) : FileReadResult()
     }
 
@@ -112,10 +115,10 @@ object FileUtils {
                         sizeBytes = data.size,
                     ),
                 )
-            } ?: FileReadResult.Error("Could not open file")
+            } ?: FileReadResult.Error(UiMessage.Text(R.string.file_read_could_not_open))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read file from URI: $uri", e)
-            FileReadResult.Error(e.message ?: "Unknown error")
+            FileReadResult.Error(e.toUiMessage(R.string.error_unknown))
         }
     }
 

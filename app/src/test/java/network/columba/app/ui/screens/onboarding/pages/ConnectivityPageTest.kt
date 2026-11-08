@@ -9,6 +9,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.test.core.app.ApplicationProvider
+import network.columba.app.R
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.ui.screens.onboarding.OnboardingInterfaceType
 import org.junit.Assert.assertEquals
@@ -35,6 +37,9 @@ class ConnectivityPageTest {
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
     val composeTestRule get() = composeRule
+
+    private fun resText(id: Int): String =
+        ApplicationProvider.getApplicationContext<Application>().getString(id)
 
     // ========== Page Header Tests ==========
 
@@ -91,7 +96,7 @@ class ConnectivityPageTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText(OnboardingInterfaceType.AUTO.displayName).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.onboarding_iface_wifi_name)).assertIsDisplayed()
     }
 
     @Test
@@ -109,7 +114,7 @@ class ConnectivityPageTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText(OnboardingInterfaceType.BLE.displayName).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.onboarding_iface_ble_name)).assertIsDisplayed()
     }
 
     @Test
@@ -127,7 +132,7 @@ class ConnectivityPageTest {
         }
 
         // Then - scroll to make visible if needed
-        composeTestRule.onNodeWithText(OnboardingInterfaceType.TCP.displayName)
+        composeTestRule.onNodeWithText(resText(R.string.onboarding_iface_tcp_name))
             .performScrollTo()
             .assertIsDisplayed()
     }
@@ -147,7 +152,7 @@ class ConnectivityPageTest {
         }
 
         // Then - scroll to make visible if needed
-        composeTestRule.onNodeWithText(OnboardingInterfaceType.RNODE.displayName)
+        composeTestRule.onNodeWithText(resText(R.string.onboarding_iface_lora_name))
             .performScrollTo()
             .assertIsDisplayed()
     }
@@ -190,7 +195,7 @@ class ConnectivityPageTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText(OnboardingInterfaceType.AUTO.description).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.onboarding_iface_wifi_desc)).assertIsDisplayed()
     }
 
     @Test
@@ -208,7 +213,7 @@ class ConnectivityPageTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText(OnboardingInterfaceType.BLE.description).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.onboarding_iface_ble_desc)).assertIsDisplayed()
     }
 
     @Test
@@ -226,7 +231,7 @@ class ConnectivityPageTest {
         }
 
         // Then - scroll to make visible
-        composeTestRule.onNodeWithText(OnboardingInterfaceType.TCP.description)
+        composeTestRule.onNodeWithText(resText(R.string.onboarding_iface_tcp_desc))
             .performScrollTo()
             .assertIsDisplayed()
     }
@@ -246,7 +251,7 @@ class ConnectivityPageTest {
         }
 
         // Then - scroll to make visible
-        composeTestRule.onNodeWithText(OnboardingInterfaceType.RNODE.description)
+        composeTestRule.onNodeWithText(resText(R.string.onboarding_iface_lora_desc))
             .performScrollTo()
             .assertIsDisplayed()
     }

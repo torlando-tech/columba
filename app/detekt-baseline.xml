@@ -47,8 +47,6 @@
     <ID>ThrowsCount:IdentityManagerViewModel.kt$IdentityManagerViewModel$fun importIdentity( fileUri: Uri, displayName: String, )</ID>
     <ID>TooGenericExceptionThrown:AnnounceStreamViewModel.kt$AnnounceStreamViewModel$throw RuntimeException("Service error: ${status.message}")</ID>
     <ID>TooGenericExceptionThrown:DebugViewModel.kt$DebugViewModel$throw RuntimeException("Could not get LXMF destination")</ID>
-    <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("Failed to read file")</ID>
-    <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("Failed to read identity file: ${e.message}")</ID>
     <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("No destination_hash in result")</ID>
     <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("No file_path in result")</ID>
     <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("No identity_hash in result")</ID>
@@ -66,7 +64,6 @@
     <ID>UnusedParameter:MyIdentityScreen.kt$publicKey: ByteArray?</ID>
     <ID>UnusedParameter:QrScannerScreen.kt$onNavigateToConversation: (destinationHash: String) -&gt; Unit = {}</ID>
     <ID>UnusedPrivateMember:AnnounceStreamScreen.kt$private fun formatHash(hash: ByteArray): String</ID>
-    <ID>UnusedPrivateMember:ColumbaApplication.kt$ColumbaApplication$private suspend fun initializeReticulumService(rnsCore: RnsCore)</ID>
     <ID>UnusedPrivateMember:InterfaceDatabase.kt$InterfaceDatabase.Callback$private suspend fun populateDatabase(interfaceDao: InterfaceDao)</ID>
     <ID>UnusedPrivateMember:MessageCollector.kt$MessageCollector$private fun getPeerName(peerHash: String): String</ID>
     <ID>UnusedPrivateMember:MessageMapper.kt$@Deprecated( "Use parseReplyToFromFields — it accepts both the canonical 0x30 " + "format AND the legacy 0x10 overload.", ReplaceWith("parseReplyToFromFields(fieldsJson)"), ) private fun parseReplyToFromField16(fieldsJson: String?): String?</ID>

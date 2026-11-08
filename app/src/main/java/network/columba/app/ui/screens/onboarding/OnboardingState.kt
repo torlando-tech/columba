@@ -3,6 +3,7 @@ package network.columba.app.ui.screens.onboarding
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
 import network.columba.app.R
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.viewmodel.UiMessage
 
 /**
@@ -16,6 +17,7 @@ data class OnboardingState(
     val notificationsEnabled: Boolean = false,
     val notificationsGranted: Boolean = false,
     val batteryOptimizationExempt: Boolean = false,
+    val notificationPrivacyLevel: NotificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
     val crashReportingEnabled: Boolean = false,
     val isSaving: Boolean = false,
     val isLoading: Boolean = true,

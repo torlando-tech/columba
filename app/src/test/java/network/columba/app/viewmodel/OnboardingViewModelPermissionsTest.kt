@@ -24,7 +24,9 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.data.repository.IdentityRepository
+import network.columba.app.notifications.NotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.service.InterfaceConfigManager
@@ -61,6 +63,7 @@ class OnboardingViewModelPermissionsTest {
     private lateinit var mockInterfaceRepository: InterfaceRepository
     private lateinit var mockInterfaceConfigManager: InterfaceConfigManager
     private lateinit var mockCrashReportManager: network.columba.app.util.CrashReportManager
+    private lateinit var mockNotificationHelper: NotificationHelper
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var context: Context
 
@@ -74,9 +77,12 @@ class OnboardingViewModelPermissionsTest {
         mockInterfaceRepository = mockk()
         mockInterfaceConfigManager = mockk()
         mockCrashReportManager = mockk()
+        mockNotificationHelper = mockk()
+        coEvery { mockNotificationHelper.setMessagePrivacyLevel(any()) } just Runs
         coEvery { mockCrashReportManager.updateCrashReportingConsent(any(), any(), any()) } returns Unit
 
         coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
+        coEvery { mockSettingsRepository.notificationPrivacyLevelFlow } returns MutableStateFlow(NotificationPrivacyLevel.FULL)
         coEvery { mockSettingsRepository.needsIdentityUnlockFlow } returns MutableStateFlow(false)
         coEvery { mockSettingsRepository.markOnboardingCompleted() } just Runs
         coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
@@ -102,6 +108,7 @@ class OnboardingViewModelPermissionsTest {
             mockInterfaceRepository,
             mockInterfaceConfigManager,
             mockCrashReportManager,
+            mockNotificationHelper,
         )
 
     private fun stubBlePermissionsAllGranted() {

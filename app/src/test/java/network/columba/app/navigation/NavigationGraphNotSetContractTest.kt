@@ -3,6 +3,7 @@ package network.columba.app.navigation
 import android.app.Application
 import androidx.navigation.NavController
 import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,6 +34,32 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class NavigationGraphNotSetContractTest {
+    @Test
+    fun `openNomadNetPage without a navigation graph reports the retry instead of throwing`() {
+        val controller = NavController(ApplicationProvider.getApplicationContext())
+        assertTrue(
+            "Precondition: empty back stack must yield null currentDestination",
+            controller.currentDestination == null,
+        )
+
+        // A launcher shortcut (or nomadnetwork:// VIEW intent) is handled in the
+        // same cold-start window as the call race above.
+        val opened =
+            controller.openNomadNetPage(
+                nodeHash = "0123456789abcdef0123456789abcdef",
+                path = "/page/index.mu",
+            )
+
+        assertFalse(
+            "The caller must be told to retry once the graph is attached",
+            opened,
+        )
+        assertNull(
+            "Skipping must leave the back stack empty (no navigation attempted)",
+            controller.currentDestination,
+        )
+    }
+
     @Test
     fun `navigateToIncomingCall without a navigation graph is a no-op instead of throwing`() {
         // A fresh NavController with no setGraph()/NavHost — reproduces the

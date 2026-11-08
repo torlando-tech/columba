@@ -12,15 +12,12 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -283,20 +280,6 @@ class NomadNetBrowserTabOwnershipTest {
             1,
             backStackRoutes().count { it == AppDestination.NOMADNET_BROWSER.routePattern },
         )
-    }
-
-    @Test
-    fun `a cold-start deep link before the graph is attached does not throw`() {
-        // A launcher shortcut delivers its intent before NavHost attaches the
-        // graph. Navigating there throws "You must call setGraph() before
-        // calling getGraph()", so the request has to stay pending for the
-        // activity to retry once the back stack exists.
-        val grapeless = NavController(composeRule.activity)
-
-        val opened = grapeless.openNomadNetPage(NODE_A, INDEX_PATH)
-
-        assertNull("nothing can be shown before the graph exists", grapeless.currentDestination)
-        assertFalse("the caller must be told to retry the pending request", opened)
     }
 
     @Test

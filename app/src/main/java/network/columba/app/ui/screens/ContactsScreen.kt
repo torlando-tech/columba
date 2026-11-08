@@ -480,7 +480,7 @@ fun ContactsScreen(
                     !contactsState.isLoading && !hasContacts && activeSearchQuery.isNotBlank() -> {
                         SearchNoResultsState(
                             query = activeSearchQuery.trim(),
-                            itemNoun = "contacts",
+                            titleRes = R.string.search_no_results_title_contacts,
                             onClearSearch = { viewModel.onSearchQueryChanged("") },
                             modifier =
                                 Modifier

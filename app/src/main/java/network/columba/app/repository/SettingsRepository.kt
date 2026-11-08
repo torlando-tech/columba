@@ -12,10 +12,10 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -43,9 +43,19 @@ import network.columba.app.ui.theme.ThemeMode
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Set by [ReplaceFileCorruptionHandler], so a reader can tell "never chosen" apart from
+ * "lost when DataStore replaced a corrupt file". Privacy-sensitive settings fail closed
+ * on the latter instead of reverting to their revealing default.
+ */
+private val SETTINGS_CORRUPTION_RECOVERED = booleanPreferencesKey("settings_corruption_recovered")
+
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
     name = "settings",
-    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+    corruptionHandler =
+        ReplaceFileCorruptionHandler {
+            mutablePreferencesOf(SETTINGS_CORRUPTION_RECOVERED to true)
+        },
 )
 
 /**
@@ -437,12 +447,10 @@ class SettingsRepository
         val notificationPrivacyLevelFlow: Flow<NotificationPrivacyLevel> =
             context.dataStore.data
                 .map { preferences ->
-                    val stored = preferences[PreferencesKeys.NOTIFICATION_PRIVACY_LEVEL]
-                    if (stored == null) {
-                        NotificationPrivacyLevel.DEFAULT
-                    } else {
-                        NotificationPrivacyLevel.fromStoredName(stored)
-                    }
+                    NotificationPrivacyLevel.resolve(
+                        storedName = preferences[PreferencesKeys.NOTIFICATION_PRIVACY_LEVEL],
+                        corruptionRecovered = preferences[SETTINGS_CORRUPTION_RECOVERED] == true,
+                    )
                 }.distinctUntilChanged()
 
         /**
@@ -453,6 +461,8 @@ class SettingsRepository
         suspend fun saveNotificationPrivacyLevel(level: NotificationPrivacyLevel) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.NOTIFICATION_PRIVACY_LEVEL] = level.name
+                // An explicit choice supersedes the corruption-recovery fallback.
+                preferences.remove(SETTINGS_CORRUPTION_RECOVERED)
             }
         }
 

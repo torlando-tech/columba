@@ -540,6 +540,37 @@ class OnboardingViewModelTest {
         }
 
     @Test
+    fun `completeOnboarding keeps the stored level when the initial read failed`() =
+        runTest {
+            // A failed settings read leaves the in-memory default; writing it would
+            // re-enable message previews the user had turned off.
+            coEvery { mockSettingsRepository.notificationPrivacyLevelFlow } throws IllegalStateException("read failed")
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.completeOnboarding { }
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.hasCompletedOnboarding)
+            coVerify(exactly = 0) { mockNotificationHelper.setMessagePrivacyLevel(any()) }
+        }
+
+    @Test
+    fun `skipOnboarding keeps the stored level when the initial read failed`() =
+        runTest {
+            coEvery { mockInterfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            coEvery { mockSettingsRepository.notificationPrivacyLevelFlow } throws IllegalStateException("read failed")
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.skipOnboarding { }
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.hasCompletedOnboarding)
+            coVerify(exactly = 0) { mockNotificationHelper.setMessagePrivacyLevel(any()) }
+        }
+
+    @Test
     fun `completeOnboarding applies interface changes`() =
         runTest {
             val viewModel = createViewModel()

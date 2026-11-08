@@ -82,6 +82,13 @@ class OnboardingViewModel
          */
         private var blePermissionsEverGranted = false
 
+        /**
+         * False when the stored message privacy level could not be read, so onboarding
+         * exits must not overwrite it with the in-memory default (which reveals text).
+         * Set by a successful read or by an explicit user selection.
+         */
+        private var privacyLevelLoaded = false
+
         init {
             checkOnboardingStatus()
         }
@@ -109,6 +116,7 @@ class OnboardingViewModel
                             hasCompletedOnboarding = hasCompleted,
                             notificationPrivacyLevel = privacyLevel,
                         )
+                    privacyLevelLoaded = true
                     Log.d(TAG, "Onboarding status checked: hasCompleted=$hasCompleted, privacyLevel=${privacyLevel.name}")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error checking onboarding status", e)
@@ -145,6 +153,7 @@ class OnboardingViewModel
          */
         fun setNotificationPrivacyLevel(level: NotificationPrivacyLevel) {
             _state.value = _state.value.copy(notificationPrivacyLevel = level)
+            privacyLevelLoaded = true
         }
 
         /**
@@ -321,8 +330,12 @@ class OnboardingViewModel
 
                     // Persist the message privacy choice. If onboarding is being re-run and
                     // the level got stricter, drop message notifications already in the
-                    // shade — they were built with the previous level.
-                    notificationHelper.setMessagePrivacyLevel(_state.value.notificationPrivacyLevel)
+                    // shade — they were built with the previous level. Skip the write when the
+                    // stored level never loaded: the default in state would silently re-enable
+                    // message previews the user had turned off.
+                    if (privacyLevelLoaded) {
+                        notificationHelper.setMessagePrivacyLevel(_state.value.notificationPrivacyLevel)
+                    }
 
                     // Mark onboarding as completed - this is critical and will throw if it fails
                     settingsRepository.markOnboardingCompleted()
@@ -516,8 +529,12 @@ class OnboardingViewModel
                     }
 
                     // Persist the message privacy choice. Skip is a reachable exit from the
-                    // Permissions page, so the choice made there must not be discarded.
-                    notificationHelper.setMessagePrivacyLevel(_state.value.notificationPrivacyLevel)
+                    // Permissions page, so the choice made there must not be discarded. Only
+                    // write when the level is known: a failed read must not overwrite the
+                    // stored choice with the revealing default.
+                    if (privacyLevelLoaded) {
+                        notificationHelper.setMessagePrivacyLevel(_state.value.notificationPrivacyLevel)
+                    }
 
                     // Mark onboarding as completed
                     settingsRepository.markOnboardingCompleted()

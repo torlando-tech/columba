@@ -267,7 +267,7 @@ class MessagingViewModelTest {
         every { receivedLocationRepository.observeHasLocation(any()) } returns flowOf(false)
 
         // Mock activeConversationManager methods
-        every { activeConversationManager.setActive(any()) } just Runs
+        every { activeConversationManager.setActive(any(), any()) } just Runs
 
         // Mock settingsRepository methods
         coEvery { settingsRepository.getDefaultDeliveryMethod() } returns "direct"
@@ -733,7 +733,7 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             assertTrue("Visibility handling should complete without error", result.isSuccess)
-            verify { activeConversationManager.setActive(testPeerHash) }
+            verify { activeConversationManager.setActive(testPeerHash, any()) }
             verify { notificationHelper.cancelNotificationForConversation(testPeerHash) }
             coVerify { conversationRepository.markConversationAsRead(testPeerHash) }
         }
@@ -1109,7 +1109,7 @@ class MessagingViewModelTest {
             every { failingContactRepository.getEnrichedContacts() } returns flowOf(emptyList())
 
             val failingActiveConversationManager: ActiveConversationManager = mockk()
-            every { failingActiveConversationManager.setActive(any()) } just Runs
+            every { failingActiveConversationManager.setActive(any(), any()) } just Runs
 
             val failingSettingsRepository: SettingsRepository = mockk()
             coEvery { failingSettingsRepository.getDefaultDeliveryMethod() } returns "direct"
@@ -4951,6 +4951,83 @@ class MessagingViewModelTest {
                 )
             }
             assertEquals("the send stays in the thread target", threadHex, viewModel.selectedThread.value)
+            flagCollection.cancel()
+        }
+
+    @Test
+    fun `send targets Main when the thread flag is off even with a stored selection`() =
+        runTest {
+            stubThreadSurface()
+            // Flag off: one flat list. A selection may still exist (process
+            // restore, or the user turning the flag off mid-conversation) but
+            // the composer, the draft, and the send must all target Main.
+            every { settingsRepository.threadsEnabledFlow } returns flowOf(false)
+            val viewModel =
+                createTestViewModel().also {
+                    it.attachmentIoDispatcher = StandardTestDispatcher(testScheduler)
+                }
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            viewModel.selectThread("0a0b0c0d0e0f1112131415161718191a")
+            advanceUntilIdle()
+            assertTrue("threads flag must be off", !viewModel.threadsEnabled.value)
+
+            viewModel.sendMessage(testPeerHash, "flat list message")
+            advanceUntilIdle()
+
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = "flat list message",
+                    sourceIdentity = any(),
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                    fileAttachments = null,
+                    replyToMessageId = null,
+                    replyQuotedContent = any(),
+                    iconAppearance = null,
+                    extraFields = null,
+                    threadId = null,
+                )
+            }
+            flagCollection.cancel()
+        }
+
+    @Test
+    fun `turning the flag off collapses the selection back to Main`() =
+        runTest {
+            val flag = MutableStateFlow(true)
+            stubThreadSurface()
+            every { settingsRepository.threadsEnabledFlow } returns flag
+            coEvery { conversationRepository.getDraft(any(), null) } returns "main drafts"
+            val viewModel =
+                createTestViewModel().also {
+                    it.attachmentIoDispatcher = StandardTestDispatcher(testScheduler)
+                }
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            viewModel.selectThread("0a0b0c0d0e0f1112131415161718191a")
+            advanceUntilIdle()
+            assertEquals(
+                "the thread is selected while the flag is on",
+                "0a0b0c0d0e0f1112131415161718191a",
+                viewModel.selectedThread.value,
+            )
+
+            flag.value = false
+            advanceUntilIdle()
+
+            assertNull("flag off drops the selection", viewModel.selectedThread.value)
+            assertEquals("Main's draft comes back", "main drafts", viewModel.draftText.value)
             flagCollection.cancel()
         }
 

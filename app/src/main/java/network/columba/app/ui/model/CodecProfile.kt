@@ -16,48 +16,62 @@ enum class CodecProfile(
     val code: Int,
     @StringRes val labelRes: Int,
     @StringRes val descriptionRes: Int,
+    /**
+     * LXST's own abbreviation for this profile (the `Profile` subclasses'
+     * `abbreviation`), used by the compact in-call control where the full
+     * label does not fit. Not translatable: it is a protocol token.
+     */
+    val abbreviation: String,
     val isExperimental: Boolean = false,
 ) {
     BANDWIDTH_ULTRA_LOW(
         code = 0x10,
         labelRes = R.string.codec_profile_bandwidth_ultra_low,
         descriptionRes = R.string.codec_profile_bandwidth_ultra_low_desc,
+        abbreviation = "ULBW",
     ),
     BANDWIDTH_VERY_LOW(
         code = 0x20,
         labelRes = R.string.codec_profile_bandwidth_very_low,
         descriptionRes = R.string.codec_profile_bandwidth_very_low_desc,
+        abbreviation = "VLBW",
     ),
     BANDWIDTH_LOW(
         code = 0x30,
         labelRes = R.string.codec_profile_bandwidth_low,
         descriptionRes = R.string.codec_profile_bandwidth_low_desc,
+        abbreviation = "LBW",
     ),
     QUALITY_MEDIUM(
         code = 0x40,
         labelRes = R.string.codec_profile_quality_medium,
         descriptionRes = R.string.codec_profile_quality_medium_desc,
+        abbreviation = "MQ",
     ),
     QUALITY_HIGH(
         code = 0x50,
         labelRes = R.string.codec_profile_quality_high,
         descriptionRes = R.string.codec_profile_quality_high_desc,
+        abbreviation = "HQ",
     ),
     QUALITY_MAX(
         code = 0x60,
         labelRes = R.string.codec_profile_quality_max,
         descriptionRes = R.string.codec_profile_quality_max_desc,
+        abbreviation = "SHQ",
     ),
     LATENCY_LOW(
         code = 0x80,
         labelRes = R.string.codec_profile_latency_low,
         descriptionRes = R.string.codec_profile_latency_low_desc,
+        abbreviation = "LL",
         isExperimental = true,
     ),
     LATENCY_ULTRA_LOW(
         code = 0x70,
         labelRes = R.string.codec_profile_latency_ultra_low,
         descriptionRes = R.string.codec_profile_latency_ultra_low_desc,
+        abbreviation = "ULL",
         isExperimental = true,
     ),
     ;

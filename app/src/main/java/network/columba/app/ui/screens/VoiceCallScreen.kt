@@ -58,6 +58,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import network.columba.app.R
 import network.columba.app.call.PttMediaSessionManager
+import network.columba.app.ui.components.CallProfileSheet
+import network.columba.app.ui.model.CodecProfile
 import network.columba.app.viewmodel.CallViewModel
 import network.columba.app.rns.api.model.CallState
 
@@ -86,8 +88,18 @@ fun VoiceCallScreen(
     val isPttActive by viewModel.isPttActive.collectAsStateWithLifecycle()
     val callDuration by viewModel.callDuration.collectAsStateWithLifecycle()
     val peerName by viewModel.peerName.collectAsStateWithLifecycle()
-    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
+    val activeProfileCode by viewModel.activeProfileCode.collectAsStateWithLifecycle()
     val callMode by viewModel.callMode.collectAsStateWithLifecycle()
+
+    // Current profile resolved from the backend id; the compact control shows
+    // its LXST abbreviation, the sheet shows the full label. Null until the
+    // backend reports a profile for this call.
+    val activeProfile = activeProfileCode?.let { code -> CodecProfile.fromCode(code) }
+
+    // Audio profile picker: a deliberate second tap to open, one tap on a row
+    // to switch. Nothing else on the call screen is blocked by it beyond the
+    // M3 modal scrim, and it closes as soon as the call leaves Active.
+    var showProfileSheet by remember { mutableStateOf(false) }
 
     // Half duplex (the PTT transport mode). The PTT hold button and the
     // Bluetooth-headset PTT capture are active only in HDX; in FDX the call is
@@ -181,6 +193,13 @@ fun VoiceCallScreen(
             }
             else -> {}
         }
+    }
+
+    // The picker only exists for an established call; drop it if the call
+    // stops being active (peer hung up, declined, ...) so the sheet does not
+    // linger over the post-call state while the screen navigates away.
+    LaunchedEffect(callState) {
+        if (callState !is CallState.Active) showProfileSheet = false
     }
 
     // Full-screen call UI
@@ -342,19 +361,22 @@ fun VoiceCallScreen(
                         testTag = "speakerButton",
                     )
 
-                    // LXST profile cycle button (Profile Negotiation).
-                    // Shows the active codec profile abbreviation; tapping
-                    // cycles to the next profile and signals it to the peer.
-                    // Disabled until a call is established (switchProfile is a
-                    // no-op otherwise); the label falls back to "Audio" when
-                    // the backend hasn't reported a profile yet.
+                    // LXST audio profile control (Profile Negotiation).
+                    // Opens the profile picker instead of cycling: one
+                    // deliberate tap to open, one tap on a row to switch, and
+                    // the exact codec is chosen directly. Disabled until a
+                    // call is established (switchProfile is a no-op
+                    // otherwise); the label carries the active profile's
+                    // LXST abbreviation, falling back to "Audio" until the
+                    // backend reports one.
                     CallControlButton(
                         icon = Icons.Default.AudioFile,
-                        label = (activeProfile ?: "Audio").uppercase(),
+                        label = activeProfile?.abbreviation ?: stringResource(R.string.call_profile_control),
+                        contentDescription = stringResource(R.string.call_profile_control_content_description),
                         isActive = false,
-                        onClick = { viewModel.cycleProfile() },
+                        onClick = { showProfileSheet = true },
                         enabled = callState is CallState.Active,
-                        testTag = "profileCycleButton",
+                        testTag = "profileButton",
                     )
                 }
 
@@ -387,6 +409,17 @@ fun VoiceCallScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+
+        if (showProfileSheet) {
+            CallProfileSheet(
+                activeProfileCode = activeProfileCode,
+                onProfileSelected = { profile ->
+                    showProfileSheet = false
+                    viewModel.switchProfile(profile)
+                },
+                onDismiss = { showProfileSheet = false },
+            )
         }
     }
 }
@@ -478,6 +511,7 @@ private fun CallControlButton(
     onClick: () -> Unit,
     enabled: Boolean = true,
     testTag: String = "",
+    contentDescription: String = label,
 ) {
     val backgroundColor by animateColorAsState(
         targetValue =
@@ -509,7 +543,7 @@ private fun CallControlButton(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = label,
+                contentDescription = contentDescription,
                 modifier = Modifier.size(24.dp),
             )
         }

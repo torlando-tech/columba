@@ -217,14 +217,14 @@ class AnnounceRepository
             }
 
         /**
-         * Arrival floor the current filters can show, used as the floor for the "N new
-         * announces" counter. Both halves are null when the filtered stream is empty.
+         * Sort key of the row at the top of the filtered stream, used as the floor for the
+         * "N new announces" counter. Null when the filtered stream is empty.
          */
         suspend fun getArrivalFloor(
             nodeTypes: List<String>,
             searchQuery: String,
             interfaceTypes: List<String>,
-        ): AnnounceArrivalMarker =
+        ): AnnounceArrivalMarker? =
             announceDao.getArrivalFloor(
                 nodeTypes = nodeTypes,
                 nodeTypeCount = nodeTypes.size,
@@ -234,20 +234,20 @@ class AnnounceRepository
             )
 
         /**
-         * Live count of announces that arrived past the floor and that the current filters
-         * can show. Re-emits on announce writes so the UI can advertise arrivals while frozen.
+         * Live count of announces that sort above the floor and that the current filters can
+         * show. Re-emits on announce writes so the UI can advertise arrivals while frozen.
          */
-        @Suppress("LongParameterList") // Filter halves plus both floor halves are bind params
+        @Suppress("LongParameterList") // Filter halves plus the floor key are bind params
         fun observeAnnounceCountNewerThan(
             sinceTimestamp: Long,
-            sinceRowId: Long,
+            sinceHash: String,
             nodeTypes: List<String>,
             searchQuery: String,
             interfaceTypes: List<String>,
         ): Flow<Int> =
             announceDao.observeAnnounceCountNewerThan(
                 sinceTimestamp = sinceTimestamp,
-                sinceRowId = sinceRowId,
+                sinceHash = sinceHash,
                 nodeTypes = nodeTypes,
                 nodeTypeCount = nodeTypes.size,
                 query = searchQuery,

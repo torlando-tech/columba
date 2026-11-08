@@ -810,14 +810,14 @@ interface AnnounceDao {
 
 
     /**
-     * Arrival floor among rows the current filters can show: the newest receive time and the
-     * highest `rowid` (insertion order). Both are needed because `lastSeenTimestamp` is a
-     * receive time: a row received earlier can be saved after this floor is captured, and only
-     * its rowid proves it is an arrival. Used as the floor for the "N new announces" counter.
+     * The row that sorts first among the rows the current filters can show: the boundary of
+     * the first page, using the paging order (`lastSeenTimestamp DESC, destinationHash ASC`).
+     * Null when the filtered stream is empty. The "N new announces" counter compares against
+     * this key, so every counted row provably belongs above it on the reloaded first page.
      */
     @Query(
         """
-        SELECT MAX(a.lastSeenTimestamp) AS lastSeenTimestamp, MAX(a.rowid) AS rowId
+        SELECT a.lastSeenTimestamp AS lastSeenTimestamp, a.destinationHash AS destinationHash
         FROM announces a
         WHERE (:nodeTypeCount = 0 OR a.nodeType IN (:nodeTypes))
         AND (:query = '' OR a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
@@ -831,6 +831,8 @@ interface AnnounceDao {
                 AND filter_sighting.lastSeenTimestamp >= (strftime('%s', 'now') * 1000) - 2592000000
             )
         )
+        ORDER BY a.lastSeenTimestamp DESC, a.destinationHash ASC
+        LIMIT 1
         """,
     )
     suspend fun getArrivalFloor(
@@ -839,18 +841,21 @@ interface AnnounceDao {
         query: String,
         interfaceTypes: List<String>,
         interfaceTypeCount: Int,
-    ): AnnounceArrivalMarker
+    ): AnnounceArrivalMarker?
 
     /**
-     * Live count of rows that arrived past the generation's floor and that the current
-     * filters can show: a newer receive time (a re-announce) or a higher rowid (a late save
-     * of an older receive time). Backs the "N new announces" affordance while frozen.
+     * Live count of rows the current filters can show that sort strictly above the generation's
+     * floor key. Same comparison as the paging order, so the count is exactly the set of cards
+     * revealed at the top by a reload. Backs the "N new announces" affordance while frozen.
      */
     @Query(
         """
         SELECT COUNT(*)
         FROM announces a
-        WHERE (a.lastSeenTimestamp > :sinceTimestamp OR a.rowid > :sinceRowId)
+        WHERE (
+            a.lastSeenTimestamp > :sinceTimestamp
+            OR (a.lastSeenTimestamp = :sinceTimestamp AND a.destinationHash < :sinceHash)
+        )
         AND (:nodeTypeCount = 0 OR a.nodeType IN (:nodeTypes))
         AND (:query = '' OR a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
         AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
@@ -867,7 +872,7 @@ interface AnnounceDao {
     )
     fun observeAnnounceCountNewerThan(
         sinceTimestamp: Long,
-        sinceRowId: Long,
+        sinceHash: String,
         nodeTypes: List<String>,
         nodeTypeCount: Int,
         query: String,
@@ -895,10 +900,10 @@ data class NodeTypeCount(
 )
 
 /**
- * Arrival floor of a paging generation: the newest receive time and the highest rowid among
- * the rows the current filters can show.
+ * Arrival floor of a paging generation: the sort key of the row at the top of the filtered
+ * stream, i.e. the boundary of its first page.
  */
 data class AnnounceArrivalMarker(
-    val lastSeenTimestamp: Long?,
-    val rowId: Long?,
+    val lastSeenTimestamp: Long,
+    val destinationHash: String,
 )

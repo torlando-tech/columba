@@ -190,10 +190,10 @@ class AnnounceStreamViewModel
         )
 
         /**
-         * The current paging generation. [Generation.floor] is captured *before* the first page
-         * is read: an announce saved between the two reads is past the floor (by receive time
-         * or, for a late save of an older receive time, by rowid), so it is both counted as new
-         * and shown once reloaded. It
+         * The current paging generation. [Generation.floor] is the sort key of the row at the
+         * top of the stream, captured *before* the first page is read: an announce saved
+         * between the two reads sorts above it, so it is both counted as new and revealed at
+         * the top once reloaded. It
          * is computed once per generation (not per subscription), so leaving the Network tab
          * and returning still counts the peers discovered while away.
          */
@@ -289,7 +289,7 @@ class AnnounceStreamViewModel
                         // matching row lets arrivals make the list fill itself.
                         announceRepository.observeAnnounceCountNewerThan(
                             sinceTimestamp = gen.floor?.lastSeenTimestamp ?: 0L,
-                            sinceRowId = gen.floor?.rowId ?: 0L,
+                            sinceHash = gen.floor?.destinationHash ?: "",
                             nodeTypes = typeStrings,
                             searchQuery = params.query.trim(),
                             interfaceTypes = params.selectedInterfaces.map { it.storageName },

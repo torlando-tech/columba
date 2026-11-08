@@ -439,7 +439,11 @@ fun NomadNetBrowserScreen(
                         val bookmarkPath =
                             buildNomadNetPersistPath(loadedForBookmark.path, loadedForBookmark.fieldTokens)
                         val saved =
-                            NomadNetSavedSites.key(loadedForBookmark.nodeHash, bookmarkPath) in savedPageKeys
+                            NomadNetSavedSites.key(
+                                loadedForBookmark.nodeHash,
+                                bookmarkPath,
+                                loadedForBookmark.requestData,
+                            ) in savedPageKeys
                         IconButton(
                             onClick = {
                                 sitesViewModel.toggleSaved(

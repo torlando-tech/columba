@@ -906,6 +906,31 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
+    fun `loadPage replays a saved request instead of serving the path's cached page`() =
+        runTest(testDispatcher) {
+            // The page cache is keyed by path, which only names the submitted
+            // fields: it can hold the response to a *different* submission of
+            // the same search.
+            every { pageCache.get(any(), any()) } returns ">Stale results of another search"
+            val formDataSlot = slot<String>()
+            coEvery {
+                protocol.requestNomadnetPage(any(), any(), capture(formDataSlot), any())
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/search.mu"))
+
+            viewModel.loadPage(
+                destinationHash = nodeHash,
+                path = "/page/search.mu`query",
+                requestDataJson = "{\"query\":\"rngit\"}",
+            )
+            advanceUntilIdle()
+            Thread.sleep(200) // the page request runs on Dispatchers.IO
+            advanceUntilIdle()
+
+            verify(exactly = 0) { pageCache.get(any(), any()) }
+            assertEquals("{\"query\":\"rngit\"}", formDataSlot.captured)
+        }
+
+    @Test
     fun `navigateToLink submits parser-declared default for unmodified field`() =
         runTest(testDispatcher) {
             // Forum-style page: display_name pre-filled, message empty.

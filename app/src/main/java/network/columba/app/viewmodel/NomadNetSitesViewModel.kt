@@ -109,11 +109,11 @@ class NomadNetSitesViewModel
             }
         }
 
-        fun removeSaved(
-            nodeHash: String,
-            persistPath: String,
-        ) {
-            viewModelScope.launch { settingsRepository.removeNomadNetSavedSite(nodeHash, persistPath) }
+        /** Removes [site] — the request identifies which save of a path it is. */
+        fun removeSaved(site: NomadNetSavedSite) {
+            viewModelScope.launch {
+                settingsRepository.removeNomadNetSavedSite(site.nodeHash, site.persistPath, site.requestData)
+            }
         }
 
         /** Puts a removed page back exactly where it was (snackbar Undo). */

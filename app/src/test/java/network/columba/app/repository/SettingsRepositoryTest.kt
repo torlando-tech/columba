@@ -1836,6 +1836,29 @@ class SettingsRepositoryTest {
         }
 
     @Test
+    fun `two searches of one path are saved and removed separately`() =
+        runTest {
+            clearSavedNomadNetSites()
+            val node = "abcdef01234567890abcdef012345678"
+            val searchPath = "/page/search.mu`query"
+            val firstRequest = "{\"query\":\"rngit\"}"
+            val secondRequest = "{\"query\":\"meshchat\"}"
+
+            repository.toggleNomadNetSavedSite(node, searchPath, "Search one", firstRequest)
+            repository.toggleNomadNetSavedSite(node, searchPath, "Search two", secondRequest)
+
+            val saved = repository.nomadNetSavedSitesFlow.first()
+            assertEquals("both searches stay saved", 2, saved.size)
+
+            repository.removeNomadNetSavedSite(node, searchPath, firstRequest)
+
+            val remaining = repository.nomadNetSavedSitesFlow.first()
+            assertEquals(1, remaining.size)
+            assertEquals(secondRequest, remaining.single().requestData)
+            clearSavedNomadNetSites()
+        }
+
+    @Test
     fun `removeNomadNetSavedSite leaves the other saved pages alone`() =
         runTest {
             clearSavedNomadNetSites()
@@ -1874,7 +1897,7 @@ class SettingsRepositoryTest {
     /** Saved pages live in the class-shared Robolectric DataStore. */
     private suspend fun clearSavedNomadNetSites() {
         repository.nomadNetSavedSitesFlow.first().forEach { site: NomadNetSavedSite ->
-            repository.removeNomadNetSavedSite(site.nodeHash, site.persistPath)
+            repository.removeNomadNetSavedSite(site.nodeHash, site.persistPath, site.requestData)
         }
     }
 

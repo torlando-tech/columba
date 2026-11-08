@@ -498,6 +498,12 @@ class NomadNetBrowserViewModel
             // from the backtick tokens, whose values are not in the path (a
             // saved search would otherwise re-submit with empty fields).
             val formDataJson = requestDataJson ?: buildNomadNetRequestData(fieldNames, _formFields.value)
+            // A replayed saved request must never be served from the page cache:
+            // the cache is keyed by the path (which only names the submitted
+            // fields), so it can hold the response to a *different* submission
+            // of the same path. Re-fetching is also what keeps two saved
+            // searches of one path apart.
+            val replayingSavedRequest = requestDataJson != null
 
             // The tab home's Continue row reopens the page the user was
             // looking at from the in-memory session store - immediately, and
@@ -575,7 +581,7 @@ class NomadNetBrowserViewModel
             // backend's identifyIfFlagged fires on the next fetch (any
             // navigation or refresh), which is immediate for a user
             // interacting with the page.
-            val bypassCache = destinationHash in _autoIdentifyNodes.value
+            val bypassCache = destinationHash in _autoIdentifyNodes.value || replayingSavedRequest
             val cachePath = if (formDataJson != null) path else requestPath
             val cached = if (bypassCache) null else pageCache.get(destinationHash, cachePath)
             if (cached != null) {
@@ -593,7 +599,13 @@ class NomadNetBrowserViewModel
             }
             if (formDataJson != null) {
                 // Miss: submit the variables (response depends on data).
-                submitFormAndNavigate(destinationHash, requestPath, formDataJson, fieldNames)
+                submitFormAndNavigate(
+                    nodeHash = destinationHash,
+                    path = requestPath,
+                    formDataJson = formDataJson,
+                    fieldTokens = fieldNames,
+                    cacheResponse = !replayingSavedRequest,
+                )
                 return
             }
 
@@ -673,6 +685,7 @@ class NomadNetBrowserViewModel
             path: String,
             formDataJson: String,
             fieldTokens: List<String> = emptyList(),
+            cacheResponse: Boolean = true,
         ) {
             val epoch = ++fetchEpoch
             // Same single-flight hygiene as fetchPage: a form submission is a
@@ -710,8 +723,14 @@ class NomadNetBrowserViewModel
                             // block - the same key loadPage restores with - so a
                             // later restore (tab reopen, deep link) serves this
                             // response instead of re-submitting the request.
+                            // A replayed saved request is not cached: the key is
+                            // the path (field *names* only), so storing it would
+                            // serve its response to a different submission of the
+                            // same path.
                             val persistPath = buildNomadNetPersistPath(pageResult.path, lastFetchFieldTokens)
-                            pageCache.put(nodeHash, persistPath, pageResult.content, document.cacheTime)
+                            if (cacheResponse) {
+                                pageCache.put(nodeHash, persistPath, pageResult.content, document.cacheTime)
+                            }
                             // And hold it in the session store: a `#!c=0` page
                             // never reaches the file cache, yet a tab restore
                             // must still show it without re-submitting.

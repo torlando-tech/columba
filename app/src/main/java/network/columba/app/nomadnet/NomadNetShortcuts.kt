@@ -68,17 +68,25 @@ object NomadNetShortcuts {
     /**
      * Launcher shortcut id for a page. Deterministic (same page -> same id, so
      * `requestPinShortcut` updates instead of duplicating) and distinct per
-     * node + path, including the backtick field block.
+     * node + path, including the backtick field block and the submitted
+     * request: two saved searches of one path are two shortcuts.
      */
     fun shortcutId(
         nodeHash: String,
         persistPath: String,
+        requestData: String? = null,
     ): String {
         // SHA-256, not String.hashCode(): "Aa" and "BB" (and other pairs) share
         // a hashCode, so two different pages of one node could collide and the
         // launcher - and the saved-sites list - would treat them as the same
         // page. The digest is of the full node + path, so identity is the pair.
-        val digest = MessageDigest.getInstance("SHA-256").digest("$nodeHash:$persistPath".toByteArray(Charsets.UTF_8))
+        val identity = buildString {
+            append(nodeHash).append(':').append(persistPath)
+            // A form-result page is identified by its request as well; the NUL
+            // separator keeps "path + request" unambiguous.
+            NomadNetSavedSites.normalizeRequestData(requestData)?.let { append('\u0000').append(it) }
+        }
+        val digest = MessageDigest.getInstance("SHA-256").digest(identity.toByteArray(Charsets.UTF_8))
         val suffix = digest.take(ID_DIGEST_BYTES).joinToString("") { byte -> "%02x".format(byte.toInt() and 0xFF) }
         return "nomadnet-${nodeHash.take(HASH_PREFIX)}-$suffix"
     }
@@ -102,7 +110,7 @@ object NomadNetShortcuts {
         val barePath = persistPath.substringBefore('`')
         val longLabel = truncate("$shortLabel — ${nodeHash.take(HASH_PREFIX)}:$barePath", MAX_LONG_LABEL)
         return NomadNetShortcutSpec(
-            id = shortcutId(nodeHash, persistPath),
+            id = shortcutId(nodeHash, persistPath, requestData),
             nodeHash = nodeHash,
             shortLabel = truncate(shortLabel, MAX_SHORT_LABEL),
             longLabel = longLabel,

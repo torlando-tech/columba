@@ -6,6 +6,7 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import network.columba.app.data.db.ColumbaDatabase
+import network.columba.app.data.db.ThreadGrouping
 import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
 import network.columba.app.data.db.entity.ConversationEntity
@@ -16,6 +17,7 @@ import network.columba.app.data.util.HashUtils
 import network.columba.app.data.util.TextSanitizer
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.util.ThreadFieldCodec
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.rns.host.util.PeerNameResolver
 import org.json.JSONObject
@@ -87,6 +89,7 @@ class ServicePersistenceManager(
             pendingDeliveryPersistence.startReconciliation(scope)
         }
     }
+    private val threadDao by lazy { database.threadDao() }
 
     /**
      * Check if a peer is explicitly blocked.
@@ -325,58 +328,84 @@ class ServicePersistenceManager(
                 )
             val peerName = TextSanitizer.sanitizePeerName(resolvedName)
 
-            // Insert/update conversation
-            if (existingConversation != null) {
-                // Update peerName if we resolved a better name (nickname or announce)
-                val updatedPeerName =
-                    if (PeerNameResolver.isValidPeerName(resolvedName)) peerName else existingConversation.peerName
-                val updated =
-                    existingConversation.copy(
-                        peerName = updatedPeerName,
-                        lastMessage = sanitizedPreview,
-                        lastMessageTimestamp = receivedAt,
-                        unreadCount = existingConversation.unreadCount + 1,
-                        peerPublicKey = publicKey ?: existingConversation.peerPublicKey,
-                    )
-                conversationDao.updateConversation(updated)
-            } else {
-                val newConversation =
-                    ConversationEntity(
-                        peerHash = sourceHash,
-                        identityHash = activeIdentity.identityHash,
-                        peerName = peerName,
-                        peerPublicKey = publicKey,
-                        lastMessage = sanitizedPreview,
-                        lastMessageTimestamp = receivedAt,
-                        unreadCount = 1,
-                        lastSeenTimestamp = 0,
-                    )
-                conversationDao.insertConversation(newConversation)
-            }
+            // One real Room transaction: the conversation preview, the message
+            // row, the peer-activity stamp, and the thread bump commit together,
+            // so a reader can never see a message without its preview or its
+            // thread state.
+            database.withTransaction {
+                // Insert/update conversation
+                if (existingConversation != null) {
+                    // Update peerName if we resolved a better name (nickname or announce)
+                    val updatedPeerName =
+                        if (PeerNameResolver.isValidPeerName(resolvedName)) peerName else existingConversation.peerName
+                    val updated =
+                        existingConversation.copy(
+                            peerName = updatedPeerName,
+                            lastMessage = sanitizedPreview,
+                            lastMessageTimestamp = receivedAt,
+                            unreadCount = existingConversation.unreadCount + 1,
+                            peerPublicKey = publicKey ?: existingConversation.peerPublicKey,
+                        )
+                    conversationDao.updateConversation(updated)
+                } else {
+                    val newConversation =
+                        ConversationEntity(
+                            peerHash = sourceHash,
+                            identityHash = activeIdentity.identityHash,
+                            peerName = peerName,
+                            peerPublicKey = publicKey,
+                            lastMessage = sanitizedPreview,
+                            lastMessageTimestamp = receivedAt,
+                            unreadCount = 1,
+                            lastSeenTimestamp = 0,
+                        )
+                    conversationDao.insertConversation(newConversation)
+                }
 
-            // Insert message
-            val messageEntity =
-                MessageEntity(
-                    id = messageHash,
-                    conversationHash = sourceHash,
-                    identityHash = activeIdentity.identityHash,
-                    content = sanitizedContent,
-                    timestamp = timestamp,
-                    isFromMe = false,
-                    status = "delivered",
-                    isRead = false,
-                    fieldsJson = fieldsJson,
-                    replyToMessageId = replyToMessageId,
-                    deliveryMethod = deliveryMethod,
-                    errorMessage = null,
-                    receivedHopCount = receivedHopCount,
-                    receivedInterface = receivedInterface,
-                    receivedRssi = receivedRssi,
-                    receivedSnr = receivedSnr,
-                    receivedAt = receivedAt,
-                )
-            messageDao.insertMessage(messageEntity)
-            peerActivityDao.recordActivity(sourceHash, receivedAt, PeerActivityType.MESSAGE)
+                // Insert message
+                val messageEntity =
+                    MessageEntity(
+                        id = messageHash,
+                        conversationHash = sourceHash,
+                        identityHash = activeIdentity.identityHash,
+                        content = sanitizedContent,
+                        timestamp = timestamp,
+                        isFromMe = false,
+                        status = "delivered",
+                        isRead = false,
+                        fieldsJson = fieldsJson,
+                        replyToMessageId = replyToMessageId,
+                        deliveryMethod = deliveryMethod,
+                        errorMessage = null,
+                        receivedHopCount = receivedHopCount,
+                        receivedInterface = receivedInterface,
+                        receivedRssi = receivedRssi,
+                        receivedSnr = receivedSnr,
+                        receivedAt = receivedAt,
+                        threadId = ThreadFieldCodec.threadIdFromFieldsJson(fieldsJson),
+                    )
+                messageDao.insertMessage(messageEntity)
+                peerActivityDao.recordActivity(sourceHash, receivedAt, PeerActivityType.MESSAGE)
+
+                // Threads-spec §4.3: implicit thread creation / activity bump /
+                // first-sighting root hook. T comes from fieldsJson key "8"; the
+                // root candidate is the explicit replyToMessageId parameter or
+                // the canonical 0x30 field. Unresolved targets degrade to no
+                // root — the message is already persisted and never dropped.
+                if (messageEntity.threadId != null) {
+                    ThreadGrouping.applyMessageActivity(
+                        threadDao = threadDao,
+                        messageDao = messageDao,
+                        identityHash = activeIdentity.identityHash,
+                        conversationHash = sourceHash,
+                        threadId = messageEntity.threadId,
+                        replyToMessageId = replyToMessageId
+                            ?: ThreadFieldCodec.replyHashFromFieldsJson(fieldsJson),
+                        content = sanitizedContent,
+                        activityAt = receivedAt,
+                    )
+                }
+            }
 
             // Check if this message has file attachments and should supersede a pending notification
             if (hasFileAttachments) {

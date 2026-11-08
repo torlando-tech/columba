@@ -1,0 +1,85 @@
+# 02-thread-from-here-and-hook.yaml
+#
+# Spec §6.4 case 2 + §6.6 hook navigation: long-press a Main bubble ->
+# "Thread from here" opens a new thread with an editable quote of the root
+# prefilled; the first reply carries the root; back returns to Main where the
+# root bubble grows an "N replies" pill; tapping the pill reopens the thread
+# with the root pinned on top.
+#
+# Params: APP_ID, PEER_NAME, MAIN_TOKEN, REPLY_TOKEN.
+appId: ${APP_ID}
+---
+- runFlow:
+    file: lib/open-chat.yaml
+    env:
+      APP_ID: ${APP_ID}
+      PEER_NAME: ${PEER_NAME}
+
+- extendedWaitUntil:
+    visible:
+      text: "Switch thread: Main"
+    timeout: 10000
+
+# A root message in Main.
+- tapOn: "Type a message..."
+- inputText: ${MAIN_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${MAIN_TOKEN}
+    timeout: 30000
+
+# A second message keeps the root off the composer edge: Maestro's long press
+# does not register on the bottom-most bubble.
+- tapOn: "Type a message..."
+- inputText: ${MAIN_TOKEN}-tail
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${MAIN_TOKEN}-tail
+    timeout: 30000
+
+# Case 2: long-press the root -> "Thread from here".
+- longPressOn:
+    text: ${MAIN_TOKEN}
+# The reaction overlay fades; confirm it before the tap resolves.
+- extendedWaitUntil:
+    visible: "Thread from here"
+    timeout: 3000
+- tapOn: "Thread from here"
+
+# Composer retargeted and prefilled with an editable quote of the root —
+# the quote replaces the empty-composer placeholder, so the prefilled ">
+# <root>" text is what proves the retarget.
+- assertVisible:
+    text: ".*> ${MAIN_TOKEN}.*"
+
+# Type without tapping the composer: a tap places the caret inside the
+# prefilled quote line and the reply would be spliced into the quote.
+- inputText: ${REPLY_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+# The reply bubble carries the quote too, so match on the token inside it.
+- extendedWaitUntil:
+    visible: ".*${REPLY_TOKEN}.*"
+    timeout: 30000
+
+# Back from the thread lands on Main (not out of the chat).
+- back
+- extendedWaitUntil:
+    visible:
+      text: "Switch thread: Main"
+    timeout: 10000
+
+# Hook pill under the root bubble; the root stays in Main.
+- extendedWaitUntil:
+    visible: "1 reply"
+    timeout: 10000
+- assertVisible: ${MAIN_TOKEN}
+
+# Hook navigation: tap the pill -> thread view with the root pinned on top.
+- tapOn: "1 reply"
+- assertVisible: ".*1 reply.*"
+- assertVisible:
+    text: ".*${REPLY_TOKEN}.*"
+- takeScreenshot: threads-hook-navigation

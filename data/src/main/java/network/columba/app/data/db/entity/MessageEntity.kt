@@ -28,6 +28,7 @@ import androidx.room.Index
         Index("conversationHash", "identityHash", "timestamp"), // For queries with ordering
         Index("conversationHash", "identityHash", "isFromMe", "isRead"), // For unread count queries
         Index("replyToMessageId"), // For efficient reply lookups
+        Index("conversationHash", "identityHash", "threadId", "timestamp"), // Thread grouping (spec §5); threadId NULL rows serve Main queries
     ], // Indexes for faster queries
 )
 data class MessageEntity(
@@ -84,4 +85,9 @@ data class MessageEntity(
     //           rows from before this column (migration backfills null). Treat
     //           as "no warning" to preserve historical display.
     val signatureVerified: Boolean? = null,
+    // LXMF FIELD_THREAD (0x08) raw wire bytes — the thread grouping key
+    // (threads-spec §4.1). Null = Main conversation. Migrated v10→v11; all
+    // pre-thread messages keep threadId = NULL. Reception is opaque: any
+    // byte length is stored as-is and grouped by exact bytes.
+    val threadId: ByteArray? = null,
 )

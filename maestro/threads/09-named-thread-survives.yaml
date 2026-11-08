@@ -1,0 +1,52 @@
+# 09-named-thread-survives.yaml
+#
+# Spec §6.2 + Greptile P1: a thread created by `+ New` has no messages, and
+# switching away from it saves an empty draft. That cleanup must not delete the
+# name the user just gave the thread — the row has to survive and stay in the
+# sheet.
+#
+# Params: APP_ID, PEER_NAME, RENAMED_TITLE.
+appId: ${APP_ID}
+---
+- runFlow:
+    file: lib/open-chat.yaml
+    env:
+      APP_ID: ${APP_ID}
+      PEER_NAME: ${PEER_NAME}
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- tapOn: "+ New"
+- extendedWaitUntil:
+    visible:
+      text: "Switch thread:.*"
+    timeout: 10000
+
+# Rename the brand-new, message-less thread through the chat overflow.
+- tapOn: "More options"
+- tapOn: "Rename"
+- eraseText: 200
+- inputText: ${RENAMED_TITLE}
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible:
+      text: "Switch thread: ${RENAMED_TITLE}"
+    timeout: 10000
+
+# Switching targets saves an empty draft for the new thread; the name must
+# survive it (Greptile P1 on the naming path).
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- tapOn: "Main"
+- extendedWaitUntil:
+    visible:
+      text: "Switch thread: Main"
+    timeout: 10000
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- assertVisible: ${RENAMED_TITLE}

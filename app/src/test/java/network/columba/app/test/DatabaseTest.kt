@@ -15,6 +15,7 @@ import network.columba.app.data.db.dao.DraftDao
 import network.columba.app.data.db.dao.LocalIdentityDao
 import network.columba.app.data.db.dao.MessageDao
 import network.columba.app.data.db.dao.PeerIdentityDao
+import network.columba.app.data.db.dao.ThreadDao
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import org.junit.After
 import org.junit.Before
@@ -75,6 +76,7 @@ abstract class DatabaseTest {
     protected val localIdentityDao: LocalIdentityDao get() = database.localIdentityDao()
     protected val peerIdentityDao: PeerIdentityDao get() = database.peerIdentityDao()
     protected val draftDao: DraftDao get() = database.draftDao()
+    protected val threadDao: ThreadDao get() = database.threadDao()
 
     companion object {
         // Standard test values for identity-scoped operations

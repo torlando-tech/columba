@@ -38,7 +38,12 @@ class NotificationHelperTest {
     private lateinit var notificationManager: NotificationManager
     private lateinit var notificationHelper: NotificationHelper
 
+    private companion object {
+        const val THREAD_A = "aa0000000000000000000000000000aa"
+    }
+
     private val activeConversationFlow = MutableStateFlow<String?>(null)
+    private val activeThreadFlow = MutableStateFlow<String?>(null)
 
     private fun messageNotification(destinationHash: String) =
         notificationManager.activeNotifications.firstOrNull {
@@ -61,11 +66,14 @@ class NotificationHelperTest {
 
         // Mock active conversation
         every { activeConversationManager.activeConversation } returns activeConversationFlow
+        every { activeConversationManager.activeThread } returns activeThreadFlow
 
         // Default settings: all notifications enabled
         coEvery { settingsRepository.notificationsEnabledFlow } returns flowOf(true)
         coEvery { settingsRepository.notificationReceivedMessageFlow } returns flowOf(true)
         coEvery { settingsRepository.notificationReceivedMessageFavoriteFlow } returns flowOf(true)
+        // Threads are off by default: one flat list, so suppression stays per peer.
+        every { settingsRepository.threadsEnabledFlow } returns flowOf(false)
         coEvery { settingsRepository.notificationHeardAnnounceFlow } returns flowOf(true)
         coEvery { settingsRepository.notificationBleConnectedFlow } returns flowOf(true)
         coEvery { settingsRepository.notificationBleDisconnectedFlow } returns flowOf(true)
@@ -115,6 +123,30 @@ class NotificationHelperTest {
             val shadowNotificationManager = shadowOf(notificationManager)
             val notifications = shadowNotificationManager.allNotifications
             assertTrue("Notification should be posted", notifications.isNotEmpty())
+        }
+
+    @Test
+    fun `notifyMessageReceived puts the thread id on the open intent`() =
+        runBlocking {
+            // When: a thread message is notified
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Thread reply",
+                isFavorite = false,
+                threadIdHex = "02000000000000000000000000000002",
+            )
+
+            // Then: tapping it carries the thread to the navigation layer
+            val notification =
+                shadowOf(notificationManager).allNotifications.single()
+            val openIntent =
+                shadowOf(notification.contentIntent).savedIntent
+            assertEquals(NotificationHelper.ACTION_OPEN_CONVERSATION, openIntent.action)
+            assertEquals(
+                "02000000000000000000000000000002",
+                openIntent.getStringExtra(NotificationHelper.EXTRA_THREAD_ID),
+            )
         }
 
     // ========== Message Notification Preference Tests ==========
@@ -227,6 +259,84 @@ class NotificationHelperTest {
             val shadowNotificationManager = shadowOf(notificationManager)
             val notifications = shadowNotificationManager.allNotifications
             assertTrue("Notification should be posted when app is backgrounded", notifications.isNotEmpty())
+        }
+
+    @Test
+    fun `notifyMessageReceived suppressed for the thread on screen when threads are enabled`() =
+        runBlocking {
+            // Given: this peer's thread 0xaa is open and the app is in the foreground
+            every { settingsRepository.threadsEnabledFlow } returns flowOf(true)
+            activeConversationFlow.value = "abc123def456"
+            activeThreadFlow.value = THREAD_A
+            notificationHelper.isAppInForeground = { true }
+
+            // When: a message arrives in that same thread
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Active Conversation Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+                threadIdHex = THREAD_A,
+            )
+
+            // Then: no notification - the user is looking at that thread
+            val shadowNotificationManager = shadowOf(notificationManager)
+            assertTrue(
+                "Notification should be suppressed for the visible thread",
+                shadowNotificationManager.allNotifications.isEmpty(),
+            )
+        }
+
+    @Test
+    fun `notifyMessageReceived posted for Main while another thread is on screen`() =
+        runBlocking {
+            // Given: thread 0xaa is open, threads on, app foreground
+            every { settingsRepository.threadsEnabledFlow } returns flowOf(true)
+            activeConversationFlow.value = "abc123def456"
+            activeThreadFlow.value = THREAD_A
+            notificationHelper.isAppInForeground = { true }
+
+            // When: a Main (no thread id) message arrives for the same peer
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Active Conversation Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+                threadIdHex = null,
+            )
+
+            // Then: notification - the message is not in the open thread (nor in Main's view)
+            val shadowNotificationManager = shadowOf(notificationManager)
+            assertTrue(
+                "Main message must notify while a thread is on screen",
+                shadowNotificationManager.allNotifications.isNotEmpty(),
+            )
+        }
+
+    @Test
+    fun `notifyMessageReceived suppresses any thread when threads are disabled`() =
+        runBlocking {
+            // Given: threads off (flat list), conversation active, app foreground
+            every { settingsRepository.threadsEnabledFlow } returns flowOf(false)
+            activeConversationFlow.value = "abc123def456"
+            activeThreadFlow.value = THREAD_A
+            notificationHelper.isAppInForeground = { true }
+
+            // When: a thread message arrives
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Active Conversation Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+                threadIdHex = THREAD_A,
+            )
+
+            // Then: suppressed - with the flag off every message shows in the one list
+            val shadowNotificationManager = shadowOf(notificationManager)
+            assertTrue(
+                "Flag off must keep the pre-threads per-peer suppression",
+                shadowNotificationManager.allNotifications.isEmpty(),
+            )
         }
 
     @Test

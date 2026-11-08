@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothDisabled
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
@@ -58,6 +59,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.hilt.navigation.compose.hiltViewModel
 import network.columba.app.R
+import network.columba.app.data.model.NotificationPrivacyLevel
+import network.columba.app.ui.components.NotificationPrivacyChooser
 import network.columba.app.viewmodel.NotificationSettingsViewModel
 
 /**
@@ -154,6 +157,13 @@ fun NotificationSettingsScreen(
                     },
                 )
 
+                // Message privacy card
+                MessagePrivacyCard(
+                    enabled = state.notificationsEnabled,
+                    privacyLevel = state.privacyLevel,
+                    onPrivacyLevelChange = { viewModel.setNotificationPrivacyLevel(it) },
+                )
+
                 // Notification types card
                 NotificationTypesCard(
                     masterEnabled = state.notificationsEnabled,
@@ -240,6 +250,60 @@ fun MasterNotificationToggleCard(
             Switch(
                 checked = enabled,
                 onCheckedChange = onToggle,
+            )
+        }
+    }
+}
+
+@Composable
+fun MessagePrivacyCard(
+    enabled: Boolean,
+    privacyLevel: NotificationPrivacyLevel,
+    onPrivacyLevelChange: (NotificationPrivacyLevel) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = stringResource(R.string.message_privacy_cd),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(R.string.message_privacy_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+
+            Text(
+                text = stringResource(R.string.message_privacy_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Divider(modifier = Modifier.padding(vertical = 4.dp))
+
+            NotificationPrivacyChooser(
+                selected = privacyLevel,
+                onSelect = onPrivacyLevelChange,
+                enabled = enabled,
             )
         }
     }

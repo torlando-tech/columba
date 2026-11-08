@@ -227,6 +227,7 @@ fun OnboardingPagerScreen(
                             PermissionsPage(
                                 notificationsGranted = state.notificationsGranted,
                                 batteryOptimizationExempt = state.batteryOptimizationExempt,
+                                notificationPrivacyLevel = state.notificationPrivacyLevel,
                                 onEnableNotifications = {
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                         notificationPermissionLauncher.launch(
@@ -245,6 +246,7 @@ fun OnboardingPagerScreen(
                                         BatteryOptimizationManager.requestBatteryOptimizationExemption(context)
                                     }
                                 },
+                                onNotificationPrivacyLevelChange = viewModel::setNotificationPrivacyLevel,
                                 onBack = { goBack() },
                                 onContinue = { goNext() },
                             )

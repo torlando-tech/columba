@@ -41,19 +41,17 @@ internal class ServerRnsLxmf(
     )
 
     /**
-     * Deliver one inbound message to a UI-process observer. A received image/file
-     * is hex-encoded inside [ReceivedMessage.fieldsJson]; when that is large, ship
-     * it out-of-band as a [ParcelFileDescriptor] rather than inline, because an
-     * inline multi-hundred-KB parcel overflows the Binder buffer and throws
-     * `TransactionTooLargeException` (which [ObserverHub] now survives, but the
-     * message would still be lost). Small messages — plain text has null/tiny
-     * `fieldsJson` — stay inline (null blob) at zero overhead.
+     * Deliver one inbound message to a UI-process observer. Large attachment
+     * fields and original packed signature evidence travel together out-of-band
+     * to avoid overflowing Binder's shared transaction buffer. Small messages
+     * stay inline at zero overhead.
      */
-    private fun emitMessage(cb: IRnsMessageCallback, message: ReceivedMessage) {
+    private fun emitMessage(cb: IRnsMessageCallback, message: ReceivedMessage,
+    ) {
         val fields = message.fieldsJson
-        if (fields != null && fields.length > INLINE_FIELDS_LIMIT) {
+        if ((fields?.length?.toLong() ?: 0L) + (message.signatureEvidence?.size ?: 0) > INLINE_FIELDS_LIMIT) {
             val pfd = try {
-                FieldsBlob.writeToPfd(cacheDir, fields)
+                FieldsBlob.writeToPfd(cacheDir, fields, message.signatureEvidence)
             } catch (e: IOException) {
                 // Staging failed (e.g. disk full). Drop just this message rather
                 // than throwing out of the collector (which would cancel it and
@@ -64,7 +62,7 @@ internal class ServerRnsLxmf(
             // onMessage may still throw (RemoteException/TransactionTooLargeException);
             // let it propagate to ObserverHub, which keeps the observer subscribed.
             try {
-                cb.onMessage(message.copy(fieldsJson = null), pfd)
+                cb.onMessage(message.copy(fieldsJson = null, signatureEvidence = null), pfd)
             } finally {
                 pfd.close()
             }
@@ -184,7 +182,8 @@ internal class ServerRnsLxmf(
         Bundle().apply { putParcelable(BundleKeys.DESTINATION, destination) }
     }
 
-    override fun setOutboundPropagationNode(destHash: ByteArray?, cb: IRnsResultCallback) =
+    override fun setOutboundPropagationNode(destHash: ByteArray?, cb: IRnsResultCallback,
+    ) =
         dispatch(cb, scope) { impl.setOutboundPropagationNode(destHash).bundleOrThrow() }
 
     override fun getOutboundPropagationNode(cb: IRnsStringCallback) = dispatchNullableString(cb, scope) {
@@ -224,14 +223,9 @@ internal class ServerRnsLxmf(
     private companion object {
         const val TAG = "ServerRnsLxmf"
 
-        // `fieldsJson` longer than this crosses out-of-band via FieldsBlob.
-        // Comfortably under the ~1 MB Binder async-transaction buffer (so even a
-        // few small inline messages queued together stay safe) yet large enough
-        // that plain-text messages (null/tiny fieldsJson) always ride inline.
-        // NOTE: measured in chars (String.length), not UTF-8 bytes. fieldsJson is
-        // hex-encoded binary + ASCII JSON, so chars == bytes here; a hypothetical
-        // multi-byte fieldsJson could be up to 4x larger on the wire but still
-        // far under the ~1 MB buffer at this 64 KB threshold.
+        // Combined fields/evidence larger than this cross out-of-band.
+        // Fields are predominantly hex + ASCII; even multi-byte JSON stays
+        // comfortably below the ~1 MB Binder buffer at this 64 KB threshold.
         const val INLINE_FIELDS_LIMIT = 64 * 1024
     }
 }

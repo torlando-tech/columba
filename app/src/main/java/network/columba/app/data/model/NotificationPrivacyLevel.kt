@@ -45,5 +45,21 @@ enum class NotificationPrivacyLevel(
          */
         fun fromStoredName(name: String): NotificationPrivacyLevel =
             entries.find { it.name == name } ?: NONE
+
+        /**
+         * Resolve the level for a stored value plus whether DataStore replaced a corrupt
+         * settings file. No stored value means a fresh install ([DEFAULT]); a recovered
+         * corruption means the choice was lost, which falls back to [NONE] so message text
+         * cannot reappear without the user asking for it.
+         */
+        fun resolve(
+            storedName: String?,
+            corruptionRecovered: Boolean,
+        ): NotificationPrivacyLevel =
+            when {
+                storedName != null -> fromStoredName(storedName)
+                corruptionRecovered -> NONE
+                else -> DEFAULT
+            }
     }
 }

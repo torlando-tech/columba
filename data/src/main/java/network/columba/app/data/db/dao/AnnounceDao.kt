@@ -810,12 +810,14 @@ interface AnnounceDao {
 
 
     /**
-     * Newest timestamp among rows the current filters can show. Used as the floor for the
-     * "N new announces" counter: rows newer than this arrived after the list was loaded.
+     * Arrival floor among rows the current filters can show: the newest receive time and the
+     * highest `rowid` (insertion order). Both are needed because `lastSeenTimestamp` is a
+     * receive time: a row received earlier can be saved after this floor is captured, and only
+     * its rowid proves it is an arrival. Used as the floor for the "N new announces" counter.
      */
     @Query(
         """
-        SELECT MAX(a.lastSeenTimestamp)
+        SELECT MAX(a.lastSeenTimestamp) AS lastSeenTimestamp, MAX(a.rowid) AS rowId
         FROM announces a
         WHERE (:nodeTypeCount = 0 OR a.nodeType IN (:nodeTypes))
         AND (:query = '' OR a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
@@ -831,23 +833,24 @@ interface AnnounceDao {
         )
         """,
     )
-    suspend fun getNewestAnnounceTimestamp(
+    suspend fun getArrivalFloor(
         nodeTypes: List<String>,
         nodeTypeCount: Int,
         query: String,
         interfaceTypes: List<String>,
         interfaceTypeCount: Int,
-    ): Long?
+    ): AnnounceArrivalMarker
 
     /**
-     * Live count of rows newer than [since] that the current filters can show.
-     * Backs the "N new announces" affordance while the stream is frozen.
+     * Live count of rows that arrived past the generation's floor and that the current
+     * filters can show: a newer receive time (a re-announce) or a higher rowid (a late save
+     * of an older receive time). Backs the "N new announces" affordance while frozen.
      */
     @Query(
         """
         SELECT COUNT(*)
         FROM announces a
-        WHERE a.lastSeenTimestamp > :since
+        WHERE (a.lastSeenTimestamp > :sinceTimestamp OR a.rowid > :sinceRowId)
         AND (:nodeTypeCount = 0 OR a.nodeType IN (:nodeTypes))
         AND (:query = '' OR a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
         AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
@@ -863,7 +866,8 @@ interface AnnounceDao {
         """,
     )
     fun observeAnnounceCountNewerThan(
-        since: Long,
+        sinceTimestamp: Long,
+        sinceRowId: Long,
         nodeTypes: List<String>,
         nodeTypeCount: Int,
         query: String,
@@ -888,4 +892,13 @@ interface AnnounceDao {
 data class NodeTypeCount(
     val nodeType: String,
     val count: Int,
+)
+
+/**
+ * Arrival floor of a paging generation: the newest receive time and the highest rowid among
+ * the rows the current filters can show.
+ */
+data class AnnounceArrivalMarker(
+    val lastSeenTimestamp: Long?,
+    val rowId: Long?,
 )

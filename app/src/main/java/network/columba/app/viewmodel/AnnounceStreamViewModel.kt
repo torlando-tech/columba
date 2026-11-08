@@ -9,6 +9,7 @@ import androidx.paging.cachedIn
 import androidx.paging.filter
 import network.columba.app.R
 import network.columba.app.data.model.InterfaceType
+import network.columba.app.data.db.dao.AnnounceArrivalMarker
 import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
@@ -185,13 +186,14 @@ class AnnounceStreamViewModel
         /** One paging generation: its filters and the arrival floor. */
         private data class Generation(
             val params: FilterParams,
-            val floor: Long?,
+            val floor: AnnounceArrivalMarker?,
         )
 
         /**
-         * The current paging generation. [Generation.floor] is the newest matching timestamp,
-         * captured *before* the first page is read: an announce saved between the two reads is
-         * then newer than the floor, so it is both counted as new and shown once reloaded. It
+         * The current paging generation. [Generation.floor] is captured *before* the first page
+         * is read: an announce saved between the two reads is past the floor (by receive time
+         * or, for a late save of an older receive time, by rowid), so it is both counted as new
+         * and shown once reloaded. It
          * is computed once per generation (not per subscription), so leaving the Network tab
          * and returning still counts the peers discovered while away.
          */
@@ -207,7 +209,7 @@ class AnnounceStreamViewModel
                                 Generation(
                                     params = params,
                                     floor =
-                                        announceRepository.getNewestAnnounceTimestamp(
+                                        announceRepository.getArrivalFloor(
                                             nodeTypes = typeStrings,
                                             searchQuery = params.query.trim(),
                                             interfaceTypes = params.selectedInterfaces.map { it.storageName },
@@ -286,7 +288,8 @@ class AnnounceStreamViewModel
                         // An empty (or not yet loaded) stream has no floor: counting every
                         // matching row lets arrivals make the list fill itself.
                         announceRepository.observeAnnounceCountNewerThan(
-                            since = gen.floor ?: 0L,
+                            sinceTimestamp = gen.floor?.lastSeenTimestamp ?: 0L,
+                            sinceRowId = gen.floor?.rowId ?: 0L,
                             nodeTypes = typeStrings,
                             searchQuery = params.query.trim(),
                             interfaceTypes = params.selectedInterfaces.map { it.storageName },

@@ -1494,7 +1494,7 @@ class ContactsScreenTest {
     }
 
     @Test
-    fun contactsScreen_searchQueryHidesAllContacts_showsFilterEmptyState() {
+    fun contactsScreen_searchQueryHidesAllContacts_showsSearchEmptyState() {
         // Search alone can empty the list; that must not read as an empty
         // address book, and the recovery action must clear the query too.
         val mockViewModel =
@@ -1507,7 +1507,8 @@ class ContactsScreenTest {
             ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
-        composeTestRule.onNodeWithText("No contacts match your filters").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No contacts match \"zzz\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No contacts match your filters").assertDoesNotExist()
         composeTestRule.onNodeWithText("No contacts yet").assertDoesNotExist()
     }
 
@@ -1524,6 +1525,13 @@ class ContactsScreenTest {
             ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
+        // The query outranks the type filter: its state names what failed to match.
+        composeTestRule.onNodeWithText("No contacts match \"zzz\"").assertIsDisplayed()
+
+        composeTestRule.onNodeWithText("Clear search").performClick()
+        composeTestRule.waitForIdle()
+
+        // The type filter alone still hides every contact.
         composeTestRule.onNodeWithText("No contacts match your filters").assertIsDisplayed()
 
         composeTestRule.onNodeWithText("Clear filters").performClick()

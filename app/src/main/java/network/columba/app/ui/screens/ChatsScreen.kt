@@ -397,7 +397,7 @@ fun ChatsScreen(
             !chatsState.isLoading && chatsState.conversations.isEmpty() && searchQuery.isNotBlank() -> {
                 SearchNoResultsState(
                     query = searchQuery.trim(),
-                    itemNoun = "conversations",
+                    titleRes = R.string.search_no_results_title_conversations,
                     onClearSearch = { viewModel.searchQuery.value = "" },
                     modifier =
                         Modifier

@@ -1553,6 +1553,19 @@
     <string name="search_app_bar_search">Search</string>
     <string name="search_app_bar_clear_search">Clear search</string>
 
+    <!-- SearchFilterSummary / SearchNoResultsState -->
+    <string name="search_filter_chip">Filtering: \"%1$s\"</string>
+    <plurals name="search_filter_match_count">
+        <item quantity="one">%1$d match</item>
+        <item quantity="other">%1$d matches</item>
+    </plurals>
+    <string name="search_no_results_title_conversations">No conversations match \"%1$s\"</string>
+    <string name="search_no_results_title_contacts">No contacts match \"%1$s\"</string>
+    <string name="search_no_results_title_nodes">No nodes match \"%1$s\"</string>
+    <string name="search_no_results_title_calls">No calls match \"%1$s\"</string>
+    <string name="search_no_results_hint">Try a different search, or clear it to see everything.</string>
+    <string name="search_no_results_clear">Clear search</string>
+
     <!-- SortModeSelector -->
     <string name="sort_mode_quality">Quality</string>
     <string name="sort_mode_proximity">Proximity</string>

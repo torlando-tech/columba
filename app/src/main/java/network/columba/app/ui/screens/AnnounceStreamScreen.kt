@@ -291,7 +291,7 @@ fun AnnounceStreamScreen(
                     if (searchQuery.isNotBlank()) {
                         SearchNoResultsState(
                             query = searchQuery.trim(),
-                            itemNoun = "nodes",
+                            titleRes = R.string.search_no_results_title_nodes,
                             onClearSearch = { viewModel.searchQuery.value = "" },
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -663,7 +663,7 @@ fun AnnounceStreamContent(
             !isLoading && pagingItems.itemCount == 0 && searchQuery.isNotBlank() -> {
                 SearchNoResultsState(
                     query = searchQuery.trim(),
-                    itemNoun = "nodes",
+                    titleRes = R.string.search_no_results_title_nodes,
                     onClearSearch = { viewModel.searchQuery.value = "" },
                     modifier = Modifier.fillMaxSize(),
                 )

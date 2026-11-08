@@ -31,10 +31,12 @@ import network.columba.app.BuildConfig
 import network.columba.app.R
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.model.ImageCompressionPreset
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.map.MapTileSourceManager
 import network.columba.app.navigation.NavTab
+import network.columba.app.notifications.NotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.BatteryProfile
@@ -169,6 +171,7 @@ data class SettingsState(
     val blockUnknownSenders: Boolean = false,
     val allowCallsFromContactsOnly: Boolean = false,
     val allowVoiceCalls: Boolean = true,
+    val notificationPrivacyLevel: NotificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
     // Incoming message size limit (default 1MB)
     val incomingMessageSizeLimitKb: Int = 1024,
     // Image compression state
@@ -243,6 +246,7 @@ class SettingsViewModel
         private val contactRepository: ContactRepository,
         private val updateChecker: network.columba.app.service.UpdateChecker,
         private val crashReportManager: network.columba.app.util.CrashReportManager,
+        private val notificationHelper: NotificationHelper,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -1870,6 +1874,11 @@ class SettingsViewModel
                     _state.update { it.copy(allowVoiceCalls = enabled) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.notificationPrivacyLevelFlow.collect { level ->
+                    _state.update { it.copy(notificationPrivacyLevel = level) }
+                }
+            }
         }
 
         /**
@@ -1896,6 +1905,22 @@ class SettingsViewModel
                 settingsRepository.saveAllowCallsFromContactsOnly(enabled)
                 _state.update { it.copy(allowCallsFromContactsOnly = enabled) }
                 Log.d(TAG, "Calls-from-contacts-only ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set how much a received-message notification reveals. Delegates to
+         * [NotificationHelper.setMessagePrivacyLevel] so the save runs under the same lock
+         * as notification posting, and tightening drops message notifications already shown.
+         */
+        fun setNotificationPrivacyLevel(level: NotificationPrivacyLevel) {
+            viewModelScope.launch {
+                try {
+                    notificationHelper.setMessagePrivacyLevel(level)
+                    Log.d(TAG, "Message privacy level: ${level.name}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error saving message privacy level", e)
+                }
             }
         }
 

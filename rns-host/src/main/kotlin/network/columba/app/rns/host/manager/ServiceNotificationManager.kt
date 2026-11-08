@@ -33,11 +33,9 @@ class ServiceNotificationManager(
         private const val TAG = "ServiceNotificationMgr"
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "reticulum_service"
-        const val CHANNEL_NAME = "Reticulum Network Service"
 
         const val NOTIFICATION_ID_RNODE = 1002
         private const val CHANNEL_ID_RNODE = "rnode_alerts"
-        private const val CHANNEL_NAME_RNODE = "RNode Connection Alerts"
     }
 
     private val notificationManager: NotificationManager by lazy {
@@ -94,10 +92,10 @@ class ServiceNotificationManager(
             val channel =
                 NotificationChannel(
                     CHANNEL_ID,
-                    CHANNEL_NAME,
+                    context.getString(R.string.notif_channel_reticulum_name),
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
-                    description = "Keeps Reticulum network running in background"
+                    description = context.getString(R.string.notif_channel_reticulum_description)
                     setShowBadge(false)
                     // Disable sound and vibration for non-intrusive foreground service
                     setSound(null, null)
@@ -109,10 +107,10 @@ class ServiceNotificationManager(
             val rnodeChannel =
                 NotificationChannel(
                     CHANNEL_ID_RNODE,
-                    CHANNEL_NAME_RNODE,
+                    context.getString(R.string.notif_channel_rnode_name),
                     NotificationManager.IMPORTANCE_HIGH,
                 ).apply {
-                    description = "Alerts when an RNode radio loses connection"
+                    description = context.getString(R.string.notif_channel_rnode_description)
                     setShowBadge(true)
                 }
             notificationManager.createNotificationChannel(rnodeChannel)
@@ -131,7 +129,7 @@ class ServiceNotificationManager(
 
         return NotificationCompat
             .Builder(context, CHANNEL_ID)
-            .setContentTitle("Columba Mesh Network")
+            .setContentTitle(context.getString(R.string.notif_foreground_title))
             .setContentText(statusText)
             .setStyle(
                 NotificationCompat
@@ -243,8 +241,8 @@ class ServiceNotificationManager(
                     NotificationCompat
                         .Builder(context, CHANNEL_ID_RNODE)
                         .setSmallIcon(R.drawable.ic_notification_stat)
-                        .setContentTitle("RNode Disconnected")
-                        .setContentText("$names lost connection. Attempting to reconnect...")
+                        .setContentTitle(context.getString(R.string.notif_rnode_alert_title))
+                        .setContentText(context.getString(R.string.notif_rnode_alert_text, names))
                         .setContentIntent(pendingIntent)
                         .setAutoCancel(true)
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -371,21 +369,21 @@ class ServiceNotificationManager(
         stateName: String,
         progress: Float,
     ): Pair<String, String> {
-        val title = "Syncing with relay..."
+        val title = context.getString(R.string.notif_sync_title)
         val subtitle =
             when (stateName.lowercase()) {
-                "path_requested" -> "Discovering network path..."
-                "link_establishing" -> "Establishing connection..."
-                "link_established" -> "Connected, preparing request..."
-                "request_sent" -> "Requesting messages..."
+                "path_requested" -> context.getString(R.string.notif_sync_path_requested)
+                "link_establishing" -> context.getString(R.string.notif_sync_link_establishing)
+                "link_established" -> context.getString(R.string.notif_sync_link_established)
+                "request_sent" -> context.getString(R.string.notif_sync_request_sent)
                 "receiving" ->
                     if (progress > 0f) {
-                        "Downloading: ${(progress * 100).toInt()}%"
+                        context.getString(R.string.notif_sync_downloading, (progress * 100).toInt())
                     } else {
-                        "Downloading messages..."
+                        context.getString(R.string.notif_sync_downloading_messages)
                     }
-                "response_received" -> "Processing response..."
-                else -> "Processing..."
+                "response_received" -> context.getString(R.string.notif_sync_response_received)
+                else -> context.getString(R.string.notif_sync_processing)
             }
         return Pair(title, subtitle)
     }
@@ -426,7 +424,9 @@ class ServiceNotificationManager(
             ) {
                 Log.e(TAG, "Foreground service time limit exhausted. Service will run in background with limited capabilities.")
                 // Update state to reflect the issue - service is now vulnerable to being killed
-                state.networkStatus.set("ERROR:Foreground service not allowed - battery optimization may kill the service")
+                state.networkStatus.set(
+                    "ERROR:" + context.getString(R.string.notif_error_foreground_not_allowed),
+                )
             }
 
             // Service continues to run but not as foreground - it's now killable
@@ -480,32 +480,32 @@ class ServiceNotificationManager(
     private fun getStatusTexts(networkStatus: String): Pair<String, String> {
         val statusText =
             when {
-                networkStatus == "READY" -> "Connected - Mesh network active"
-                networkStatus == "INITIALIZING" -> "Starting mesh network..."
-                networkStatus == "CONNECTING" -> "Reconnecting..."
-                networkStatus.startsWith("ERROR:") -> "Error - Tap to view"
-                else -> "Disconnected"
+                networkStatus == "READY" -> context.getString(R.string.notif_status_connected)
+                networkStatus == "INITIALIZING" -> context.getString(R.string.notif_status_initializing)
+                networkStatus == "CONNECTING" -> context.getString(R.string.notif_status_reconnecting)
+                networkStatus.startsWith("ERROR:") -> context.getString(R.string.notif_status_error)
+                else -> context.getString(R.string.notif_status_disconnected)
             }
 
         var detailText =
             when {
                 networkStatus == "READY" ->
-                    "Background service running. Keep battery optimization disabled for reliable message delivery."
-                networkStatus == "INITIALIZING" -> "Connecting to mesh network..."
-                networkStatus == "CONNECTING" -> "Service was interrupted. Attempting to reconnect..."
+                    context.getString(R.string.notif_detail_running)
+                networkStatus == "INITIALIZING" -> context.getString(R.string.notif_detail_initializing)
+                networkStatus == "CONNECTING" -> context.getString(R.string.notif_detail_reconnecting)
                 networkStatus.startsWith("ERROR:") -> networkStatus.substringAfter("ERROR:")
                 else -> statusText
             }
 
         // Append RNode status when network is otherwise healthy
         if (networkStatus == "READY" && disconnectedRNodeInterfaces.isNotEmpty()) {
-            detailText += " (RNode disconnected)"
+            detailText += context.getString(R.string.notif_detail_rnode_disconnected)
         }
 
         // Append RNode battery when we have a live reading and the network is healthy.
         val battery = rnodeBatteryPercent
         if (networkStatus == "READY" && battery != null) {
-            detailText += " (RNode battery ${battery}%)"
+            detailText += context.getString(R.string.notif_detail_rnode_battery, battery)
         }
 
         return Pair(statusText, detailText)

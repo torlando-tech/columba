@@ -41,9 +41,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.service.ConversationLinkManager
 import java.util.Locale
 
@@ -98,11 +101,12 @@ fun <T> QualitySelectionDialog(
     linkState: ConversationLinkManager.LinkState? = null,
     isProbing: Boolean = false,
     transferTimeEstimates: Map<T, String?>? = null,
-    confirmButtonText: String = "Confirm",
+    confirmButtonText: String? = null,
     onConfirm: (T) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var selectedValue by remember { mutableStateOf(initialSelection) }
+    val resolvedConfirmText = confirmButtonText ?: stringResource(R.string.quality_dialog_confirm)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -166,12 +170,12 @@ fun <T> QualitySelectionDialog(
             Button(
                 onClick = { onConfirm(selectedValue) },
             ) {
-                Text(confirmButtonText)
+                Text(resolvedConfirmText)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         },
     )
@@ -198,12 +202,12 @@ fun PathInfoSection(
         when {
             // isProbing takes precedence over linkState being null so the
             // dialog can render the probing card immediately on open.
-            isProbing -> "Probing link..."
+            isProbing -> stringResource(R.string.quality_path_probing)
             linkState == null -> null
-            linkState.isEstablishing -> "Connecting..."
+            linkState.isEstablishing -> stringResource(R.string.quality_path_connecting)
             linkState.isActive -> {
                 buildString {
-                    linkState.hops?.let { append("$it hops") }
+                    linkState.hops?.let { append(pluralStringResource(R.plurals.notif_hops, it, it)) }
 
                     linkState.bestRateBps?.let { rate ->
                         if (isNotEmpty()) append(" • ")
@@ -212,12 +216,12 @@ fun PathInfoSection(
 
                     linkState.linkMtu?.let { mtu ->
                         if (isNotEmpty()) append(" • ")
-                        append("${mtu}B MTU")
+                        append(stringResource(R.string.quality_path_mtu, mtu))
                     }
                 }.ifEmpty { null }
             }
-            linkState.error != null -> "Connection failed"
-            else -> "No active link"
+            linkState.error != null -> stringResource(R.string.quality_path_failed)
+            else -> stringResource(R.string.quality_path_no_link)
         }
 
     if (pathInfo != null) {
@@ -355,7 +359,7 @@ fun QualityOptionRow(
 fun RecommendedChip() {
     Icon(
         imageVector = Icons.Filled.Star,
-        contentDescription = "Recommended",
+        contentDescription = stringResource(R.string.quality_recommended),
         modifier = Modifier.height(18.dp),
         tint = MaterialTheme.colorScheme.primary,
     )
@@ -368,7 +372,7 @@ fun RecommendedChip() {
 fun ExperimentalChip() {
     Icon(
         imageVector = Icons.Filled.Warning,
-        contentDescription = "Experimental",
+        contentDescription = stringResource(R.string.quality_experimental),
         modifier = Modifier.height(18.dp),
         tint = MaterialTheme.colorScheme.tertiary,
     )

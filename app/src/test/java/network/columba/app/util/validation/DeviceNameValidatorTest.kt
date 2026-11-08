@@ -58,7 +58,7 @@ class DeviceNameValidatorTest {
         val result = DeviceNameValidator.validate("HC-05")
         assertTrue(result is DeviceNameValidator.ValidationResult.Warning)
         val warning = result as DeviceNameValidator.ValidationResult.Warning
-        assertEquals("Device may not be an RNode. Proceed with caution.", warning.message)
+        assertEquals(DeviceNameValidator.DeviceNameErrorReason.NOT_RNODE, warning.warning.reason)
     }
 
     @Test
@@ -89,7 +89,8 @@ class DeviceNameValidatorTest {
         val result = DeviceNameValidator.validate(name)
         assertTrue(result is DeviceNameValidator.ValidationResult.Error)
         val error = result as DeviceNameValidator.ValidationResult.Error
-        assertEquals("Device name must be 32 characters or less", error.message)
+        assertEquals(DeviceNameValidator.DeviceNameErrorReason.TOO_LONG, error.error.reason)
+        assertEquals(listOf(32), error.error.args)
     }
 
     @Test

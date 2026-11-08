@@ -28,7 +28,7 @@ fun CrashReportingOptInDialog(
                 contentDescription = null,
             )
         },
-        title = { Text("Help improve Columba?") },
+        title = { Text(stringResource(R.string.settings_crash_optin_title)) },
         text = {
             Text(
                 stringResource(R.string.crash_reporting_privacy_description),
@@ -36,12 +36,12 @@ fun CrashReportingOptInDialog(
         },
         confirmButton = {
             TextButton(onClick = onEnable) {
-                Text("Enable")
+                Text(stringResource(R.string.settings_crash_optin_enable))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Not now")
+                Text(stringResource(R.string.settings_crash_optin_not_now))
             }
         },
     )

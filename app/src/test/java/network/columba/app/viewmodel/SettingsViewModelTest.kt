@@ -1806,7 +1806,7 @@ class SettingsViewModelTest {
 
                 // Wait for error state
                 val finalState = expectMostRecentItem()
-                assertEquals("Announce failed", finalState.manualAnnounceError)
+                assertEquals(AnnounceError(AnnounceErrorReason.UNKNOWN, "Announce failed"), finalState.manualAnnounceError)
                 assertFalse("Should not be announcing anymore", finalState.isManualAnnouncing)
 
                 cancelAndConsumeRemainingEvents()

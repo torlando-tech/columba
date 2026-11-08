@@ -13,11 +13,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
 import network.columba.app.test.RegisterComponentActivityRule
 import org.junit.Assert.assertNotEquals
 import org.junit.Rule
@@ -194,8 +196,13 @@ class ThemeSwitchingComposeTest {
                 darkTheme = true,
                 selectedTheme = currentTheme,
             ) {
+                val label =
+                    when (val t = currentTheme) {
+                        is PresetTheme -> stringResource(t.displayNameRes)
+                        is CustomTheme -> t.displayName
+                    }
                 Text(
-                    text = "Theme: ${currentTheme.displayName}",
+                    text = "Theme: $label",
                     modifier = Modifier.testTag("theme-content"),
                 )
             }
@@ -205,7 +212,9 @@ class ThemeSwitchingComposeTest {
             currentTheme = theme
             composeTestRule.waitForIdle()
             composeTestRule.onNodeWithTag("theme-content").assertIsDisplayed()
-            composeTestRule.onNodeWithText("Theme: ${theme.displayName}").assertIsDisplayed()
+            composeTestRule.onNodeWithText(
+                "Theme: ${ApplicationProvider.getApplicationContext<Application>().getString(theme.displayNameRes)}",
+            ).assertIsDisplayed()
         }
     }
 

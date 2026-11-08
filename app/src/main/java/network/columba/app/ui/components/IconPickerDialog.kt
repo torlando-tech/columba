@@ -49,6 +49,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
@@ -87,7 +89,7 @@ fun IconPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Choose Profile Icon") },
+        title = { Text(stringResource(R.string.icon_picker_title)) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -116,12 +118,12 @@ fun IconPickerDialog(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = { Text("Search icons") },
-                    placeholder = { Text("e.g., star, heart, wifi") },
+                    label = { Text(stringResource(R.string.icon_picker_search_label)) },
+                    placeholder = { Text(stringResource(R.string.icon_picker_search_placeholder)) },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Search,
-                            contentDescription = "Search",
+                            contentDescription = stringResource(R.string.icon_picker_search_desc),
                         )
                     },
                     trailingIcon = {
@@ -129,7 +131,7 @@ fun IconPickerDialog(
                             IconButton(onClick = { searchQuery = "" }) {
                                 Icon(
                                     imageVector = Icons.Default.Clear,
-                                    contentDescription = "Clear search",
+                                    contentDescription = stringResource(R.string.icon_picker_clear_search_desc),
                                 )
                             }
                         }
@@ -153,7 +155,7 @@ fun IconPickerDialog(
                     onConfirm(selectedIconName, selectedForegroundColor, selectedBackgroundColor)
                 },
             ) {
-                Text("Save")
+                Text(stringResource(R.string.icon_picker_save))
             }
         },
         dismissButton = {
@@ -165,12 +167,12 @@ fun IconPickerDialog(
                             onConfirm(null, null, null)
                         },
                     ) {
-                        Text("Clear")
+                        Text(stringResource(R.string.icon_picker_clear))
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                 }
                 TextButton(onClick = onDismiss) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         },
@@ -194,7 +196,7 @@ private fun IconPreviewSection(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "Preview",
+            text = stringResource(R.string.icon_picker_preview),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -315,7 +317,7 @@ private fun ColorSelectionSection(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = "Background",
+                    text = stringResource(R.string.icon_picker_background),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -347,7 +349,7 @@ private fun ColorSelectionSection(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = "Icon",
+                    text = stringResource(R.string.icon_picker_icon),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -375,7 +377,7 @@ private fun ColorSelectionSection(
         }
 
         Text(
-            text = "Tap a color to customize",
+            text = stringResource(R.string.icon_picker_tap_color_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -386,7 +388,7 @@ private fun ColorSelectionSection(
     if (showBgColorPicker) {
         ColorPickerDialog(
             initialColor = bgColor,
-            title = "Background Color",
+            title = stringResource(R.string.icon_picker_background_color_title),
             onConfirm = { color ->
                 val hex = String.format(java.util.Locale.US, "%06X", color.toArgb() and 0xFFFFFF)
                 onBackgroundColorChange(hex)
@@ -399,7 +401,7 @@ private fun ColorSelectionSection(
     if (showFgColorPicker) {
         ColorPickerDialog(
             initialColor = fgColor,
-            title = "Icon Color",
+            title = stringResource(R.string.icon_picker_icon_color_title),
             onConfirm = { color ->
                 val hex = String.format(java.util.Locale.US, "%06X", color.toArgb() and 0xFFFFFF)
                 onForegroundColorChange(hex)
@@ -460,14 +462,22 @@ private fun IconCategoryList(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         ) {
                             Text(
-                                text = "Search Results",
+                                text = stringResource(R.string.icon_picker_search_results),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Text(
                                 text =
-                                    "${searchResults.size} icons" +
-                                        if (searchResults.size >= 100) " (showing first 100)" else "",
+                                    pluralStringResource(
+                                        R.plurals.icon_picker_icon_count,
+                                        searchResults.size,
+                                        searchResults.size,
+                                    ) +
+                                    if (searchResults.size >= 100) {
+                                        stringResource(R.string.icon_picker_showing_first_100)
+                                    } else {
+                                        ""
+                                    },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             )
@@ -484,7 +494,7 @@ private fun IconCategoryList(
             } else {
                 item {
                     Text(
-                        text = "No icons found for \"$searchQuery\"",
+                        text = stringResource(R.string.icon_picker_no_results, searchQuery),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp),
@@ -520,7 +530,11 @@ private fun IconCategoryList(
             // Hint about search
             item(key = "search_hint") {
                 Text(
-                    text = "Search to find any of ${MaterialDesignIcons.iconCount} icons",
+                    text = pluralStringResource(
+                        R.plurals.icon_picker_search_hint,
+                        MaterialDesignIcons.iconCount,
+                        MaterialDesignIcons.iconCount,
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -563,14 +577,14 @@ private fun CategoryHeader(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "$iconCount icons",
+                    text = pluralStringResource(R.plurals.icon_picker_icon_count, iconCount, iconCount),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 )
             }
             Icon(
                 imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                contentDescription = stringResource(if (isExpanded) R.string.icon_picker_collapse else R.string.icon_picker_expand),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

@@ -1,0 +1,9 @@
+[
+  "IFAC (Network Access)",
+  "Leave blank unless the RNode network requires an IFAC network name and passphrase. Only interfaces with matching credentials can communicate.",
+  "rnode-ifac",
+  "Network Name",
+  "radio-pass",
+  "Passphrase",
+  "Hide passphrase"
+]

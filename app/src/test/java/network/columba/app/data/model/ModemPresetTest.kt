@@ -175,7 +175,7 @@ class ModemPresetTest {
     @Test
     fun `all presets have non-empty display names`() {
         ModemPreset.entries.forEach { preset ->
-            assert(preset.displayName.isNotBlank()) {
+            assert(preset.displayNameRes != 0) {
                 "${preset.name} has empty display name"
             }
         }
@@ -184,7 +184,7 @@ class ModemPresetTest {
     @Test
     fun `all presets have non-empty descriptions`() {
         ModemPreset.entries.forEach { preset ->
-            assert(preset.description.isNotBlank()) {
+            assert(preset.descriptionRes != 0) {
                 "${preset.name} has empty description"
             }
         }

@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import network.columba.app.R
 import network.columba.app.data.repository.OfflineMapRegion
 import network.columba.app.data.repository.OfflineMapRegionRepository
 import network.columba.app.di.IoDispatcher
@@ -75,8 +76,8 @@ data class DownloadProgress(
     val completedResources: Long = 0L,
     val requiredResources: Long = 0L,
     val isComplete: Boolean = false,
-    val errorMessage: String? = null,
-    val statusMessage: String? = null, // Shown during post-download finalization (e.g., style caching)
+    val errorMessage: UiMessage? = null,
+    val statusMessage: UiMessage? = null, // Shown during post-download finalization (e.g., style caching)
 )
 
 /**
@@ -84,7 +85,7 @@ data class DownloadProgress(
  */
 @Immutable
 data class AddressSearchResult(
-    val displayName: String,
+    val displayName: UiMessage,
     val latitude: Double,
     val longitude: Double,
 )
@@ -105,18 +106,18 @@ data class OfflineMapDownloadState(
     val estimatedSizeBytes: Long = 0L,
     val downloadProgress: DownloadProgress? = null,
     val isComplete: Boolean = false,
-    val errorMessage: String? = null,
+    val errorMessage: UiMessage? = null,
     val createdRegionId: Long? = null,
     val maplibreRegionId: Long? = null,
     // Address search fields
     val addressQuery: String = "",
     val addressSearchResults: List<AddressSearchResult> = emptyList(),
     val isSearchingAddress: Boolean = false,
-    val addressSearchError: String? = null,
+    val addressSearchError: UiMessage? = null,
     val isGeocoderAvailable: Boolean = true, // Checked on init
     val httpEnabled: Boolean = true, // HTTP map source enabled (needed for downloads)
     val httpAutoDisabled: Boolean = false, // True when HTTP was auto-disabled after download
-    val styleCacheWarning: String? = null, // Non-null when style caching failed but tiles were saved
+    val styleCacheWarning: UiMessage? = null, // Non-null when style caching failed but tiles were saved
     val updateRegionId: Long? = null, // Non-null when updating an existing region (delete old on complete)
 ) {
     /**
@@ -326,7 +327,7 @@ class OfflineMapDownloadViewModel
                         it.copy(
                             addressSearchResults = results,
                             isSearchingAddress = false,
-                            addressSearchError = if (results.isEmpty()) "No results found" else null,
+                            addressSearchError = if (results.isEmpty()) UiMessage.Text(R.string.offline_map_no_results) else null,
                         )
                     }
                 } catch (e: Exception) {
@@ -334,7 +335,7 @@ class OfflineMapDownloadViewModel
                     _state.update {
                         it.copy(
                             isSearchingAddress = false,
-                            addressSearchError = "Search failed: ${e.message}",
+                            addressSearchError = UiMessage.Text(R.string.offline_map_search_failed, listOf(e.message ?: "null")),
                         )
                     }
                 }
@@ -381,7 +382,7 @@ class OfflineMapDownloadViewModel
             }
         }
 
-        private fun formatAddress(address: Address): String {
+        private fun formatAddress(address: Address): UiMessage {
             // Try to build a readable address string
             val parts = mutableListOf<String>()
 
@@ -390,10 +391,11 @@ class OfflineMapDownloadViewModel
             address.countryName?.let { parts.add(it) } // Country
 
             return if (parts.isNotEmpty()) {
-                parts.joinToString(", ")
+                UiMessage.Raw(parts.joinToString(", "))
             } else {
                 // Fallback to full address line
-                address.getAddressLine(0) ?: "Unknown location"
+                address.getAddressLine(0)?.let { UiMessage.Raw(it) }
+                    ?: UiMessage.Text(R.string.offline_map_unknown_location)
             }
         }
 
@@ -633,7 +635,7 @@ class OfflineMapDownloadViewModel
                 .build()
         }
 
-        @Suppress("LongMethod") // Orchestrates download process - splitting would fragment cohesive flow
+        @Suppress("LongMethod", "CyclomaticComplexMethod") // Orchestrates download process - splitting would fragment cohesive flow
         private fun startDownload() {
             val currentState = _state.value
             val lat = currentState.centerLatitude ?: return
@@ -758,7 +760,7 @@ class OfflineMapDownloadViewModel
                                         it.copy(
                                             downloadProgress =
                                                 it.downloadProgress?.copy(
-                                                    statusMessage = "Finalizing offline style…",
+                                                    statusMessage = UiMessage.Text(R.string.offline_map_finalizing_style),
                                                 ),
                                         )
                                     }
@@ -772,9 +774,7 @@ class OfflineMapDownloadViewModel
                                     val styleCacheWarning =
                                         if (!styleCached) {
                                             Log.w(TAG, "Style caching failed — offline map may not work after 24h")
-                                            "Map tiles saved, but offline style caching failed. " +
-                                                "The map may stop working offline after 24 hours. " +
-                                                "Try re-downloading while connected to the internet."
+                                            UiMessage.Text(R.string.offline_map_style_cache_warning)
                                         } else {
                                             null
                                         }
@@ -820,8 +820,10 @@ class OfflineMapDownloadViewModel
                                         it.copy(
                                             downloadProgress = it.downloadProgress?.copy(statusMessage = null),
                                             errorMessage =
-                                                "Error finalizing download: ${e.message}. " +
-                                                    "MapLibre region saved but finalization failed.",
+                                                UiMessage.Text(
+                                                    R.string.offline_map_finalize_failed,
+                                                    listOf(e.message ?: "null"),
+                                                ),
                                         )
                                     }
                                 }
@@ -835,13 +837,13 @@ class OfflineMapDownloadViewModel
                             viewModelScope.launch {
                                 offlineMapRegionRepository.markError(
                                     id = regionId,
-                                    errorMessage = errorMessage,
+                                    errorMessage = errorMessage.resolve(context),
                                 )
                             }
 
                             _state.update {
                                 it.copy(
-                                    errorMessage = "Download failed: $errorMessage",
+                                    errorMessage = UiMessage.Text(R.string.offline_map_download_failed, listOf(errorMessage)),
                                     downloadProgress =
                                         (it.downloadProgress ?: DownloadProgress()).copy(
                                             errorMessage = errorMessage,
@@ -856,7 +858,7 @@ class OfflineMapDownloadViewModel
                     Log.e(TAG, "Failed to start download", e)
                     isDownloading = false
                     _state.update {
-                        it.copy(errorMessage = "Download failed: ${e.message}")
+                        it.copy(errorMessage = UiMessage.Text(R.string.offline_map_download_failed, listOf(e.message ?: "null")))
                     }
                 }
             }

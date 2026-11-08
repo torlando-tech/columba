@@ -1,6 +1,8 @@
 package network.columba.app.ui.components
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import network.columba.app.R
 import network.columba.app.service.ConversationLinkManager
 import network.columba.app.ui.model.CodecProfile
 
@@ -22,36 +24,39 @@ import network.columba.app.ui.model.CodecProfile
  */
 @Composable
 fun CodecSelectionDialog(
-    title: String = "Select Call Quality",
-    subtitle: String = "Choose a codec profile based on your connection speed",
+    title: String? = null,
+    subtitle: String? = null,
     profiles: List<CodecProfile> = CodecProfile.entries,
     initialProfile: CodecProfile? = null,
     recommendedProfile: CodecProfile = CodecProfile.DEFAULT,
     linkState: ConversationLinkManager.LinkState? = null,
     isProbing: Boolean = false,
-    confirmButtonText: String = "Call",
+    confirmButtonText: String? = null,
     onDismiss: () -> Unit,
     onProfileSelected: (CodecProfile) -> Unit,
 ) {
+    val resolvedTitle = title ?: stringResource(R.string.codec_selection_title)
+    val resolvedSubtitle = subtitle ?: stringResource(R.string.codec_selection_subtitle)
+    val resolvedConfirmText = confirmButtonText ?: stringResource(R.string.codec_selection_confirm)
     val options =
         profiles.map { profile ->
             QualityOption(
                 value = profile,
-                displayName = profile.displayName,
-                description = profile.description,
+                displayName = stringResource(profile.labelRes),
+                description = stringResource(profile.descriptionRes),
                 isExperimental = profile.isExperimental,
             )
         }
 
     QualitySelectionDialog(
-        title = title,
-        subtitle = subtitle,
+        title = resolvedTitle,
+        subtitle = resolvedSubtitle,
         options = options,
         initialSelection = (initialProfile ?: recommendedProfile).takeIf(profiles::contains) ?: profiles.first(),
         recommendedOption = recommendedProfile,
         linkState = linkState,
         isProbing = isProbing,
-        confirmButtonText = confirmButtonText,
+        confirmButtonText = resolvedConfirmText,
         onConfirm = onProfileSelected,
         onDismiss = onDismiss,
     )

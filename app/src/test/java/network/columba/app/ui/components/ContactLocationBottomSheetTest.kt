@@ -8,9 +8,11 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import network.columba.app.R
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.ContactMarker
 import network.columba.app.viewmodel.MarkerState
+import network.columba.app.viewmodel.UiMessage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -43,97 +45,98 @@ class ContactLocationBottomSheetTest {
 
     @Test
     fun `bearingToDirection returns north for 0 degrees`() {
-        assertEquals("north", bearingToDirection(0f))
+        assertEquals(R.string.contact_loc_dir_north, bearingToDirection(0f))
     }
 
     @Test
     fun `bearingToDirection returns north for 360 degrees`() {
         // 360 is same as 0
-        assertEquals("north", bearingToDirection(360f))
+        assertEquals(R.string.contact_loc_dir_north, bearingToDirection(360f))
     }
 
     @Test
     fun `bearingToDirection returns north for small positive angles`() {
-        assertEquals("north", bearingToDirection(10f))
-        assertEquals("north", bearingToDirection(22f))
+        assertEquals(R.string.contact_loc_dir_north, bearingToDirection(10f))
+        assertEquals(R.string.contact_loc_dir_north, bearingToDirection(22f))
     }
 
     @Test
     fun `bearingToDirection returns north for angles near 360`() {
-        assertEquals("north", bearingToDirection(350f))
-        assertEquals("north", bearingToDirection(338f))
+        assertEquals(R.string.contact_loc_dir_north, bearingToDirection(350f))
+        assertEquals(R.string.contact_loc_dir_north, bearingToDirection(338f))
     }
 
     @Test
     fun `bearingToDirection returns northeast for angles 22_5 to 67_5`() {
-        assertEquals("northeast", bearingToDirection(23f))
-        assertEquals("northeast", bearingToDirection(45f))
-        assertEquals("northeast", bearingToDirection(67f))
+        assertEquals(R.string.contact_loc_dir_northeast, bearingToDirection(23f))
+        assertEquals(R.string.contact_loc_dir_northeast, bearingToDirection(45f))
+        assertEquals(R.string.contact_loc_dir_northeast, bearingToDirection(67f))
     }
 
     @Test
     fun `bearingToDirection returns east for angles 67_5 to 112_5`() {
-        assertEquals("east", bearingToDirection(68f))
-        assertEquals("east", bearingToDirection(90f))
-        assertEquals("east", bearingToDirection(112f))
+        assertEquals(R.string.contact_loc_dir_east, bearingToDirection(68f))
+        assertEquals(R.string.contact_loc_dir_east, bearingToDirection(90f))
+        assertEquals(R.string.contact_loc_dir_east, bearingToDirection(112f))
     }
 
     @Test
     fun `bearingToDirection returns southeast for angles 112_5 to 157_5`() {
-        assertEquals("southeast", bearingToDirection(113f))
-        assertEquals("southeast", bearingToDirection(135f))
-        assertEquals("southeast", bearingToDirection(157f))
+        assertEquals(R.string.contact_loc_dir_southeast, bearingToDirection(113f))
+        assertEquals(R.string.contact_loc_dir_southeast, bearingToDirection(135f))
+        assertEquals(R.string.contact_loc_dir_southeast, bearingToDirection(157f))
     }
 
     @Test
     fun `bearingToDirection returns south for angles 157_5 to 202_5`() {
-        assertEquals("south", bearingToDirection(158f))
-        assertEquals("south", bearingToDirection(180f))
-        assertEquals("south", bearingToDirection(202f))
+        assertEquals(R.string.contact_loc_dir_south, bearingToDirection(158f))
+        assertEquals(R.string.contact_loc_dir_south, bearingToDirection(180f))
+        assertEquals(R.string.contact_loc_dir_south, bearingToDirection(202f))
     }
 
     @Test
     fun `bearingToDirection returns southwest for angles 202_5 to 247_5`() {
-        assertEquals("southwest", bearingToDirection(203f))
-        assertEquals("southwest", bearingToDirection(225f))
-        assertEquals("southwest", bearingToDirection(247f))
+        assertEquals(R.string.contact_loc_dir_southwest, bearingToDirection(203f))
+        assertEquals(R.string.contact_loc_dir_southwest, bearingToDirection(225f))
+        assertEquals(R.string.contact_loc_dir_southwest, bearingToDirection(247f))
     }
 
     @Test
     fun `bearingToDirection returns west for angles 247_5 to 292_5`() {
-        assertEquals("west", bearingToDirection(248f))
-        assertEquals("west", bearingToDirection(270f))
-        assertEquals("west", bearingToDirection(292f))
+        assertEquals(R.string.contact_loc_dir_west, bearingToDirection(248f))
+        assertEquals(R.string.contact_loc_dir_west, bearingToDirection(270f))
+        assertEquals(R.string.contact_loc_dir_west, bearingToDirection(292f))
     }
 
     @Test
     fun `bearingToDirection returns northwest for angles 292_5 to 337_5`() {
-        assertEquals("northwest", bearingToDirection(293f))
-        assertEquals("northwest", bearingToDirection(315f))
-        assertEquals("northwest", bearingToDirection(337f))
+        assertEquals(R.string.contact_loc_dir_northwest, bearingToDirection(293f))
+        assertEquals(R.string.contact_loc_dir_northwest, bearingToDirection(315f))
+        assertEquals(R.string.contact_loc_dir_northwest, bearingToDirection(337f))
     }
 
     @Test
     fun `bearingToDirection handles negative angles`() {
         // -90 should normalize to 270 (west)
-        assertEquals("west", bearingToDirection(-90f))
+        assertEquals(R.string.contact_loc_dir_west, bearingToDirection(-90f))
         // -180 should normalize to 180 (south)
-        assertEquals("south", bearingToDirection(-180f))
+        assertEquals(R.string.contact_loc_dir_south, bearingToDirection(-180f))
     }
 
     @Test
     fun `bearingToDirection handles angles greater than 360`() {
         // 450 should normalize to 90 (east)
-        assertEquals("east", bearingToDirection(450f))
+        assertEquals(R.string.contact_loc_dir_east, bearingToDirection(450f))
         // 720 should normalize to 0 (north)
-        assertEquals("north", bearingToDirection(720f))
+        assertEquals(R.string.contact_loc_dir_north, bearingToDirection(720f))
     }
 
     // ========== formatDistanceAndDirection Tests ==========
 
     @Test
     fun `formatDistanceAndDirection returns unknown when userLocation is null`() {
-        val result = formatDistanceAndDirection(null, 37.7749, -122.4194)
+        lateinit var result: String
+        composeTestRule.setContent { result = formatDistanceAndDirection(null, 37.7749, -122.4194) }
         assertEquals("Location unknown", result)
     }
 
@@ -143,7 +146,8 @@ class ContactLocationBottomSheetTest {
         val userLocation = createTestLocation(37.7749, -122.4194)
 
         // Location very close (~500m away)
-        val result = formatDistanceAndDirection(userLocation, 37.7799, -122.4194)
+        lateinit var result: String
+        composeTestRule.setContent { result = formatDistanceAndDirection(userLocation, 37.7799, -122.4194) }
 
         // Should contain "m" for meters
         assertTrue("Result should contain meters: $result", result.contains("m"))
@@ -162,7 +166,8 @@ class ContactLocationBottomSheetTest {
         val userLocation = createTestLocation(37.7749, -122.4194) // San Francisco
 
         // Location ~10km away
-        val result = formatDistanceAndDirection(userLocation, 37.8749, -122.4194)
+        lateinit var result: String
+        composeTestRule.setContent { result = formatDistanceAndDirection(userLocation, 37.8749, -122.4194) }
 
         // Should contain "km" for kilometers
         assertTrue("Result should contain kilometers: $result", result.contains("km"))
@@ -173,7 +178,8 @@ class ContactLocationBottomSheetTest {
         val userLocation = createTestLocation(37.7749, -122.4194)
 
         // Location to the east
-        val result = formatDistanceAndDirection(userLocation, 37.7749, -122.3194)
+        lateinit var result: String
+        composeTestRule.setContent { result = formatDistanceAndDirection(userLocation, 37.7749, -122.3194) }
 
         // Should contain a direction word
         val directions = listOf("north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest")
@@ -188,7 +194,8 @@ class ContactLocationBottomSheetTest {
     @Test
     fun `formatUpdatedTime returns just now for recent timestamps`() {
         val now = System.currentTimeMillis()
-        val result = formatUpdatedTime(now - 5_000) // 5 seconds ago
+        lateinit var result: String
+        composeTestRule.setContent { result = formatUpdatedTime(now - 5_000) } // 5 seconds ago
 
         assertEquals("Updated just now", result)
     }
@@ -196,7 +203,8 @@ class ContactLocationBottomSheetTest {
     @Test
     fun `formatUpdatedTime returns seconds for timestamps under 1 minute`() {
         val now = System.currentTimeMillis()
-        val result = formatUpdatedTime(now - 30_000) // 30 seconds ago
+        lateinit var result: String
+        composeTestRule.setContent { result = formatUpdatedTime(now - 30_000) } // 30 seconds ago
 
         assertTrue("Result should contain seconds: $result", result.contains("s ago"))
         assertTrue("Result should start with Updated: $result", result.startsWith("Updated"))
@@ -205,7 +213,8 @@ class ContactLocationBottomSheetTest {
     @Test
     fun `formatUpdatedTime returns minutes for timestamps under 1 hour`() {
         val now = System.currentTimeMillis()
-        val result = formatUpdatedTime(now - 5 * 60_000) // 5 minutes ago
+        lateinit var result: String
+        composeTestRule.setContent { result = formatUpdatedTime(now - 5 * 60_000) } // 5 minutes ago
 
         assertTrue("Result should contain minutes: $result", result.contains("m ago"))
     }
@@ -213,7 +222,8 @@ class ContactLocationBottomSheetTest {
     @Test
     fun `formatUpdatedTime returns hours for timestamps under 1 day`() {
         val now = System.currentTimeMillis()
-        val result = formatUpdatedTime(now - 3 * 3600_000) // 3 hours ago
+        lateinit var result: String
+        composeTestRule.setContent { result = formatUpdatedTime(now - 3 * 3600_000) } // 3 hours ago
 
         assertTrue("Result should contain hours: $result", result.contains("h ago"))
     }
@@ -221,7 +231,8 @@ class ContactLocationBottomSheetTest {
     @Test
     fun `formatUpdatedTime returns days for old timestamps`() {
         val now = System.currentTimeMillis()
-        val result = formatUpdatedTime(now - 2L * 86400_000L) // 2 days ago
+        lateinit var result: String
+        composeTestRule.setContent { result = formatUpdatedTime(now - 2L * 86400_000L) } // 2 days ago
 
         assertTrue("Result should contain days: $result", result.contains("d ago"))
     }
@@ -229,7 +240,8 @@ class ContactLocationBottomSheetTest {
     @Test
     fun `formatUpdatedTime handles very old timestamps`() {
         val now = System.currentTimeMillis()
-        val result = formatUpdatedTime(now - 30L * 86400_000L) // 30 days ago
+        lateinit var result: String
+        composeTestRule.setContent { result = formatUpdatedTime(now - 30L * 86400_000L) } // 30 days ago
 
         assertTrue("Result should contain days: $result", result.contains("d ago"))
     }
@@ -468,7 +480,7 @@ class ContactLocationBottomSheetTest {
     ): ContactMarker =
         ContactMarker(
             destinationHash = "hash_$name",
-            displayName = name,
+            displayName = UiMessage.Raw(name),
             latitude = 37.7749,
             longitude = -122.4194,
             timestamp = timestamp,

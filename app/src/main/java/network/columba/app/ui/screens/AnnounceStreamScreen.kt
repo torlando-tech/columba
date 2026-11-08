@@ -58,6 +58,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -65,6 +67,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import kotlinx.coroutines.launch
+import network.columba.app.R
 import network.columba.app.data.repository.Announce
 import network.columba.app.rns.api.model.NodeType
 import network.columba.app.ui.components.AnnounceFilterChips
@@ -75,6 +78,7 @@ import network.columba.app.ui.components.PeerCard
 import network.columba.app.ui.components.SearchableTopAppBar
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.viewmodel.AnnounceStreamViewModel
+import network.columba.app.viewmodel.messageResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,25 +158,26 @@ fun AnnounceStreamScreen(
     // Show toast for announce success/error
     LaunchedEffect(announceSuccess) {
         if (announceSuccess) {
-            Toast.makeText(context, "Announce sent!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.announce_sent_toast), Toast.LENGTH_SHORT).show()
         }
     }
     LaunchedEffect(announceError) {
         announceError?.let { error ->
-            Toast.makeText(context, "Error: $error", Toast.LENGTH_LONG).show()
+            val detail = error.detail ?: context.getString(error.reason.messageResource())
+            Toast.makeText(context, context.getString(R.string.error_prefix, detail), Toast.LENGTH_LONG).show()
         }
     }
 
     Scaffold(
         topBar = {
             SearchableTopAppBar(
-                title = "Discovered Nodes",
-                subtitle = "$reachableCount nodes in range (active paths)",
+                title = stringResource(R.string.announce_stream_title),
+                subtitle = pluralStringResource(R.plurals.announce_nodes_in_range, reachableCount, reachableCount),
                 isSearching = isSearching,
                 searchQuery = searchQuery,
                 onSearchQueryChange = { viewModel.searchQuery.value = it },
                 onSearchToggle = { isSearching = !isSearching },
-                searchPlaceholder = "Search by name or hash...",
+                searchPlaceholder = stringResource(R.string.search_placeholder_name_or_hash),
                 additionalActions = {
                     // Filter chips toggle (matches ContactsScreen Network tab)
                     IconButton(onClick = { filtersExpanded = !filtersExpanded }) {
@@ -184,7 +189,7 @@ fun AnnounceStreamScreen(
                                     Icons.Default.FilterAlt
                                 },
                             contentDescription =
-                                if (filtersExpanded) "Hide filters" else "Show filters",
+                                if (filtersExpanded) stringResource(R.string.filters_hide) else stringResource(R.string.filters_show),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
@@ -202,7 +207,7 @@ fun AnnounceStreamScreen(
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Campaign,
-                                contentDescription = "Announce now",
+                                contentDescription = stringResource(R.string.announce_now),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
@@ -212,7 +217,7 @@ fun AnnounceStreamScreen(
                         IconButton(onClick = { showOverflowMenu = true }) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More options",
+                                contentDescription = stringResource(R.string.announce_more_options),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
@@ -230,7 +235,7 @@ fun AnnounceStreamScreen(
                                 },
                                 text = {
                                     Text(
-                                        text = "Clear All Announces",
+                                        text = stringResource(R.string.announce_clear_all_menu),
                                         color = MaterialTheme.colorScheme.error,
                                     )
                                 },
@@ -354,7 +359,7 @@ fun AnnounceStreamScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.KeyboardArrowUp,
-                                    contentDescription = "Scroll to top",
+                                    contentDescription = stringResource(R.string.announce_scroll_to_top),
                                 )
                                 Text(
                                     text = "$newAnnouncesCount",
@@ -452,7 +457,7 @@ fun PeerContextMenu(
                 )
             },
             text = {
-                Text(if (announce.isFavorite) "Remove from Saved" else "Save Peer")
+                Text(if (announce.isFavorite) stringResource(R.string.announce_menu_unsave) else stringResource(R.string.announce_menu_save))
             },
             onClick = {
                 onToggleFavorite()
@@ -472,7 +477,7 @@ fun PeerContextMenu(
                     )
                 },
                 text = {
-                    Text("Start Chat")
+                    Text(stringResource(R.string.announce_start_chat))
                 },
                 onClick = {
                     onStartChat()
@@ -490,7 +495,7 @@ fun PeerContextMenu(
                 )
             },
             text = {
-                Text("View Details")
+                Text(stringResource(R.string.announce_view_details))
             },
             onClick = {
                 onViewDetails()
@@ -511,7 +516,7 @@ fun PeerContextMenu(
             },
             text = {
                 Text(
-                    text = "Delete",
+                    text = stringResource(R.string.delete),
                     color = MaterialTheme.colorScheme.error,
                 )
             },
@@ -713,7 +718,7 @@ fun LoadingNetworkState(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Loading network...",
+            text = stringResource(R.string.announce_loading_network),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -735,13 +740,13 @@ fun EmptyAnnounceState(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "No nodes discovered yet",
+            text = stringResource(R.string.announce_empty_title),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Listening for announces...",
+            text = stringResource(R.string.announce_listening),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
         )
@@ -771,10 +776,10 @@ fun DeleteAnnounceDialog(
             )
         },
         title = {
-            Text("Delete Announce?")
+            Text(stringResource(R.string.announce_delete_title))
         },
         text = {
-            Text("Remove $peerName from the list? They will reappear when they announce again.")
+            Text(stringResource(R.string.announce_delete_body, peerName))
         },
         confirmButton = {
             TextButton(
@@ -784,12 +789,12 @@ fun DeleteAnnounceDialog(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
             ) {
-                Text("Delete")
+                Text(stringResource(R.string.delete))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         },
     )
@@ -810,10 +815,10 @@ fun ClearAllAnnouncesDialog(
             )
         },
         title = {
-            Text("Clear All Announces?")
+            Text(stringResource(R.string.announce_clear_all_title))
         },
         text = {
-            Text("This will remove all discovered nodes from the list, except those saved in My Contacts. Nodes will reappear when they announce again.")
+            Text(stringResource(R.string.announce_clear_all_body))
         },
         confirmButton = {
             TextButton(
@@ -823,12 +828,12 @@ fun ClearAllAnnouncesDialog(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
             ) {
-                Text("Clear All")
+                Text(stringResource(R.string.announce_clear_all_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         },
     )

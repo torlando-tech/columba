@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import network.columba.app.R
 import network.columba.app.data.db.dao.AnnounceDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.entity.ReceivedLocationEntity
@@ -550,7 +551,7 @@ class MapViewModelTest {
                 val state = awaitItem()
                 assertEquals(2, state.contactMarkers.size)
                 assertEquals("hash1", state.contactMarkers[0].destinationHash)
-                assertEquals("Contact 1", state.contactMarkers[0].displayName)
+                assertEquals(UiMessage.Raw("Contact 1"), state.contactMarkers[0].displayName)
                 assertEquals(37.7749, state.contactMarkers[0].latitude, 0.0001)
             }
         }
@@ -600,7 +601,7 @@ class MapViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertEquals(1, state.contactMarkers.size)
-                assertEquals("My Friend", state.contactMarkers[0].displayName)
+                assertEquals(UiMessage.Raw("My Friend"), state.contactMarkers[0].displayName)
             }
         }
 
@@ -1520,7 +1521,7 @@ class MapViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertEquals(1, state.contactMarkers.size)
-                assertEquals("Announce Name", state.contactMarkers[0].displayName)
+                assertEquals(UiMessage.Raw("Announce Name"), state.contactMarkers[0].displayName)
             }
         }
 
@@ -1569,7 +1570,10 @@ class MapViewModelTest {
                 // Fallback formatter changed to `Peer ABCDEFGH` (uppercase,
                 // matching PeerNameResolver.formatHashAsFallback) — reads
                 // less like a stray hash leak in the marker label.
-                assertEquals("Peer ABCDEFGH", state.contactMarkers[0].displayName)
+                assertEquals(
+                    UiMessage.Text(R.string.map_marker_peer_fallback, listOf("ABCDEFGH")),
+                    state.contactMarkers[0].displayName,
+                )
             }
         }
 
@@ -1628,7 +1632,7 @@ class MapViewModelTest {
                 val state = awaitItem()
                 assertEquals(1, state.contactMarkers.size)
                 // Contact name takes priority
-                assertEquals("Contact Name", state.contactMarkers[0].displayName)
+                assertEquals(UiMessage.Raw("Contact Name"), state.contactMarkers[0].displayName)
             }
         }
 

@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.Font
@@ -74,13 +75,14 @@ fun ProfileIcon(
             val density = LocalDensity.current
             val fontSize = with(density) { (size * 0.6f).toSp() }
 
+            val iconDescription = stringResource(R.string.profile_icon_description)
             Box(
                 modifier =
                     modifier
                         .size(size)
                         .clip(CircleShape)
                         .background(bgColor)
-                        .semantics { contentDescription = "Profile icon" },
+                        .semantics { contentDescription = iconDescription },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(

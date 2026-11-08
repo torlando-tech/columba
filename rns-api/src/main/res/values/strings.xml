@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="battery_profile_maximum_name">Maximum Battery</string>
+    <string name="battery_profile_maximum_description">Best battery life with slower background networking and discovery.</string>
+    <string name="battery_profile_balanced_name">Balanced</string>
+    <string name="battery_profile_balanced_description">Good battery life with normal responsiveness for most users.</string>
+    <string name="battery_profile_performance_name">Performance</string>
+    <string name="battery_profile_performance_description">Fastest path recovery and networking responsiveness at higher battery cost.</string>
+    <string name="failed_interface_unknown_name">Unknown</string>
+    <string name="failed_interface_unknown_error">Unknown error</string>
+</resources>

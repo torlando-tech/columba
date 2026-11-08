@@ -1,6 +1,7 @@
 package network.columba.app.ui.screens
 
 import network.columba.app.viewmodel.ContactMarker
+import network.columba.app.viewmodel.UiMessage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -11,7 +12,7 @@ class MapScreenDeclutterTest {
         val older =
             ContactMarker(
                 destinationHash = "ABCDEF1234",
-                displayName = "Old",
+                displayName = UiMessage.Raw("Old"),
                 latitude = 44.0,
                 longitude = -0.7,
                 timestamp = 1000L,
@@ -19,7 +20,7 @@ class MapScreenDeclutterTest {
         val newer =
             ContactMarker(
                 destinationHash = "abcdef1234",
-                displayName = "New",
+                displayName = UiMessage.Raw("New"),
                 latitude = 45.0,
                 longitude = -0.8,
                 timestamp = 2000L,
@@ -27,7 +28,7 @@ class MapScreenDeclutterTest {
         val other =
             ContactMarker(
                 destinationHash = "otherhash",
-                displayName = "Other",
+                displayName = UiMessage.Raw("Other"),
                 latitude = 46.0,
                 longitude = -0.9,
                 timestamp = 1500L,

@@ -1,5 +1,6 @@
 package network.columba.app.ui.components
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,8 +24,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.util.LocationPermissionManager
 
 /**
@@ -34,7 +37,7 @@ import network.columba.app.util.LocationPermissionManager
  * @param onDismiss Callback when the bottom sheet is dismissed
  * @param onRequestPermissions Callback when user grants permission request
  * @param sheetState The state of the bottom sheet
- * @param rationale Optional custom rationale text (defaults to LocationPermissionManager rationale)
+ * @param rationale Optional custom rationale string resource (defaults to LocationPermissionManager rationale)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,8 +45,8 @@ fun LocationPermissionBottomSheet(
     onDismiss: () -> Unit,
     onRequestPermissions: () -> Unit,
     sheetState: SheetState,
-    rationale: String = LocationPermissionManager.getPermissionRationale(),
-    primaryActionLabel: String = "Enable Location",
+    @StringRes rationale: Int = LocationPermissionManager.getPermissionRationale(),
+    primaryActionLabel: String? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -70,7 +73,7 @@ fun LocationPermissionBottomSheet(
                     modifier = Modifier.padding(end = 12.dp),
                 )
                 Text(
-                    text = "Location Permission",
+                    text = stringResource(R.string.loc_perm_title),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                 )
@@ -80,7 +83,7 @@ fun LocationPermissionBottomSheet(
 
             // Rationale text
             Text(
-                text = rationale,
+                text = stringResource(rationale),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -93,11 +96,11 @@ fun LocationPermissionBottomSheet(
                 horizontalArrangement = Arrangement.End,
             ) {
                 TextButton(onClick = onDismiss) {
-                    Text("Not Now")
+                    Text(stringResource(R.string.loc_perm_not_now))
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(onClick = onRequestPermissions) {
-                    Text(primaryActionLabel)
+                    Text(primaryActionLabel ?: stringResource(R.string.loc_perm_enable_location))
                 }
             }
         }

@@ -5,8 +5,8 @@ import androidx.compose.material.icons.filled.SignalCellular4Bar
 import androidx.compose.material.icons.filled.SignalCellularAlt
 import androidx.compose.material.icons.filled.SignalCellularConnectedNoInternet0Bar
 import androidx.compose.ui.graphics.Color
+import network.columba.app.R
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -31,8 +31,9 @@ class SignalQualityInfoTest {
 
         assertEquals(Icons.Default.SignalCellular4Bar, info.icon)
         assertEquals(ColorExcellent, info.color)
-        assertTrue(info.text.contains("Excellent"))
-        assertTrue(info.text.contains("-40 dBm"))
+        assertEquals(R.string.signal_quality_rssi_excellent, info.textRes)
+        assertEquals(R.string.signal_quality_rssi_sub_excellent, info.subtitleRes)
+        assertEquals(listOf<Any>(-40), info.textArgs)
     }
 
     @Test
@@ -40,7 +41,7 @@ class SignalQualityInfoTest {
         val info = getRssiInfo(-49)
 
         assertEquals(Icons.Default.SignalCellular4Bar, info.icon)
-        assertTrue(info.text.contains("Excellent"))
+        assertEquals(R.string.signal_quality_rssi_excellent, info.textRes)
     }
 
     @Test
@@ -49,8 +50,9 @@ class SignalQualityInfoTest {
 
         assertEquals(Icons.Default.SignalCellular4Bar, info.icon)
         assertEquals(ColorGood, info.color)
-        assertTrue(info.text.contains("Good"))
-        assertTrue(info.text.contains("-60 dBm"))
+        assertEquals(R.string.signal_quality_rssi_good, info.textRes)
+        assertEquals(R.string.signal_quality_rssi_sub_good, info.subtitleRes)
+        assertEquals(listOf<Any>(-60), info.textArgs)
     }
 
     @Test
@@ -58,7 +60,7 @@ class SignalQualityInfoTest {
         val info = getRssiInfo(-50)
 
         assertEquals(Icons.Default.SignalCellular4Bar, info.icon)
-        assertTrue(info.text.contains("Good"))
+        assertEquals(R.string.signal_quality_rssi_good, info.textRes)
     }
 
     @Test
@@ -67,8 +69,9 @@ class SignalQualityInfoTest {
 
         assertEquals(Icons.Default.SignalCellularAlt, info.icon)
         assertEquals(ColorFair, info.color)
-        assertTrue(info.text.contains("Fair"))
-        assertTrue(info.text.contains("-75 dBm"))
+        assertEquals(R.string.signal_quality_rssi_fair, info.textRes)
+        assertEquals(R.string.signal_quality_rssi_sub_fair, info.subtitleRes)
+        assertEquals(listOf<Any>(-75), info.textArgs)
     }
 
     @Test
@@ -76,7 +79,7 @@ class SignalQualityInfoTest {
         val info = getRssiInfo(-70)
 
         assertEquals(Icons.Default.SignalCellularAlt, info.icon)
-        assertTrue(info.text.contains("Fair"))
+        assertEquals(R.string.signal_quality_rssi_fair, info.textRes)
     }
 
     @Test
@@ -85,8 +88,9 @@ class SignalQualityInfoTest {
 
         assertEquals(Icons.Default.SignalCellularAlt, info.icon)
         assertEquals(ColorPoor, info.color)
-        assertTrue(info.text.contains("Weak"))
-        assertTrue(info.text.contains("-90 dBm"))
+        assertEquals(R.string.signal_quality_rssi_weak, info.textRes)
+        assertEquals(R.string.signal_quality_rssi_sub_weak, info.subtitleRes)
+        assertEquals(listOf<Any>(-90), info.textArgs)
     }
 
     @Test
@@ -94,7 +98,7 @@ class SignalQualityInfoTest {
         val info = getRssiInfo(-85)
 
         assertEquals(Icons.Default.SignalCellularAlt, info.icon)
-        assertTrue(info.text.contains("Weak"))
+        assertEquals(R.string.signal_quality_rssi_weak, info.textRes)
     }
 
     @Test
@@ -103,8 +107,9 @@ class SignalQualityInfoTest {
 
         assertEquals(Icons.Default.SignalCellularConnectedNoInternet0Bar, info.icon)
         assertEquals(ColorVeryPoor, info.color)
-        assertTrue(info.text.contains("Very Weak"))
-        assertTrue(info.text.contains("-110 dBm"))
+        assertEquals(R.string.signal_quality_rssi_very_weak, info.textRes)
+        assertEquals(R.string.signal_quality_rssi_sub_very_weak, info.subtitleRes)
+        assertEquals(listOf<Any>(-110), info.textArgs)
     }
 
     @Test
@@ -112,7 +117,7 @@ class SignalQualityInfoTest {
         val info = getRssiInfo(-100)
 
         assertEquals(Icons.Default.SignalCellularConnectedNoInternet0Bar, info.icon)
-        assertTrue(info.text.contains("Very Weak"))
+        assertEquals(R.string.signal_quality_rssi_very_weak, info.textRes)
     }
 
     @Test
@@ -121,8 +126,9 @@ class SignalQualityInfoTest {
 
         assertEquals(Icons.Default.SignalCellular4Bar, info.icon)
         assertEquals(ColorExcellent, info.color)
-        assertTrue(info.text.contains("Excellent"))
-        assertTrue(info.text.contains("15.0 dB"))
+        assertEquals(R.string.signal_quality_snr_excellent, info.textRes)
+        assertEquals(R.string.signal_quality_snr_sub_excellent, info.subtitleRes)
+        assertEquals(listOf<Any>("15.0"), info.textArgs)
     }
 
     @Test
@@ -130,7 +136,7 @@ class SignalQualityInfoTest {
         val info = getSnrInfo(10.1f)
 
         assertEquals(Icons.Default.SignalCellular4Bar, info.icon)
-        assertTrue(info.text.contains("Excellent"))
+        assertEquals(R.string.signal_quality_snr_excellent, info.textRes)
     }
 
     @Test
@@ -139,8 +145,9 @@ class SignalQualityInfoTest {
 
         assertEquals(Icons.Default.SignalCellular4Bar, info.icon)
         assertEquals(ColorGood, info.color)
-        assertTrue(info.text.contains("Good"))
-        assertTrue(info.text.contains("7.5 dB"))
+        assertEquals(R.string.signal_quality_snr_good, info.textRes)
+        assertEquals(R.string.signal_quality_snr_sub_good, info.subtitleRes)
+        assertEquals(listOf<Any>("7.5"), info.textArgs)
     }
 
     @Test
@@ -148,7 +155,7 @@ class SignalQualityInfoTest {
         val info = getSnrInfo(5.1f)
 
         assertEquals(Icons.Default.SignalCellular4Bar, info.icon)
-        assertTrue(info.text.contains("Good"))
+        assertEquals(R.string.signal_quality_snr_good, info.textRes)
     }
 
     @Test
@@ -157,8 +164,9 @@ class SignalQualityInfoTest {
 
         assertEquals(Icons.Default.SignalCellularAlt, info.icon)
         assertEquals(ColorFair, info.color)
-        assertTrue(info.text.contains("Fair"))
-        assertTrue(info.text.contains("2.5 dB"))
+        assertEquals(R.string.signal_quality_snr_fair, info.textRes)
+        assertEquals(R.string.signal_quality_snr_sub_fair, info.subtitleRes)
+        assertEquals(listOf<Any>("2.5"), info.textArgs)
     }
 
     @Test
@@ -166,7 +174,7 @@ class SignalQualityInfoTest {
         val info = getSnrInfo(0.1f)
 
         assertEquals(Icons.Default.SignalCellularAlt, info.icon)
-        assertTrue(info.text.contains("Fair"))
+        assertEquals(R.string.signal_quality_snr_fair, info.textRes)
     }
 
     @Test
@@ -175,8 +183,9 @@ class SignalQualityInfoTest {
 
         assertEquals(Icons.Default.SignalCellularAlt, info.icon)
         assertEquals(ColorPoor, info.color)
-        assertTrue(info.text.contains("Poor"))
-        assertTrue(info.text.contains("-2.5 dB"))
+        assertEquals(R.string.signal_quality_snr_poor, info.textRes)
+        assertEquals(R.string.signal_quality_snr_sub_poor, info.subtitleRes)
+        assertEquals(listOf<Any>("-2.5"), info.textArgs)
     }
 
     @Test
@@ -184,7 +193,7 @@ class SignalQualityInfoTest {
         val info = getSnrInfo(-4.9f)
 
         assertEquals(Icons.Default.SignalCellularAlt, info.icon)
-        assertTrue(info.text.contains("Poor"))
+        assertEquals(R.string.signal_quality_snr_poor, info.textRes)
     }
 
     @Test
@@ -193,8 +202,9 @@ class SignalQualityInfoTest {
 
         assertEquals(Icons.Default.SignalCellularConnectedNoInternet0Bar, info.icon)
         assertEquals(ColorVeryPoor, info.color)
-        assertTrue(info.text.contains("Very Poor"))
-        assertTrue(info.text.contains("-10.0 dB"))
+        assertEquals(R.string.signal_quality_snr_very_poor, info.textRes)
+        assertEquals(R.string.signal_quality_snr_sub_very_poor, info.subtitleRes)
+        assertEquals(listOf<Any>("-10.0"), info.textArgs)
     }
 
     @Test
@@ -202,13 +212,13 @@ class SignalQualityInfoTest {
         val info = getSnrInfo(-5.0f)
 
         assertEquals(Icons.Default.SignalCellularConnectedNoInternet0Bar, info.icon)
-        assertTrue(info.text.contains("Very Poor"))
+        assertEquals(R.string.signal_quality_snr_very_poor, info.textRes)
     }
 
     @Test
     fun `getSnrInfo formats decimal correctly`() {
         val info = getSnrInfo(8.333333f)
 
-        assertTrue(info.text.contains("8.3 dB"))
+        assertEquals(listOf<Any>("8.3"), info.textArgs)
     }
 }

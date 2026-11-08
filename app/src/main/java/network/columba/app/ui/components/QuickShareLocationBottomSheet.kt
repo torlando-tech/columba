@@ -23,8 +23,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.ui.model.SharingDuration
 
 /**
@@ -60,7 +62,7 @@ fun QuickShareLocationBottomSheet(
         ) {
             // Title
             Text(
-                text = "Share your location",
+                text = stringResource(R.string.quick_share_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
@@ -69,7 +71,7 @@ fun QuickShareLocationBottomSheet(
 
             // Subtitle with contact name
             Text(
-                text = "with $contactName",
+                text = stringResource(R.string.quick_share_with_contact, contactName),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -78,7 +80,7 @@ fun QuickShareLocationBottomSheet(
 
             // Duration label
             Text(
-                text = "Duration:",
+                text = stringResource(R.string.quick_share_duration_label),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Medium,
             )
@@ -107,7 +109,7 @@ fun QuickShareLocationBottomSheet(
                 onClick = { onStartSharing(selectedDuration) },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Start Sharing")
+                Text(stringResource(R.string.quick_share_start_sharing))
             }
 
             Spacer(modifier = Modifier.height(16.dp))

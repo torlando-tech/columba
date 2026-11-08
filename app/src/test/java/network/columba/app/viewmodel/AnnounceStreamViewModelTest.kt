@@ -10,6 +10,7 @@ import androidx.paging.PagingData
 import app.cash.turbine.test
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.model.InterfaceType
+import network.columba.app.data.db.dao.AnnounceArrivalMarker
 import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
@@ -139,6 +140,11 @@ class AnnounceStreamViewModelTest {
         coEvery { reticulumProtocol.getPathTableHashes() } returns emptyList()
         coEvery { announceRepository.setFavorite(any(), any()) } just Runs
         coEvery { announceRepository.getAnnounce(any()) } returns null
+        coEvery { announceRepository.getArrivalFloor(any(), any(), any()) } returns null
+        every {
+            announceRepository.observeAnnounceCountNewerThan(any(), any(), any(), any(), any())
+        } returns flowOf(0)
+        coEvery { announceRepository.deleteAnnounce(any()) } just Runs
         coEvery { contactRepository.hasContact(any()) } returns false
         coEvery { contactRepository.deleteContact(any()) } just Runs
         coEvery { contactRepository.addContactFromAnnounce(any(), any()) } returns Result.success(Unit)
@@ -587,7 +593,7 @@ class AnnounceStreamViewModelTest {
         }
 
     @Test
-    fun interfaceFilterPager_isRecreatedWhenRetentionWindowAdvances() =
+    fun interfaceRetentionWindow_marksRefreshPendingWithoutRebuildingPager() =
         runTest {
             AnnounceStreamViewModel.updateIntervalMs = 1_000L
             networkStatusFlow.value = NetworkStatus.READY
@@ -618,7 +624,23 @@ class AnnounceStreamViewModelTest {
                 advanceTimeBy(1_000L)
                 runCurrent()
                 assertEquals(setOf(InterfaceType.RNODE), viewModel.selectedInterfaceTypes.value)
-                verify(atLeast = 2) {
+                assertTrue(
+                    "Window expiry must be surfaced as a pending refresh",
+                    viewModel.windowRefreshPending.value,
+                )
+                // Frozen stream: no rebuild while the user may be scrolled.
+                verify(exactly = 1) {
+                    announceRepository.getAnnouncesPaged(
+                        listOf("PEER"),
+                        "",
+                        listOf(InterfaceType.RNODE.storageName),
+                    )
+                }
+
+                viewModel.refreshAnnounces()
+                runCurrent()
+                assertFalse("Consuming the pending refresh clears it", viewModel.windowRefreshPending.value)
+                verify(exactly = 2) {
                     announceRepository.getAnnouncesPaged(
                         listOf("PEER"),
                         "",
@@ -633,6 +655,212 @@ class AnnounceStreamViewModelTest {
                 runCurrent()
             }
         }
+
+    @Test
+    fun refreshAnnounces_startsANewPagingGeneration() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
+            val emissions = mutableListOf<PagingData<Announce>>()
+            val collection = launch { viewModel.announces.collect { emissions.add(it) } }
+            try {
+                runCurrent()
+                // One page generation for the initial stream.
+                assertEquals(1, emissions.size)
+
+                viewModel.refreshAnnounces()
+                runCurrent()
+                // A refresh must emit a new page generation.
+                assertEquals(2, emissions.size)
+            } finally {
+                collection.cancel()
+                viewModel.viewModelScope.cancel()
+                runCurrent()
+            }
+        }
+
+    @Test
+    fun newAnnounceCount_countsRowsAfterTheLoadedStreamStart() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            coEvery { announceRepository.getArrivalFloor(any(), any(), any()) } returns
+                AnnounceArrivalMarker(lastSeenTimestamp = 1_000L, destinationHash = "aa")
+            every {
+                announceRepository.observeAnnounceCountNewerThan(any(), any(), any(), any(), any())
+            } returns flowOf(3)
+
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
+
+            viewModel.newAnnounceCount.test {
+                assertEquals(0, awaitItem()) // initial value before the first query resolves
+                assertEquals(3, awaitItem())
+                cancelAndConsumeRemainingEvents()
+            }
+
+            coVerify {
+                announceRepository.getArrivalFloor(listOf("PEER"), "", emptyList())
+            }
+            verify {
+                announceRepository.observeAnnounceCountNewerThan(
+                    1_000L,
+                    "aa",
+                    listOf("PEER"),
+                    "",
+                    emptyList(),
+                )
+            }
+        }
+
+    @Test
+    fun newAnnounceCount_emptyStream_countsArrivals() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            coEvery { announceRepository.getArrivalFloor(any(), any(), any()) } returns null
+            every {
+                announceRepository.observeAnnounceCountNewerThan(any(), any(), any(), any(), any())
+            } returns flowOf(2)
+
+            viewModel = newViewModel()
+
+            viewModel.newAnnounceCount.test {
+                assertEquals(0, awaitItem())
+                assertEquals(2, awaitItem())
+                cancelAndConsumeRemainingEvents()
+            }
+
+            verify {
+                announceRepository.observeAnnounceCountNewerThan(
+                    0L,
+                    "",
+                    listOf("PEER"),
+                    "",
+                    emptyList(),
+                )
+            }
+        }
+
+    @Test
+    fun arrivalFloor_keepsCountingAfterLeavingTheScreen() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            // First read captures the floor; any later read would see the newer announce.
+            coEvery { announceRepository.getArrivalFloor(any(), any(), any()) } returnsMany
+                listOf(
+                    AnnounceArrivalMarker(lastSeenTimestamp = 500L, destinationHash = "aa"),
+                    AnnounceArrivalMarker(lastSeenTimestamp = 1_200L, destinationHash = "bb"),
+                )
+            every {
+                announceRepository.observeAnnounceCountNewerThan(eq(500L), eq("aa"), any(), any(), any())
+            } returns flowOf(4)
+            every {
+                announceRepository.observeAnnounceCountNewerThan(eq(1_200L), eq("bb"), any(), any(), any())
+            } returns flowOf(0)
+
+            viewModel = newViewModel()
+
+            viewModel.newAnnounceCount.test {
+                assertEquals(0, awaitItem()) // initial value before the first query resolves
+                assertEquals(4, awaitItem())
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Peers announced while the Network tab was closed still count as new: the
+            // floor is the one captured when the paging generation started.
+            viewModel.newAnnounceCount.test {
+                assertEquals(4, awaitItem())
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun arrivalFloor_isReadBeforeTheFirstPage() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            val order = mutableListOf<String>()
+            coEvery { announceRepository.getArrivalFloor(any(), any(), any()) } coAnswers {
+                order += "floor"
+                null
+            }
+            every { announceRepository.getAnnouncesPaged(any(), any(), any()) } answers {
+                order += "page"
+                flowOf(PagingData.empty())
+            }
+
+            viewModel = newViewModel()
+            runCurrent()
+
+            val collection = launch { viewModel.announces.collect {} }
+            runCurrent()
+            collection.cancel()
+            runCurrent()
+
+            // An announce saved between the two reads must be newer than the floor, so the
+            // floor has to be captured before the first page is read (GH #1166 review).
+            assertEquals(listOf("floor", "page"), order)
+        }
+
+    @Test
+    fun rowEdits_showFavoriteAndDeletedRowsUntilTheNextGeneration() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            coEvery { contactRepository.hasContact("hashfavorite") } returns false
+            coEvery { announceRepository.getAnnounce("hashfavorite") } returns
+                Announce(
+                    destinationHash = "hashfavorite",
+                    peerName = "Peer",
+                    publicKey = ByteArray(32),
+                    appData = null,
+                    hops = 1,
+                    lastSeenTimestamp = 1_000L,
+                    nodeType = "PEER",
+                )
+
+            viewModel = newViewModel()
+
+            viewModel.toggleContact("hashfavorite")
+            runCurrent()
+            assertEquals(true, viewModel.rowEdits.value["hashfavorite"]?.isFavorite)
+
+            viewModel.deleteAnnounce("hashfavorite")
+            runCurrent()
+            assertEquals(true, viewModel.rowEdits.value["hashfavorite"]?.isDeleted)
+
+            viewModel.refreshAnnounces()
+            val collection = launch { viewModel.announces.collect {} }
+            runCurrent()
+            assertTrue(viewModel.rowEdits.value.isEmpty())
+            collection.cancel()
+            runCurrent()
+        }
+
+    private fun newViewModel(): AnnounceStreamViewModel =
+        AnnounceStreamViewModel(
+            reticulumProtocol,
+            announceRepository,
+            contactRepository,
+            propagationNodeManager,
+            identityRepository,
+            mockk(),
+            identityResolutionManager,
+        )
 
     @Test
     fun `empty filter returns empty announces`() =

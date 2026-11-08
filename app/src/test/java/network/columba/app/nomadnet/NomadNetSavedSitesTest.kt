@@ -172,6 +172,32 @@ class NomadNetSavedSitesTest {
     }
 
     @Test
+    fun `two searches of one path with different values are separate entries`() {
+        val searchPath = "/page/search.mu`query"
+        val first = site(persistPath = searchPath, label = "Search one", requestData = "{\"query\":\"rngit\"}")
+        val second = site(persistPath = searchPath, label = "Search two", requestData = "{\"query\":\"meshchat\"}")
+
+        assertTrue("different submitted values are different pages", first.key != second.key)
+
+        val stored = NomadNetSavedSites.upsert(NomadNetSavedSites.upsert(emptyList(), first), second)
+        assertEquals(2, stored.size)
+        assertTrue(NomadNetSavedSites.contains(stored, nodeA, searchPath, first.requestData))
+        assertTrue(NomadNetSavedSites.contains(stored, nodeA, searchPath, second.requestData))
+
+        val afterRemove = NomadNetSavedSites.remove(stored, nodeA, searchPath, first.requestData)
+        assertEquals("removing one search must not drop the other", 1, afterRemove.size)
+        assertEquals(second.key, afterRemove.single().key)
+    }
+
+    @Test
+    fun `a blank request is the plain page, not a separate entry`() {
+        val plain = site()
+        val blankRequest = site(requestData = "  ")
+
+        assertEquals(plain.key, blankRequest.key)
+    }
+
+    @Test
     fun `remove drops exactly the requested page`() {
         val existing =
             listOf(

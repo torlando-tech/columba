@@ -110,7 +110,7 @@ fun NomadNetHomeScreen(
         }
     }
     val removeSite: (NomadNetSavedSite) -> Unit = { site ->
-        viewModel.removeSaved(site.nodeHash, site.persistPath)
+        viewModel.removeSaved(site)
         coroutineScope.launch {
             val result =
                 snackbarHostState.showSnackbar(

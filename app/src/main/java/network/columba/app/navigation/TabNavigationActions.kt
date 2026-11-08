@@ -16,19 +16,23 @@ import androidx.navigation.NavController
  * the tab has been saved twice a restore resurrects the *earlier* session
  * underneath the newer one - a stale site on the tab while a different
  * site is the live session. Instead the NomadNet stack is dropped (never
- * saved) when the tab is left, and returning shows a fresh tab home. The
- * session itself survives that: every page load persists its node and
- * path, and the home reopens the last page from the page cache, so the
- * tab still shows the site the user left.
+ * saved) when the tab is left, and returning shows the tab home, which is a
+ * chooser (address field, "Continue" for the last page, saved sites) rather
+ * than an auto-loading session. The site itself survives that: every page
+ * load persists its node and path, so the home's Continue row reopens it.
  *
- * Re-tapping the NomadNet tab while already browsing is a no-op; the site
- * session ends via Close Site or Back, not by re-tapping the tab.
+ * Re-tapping the NomadNet tab while browsing on it lands on the tab home,
+ * the standard "the tab icon goes to its root" behaviour; the browser that was
+ * on top is dropped, not ended (Back inside the browser is a plain pop).
  */
 fun NavController.navigateToTab(tab: NavTab) {
     if (currentDestination?.route?.startsWith("nomadnet") == true) {
         if (tab == NavTab.NOMADNET) {
-            // Already browsing; the site session ends via Close Site or Back,
-            // not by re-tapping the tab.
+            // Already on the tab: reveal its root (the home). The browser is
+            // always pushed on top of it, so this is a plain back to the list.
+            if (currentDestination?.route != AppDestination.NOMADNET_HOME.routePattern) {
+                popBackStack(AppDestination.NOMADNET_HOME.routePattern, inclusive = false)
+            }
             return
         }
         // Leaving the NomadNet stack: drop it without saving it, per the KDoc.
@@ -54,20 +58,35 @@ fun NavController.navigateToTab(tab: NavTab) {
  * switch: the calling tab's stack (e.g. contacts -> node detail) is saved
  * under its own root, so tapping that tab later reveals exactly where the
  * user left off. The NomadNet stack itself is never saved (see
- * [navigateToTab]); the session survives through the persisted last
- * node/path, which the tab home reopens when the tab is tapped again.
+ * [navigateToTab]); the site survives through the persisted last node/path,
+ * which the tab home offers as its Continue row.
  * Closing the site pops the browser to reveal the tab home beneath it.
  *
  * One site per tab, like upstream NomadNet: opening a page replaces the
  * previous session rather than stacking under it, and re-opening the exact
  * same entity is a no-op on the live session (no reload, no new entry).
+ *
+ * @return true once the page is showing (including the already-showing no-op),
+ *   false when the NavHost has not attached its graph yet — a cold-start deep
+ *   link races the graph (COLUMBA-8Y) and the caller must keep the request
+ *   pending and retry when the back stack exists.
  */
 fun NavController.openNomadNetPage(
     nodeHash: String,
     path: String,
-) {
-    if (isShowingBrowserEntity(nodeHash, path)) {
-        return
+    restoreSession: Boolean = false,
+    requestData: String? = null,
+): Boolean {
+    if (isShowingBrowserEntity(nodeHash, path, requestData)) {
+        return true
+    }
+    // A cold-start deep link (launcher shortcut, nomadnetwork:// VIEW intent) can
+    // arrive before the NavHost attaches its graph, where navigating throws
+    // "You must call setGraph() before calling getGraph()" (see COLUMBA-8Y).
+    // Report that instead of navigating, so the caller keeps the request
+    // pending and retries once the back stack exists.
+    if (currentDestination == null) {
+        return false
     }
     if (currentDestination?.route?.startsWith("nomadnet") == true) {
         // Already on the NomadNet stack: drop the current site, keep the home root.
@@ -83,49 +102,40 @@ fun NavController.openNomadNetPage(
             launchSingleTop = true
         }
     }
+    // restoreSession and requestData are not part of the entity identity (a
+    // page is the same page either way): restoreSession asks the browser to
+    // serve the in-memory session snapshot instead of re-fetching, and
+    // requestData replays the exact request a saved form-result page was
+    // fetched with.
+    val requestDataArg = Uri.encode(requestData.orEmpty())
     navigateToEntity(
         destination = AppDestination.NOMADNET_BROWSER,
-        route = "nomadnet_browser/${Uri.encode(nodeHash)}?path=${Uri.encode(path)}",
+        route = "nomadnet_browser/${Uri.encode(nodeHash)}?path=${Uri.encode(path)}&restoreSession=$restoreSession&requestData=$requestDataArg",
         identityArguments =
             mapOf(
                 "destinationHash" to nodeHash,
                 "path" to path,
             ),
     )
+    return true
 }
 
 /**
- * [androidx.lifecycle.SavedStateHandle] key on the NomadNet tab home entry:
- * set when a site session ends via Back or Close Site, so the revealed home
- * shows the address-entry prompt instead of auto-reopening the site that was
- * just ended. See [endNomadNetSessionAndPop].
- */
-const val KEY_NOMADNET_SESSION_ENDED = "nomadnet_session_ended"
-
-/**
- * Ends the current NomadNet site session: marks the NomadNet tab home beneath
- * the browser as session-ended, then pops the browser to reveal it.
+ * True when the top entry is the browser showing exactly this node, path and
+ * request.
  *
- * The home normally reopens the last-browsed node (tab restore, cold start).
- * An explicitly ended session overrides that reopen: without the mark the
- * home would immediately reload the same site and Back would look like a
- * no-op. The mark travels with the home entry through process death while
- * the tab stays open. Leaving the tab drops the home entry (see
- * [navigateToTab]), so on return the persisted last node/path decide what
- * the home reopens; Close Site clears them, keeping the session ended.
+ * The request is part of "the same page": two pinned shortcuts for one search
+ * path with different inputs must reload instead of stranding the browser on
+ * the results of the other search.
  */
-fun NavController.endNomadNetSessionAndPop() {
-    previousBackStackEntry?.savedStateHandle?.set(KEY_NOMADNET_SESSION_ENDED, true)
-    popBackStack()
-}
-
-/** True when the top entry is the browser showing exactly this node and path. */
 private fun NavController.isShowingBrowserEntity(
     nodeHash: String,
     path: String,
+    requestData: String?,
 ): Boolean {
     val arguments = currentBackStackEntry?.arguments
     return currentBackStackEntry?.destination?.route == AppDestination.NOMADNET_BROWSER.routePattern &&
         arguments?.getString("destinationHash") == nodeHash &&
-        arguments?.getString("path") == path
+        arguments?.getString("path") == path &&
+        arguments?.getString("requestData").orEmpty() == requestData.orEmpty()
 }

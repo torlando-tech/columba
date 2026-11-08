@@ -108,11 +108,11 @@ class NomadNetPageCache
         /**
          * The browser's live session, held in memory only.
          *
-         * Reopening the NomadNet tab restores the session's page, and pages
-         * marked `#!c=0` (dynamic; the majority of executable NomadNet pages)
-         * are deliberately absent from the file cache - without this store,
-         * every tab tap would re-fetch the page the user is already looking
-         * at. It also carries the session's in-page history and form-field
+         * The NomadNet tab home's Continue row restores the session's page,
+         * and pages marked `#!c=0` (dynamic; the majority of executable
+         * NomadNet pages) are deliberately absent from the file cache -
+         * without this store, continuing a session would re-fetch the page
+         * the user is already looking at. It also carries the session's in-page history and form-field
          * drafts, which the entry-scoped ViewModel otherwise loses when the
          * tab is left and its entries dropped. It is consulted ONLY for a
          * session restore, so ordinary navigation (link taps, deep links,
@@ -133,6 +133,12 @@ class NomadNetPageCache
             val document: MicronDocument,
             val fieldTokens: List<String> = emptyList(),
             val formFields: Map<String, String> = emptyMap(),
+            /**
+             * Request data (JSON) that produced this page, so a restored page
+             * still knows which saved bookmark/shortcut it belongs to; null for
+             * a plain GET.
+             */
+            val requestData: String? = null,
         )
 
         data class SessionSnapshot(
@@ -155,8 +161,9 @@ class NomadNetPageCache
             document: MicronDocument,
             fieldTokens: List<String> = emptyList(),
             formFields: Map<String, String> = emptyMap(),
+            requestData: String? = null,
         ) {
-            sessionSnapshot = SessionSnapshot(SessionPage(nodeHash, path, document, fieldTokens, formFields))
+            sessionSnapshot = SessionSnapshot(SessionPage(nodeHash, path, document, fieldTokens, formFields, requestData))
         }
 
         /** Record the full live session (page + drafts + in-page history). */

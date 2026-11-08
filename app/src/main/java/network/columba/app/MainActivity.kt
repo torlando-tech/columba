@@ -821,11 +821,24 @@ fun ColumbaNavigation(
     // the failed navigation be retried instead of silently dropped.
     val pendingNavBackStackEntry by navController.currentBackStackEntryAsState()
 
-    // Handle pending navigation from intents
-    LaunchedEffect(pendingNavigation.value, startDestination, pendingNavBackStackEntry) {
-        // The NavHost is not rendered until its start destination resolves, and
-        // entries navigated before that first setGraph() are discarded with it.
-        if (startDestination == null) return@LaunchedEffect
+    // Handle pending navigation from intents.
+    //
+    // The request can arrive before the NavHost attaches its graph (a cold start
+    // from a launcher shortcut or a notification), where navigating enters the
+    // graph-less window behind COLUMBA-8Y. It must also not be consumed while an
+    // entry gate is showing: a shortcut would skip onboarding or cover the
+    // identity recovery screen with a page that cannot load until the key is
+    // restored. Both cases keep the request pending — the effect re-runs on every
+    // destination change, so it is retried once a real screen is showing.
+    LaunchedEffect(pendingNavigation.value, pendingNavBackStackEntry) {
+        if (pendingNavigation.value == null) return@LaunchedEffect
+        val pendingNavRoute = pendingNavBackStackEntry?.destination?.route
+        if (pendingNavRoute == null ||
+            pendingNavRoute == AppDestination.WELCOME.routePattern ||
+            pendingNavRoute == AppDestination.IDENTITY_UNLOCK.routePattern
+        ) {
+            return@LaunchedEffect
+        }
         pendingNavigation.value?.let { navigation ->
             try {
                 when (navigation) {

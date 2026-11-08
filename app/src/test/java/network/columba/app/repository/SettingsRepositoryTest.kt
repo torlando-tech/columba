@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import network.columba.app.nomadnet.NomadNetSavedSite
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -64,6 +65,11 @@ class SettingsRepositoryTest {
         // so tests that assert a null initial value don't depend on test order -
         // the mode persistence/flow tests leave "full"/"roaming" stored.
         kotlinx.coroutines.runBlocking { repository.saveAutoconnectInterfaceMode(null) }
+
+        // Same for the saved NomadNet pages list: the save/remove tests assert
+        // exact list contents, so a leftover entry from an earlier test method
+        // (or a failed one) must not leak in.
+        kotlinx.coroutines.runBlocking { clearSavedNomadNetSites() }
     }
 
     @After
@@ -1760,6 +1766,140 @@ class SettingsRepositoryTest {
             assertNull(page.nodeHash)
             assertNull(page.viewPath)
         }
+
+    // ── Saved NomadNet pages ──
+
+    @Test
+    fun `saveNomadNetSavedSite stores the page normalized and newest first`() =
+        runTest {
+            clearSavedNomadNetSites()
+            val nodeA = "abcdef01234567890abcdef012345678"
+            val nodeB = "ffffffffffffffffffffffffffffffff"
+
+            repository.saveNomadNetSavedSite(nodeA.uppercase(), "/page/index.mu", "Index")
+            repository.saveNomadNetSavedSite(nodeB, "/page/forum/thread.mu`cat=help")
+
+            val sites = repository.nomadNetSavedSitesFlow.first()
+            assertEquals(2, sites.size)
+            assertEquals("newest save first", nodeB, sites[0].nodeHash)
+            assertEquals("/page/forum/thread.mu`cat=help", sites[0].persistPath)
+            assertNull("no page heading, no stored label", sites[0].label)
+            assertEquals("hash is lowercased for lookup", nodeA, sites[1].nodeHash)
+            assertEquals("Index", sites[1].label)
+            clearSavedNomadNetSites()
+        }
+
+    @Test
+    fun `saveNomadNetSavedSite rejects an unbrowsable hash and a blank path`() =
+        runTest {
+            clearSavedNomadNetSites()
+
+            repository.saveNomadNetSavedSite("not-a-hash", "/page/index.mu", "label")
+            repository.saveNomadNetSavedSite("abcdef01234567890abcdef012345678", "   ", "label")
+
+            assertTrue(repository.nomadNetSavedSitesFlow.first().isEmpty())
+        }
+
+    @Test
+    fun `toggleNomadNetSavedSite saves then removes and reports the resulting state`() =
+        runTest {
+            clearSavedNomadNetSites()
+            val node = "abcdef01234567890abcdef012345678"
+
+            val firstToggle = repository.toggleNomadNetSavedSite(node, "/page/index.mu", "Index")
+            assertEquals(1, repository.nomadNetSavedSitesFlow.first().size)
+
+            val secondToggle = repository.toggleNomadNetSavedSite(node, "/page/index.mu")
+
+            assertTrue("first toggle saves", firstToggle)
+            assertFalse("second toggle removes", secondToggle)
+            assertTrue(repository.nomadNetSavedSitesFlow.first().isEmpty())
+        }
+
+    @Test
+    fun `toggleNomadNetSavedSite stores the request data of a form-result page`() =
+        runTest {
+            clearSavedNomadNetSites()
+            val node = "abcdef01234567890abcdef012345678"
+
+            repository.toggleNomadNetSavedSite(
+                nodeHash = node,
+                persistPath = "/page/search.mu`query",
+                label = "Search",
+                requestData = "{\"query\":\"rngit\"}",
+            )
+
+            val saved = repository.nomadNetSavedSitesFlow.first().single()
+            assertEquals("/page/search.mu`query", saved.persistPath)
+            assertEquals("{\"query\":\"rngit\"}", saved.requestData)
+            clearSavedNomadNetSites()
+        }
+
+    @Test
+    fun `two searches of one path are saved and removed separately`() =
+        runTest {
+            clearSavedNomadNetSites()
+            val node = "abcdef01234567890abcdef012345678"
+            val searchPath = "/page/search.mu`query"
+            val firstRequest = "{\"query\":\"rngit\"}"
+            val secondRequest = "{\"query\":\"meshchat\"}"
+
+            repository.toggleNomadNetSavedSite(node, searchPath, "Search one", firstRequest)
+            repository.toggleNomadNetSavedSite(node, searchPath, "Search two", secondRequest)
+
+            val saved = repository.nomadNetSavedSitesFlow.first()
+            assertEquals("both searches stay saved", 2, saved.size)
+
+            repository.removeNomadNetSavedSite(node, searchPath, firstRequest)
+
+            val remaining = repository.nomadNetSavedSitesFlow.first()
+            assertEquals(1, remaining.size)
+            assertEquals(secondRequest, remaining.single().requestData)
+            clearSavedNomadNetSites()
+        }
+
+    @Test
+    fun `removeNomadNetSavedSite leaves the other saved pages alone`() =
+        runTest {
+            clearSavedNomadNetSites()
+            val nodeA = "abcdef01234567890abcdef012345678"
+            val nodeB = "ffffffffffffffffffffffffffffffff"
+            repository.saveNomadNetSavedSite(nodeA, "/page/index.mu", "A")
+            repository.saveNomadNetSavedSite(nodeB, "/page/index.mu", "B")
+
+            repository.removeNomadNetSavedSite(nodeA, "/page/index.mu")
+
+            val sites = repository.nomadNetSavedSitesFlow.first()
+            assertEquals(listOf(nodeB), sites.map { it.nodeHash })
+            clearSavedNomadNetSites()
+        }
+
+    @Test
+    fun `restoreNomadNetSavedSite puts a removed page back with its original order`() =
+        runTest {
+            clearSavedNomadNetSites()
+            val nodeA = "abcdef01234567890abcdef012345678"
+            val nodeB = "ffffffffffffffffffffffffffffffff"
+            repository.saveNomadNetSavedSite(nodeA, "/page/index.mu", "A")
+            repository.saveNomadNetSavedSite(nodeB, "/page/index.mu", "B")
+            // The older page, as it was stored before removal.
+            val older = repository.nomadNetSavedSitesFlow.first().last()
+            repository.removeNomadNetSavedSite(older.nodeHash, older.persistPath)
+
+            repository.restoreNomadNetSavedSite(older)
+
+            val sites = repository.nomadNetSavedSitesFlow.first()
+            assertEquals("undo must not reorder the list", listOf(nodeB, nodeA), sites.map { it.nodeHash })
+            assertEquals(older.savedAt, sites.last().savedAt)
+            clearSavedNomadNetSites()
+        }
+
+    /** Saved pages live in the class-shared Robolectric DataStore. */
+    private suspend fun clearSavedNomadNetSites() {
+        repository.nomadNetSavedSitesFlow.first().forEach { site: NomadNetSavedSite ->
+            repository.removeNomadNetSavedSite(site.nodeHash, site.persistPath, site.requestData)
+        }
+    }
 
     // ── Pending discovery restart (atomic compare-and-clear) ──
     //

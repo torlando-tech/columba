@@ -108,7 +108,7 @@ fun VoiceHistoryContent(
         )
         state.records.isEmpty() && searchQuery.isNotBlank() -> SearchNoResultsState(
             query = searchQuery,
-            itemNoun = "calls",
+            titleRes = R.string.search_no_results_title_calls,
             onClearSearch = onClearSearch,
             modifier = modifier,
         )

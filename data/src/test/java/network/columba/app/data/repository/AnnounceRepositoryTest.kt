@@ -336,15 +336,14 @@ class AnnounceRepositoryTest {
             saveTestAnnounce("peera".hash32(), "TCPClientInterface[A]", now, hops = 1)
             saveTestAnnounce("nodea".hash32(), "TCPClientInterface[A]", now + 1, hops = 1, nodeType = "NODE")
 
-            val mark =
-                requireNotNull(
-                    repository.getNewestAnnounceTimestamp(
-                        nodeTypes = listOf("PEER"),
-                        searchQuery = "",
-                        interfaceTypes = emptyList(),
-                    ),
+            val floor =
+                repository.getArrivalFloor(
+                    nodeTypes = listOf("PEER"),
+                    searchQuery = "",
+                    interfaceTypes = emptyList(),
                 )
-            assertEquals("PEER-only mark ignores the newer NODE row", now, mark)
+            assertEquals("PEER-only floor ignores the newer NODE row", now, floor.lastSeenTimestamp)
+            assertEquals("Floor tracks the newest matching rowid", 1L, floor.rowId)
 
             saveTestAnnounce("peerz".hash32(), "TCPClientInterface[A]", now + 2, hops = 1)
             saveTestAnnounce("nodez".hash32(), "TCPClientInterface[A]", now + 3, hops = 1, nodeType = "NODE")
@@ -352,12 +351,42 @@ class AnnounceRepositoryTest {
             val count =
                 repository
                     .observeAnnounceCountNewerThan(
-                        since = mark,
+                        sinceTimestamp = requireNotNull(floor.lastSeenTimestamp),
+                        sinceRowId = requireNotNull(floor.rowId),
                         nodeTypes = listOf("PEER"),
                         searchQuery = "",
                         interfaceTypes = emptyList(),
                     ).first()
             assertEquals("Only the newer PEER row counts", 1, count)
+        }
+
+    @Test
+    fun lateSaveWithOlderReceiveTime_countsAsArrival() =
+        runTest {
+            val now = System.currentTimeMillis()
+            saveTestAnnounce("peera".hash32(), "TCPClientInterface[A]", now, hops = 1)
+
+            val floor =
+                repository.getArrivalFloor(
+                    nodeTypes = listOf("PEER"),
+                    searchQuery = "",
+                    interfaceTypes = emptyList(),
+                )
+
+            // Announce queued before the floor was captured, but saved after it: its receive
+            // time is at or below the floor, so only the rowid proves it is an arrival.
+            saveTestAnnounce("peerl".hash32(), "TCPClientInterface[A]", now - 30_000, hops = 1)
+
+            val count =
+                repository
+                    .observeAnnounceCountNewerThan(
+                        sinceTimestamp = requireNotNull(floor.lastSeenTimestamp),
+                        sinceRowId = requireNotNull(floor.rowId),
+                        nodeTypes = listOf("PEER"),
+                        searchQuery = "",
+                        interfaceTypes = emptyList(),
+                    ).first()
+            assertEquals("A late save behind the floor still counts as new", 1, count)
         }
 
     private fun String.hash32(): String = "%032x".format(java.util.zip.CRC32().apply { update(toByteArray()) }.value)

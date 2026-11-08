@@ -1790,15 +1790,25 @@ class SettingsRepository
             }
         }
 
-        /** Remove a saved page. No-op when it is not saved. */
+        /**
+         * Remove a saved page. No-op when it is not saved.
+         *
+         * [requestData] identifies which save of a form-result path to drop:
+         * the path only names the submitted fields, so two searches of one path
+         * are two saved pages.
+         */
         suspend fun removeNomadNetSavedSite(
             nodeHash: String,
             persistPath: String,
+            requestData: String? = null,
         ) {
             val normalizedHash = NomadNetSavedSites.normalizeNodeHash(nodeHash) ?: return
             context.dataStore.edit { preferences ->
                 val current = NomadNetSavedSites.decode(preferences[PreferencesKeys.NOMADNET_SAVED_SITES])
-                putNomadNetSavedSites(preferences, NomadNetSavedSites.remove(current, normalizedHash, persistPath.trim()))
+                putNomadNetSavedSites(
+                    preferences,
+                    NomadNetSavedSites.remove(current, normalizedHash, persistPath.trim(), requestData),
+                )
             }
         }
 
@@ -1821,11 +1831,12 @@ class SettingsRepository
             var saved = false
             context.dataStore.edit { preferences ->
                 val current = NomadNetSavedSites.decode(preferences[PreferencesKeys.NOMADNET_SAVED_SITES])
+                val request = NomadNetSavedSites.normalizeRequestData(requestData)
                 saved =
-                    if (NomadNetSavedSites.contains(current, normalizedHash, path)) {
+                    if (NomadNetSavedSites.contains(current, normalizedHash, path, request)) {
                         putNomadNetSavedSites(
                             preferences,
-                            NomadNetSavedSites.remove(current, normalizedHash, path),
+                            NomadNetSavedSites.remove(current, normalizedHash, path, request),
                         )
                         false
                     } else {
@@ -1833,7 +1844,7 @@ class SettingsRepository
                             preferences,
                             NomadNetSavedSites.upsert(
                                 current,
-                                NomadNetSavedSite(normalizedHash, path, label, System.currentTimeMillis(), requestData),
+                                NomadNetSavedSite(normalizedHash, path, label, System.currentTimeMillis(), request),
                             ),
                         )
                         true

@@ -69,9 +69,9 @@ class NomadNetSitesViewModelTest {
             savedSitesFlow.value = listOf(saved) + savedSitesFlow.value.filterNot { it.key == saved.key }
             true
         }
-        coEvery { settingsRepository.removeNomadNetSavedSite(any(), any()) } answers {
-            val key = NomadNetSavedSite(firstArg(), secondArg(), null, 0L).key
-            savedSitesFlow.value = savedSitesFlow.value.filterNot { it.key == key }
+        coEvery { settingsRepository.removeNomadNetSavedSite(any(), any(), any()) } answers {
+            val removed = NomadNetSavedSite(firstArg(), secondArg(), null, 0L, thirdArg<String?>())
+            savedSitesFlow.value = savedSitesFlow.value.filterNot { it.key == removed.key }
         }
         coEvery { settingsRepository.restoreNomadNetSavedSite(any()) } answers {
             val restored = firstArg<NomadNetSavedSite>()
@@ -150,7 +150,7 @@ class NomadNetSitesViewModelTest {
             assertEquals(nodePath, saved.persistPath)
             assertEquals("Thread", saved.label)
 
-            viewModel.removeSaved(nodeA, nodePath)
+            viewModel.removeSaved(saved)
 
             assertTrue(viewModel.savedSites.first().isEmpty())
         }
@@ -172,6 +172,26 @@ class NomadNetSitesViewModelTest {
                 "the saved page must be in the repository's list",
                 savedSitesFlow.value.any { it.persistPath == "/page/search.mu`query" },
             )
+        }
+
+    @Test
+    fun `removeSaved removes that save of the path, request and all`() =
+        runTest {
+            val searchPath = "/page/search.mu`query"
+            val firstRequest = "{\"query\":\"rngit\"}"
+            val secondRequest = "{\"query\":\"meshchat\"}"
+            val first = NomadNetSavedSite(nodeA, searchPath, "Search one", 1_042L, firstRequest)
+            val second = NomadNetSavedSite(nodeA, searchPath, "Search two", 1_043L, secondRequest)
+            savedSitesFlow.value = listOf(second, first)
+
+            viewModel.removeSaved(first)
+
+            assertEquals(
+                "the other search of the same path must stay saved",
+                listOf(second),
+                savedSitesFlow.value,
+            )
+            coVerify { settingsRepository.removeNomadNetSavedSite(nodeA, searchPath, firstRequest) }
         }
 
     @Test

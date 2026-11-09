@@ -49,6 +49,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.core.content.PermissionChecker
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -58,6 +61,8 @@ import network.columba.app.R
 import network.columba.app.ui.components.BackgroundLocationPermissionBottomSheet
 import network.columba.app.ui.components.LocationPermissionBottomSheet
 import network.columba.app.ui.components.ServiceRestartBanner
+import network.columba.app.ui.components.findActivity
+import network.columba.app.ui.components.openAppSettings
 import network.columba.app.ui.screens.settings.cards.AboutCard
 import network.columba.app.util.GITHUB_NEW_ISSUE_URL
 import network.columba.app.util.safeOpenUrl
@@ -137,6 +142,39 @@ fun SettingsScreen(
         mutableStateOf(LocationPermissionManager.hasBackgroundLocationPermission(context))
     }
 
+    // Notification permission state (Android 13+). Enabling notifications without
+    // POST_NOTIFICATIONS silently produces nothing, so the notifications toggle
+    // routes through the permission request and this is re-read on resume (TOR-31).
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS,
+                ) == PermissionChecker.PERMISSION_GRANTED,
+        )
+    }
+    var notificationPermissionRequested by remember { mutableStateOf(false) }
+    val notificationPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            hasNotificationPermission = granted
+            notificationPermissionRequested = true
+            // Persist enabled=true only once the permission is actually held.
+            if (granted) {
+                viewModel.setNotificationsEnabled(true)
+            }
+        }
+    val notificationPermissionDeniedForever =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !hasNotificationPermission &&
+            notificationPermissionRequested &&
+            !ActivityCompat.shouldShowRequestPermissionRationale(
+                context.findActivity(),
+                Manifest.permission.POST_NOTIFICATIONS,
+            )
+
     // Location permission state for telemetry collector
     var showTelemetryPermissionSheet by remember { mutableStateOf(false) }
     var showBackgroundLocationSheet by remember { mutableStateOf(false) }
@@ -185,6 +223,12 @@ fun SettingsScreen(
                 if (event == Lifecycle.Event.ON_RESUME) {
                     hasForegroundPermission = LocationPermissionManager.hasPermission(context)
                     hasBackgroundPermission = LocationPermissionManager.hasBackgroundLocationPermission(context)
+                    hasNotificationPermission =
+                        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                            ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.POST_NOTIFICATIONS,
+                            ) == PermissionChecker.PERMISSION_GRANTED
                 }
             }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -348,7 +392,22 @@ fun SettingsScreen(
                     isExpanded = state.cardExpansionStates[SettingsCardId.NOTIFICATIONS.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.NOTIFICATIONS, it) },
                     notificationsEnabled = state.notificationsEnabled,
-                    onNotificationsEnabledChange = { viewModel.setNotificationsEnabled(it) },
+                    onNotificationsEnabledChange = { enabled ->
+                        // Enabling without POST_NOTIFICATIONS would silently produce
+                        // nothing, so route the toggle through the permission request
+                        // (TOR-31). On denial nothing is persisted; the setting stays off.
+                        if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+                            if (notificationPermissionDeniedForever) {
+                                // Android no longer shows the dialog; settings is
+                                // the only remaining way to grant it.
+                                openAppSettings(context)
+                            } else {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        } else {
+                            viewModel.setNotificationsEnabled(enabled)
+                        }
+                    },
                     onManageClick = onNavigateToNotifications,
                 )
 

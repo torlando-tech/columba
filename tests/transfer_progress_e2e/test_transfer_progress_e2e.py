@@ -113,6 +113,26 @@ def dismiss_optional(driver: AdbUiDriver, text: str, *, timeout: float = 12) -> 
         pass
 
 
+def app_running(driver: AdbUiDriver) -> bool:
+    try:
+        return bool(driver.adb("shell", "pidof", PKG).stdout.strip())
+    except subprocess.CalledProcessError:
+        # pidof exits 1 when no process matches.
+        return False
+
+
+def wait_app_stopped(driver: AdbUiDriver, timeout: float = 20) -> None:
+    """`pm clear` returns before system_server finishes the async force-stop.
+    An `am start` issued in that window launches the app and the pending clear
+    then kills it, leaving the launcher on screen for the whole onboarding poll."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not app_running(driver):
+            return
+        time.sleep(0.25)
+    raise TimeoutError(f"{PKG} still running {timeout}s after pm clear")
+
+
 def complete_onboarding(driver: AdbUiDriver, timeout: float = 90) -> None:
     """Keep advancing onboarding until the production chat list is visible."""
     deadline = time.monotonic() + timeout
@@ -121,6 +141,13 @@ def complete_onboarding(driver: AdbUiDriver, timeout: float = 90) -> None:
             snapshot = driver.snapshot()
         except (subprocess.CalledProcessError, ET.ParseError):
             time.sleep(0.5)
+            continue
+        if not app_running(driver):
+            # The app died or was cleared mid-onboarding (e.g. a late
+            # clearApplicationUserData force-stop); bring it back rather than
+            # polling the launcher until the deadline.
+            driver.adb("shell", "am", "start", "-n", ACTIVITY)
+            time.sleep(1)
             continue
         try:
             snapshot.require_text("Chats")
@@ -304,6 +331,7 @@ def test_real_resource_progress_reaches_outgoing_bubble(tmp_path: Path) -> None:
     try:
         driver.adb("install", "-r", str(apk), timeout=180)
         driver.adb("shell", "pm", "clear", PKG)
+        wait_app_stopped(driver)
         driver.adb("logcat", "-c")
         driver.adb("shell", "am", "start", "-n", ACTIVITY)
         complete_onboarding(driver)

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import network.columba.app.R
 import network.columba.app.data.crypto.IdentityKeyEncryptor
 import network.columba.app.data.crypto.WrongPasswordException
 import network.columba.app.data.database.InterfaceDatabase
@@ -23,6 +24,7 @@ import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.CustomThemeEntity
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.db.entity.MessageEntity
+import network.columba.app.data.db.entity.ThreadEntity
 import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.util.HashUtils
@@ -30,6 +32,7 @@ import network.columba.app.repository.SettingsRepository
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.telemetry.MemoryDiagnosticOperation
 import network.columba.app.telemetry.MemoryDiagnostics
+import network.columba.app.viewmodel.UiMessage
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
@@ -92,13 +95,15 @@ class MigrationImporter
                 try {
                     val inputStream =
                         context.contentResolver.openInputStream(uri)
-                            ?: return@withContext Result.failure(Exception("Cannot open file"))
+                            ?: return@withContext Result.failure(
+                                MigrationLocalizedException(UiMessage.Text(R.string.migration_cannot_open_file)),
+                            )
                     inputStream.use { stream ->
                         val header = ByteArray(2)
                         val bytesRead = stream.read(header)
                         if (bytesRead < 1) {
                             return@withContext Result.failure(
-                                InvalidExportFileException("Export file is empty"),
+                                MigrationLocalizedException(UiMessage.Text(R.string.migration_export_file_empty)),
                             )
                         }
                         Result.success(MigrationCrypto.isEncrypted(header))
@@ -133,7 +138,7 @@ class MigrationImporter
                     val (bundle, localFile) =
                         readMigrationBundle(uri, password)
                             ?: return@withContext Result.failure(
-                                Exception("Failed to read migration file"),
+                                MigrationLocalizedException(UiMessage.Text(R.string.migration_failed_to_read_file)),
                             )
 
                     Result.success(
@@ -196,13 +201,13 @@ class MigrationImporter
                             // delete it here.
                             val parsed = streamBundleFromZipFile(cachedZipFile)
                                 ?: return@withContext ImportResult.Error(
-                                    "Failed to read migration file",
+                                    UiMessage.Text(R.string.migration_failed_to_read_file),
                                 )
                             Triple(parsed.first, parsed.second, false)
                         } else {
                             val parsed = readMigrationBundle(uri, password)
                                 ?: return@withContext ImportResult.Error(
-                                    "Failed to read migration file",
+                                    UiMessage.Text(R.string.migration_failed_to_read_file),
                                 )
                             Triple(parsed.first, parsed.second, true)
                         }
@@ -229,29 +234,30 @@ class MigrationImporter
             return try {
                     if (bundle.version > MigrationBundle.CURRENT_VERSION) {
                         return ImportResult.Error(
-                            "Migration file is from a newer version (${bundle.version}). " +
-                                "Please update the app first.",
+                            UiMessage.Text(R.string.migration_file_newer_version, listOf(bundle.version)),
                         )
                     }
 
                     // Check minimum supported version for backwards compatibility
                     if (bundle.version < MigrationBundle.MINIMUM_VERSION) {
                         return ImportResult.Error(
-                            "Migration file is from an old version (${bundle.version}). " +
-                                "Minimum supported version is ${MigrationBundle.MINIMUM_VERSION}.",
+                            UiMessage.Text(
+                                R.string.migration_file_old_version,
+                                listOf(bundle.version, MigrationBundle.MINIMUM_VERSION),
+                            ),
                         )
                     }
 
                     if (bundle.version < 8 && bundle.callHistoryDeletions.isNotEmpty()) {
                         return ImportResult.Error(
-                            "Call-history deletion authority requires migration format version 8.",
+                            UiMessage.Text(R.string.migration_call_history_requires_v8),
                         )
                     }
 
                     // Check if password is required but not provided
                     if (bundle.keysEncrypted && importPassword == null) {
                         return ImportResult.Error(
-                            "This export file is password-protected. Please provide the password.",
+                            UiMessage.Text(R.string.migration_password_required),
                         )
                     }
                     onProgress(0.1f)
@@ -297,7 +303,7 @@ class MigrationImporter
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Migration import failed", e)
-                    ImportResult.Error("Import failed: ${e.message}", e)
+                    ImportResult.Error(UiMessage.Text(R.string.migration_import_failed, listOf(e.message ?: "null")), e)
                 }
             }
 
@@ -346,6 +352,13 @@ class MigrationImporter
                         database.localIdentityDao().identityExists(it.identityHash)
                 }
             val messages = importMessages(validMessages, onProgress)
+
+            val validThreads =
+                bundle.threads.filter {
+                    it.identityHash in importedIdentityHashes ||
+                        database.localIdentityDao().identityExists(it.identityHash)
+                }
+            importThreads(validThreads)
             onProgress(0.7f)
 
             val validContacts =
@@ -488,6 +501,7 @@ class MigrationImporter
                         isRead = msg.isRead,
                         fieldsJson = lifedFieldsJson,
                         reactionsJson = lifedReactionsJson,
+                        threadId = msg.threadId?.hexToBytesOrNullBackup(),
                     )
                 }
             val batches = entities.chunked(100)
@@ -499,6 +513,45 @@ class MigrationImporter
             }
             Log.d(TAG, "Imported ${entities.size} messages")
             return entities.size
+        }
+
+        /**
+         * Restore thread rows (v9 bundles). IGNORE guards against a PK clash
+         * when the row survived (bundles without the parent conversation);
+         * a full re-import replaces the conversation row, whose FK cascade
+         * removes and restores the bundle's thread state — same restore
+         * semantics as messages and conversations.
+         */
+        private suspend fun importThreads(threads: List<ThreadExport>): Int {
+            val entities =
+                threads.mapNotNull { t ->
+                    val threadId = t.threadId.hexToBytesOrNullBackup()
+                    if (threadId == null) {
+                        Log.w(TAG, "Skipping thread export with malformed threadId: ${t.threadId.take(16)}")
+                        return@mapNotNull null
+                    }
+                    ThreadEntity(
+                        threadId = threadId,
+                        conversationHash = t.conversationHash.lowercase(),
+                        identityHash = t.identityHash,
+                        rootMessageId = t.rootMessageId,
+                        title = t.title,
+                        createdAt = t.createdAt,
+                        lastActivityAt = t.lastActivityAt,
+                        archivedAt = t.archivedAt,
+                    )
+                }
+            entities.forEach { database.threadDao().insertThreadIgnore(it) }
+            Log.d(TAG, "Imported ${entities.size} threads")
+            return entities.size
+        }
+
+        /** Backup hex -> raw opaque thread bytes; null on malformed input. */
+        private fun String.hexToBytesOrNullBackup(): ByteArray? {
+            if (isEmpty() || length % 2 != 0) return null
+            val parts = chunked(2).map { it.toIntOrNull(16) }
+            if (parts.any { it == null }) return null
+            return ByteArray(parts.size) { requireNotNull(parts[it]).toByte() }
         }
 
         private suspend fun importContacts(contacts: List<ContactExport>): ContactImportResult {

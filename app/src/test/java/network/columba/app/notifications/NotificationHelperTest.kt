@@ -2,18 +2,26 @@ package network.columba.app.notifications
 
 import android.Manifest
 import android.app.Application
+import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
-import network.columba.app.repository.SettingsRepository
-import network.columba.app.service.ActiveConversationManager
+import androidx.core.app.NotificationCompat
+import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import network.columba.app.data.model.NotificationPrivacyLevel
+import network.columba.app.repository.SettingsRepository
+import network.columba.app.service.ActiveConversationManager
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -38,13 +46,32 @@ class NotificationHelperTest {
     private lateinit var notificationManager: NotificationManager
     private lateinit var notificationHelper: NotificationHelper
 
+    private companion object {
+        const val THREAD_A = "aa0000000000000000000000000000aa"
+    }
+
     private val activeConversationFlow = MutableStateFlow<String?>(null)
+    private val activeThreadFlow = MutableStateFlow<String?>(null)
 
     private fun messageNotification(destinationHash: String) =
         notificationManager.activeNotifications.firstOrNull {
             it.id == NotificationHelper.NOTIFICATION_ID_MESSAGE &&
                 it.tag == NotificationHelper.messageNotificationTag(destinationHash)
         }
+
+    /**
+     * Everything a notification listener or the system's notification history can read
+     * from a notification: the extras bundle (title, text, any style lines) and ticker,
+     * including the lock-screen public version.
+     */
+    private fun notificationDump(notification: Notification): String =
+        listOfNotNull(
+            notification.extras.toString(),
+            notification.tickerText?.toString(),
+            notification.publicVersion?.let { public ->
+                public.extras.toString() + public.tickerText?.toString().orEmpty()
+            },
+        ).joinToString("\n")
 
     @Before
     fun setup() {
@@ -61,14 +88,19 @@ class NotificationHelperTest {
 
         // Mock active conversation
         every { activeConversationManager.activeConversation } returns activeConversationFlow
+        every { activeConversationManager.activeThread } returns activeThreadFlow
 
         // Default settings: all notifications enabled
         coEvery { settingsRepository.notificationsEnabledFlow } returns flowOf(true)
         coEvery { settingsRepository.notificationReceivedMessageFlow } returns flowOf(true)
         coEvery { settingsRepository.notificationReceivedMessageFavoriteFlow } returns flowOf(true)
+        // Threads are off by default: one flat list, so suppression stays per peer.
+        every { settingsRepository.threadsEnabledFlow } returns flowOf(false)
         coEvery { settingsRepository.notificationHeardAnnounceFlow } returns flowOf(true)
         coEvery { settingsRepository.notificationBleConnectedFlow } returns flowOf(true)
         coEvery { settingsRepository.notificationBleDisconnectedFlow } returns flowOf(true)
+        coEvery { settingsRepository.notificationPrivacyLevelFlow } returns flowOf(NotificationPrivacyLevel.FULL)
+        coEvery { settingsRepository.saveNotificationPrivacyLevel(any()) } just Runs
 
         notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager)
     }
@@ -115,6 +147,30 @@ class NotificationHelperTest {
             val shadowNotificationManager = shadowOf(notificationManager)
             val notifications = shadowNotificationManager.allNotifications
             assertTrue("Notification should be posted", notifications.isNotEmpty())
+        }
+
+    @Test
+    fun `notifyMessageReceived puts the thread id on the open intent`() =
+        runBlocking {
+            // When: a thread message is notified
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Thread reply",
+                isFavorite = false,
+                threadIdHex = "02000000000000000000000000000002",
+            )
+
+            // Then: tapping it carries the thread to the navigation layer
+            val notification =
+                shadowOf(notificationManager).allNotifications.single()
+            val openIntent =
+                shadowOf(notification.contentIntent).savedIntent
+            assertEquals(NotificationHelper.ACTION_OPEN_CONVERSATION, openIntent.action)
+            assertEquals(
+                "02000000000000000000000000000002",
+                openIntent.getStringExtra(NotificationHelper.EXTRA_THREAD_ID),
+            )
         }
 
     // ========== Message Notification Preference Tests ==========
@@ -185,6 +241,144 @@ class NotificationHelperTest {
             assertTrue("Notification should be posted (general covers favorites)", notifications.isNotEmpty())
         }
 
+    // ========== Message Privacy Tests ==========
+
+    @Test
+    fun `notifyMessageReceived FULL keeps the preview in the notification`() =
+        runBlocking {
+            coEvery { settingsRepository.notificationPrivacyLevelFlow } returns
+                flowOf(NotificationPrivacyLevel.FULL)
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Hello there",
+                isFavorite = false,
+            )
+
+            val posted = messageNotification("abc123def456")
+            assertNotNull("Notification should be posted", posted)
+            assertEquals("Test Peer", posted!!.notification.extras.getCharSequence(Notification.EXTRA_TITLE))
+            assertEquals("Hello there", posted.notification.extras.getCharSequence(Notification.EXTRA_TEXT))
+        }
+
+    @Test
+    fun `notifyMessageReceived NAME_ONLY keeps sender name but never the preview`() =
+        runBlocking {
+            coEvery { settingsRepository.notificationPrivacyLevelFlow } returns
+                flowOf(NotificationPrivacyLevel.NAME_ONLY)
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "SECRET-PREVIEW-123",
+                isFavorite = false,
+            )
+
+            val posted = messageNotification("abc123def456")
+            assertNotNull("Notification should be posted", posted)
+            val notification = posted!!.notification
+            assertEquals("Test Peer", notification.extras.getCharSequence(Notification.EXTRA_TITLE))
+            assertEquals("New message", notification.extras.getCharSequence(Notification.EXTRA_TEXT))
+            assertFalse(
+                "Preview must not appear anywhere in the notification",
+                notificationDump(notification).contains("SECRET-PREVIEW-123"),
+            )
+            assertEquals(NotificationCompat.VISIBILITY_PRIVATE, notification.visibility)
+            assertNotNull("Privacy levels must supply a redacted lock-screen version", notification.publicVersion)
+        }
+
+    @Test
+    fun `notifyMessageReceived NONE keeps neither sender name nor preview`() =
+        runBlocking {
+            coEvery { settingsRepository.notificationPrivacyLevelFlow } returns
+                flowOf(NotificationPrivacyLevel.NONE)
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "SECRET-PREVIEW-123",
+                isFavorite = false,
+            )
+
+            val posted = messageNotification("abc123def456")
+            assertNotNull("Notification should be posted", posted)
+            val notification = posted!!.notification
+            assertEquals("New message", notification.extras.getCharSequence(Notification.EXTRA_TITLE))
+            assertNull(notification.extras.getCharSequence(Notification.EXTRA_TEXT))
+            val dump = notificationDump(notification)
+            assertFalse("Sender name must not appear", dump.contains("Test Peer"))
+            assertFalse("Preview must not appear anywhere, including the lock-screen version", dump.contains("SECRET-PREVIEW-123"))
+        }
+
+    @Test
+    fun `setMessagePrivacyLevel tightening cancels message notifications only`() =
+        runBlocking {
+            coEvery { settingsRepository.notificationAnnounceDirectOnlyFlow } returns flowOf(false)
+            coEvery { settingsRepository.notificationAnnounceExcludeTcpFlow } returns flowOf(false)
+            val savedLevels = mutableListOf<NotificationPrivacyLevel>()
+            coEvery { settingsRepository.saveNotificationPrivacyLevel(capture(savedLevels)) } answers {
+                // Model the DataStore write so a later post would read it.
+                Unit
+            }
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+            )
+            notificationHelper.notifyAnnounceHeard(
+                destinationHash = "ffeeddccbbaa",
+                peerName = "Announcer",
+                hops = 2,
+            )
+
+            notificationHelper.setMessagePrivacyLevel(NotificationPrivacyLevel.NONE)
+
+            assertEquals(
+                "The level must be persisted before cancelling",
+                listOf(NotificationPrivacyLevel.NONE),
+                savedLevels,
+            )
+            assertNull("Message notification should be cancelled", messageNotification("abc123def456"))
+            val remaining = shadowOf(notificationManager).allNotifications
+            assertTrue(
+                "Announce notification should survive",
+                remaining.any {
+                    it.extras.getCharSequence(Notification.EXTRA_TITLE) == "Announce from Announcer"
+                },
+            )
+        }
+
+    @Test
+    fun `setMessagePrivacyLevel loosening keeps posted message notifications`() =
+        runBlocking {
+            coEvery { settingsRepository.notificationPrivacyLevelFlow } returns
+                flowOf(NotificationPrivacyLevel.NONE)
+            val savedLevels = mutableListOf<NotificationPrivacyLevel>()
+            coEvery { settingsRepository.saveNotificationPrivacyLevel(capture(savedLevels)) } answers { Unit }
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Test Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+            )
+            assertNotNull("Notification should be posted first", messageNotification("abc123def456"))
+
+            notificationHelper.setMessagePrivacyLevel(NotificationPrivacyLevel.FULL)
+
+            assertEquals(listOf(NotificationPrivacyLevel.FULL), savedLevels)
+            val after = messageNotification("abc123def456")
+            assertNotNull("Loosening must not cancel the posted notification", after)
+            assertEquals(
+                "The posted notification keeps the text it was built with",
+                "New message",
+                after!!.notification.extras.getCharSequence(Notification.EXTRA_TITLE),
+            )
+        }
+
     // ========== Active Conversation Suppression Tests ==========
 
     @Test
@@ -227,6 +421,84 @@ class NotificationHelperTest {
             val shadowNotificationManager = shadowOf(notificationManager)
             val notifications = shadowNotificationManager.allNotifications
             assertTrue("Notification should be posted when app is backgrounded", notifications.isNotEmpty())
+        }
+
+    @Test
+    fun `notifyMessageReceived suppressed for the thread on screen when threads are enabled`() =
+        runBlocking {
+            // Given: this peer's thread 0xaa is open and the app is in the foreground
+            every { settingsRepository.threadsEnabledFlow } returns flowOf(true)
+            activeConversationFlow.value = "abc123def456"
+            activeThreadFlow.value = THREAD_A
+            notificationHelper.isAppInForeground = { true }
+
+            // When: a message arrives in that same thread
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Active Conversation Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+                threadIdHex = THREAD_A,
+            )
+
+            // Then: no notification - the user is looking at that thread
+            val shadowNotificationManager = shadowOf(notificationManager)
+            assertTrue(
+                "Notification should be suppressed for the visible thread",
+                shadowNotificationManager.allNotifications.isEmpty(),
+            )
+        }
+
+    @Test
+    fun `notifyMessageReceived posted for Main while another thread is on screen`() =
+        runBlocking {
+            // Given: thread 0xaa is open, threads on, app foreground
+            every { settingsRepository.threadsEnabledFlow } returns flowOf(true)
+            activeConversationFlow.value = "abc123def456"
+            activeThreadFlow.value = THREAD_A
+            notificationHelper.isAppInForeground = { true }
+
+            // When: a Main (no thread id) message arrives for the same peer
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Active Conversation Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+                threadIdHex = null,
+            )
+
+            // Then: notification - the message is not in the open thread (nor in Main's view)
+            val shadowNotificationManager = shadowOf(notificationManager)
+            assertTrue(
+                "Main message must notify while a thread is on screen",
+                shadowNotificationManager.allNotifications.isNotEmpty(),
+            )
+        }
+
+    @Test
+    fun `notifyMessageReceived suppresses any thread when threads are disabled`() =
+        runBlocking {
+            // Given: threads off (flat list), conversation active, app foreground
+            every { settingsRepository.threadsEnabledFlow } returns flowOf(false)
+            activeConversationFlow.value = "abc123def456"
+            activeThreadFlow.value = THREAD_A
+            notificationHelper.isAppInForeground = { true }
+
+            // When: a thread message arrives
+            notificationHelper.notifyMessageReceived(
+                destinationHash = "abc123def456",
+                peerName = "Active Conversation Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+                threadIdHex = THREAD_A,
+            )
+
+            // Then: suppressed - with the flag off every message shows in the one list
+            val shadowNotificationManager = shadowOf(notificationManager)
+            assertTrue(
+                "Flag off must keep the pre-threads per-peer suppression",
+                shadowNotificationManager.allNotifications.isEmpty(),
+            )
         }
 
     @Test

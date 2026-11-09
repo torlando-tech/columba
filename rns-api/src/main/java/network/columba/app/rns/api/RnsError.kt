@@ -120,6 +120,17 @@ sealed class RnsError : Parcelable {
     }
 
     /**
+     * The telephony call manager isn't constructed yet — the backend is still
+     * mid-`initialize()` (identity/RNS not ready). Callers match on this type
+     * to retry instead of surfacing an error (i18n ticket 02: replaces the
+     * old `message.contains("not initialized")` sniffing in `CallViewModel`).
+     */
+    data object CallManagerNotInitialized : RnsError() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_CALL_MANAGER_NOT_INITIALIZED)
+        }
+    }
+    /**
      * NomadNet page request couldn't reach the destination or the
      * destination returned a 404-equivalent. [destHash] is the target
      * destination's hex hash; [path] is the requested page path
@@ -188,6 +199,7 @@ sealed class RnsError : Parcelable {
         private const val TAG_NOMADNET_PAGE_NOT_FOUND = 6
         private const val TAG_NOMADNET_REQUEST_DENIED = 7
         private const val TAG_NOMADNET_RESPONSE_TOO_LARGE = 8
+        private const val TAG_CALL_MANAGER_NOT_INITIALIZED = 9
 
         @JvmField
         val CREATOR: Parcelable.Creator<RnsError> = object : Parcelable.Creator<RnsError> {
@@ -207,6 +219,7 @@ sealed class RnsError : Parcelable {
                         parcel.readLong(),
                         parcel.readLong(),
                     )
+                    TAG_CALL_MANAGER_NOT_INITIALIZED -> CallManagerNotInitialized
                     else -> error("Unknown RnsError tag: $tag")
                 }
 
@@ -241,6 +254,7 @@ class RnsException(val error: RnsError) : RuntimeException(describe(error)) {
                 is RnsError.FeatureUnsupported -> "Feature unsupported: ${error.feature}"
                 is RnsError.CallStateInvalid ->
                     "Invalid call state: expected ${error.expected}, was ${error.actual}"
+                is RnsError.CallManagerNotInitialized -> "Call manager not initialized"
                 is RnsError.NomadnetPageNotFound ->
                     "NomadNet page not found: ${error.destHash}${error.path}"
                 is RnsError.NomadnetRequestDenied ->

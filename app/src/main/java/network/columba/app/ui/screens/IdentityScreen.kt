@@ -66,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -73,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
 import network.columba.app.data.model.SignalQuality
 import network.columba.app.ui.components.BluetoothPermissionController
 import network.columba.app.ui.components.QrCodeImage
@@ -85,6 +87,8 @@ import network.columba.app.viewmodel.DebugInfo
 import network.columba.app.viewmodel.DebugViewModel
 import network.columba.app.viewmodel.InterfaceInfo
 import network.columba.app.viewmodel.TestAnnounceResult
+import network.columba.app.viewmodel.UiMessage
+import network.columba.app.viewmodel.messageResource
 import kotlinx.coroutines.launch
 
 /**
@@ -146,12 +150,12 @@ fun IdentityScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Network Status") },
+                title = { Text(stringResource(R.string.identity_network_status)) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.back),
                         )
                     }
                 },
@@ -232,8 +236,9 @@ fun StatusCard(
     isLoading: Boolean = false,
     initialized: Boolean,
     networkStatus: String,
-    error: String?,
+    error: UiMessage?,
 ) {
+    val context = LocalContext.current
     val isConnecting = networkStatus == "CONNECTING"
 
     Card(
@@ -276,7 +281,7 @@ fun StatusCard(
                         },
                 )
                 Text(
-                    text = "Reticulum Status",
+                    text = stringResource(R.string.identity_reticulum_status),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -285,17 +290,25 @@ fun StatusCard(
             Divider()
 
             InfoRow(
-                label = "Initialized",
+                label = stringResource(R.string.identity_initialized),
                 value =
                     if (isLoading) {
-                        "Loading..."
+                        stringResource(R.string.identity_loading)
                     } else if (initialized) {
-                        "Yes"
+                        stringResource(R.string.identity_yes)
                     } else {
-                        "No"
+                        stringResource(R.string.identity_no)
                     },
             )
-            InfoRow(label = "Network Status", value = if (isLoading) "Loading..." else networkStatus)
+            InfoRow(
+                label = stringResource(R.string.identity_network_status),
+                value =
+                    if (isLoading) {
+                        stringResource(R.string.identity_loading)
+                    } else {
+                        networkStatus.ifEmpty { stringResource(R.string.debug_network_status_unknown) }
+                    },
+            )
 
             if (isLoading || isConnecting) {
                 Row(
@@ -307,7 +320,7 @@ fun StatusCard(
                         strokeWidth = 2.dp,
                     )
                     Text(
-                        text = if (isLoading) "Fetching service status..." else "Reconnecting to service...",
+                        text = if (isLoading) stringResource(R.string.identity_fetching_service_status) else stringResource(R.string.identity_reconnecting_service),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
@@ -316,7 +329,7 @@ fun StatusCard(
 
             if (error != null) {
                 Text(
-                    text = "Error: $error",
+                    text = stringResource(R.string.error_prefix, error.resolve(context)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier =
@@ -359,7 +372,7 @@ fun InterfacesCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Network Interfaces (${interfaces.size})",
+                    text = stringResource(R.string.identity_network_interfaces_count, interfaces.size),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -369,7 +382,7 @@ fun InterfacesCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
-                        contentDescription = "Manage interfaces",
+                        contentDescription = stringResource(R.string.identity_manage_interfaces),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp),
                     )
@@ -380,7 +393,7 @@ fun InterfacesCard(
 
             if (interfaces.isEmpty()) {
                 Text(
-                    text = "No interfaces configured",
+                    text = stringResource(R.string.identity_no_interfaces_configured),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -434,7 +447,7 @@ fun InterfacesCard(
                     tint = MaterialTheme.colorScheme.error,
                 )
             },
-            title = { Text(if (hasFailed) "Interface Failed" else "Interface Offline") },
+            title = { Text(stringResource(if (hasFailed) R.string.identity_interface_failed else R.string.identity_interface_offline)) },
             text = {
                 Column {
                     Text(
@@ -445,31 +458,29 @@ fun InterfacesCard(
                     Spacer(modifier = Modifier.height(8.dp))
                     if (hasFailed) {
                         Text(
-                            text = "This interface failed to start:",
+                            text = stringResource(R.string.identity_interface_failed_to_start),
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = iface.error ?: "Unknown error",
+                            text = iface.error ?: stringResource(R.string.identity_unknown_error),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text =
-                                "Another Reticulum app may be using this interface. " +
-                                    "Close other apps or disable this interface in Settings.",
+                            text = stringResource(R.string.identity_interface_conflict),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else {
                         Text(
-                            text = "This interface is currently offline and not passing traffic.",
+                            text = stringResource(R.string.identity_interface_offline_desc),
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Check that the device is powered on, in range, and properly configured.",
+                            text = stringResource(R.string.identity_interface_offline_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -478,7 +489,7 @@ fun InterfacesCard(
             },
             confirmButton = {
                 Button(onClick = { selectedInterface = null }) {
-                    Text("OK")
+                    Text(stringResource(R.string.identity_ok))
                 }
             },
         )
@@ -537,9 +548,9 @@ fun InterfaceRow(
                     },
                 contentDescription =
                     when {
-                        iface.online -> "Online"
-                        hasFailed -> "Failed to start - tap for details"
-                        else -> "Offline - tap for details"
+                        iface.online -> stringResource(R.string.identity_iface_online)
+                        hasFailed -> stringResource(R.string.identity_iface_failed_details)
+                        else -> stringResource(R.string.identity_iface_offline_details)
                     },
                 tint =
                     when {
@@ -551,7 +562,7 @@ fun InterfaceRow(
             if (showChevron) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "View details",
+                    contentDescription = stringResource(R.string.identity_view_details),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -577,7 +588,7 @@ fun TestActionsCard(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = "Test Actions",
+                text = stringResource(R.string.identity_test_actions),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
@@ -590,7 +601,7 @@ fun TestActionsCard(
             ) {
                 Icon(Icons.Default.Send, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Send Test Announce")
+                Text(stringResource(R.string.identity_send_test_announce))
             }
 
             if (testResult != null) {
@@ -611,21 +622,21 @@ fun TestActionsCard(
                                     tint = MaterialTheme.colorScheme.primary,
                                 )
                                 Text(
-                                    "Test announce sent!",
+                                    stringResource(R.string.identity_test_announce_sent),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold,
                                 )
                             }
                             if (testResult.hexHash != null) {
                                 Text(
-                                    "Hash: ${testResult.hexHash}",
+                                    stringResource(R.string.identity_test_announce_hash, testResult.hexHash),
                                     style = MaterialTheme.typography.bodySmall,
                                     fontFamily = FontFamily.Monospace,
                                     modifier = Modifier.padding(top = 4.dp),
                                 )
                             }
                             TextButton(onClick = onClearResult) {
-                                Text("Dismiss")
+                                Text(stringResource(R.string.identity_dismiss))
                             }
                         }
                     }
@@ -646,7 +657,7 @@ fun TestActionsCard(
                                     tint = MaterialTheme.colorScheme.error,
                                 )
                                 Text(
-                                    "Error sending announce",
+                                    stringResource(R.string.identity_error_sending_announce),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold,
                                 )
@@ -659,7 +670,7 @@ fun TestActionsCard(
                                 )
                             }
                             TextButton(onClick = onClearResult) {
-                                Text("Dismiss")
+                                Text(stringResource(R.string.identity_dismiss))
                             }
                         }
                     }
@@ -705,25 +716,25 @@ fun UserIdentityCard(
                     tint = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
                 Text(
-                    text = "Your Identity",
+                    text = stringResource(R.string.identity_qr_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
                 )
                 Icon(
                     imageVector = Icons.Default.QrCode,
-                    contentDescription = "View QR Code",
+                    contentDescription = stringResource(R.string.identity_view_qr_code),
                     tint = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
             }
 
             Divider()
 
-            InfoRow(label = "Display Name", value = displayName)
+            InfoRow(label = stringResource(R.string.identity_display_name), value = displayName)
 
             if (destinationHash != null) {
                 InfoRow(
-                    label = "Destination",
+                    label = stringResource(R.string.identity_destination),
                     value =
                         IdentityQrCodeUtils.formatHashForDisplay(
                             hash = destinationHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
@@ -733,7 +744,7 @@ fun UserIdentityCard(
             }
 
             Text(
-                text = "Tap to view full identity details and QR code for sharing",
+                text = stringResource(R.string.identity_tap_to_view_details),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -790,7 +801,7 @@ fun BleConnectionsCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = "BLE Connections",
+                text = stringResource(R.string.identity_ble_connections),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
@@ -799,9 +810,7 @@ fun BleConnectionsCard(
 
             if (bleDisabled) {
                 Text(
-                    text =
-                        "BLE connections are not available while using a shared Reticulum instance. " +
-                            "Only Columba's own instance can initiate Bluetooth LE connections.",
+                    text = stringResource(R.string.identity_ble_shared_disabled),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -816,7 +825,7 @@ fun BleConnectionsCard(
                             CircularProgressIndicator(modifier = Modifier.size(24.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Loading connections...",
+                                text = stringResource(R.string.identity_loading_connections),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -839,13 +848,13 @@ fun BleConnectionsCard(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "Bluetooth is turned on",
+                                        text = stringResource(R.string.identity_bluetooth_on),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.primary,
                                     )
                                 }
                                 Text(
-                                    text = "No active BLE connections",
+                                    text = stringResource(R.string.identity_no_active_ble_connections),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -859,7 +868,7 @@ fun BleConnectionsCard(
                                         modifier = Modifier.size(18.dp),
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Bluetooth Settings")
+                                    Text(stringResource(R.string.identity_bluetooth_settings))
                                 }
                             }
                         } else {
@@ -882,7 +891,7 @@ fun BleConnectionsCard(
                                         color = MaterialTheme.colorScheme.primary,
                                     )
                                     Text(
-                                        text = "Total",
+                                        text = stringResource(R.string.identity_total),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -895,7 +904,7 @@ fun BleConnectionsCard(
                                         color = MaterialTheme.colorScheme.primary,
                                     )
                                     Text(
-                                        text = "Central",
+                                        text = stringResource(R.string.identity_central),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -908,7 +917,7 @@ fun BleConnectionsCard(
                                         color = MaterialTheme.colorScheme.primary,
                                     )
                                     Text(
-                                        text = "Peripheral",
+                                        text = stringResource(R.string.identity_peripheral),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -935,10 +944,11 @@ fun BleConnectionsCard(
 
                             val (signalText, signalColor) =
                                 when (avgSignalQuality) {
-                                    SignalQuality.EXCELLENT -> "Excellent Signal" to MaterialTheme.colorScheme.primary
-                                    SignalQuality.GOOD -> "Good Signal" to MaterialTheme.colorScheme.primary
-                                    SignalQuality.FAIR -> "Fair Signal" to MaterialTheme.colorScheme.tertiary
-                                    SignalQuality.POOR -> "Poor Signal" to MaterialTheme.colorScheme.error
+                                    SignalQuality.EXCELLENT ->
+                                        stringResource(R.string.identity_signal_excellent) to MaterialTheme.colorScheme.primary
+                                    SignalQuality.GOOD -> stringResource(R.string.identity_signal_good) to MaterialTheme.colorScheme.primary
+                                    SignalQuality.FAIR -> stringResource(R.string.identity_signal_fair) to MaterialTheme.colorScheme.tertiary
+                                    SignalQuality.POOR -> stringResource(R.string.identity_signal_poor) to MaterialTheme.colorScheme.error
                                 }
 
                             Row(
@@ -961,7 +971,7 @@ fun BleConnectionsCard(
                                     )
                                 }
                                 TextButton(onClick = onViewDetails) {
-                                    Text("View Details")
+                                    Text(stringResource(R.string.identity_view_details_caps))
                                     Icon(
                                         imageVector = Icons.Default.ArrowForward,
                                         contentDescription = null,
@@ -984,7 +994,10 @@ fun BleConnectionsCard(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Error: ${uiState.message}",
+                                text = stringResource(
+                                    R.string.error_prefix,
+                                    uiState.detail ?: stringResource(uiState.reason.messageResource()),
+                                ),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -993,7 +1006,7 @@ fun BleConnectionsCard(
 
                     is BleConnectionsUiState.PermissionsRequired -> {
                         Text(
-                            text = "Bluetooth permissions required",
+                            text = stringResource(R.string.identity_ble_permissions_required),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1014,7 +1027,7 @@ fun BleConnectionsCard(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Bluetooth is turned off",
+                                    text = stringResource(R.string.identity_bluetooth_off),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -1029,7 +1042,7 @@ fun BleConnectionsCard(
                                     modifier = Modifier.size(18.dp),
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Turn ON")
+                                Text(stringResource(R.string.identity_turn_on))
                             }
                         }
                     }
@@ -1070,12 +1083,12 @@ fun IdentityDetailsDialog(
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Text("Your Identity") },
+                        title = { Text(stringResource(R.string.identity_qr_title)) },
                         navigationIcon = {
                             IconButton(onClick = onDismiss) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "Close",
+                                    contentDescription = stringResource(R.string.identity_qr_close),
                                 )
                             }
                         },
@@ -1114,7 +1127,7 @@ fun IdentityDetailsDialog(
                         )
 
                         Text(
-                            text = "Scan this QR code to add me as a contact",
+                            text = stringResource(R.string.identity_qr_scan_hint),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1136,7 +1149,7 @@ fun IdentityDetailsDialog(
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Share")
+                            Text(stringResource(R.string.identity_share))
                         }
 
                         // Scan QR Button
@@ -1150,7 +1163,7 @@ fun IdentityDetailsDialog(
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Scan")
+                            Text(stringResource(R.string.identity_scan))
                         }
                     }
 
@@ -1163,7 +1176,7 @@ fun IdentityDetailsDialog(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Text(
-                                text = "Identity Hash",
+                                text = stringResource(R.string.identity_hash),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                             )
@@ -1190,7 +1203,7 @@ fun IdentityDetailsDialog(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.ContentCopy,
-                                            contentDescription = "Copy",
+                                            contentDescription = stringResource(R.string.identity_copy),
                                             modifier = Modifier.size(20.dp),
                                         )
                                     }
@@ -1206,7 +1219,7 @@ fun IdentityDetailsDialog(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Text(
-                                text = "Destination Hash (LXMF)",
+                                text = stringResource(R.string.identity_destination_hash_lxmf),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                             )
@@ -1233,7 +1246,7 @@ fun IdentityDetailsDialog(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.ContentCopy,
-                                            contentDescription = "Copy",
+                                            contentDescription = stringResource(R.string.identity_copy),
                                             modifier = Modifier.size(20.dp),
                                         )
                                     }
@@ -1287,7 +1300,7 @@ private fun ServiceControlCard(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "Service Control",
+                    text = stringResource(R.string.identity_service_control),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -1295,15 +1308,13 @@ private fun ServiceControlCard(
 
             if (controlDisabled) {
                 Text(
-                    text =
-                        "Service control is disabled while using a shared Reticulum instance. " +
-                            "The network service is managed by another app (e.g., Sideband).",
+                    text = stringResource(R.string.identity_service_control_shared),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
                 Text(
-                    text = "Manually stop or restart the background Reticulum service.",
+                    text = stringResource(R.string.identity_service_control_desc),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1320,7 +1331,7 @@ private fun ServiceControlCard(
                 ) {
                     Icon(Icons.Default.Close, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Shutdown")
+                    Text(stringResource(R.string.identity_shutdown))
                 }
 
                 Button(
@@ -1330,7 +1341,7 @@ private fun ServiceControlCard(
                 ) {
                     Icon(Icons.Default.Send, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Restart")
+                    Text(stringResource(R.string.identity_restart))
                 }
             }
         }
@@ -1340,10 +1351,10 @@ private fun ServiceControlCard(
     if (showShutdownDialog) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showShutdownDialog = false },
-            title = { Text("Shutdown Service?") },
+            title = { Text(stringResource(R.string.identity_shutdown_service_title)) },
             text = {
                 Text(
-                    "This will stop the background Reticulum service. You will not receive messages until you restart the app or manually restart the service.",
+                    stringResource(R.string.identity_shutdown_service_body),
                 )
             },
             confirmButton = {
@@ -1353,12 +1364,12 @@ private fun ServiceControlCard(
                         onShutdown()
                     },
                 ) {
-                    Text("Shutdown")
+                    Text(stringResource(R.string.identity_shutdown))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showShutdownDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             },
         )

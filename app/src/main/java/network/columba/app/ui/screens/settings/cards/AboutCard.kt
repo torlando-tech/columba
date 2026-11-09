@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -53,7 +54,7 @@ fun AboutCard(
     val context = LocalContext.current
 
     CollapsibleSettingsCard(
-        title = "About",
+        title = stringResource(R.string.about_title),
         icon = Icons.Default.Info,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
@@ -66,18 +67,18 @@ fun AboutCard(
             // Logo and Header
             Image(
                 painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                contentDescription = "Columba Logo",
+                contentDescription = stringResource(R.string.about_logo_cd),
                 modifier = Modifier.size(108.dp),
             )
 
             Text(
-                text = "Columba",
+                text = stringResource(R.string.about_app_name),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
 
             Text(
-                text = "Native Android messaging app using Bluetooth LE, TCP, or RNode (LoRa) over LXMF and Reticulum",
+                text = stringResource(R.string.about_tagline),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -86,39 +87,39 @@ fun AboutCard(
             HorizontalDivider()
 
             // Version Information
-            InfoSection(title = "App Information") {
-                InfoRow("Version", systemInfo.appVersion)
-                InfoRow("Build Number", systemInfo.appBuildCode.toString())
-                InfoRow("Build Type", systemInfo.buildType.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() })
-                InfoRow("Git Commit", systemInfo.gitCommitHash)
-                InfoRow("Build Date", systemInfo.buildDate)
+            InfoSection(title = stringResource(R.string.about_app_information)) {
+                InfoRow(label = stringResource(R.string.about_version), value = systemInfo.appVersion)
+                InfoRow(label = stringResource(R.string.about_build_number), value = systemInfo.appBuildCode.toString())
+                InfoRow(label = stringResource(R.string.about_build_type), value = systemInfo.buildType.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() })
+                InfoRow(label = stringResource(R.string.about_git_commit), value = systemInfo.gitCommitHash)
+                InfoRow(label = stringResource(R.string.about_build_date), value = systemInfo.buildDate)
             }
 
             HorizontalDivider()
 
             // Device Information
-            InfoSection(title = "Device Information") {
-                InfoRow("Android Version", systemInfo.androidVersion)
-                InfoRow("API Level", systemInfo.apiLevel.toString())
-                InfoRow("Device Model", systemInfo.deviceModel)
-                InfoRow("Manufacturer", systemInfo.manufacturer)
+            InfoSection(title = stringResource(R.string.about_device_information)) {
+                InfoRow(label = stringResource(R.string.about_android_version), value = systemInfo.androidVersion)
+                InfoRow(label = stringResource(R.string.about_api_level), value = systemInfo.apiLevel.toString())
+                InfoRow(label = stringResource(R.string.about_device_model), value = systemInfo.deviceModel)
+                InfoRow(label = stringResource(R.string.about_manufacturer), value = systemInfo.manufacturer)
             }
 
             HorizontalDivider()
 
             // Protocol Versions
-            InfoSection(title = "Protocol Versions") {
+            InfoSection(title = stringResource(R.string.about_protocol_versions)) {
                 if (systemInfo.reticulumVersion != null) {
-                    InfoRow("Reticulum", systemInfo.reticulumVersion)
+                    InfoRow(label = stringResource(R.string.about_reticulum), value = systemInfo.reticulumVersion)
                 }
                 if (systemInfo.lxmfVersion != null) {
-                    InfoRow("LXMF", systemInfo.lxmfVersion)
+                    InfoRow(label = stringResource(R.string.about_lxmf), value = systemInfo.lxmfVersion)
                 }
                 if (systemInfo.bleReticulumVersion != null) {
-                    InfoRow("BLE-Reticulum", systemInfo.bleReticulumVersion)
+                    InfoRow(label = stringResource(R.string.about_ble_reticulum), value = systemInfo.bleReticulumVersion)
                 }
                 if (systemInfo.lxstVersion != null) {
-                    InfoRow("LXST", systemInfo.lxstVersion)
+                    InfoRow(label = stringResource(R.string.about_lxst), value = systemInfo.lxstVersion)
                 }
             }
 
@@ -126,17 +127,17 @@ fun AboutCard(
 
             // Identity
             if (systemInfo.identityHash != null) {
-                InfoSection(title = "Identity") {
-                    InfoRow("Identity Hash", systemInfo.identityHash)
+                InfoSection(title = stringResource(R.string.about_identity)) {
+                    InfoRow(label = stringResource(R.string.about_identity_hash), value = systemInfo.identityHash)
                 }
                 HorizontalDivider()
             }
 
             // Links
-            InfoSection(title = "Links & Resources") {
-                LinkButton("GitHub Repository", "https://github.com/torlando-tech/columba", context)
-                LinkButton("Report an Issue", "https://github.com/torlando-tech/columba/issues", context)
-                LinkButton("About Reticulum", "https://reticulum.network/", context)
+            InfoSection(title = stringResource(R.string.about_links_resources)) {
+                LinkButton(label = stringResource(R.string.about_github_repository), url = "https://github.com/torlando-tech/columba", context = context)
+                LinkButton(label = stringResource(R.string.about_report_issue), url = "https://github.com/torlando-tech/columba/issues", context = context)
+                LinkButton(label = stringResource(R.string.about_reticulum_link), url = "https://reticulum.network/", context = context)
             }
 
             HorizontalDivider()
@@ -147,12 +148,12 @@ fun AboutCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
-                    text = "MPL 2.0",
+                    text = stringResource(R.string.about_license),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "© 2025–${network.columba.app.BuildConfig.COPYRIGHT_YEAR} Columba Contributors",
+                    text = stringResource(R.string.about_copyright, network.columba.app.BuildConfig.COPYRIGHT_YEAR),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -161,7 +162,7 @@ fun AboutCard(
                         openExternalUrl(context, "https://github.com/torlando-tech/columba/blob/main/LICENSE.md")
                     },
                 ) {
-                    Text("View License", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.about_view_license), style = MaterialTheme.typography.bodySmall)
                 }
             }
 
@@ -169,7 +170,7 @@ fun AboutCard(
 
             // Attribution
             Text(
-                text = "Built With",
+                text = stringResource(R.string.about_built_with),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
             )
@@ -178,23 +179,23 @@ fun AboutCard(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text("Reticulum by Mark Qvist", style = MaterialTheme.typography.bodySmall)
-                Text("LXMF by Mark Qvist", style = MaterialTheme.typography.bodySmall)
-                Text("Material Design 3", style = MaterialTheme.typography.bodySmall)
-                Text("Jetpack Compose", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.about_attr_reticulum), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.about_attr_lxmf), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.about_attr_material), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.about_attr_compose), style = MaterialTheme.typography.bodySmall)
             }
 
             HorizontalDivider()
 
             // Updates
-            InfoSection(title = "Updates") {
+            InfoSection(title = stringResource(R.string.about_updates)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Include pre-releases",
+                        text = stringResource(R.string.about_include_prereleases),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -214,13 +215,13 @@ fun AboutCard(
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(8.dp))
                     }
-                    Text("Check for Updates")
+                    Text(stringResource(R.string.about_check_for_updates))
                 }
 
                 when (val result = updateCheckResult) {
                     is AppUpdateResult.UpToDate ->
                         Text(
-                            text = "Up to date (v${result.currentVersion})",
+                            text = stringResource(R.string.about_up_to_date, result.currentVersion),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -231,7 +232,7 @@ fun AboutCard(
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Text(
-                                text = "Update available: ${result.tagName}",
+                                text = stringResource(R.string.about_update_available, result.tagName),
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             TextButton(
@@ -239,12 +240,12 @@ fun AboutCard(
                                     openExternalUrl(context, result.htmlUrl)
                                 },
                             ) {
-                                Text("View Release")
+                                Text(stringResource(R.string.about_view_release))
                             }
                         }
                     is AppUpdateResult.Error ->
                         Text(
-                            text = result.message,
+                            text = result.message.resolve(context),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
@@ -265,7 +266,7 @@ fun AboutCard(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Copy System Info")
+                Text(stringResource(R.string.about_copy_system_info))
             }
 
             // Report Bug Button
@@ -279,7 +280,7 @@ fun AboutCard(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Report Bug")
+                Text(stringResource(R.string.about_report_bug))
             }
         }
     }

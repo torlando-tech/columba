@@ -69,6 +69,22 @@ class ActiveConversationManagerTest {
         }
 
     @Test
+    fun `setActive tracks the visible thread`() =
+        runTest {
+            manager.setActive("abc123", "0a0b0c0d")
+            assertEquals("0a0b0c0d", manager.activeThread.first())
+
+            // Main is null, not the previous selection
+            manager.setActive("abc123", null)
+            assertNull(manager.activeThread.first())
+
+            // Leaving the conversation drops the target even if a thread was passed
+            manager.setActive("abc123", "0a0b0c0d")
+            manager.setActive(null, "0a0b0c0d")
+            assertNull(manager.activeThread.first())
+        }
+
+    @Test
     fun `StateFlow emits updates`() =
         runTest {
             val testHash = "abc123"

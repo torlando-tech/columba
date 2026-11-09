@@ -89,7 +89,7 @@ fun InterfaceConfigImportDialog(
                     label = { Text(stringResource(R.string.interface_config_import_field_label)) },
                     placeholder = {
                         Text(
-                            "[[My Node]]\n  type = TCPClientInterface\n  target_host = example.com\n  target_port = 4242",
+                            stringResource(R.string.interface_config_import_placeholder),
                             style = MaterialTheme.typography.bodySmall,
                         )
                     },

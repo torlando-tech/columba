@@ -82,6 +82,7 @@ class ConversationRepositoryConcurrencyTest {
             first.localIdentityDao().insert(identity("local-identity", isActive = true))
             val writers = listOf(repository(first, context), repository(second, context))
             val evidence = byteArrayOf(7, 8, 9)
+            val threadId = ByteArray(16) { (it + 1).toByte() }
             val older = Message(
                 id = "older-message",
                 destinationHash = "sender",
@@ -91,6 +92,7 @@ class ConversationRepositoryConcurrencyTest {
                 receivedAt = 100,
                 signatureStatus = SignatureStatus.SOURCE_UNKNOWN,
                 signatureEvidence = evidence,
+                threadId = threadId,
             )
             val newer = Message(
                 id = "newer-message",
@@ -99,9 +101,11 @@ class ConversationRepositoryConcurrencyTest {
                 timestamp = 200,
                 isFromMe = false,
                 receivedAt = 200,
+                threadId = threadId,
             )
             writers[0].saveMessage("sender", "Sender", older)
             first.messageDao().resolvePendingSignature(older.id, "local-identity", SignatureStatus.VERIFIED)
+            first.messageDao().ackNotificationHandled(older.id, "local-identity")
             writers[0].saveMessage("sender", "Sender", newer)
 
             val beforeReplay = requireNotNull(first.conversationDao().getConversation("sender", "local-identity"))
@@ -109,6 +113,9 @@ class ConversationRepositoryConcurrencyTest {
             assertEquals(200L, beforeReplay.lastMessageTimestamp)
             assertEquals(2, beforeReplay.unreadCount)
             assertEquals(2, first.messageDao().getAllMessagesForIdentity("local-identity").size)
+            val threadBeforeReplay = requireNotNull(first.threadDao().getThread("local-identity", "sender", threadId))
+            assertEquals(200L, threadBeforeReplay.lastActivityAt)
+            assertEquals("Older content", threadBeforeReplay.title)
 
             writers[1].saveMessage(
                 "sender",
@@ -127,6 +134,12 @@ class ConversationRepositoryConcurrencyTest {
             assertEquals(100L, storedOlder.receivedAt)
             assertEquals(SignatureStatus.VERIFIED, storedOlder.signatureStatus)
             assertNull(first.messageDao().readSignatureEvidence(older.id, "local-identity"))
+            assertEquals(true, storedOlder.notificationHandled)
+            assertArrayEquals(threadId, storedOlder.threadId)
+            val threadAfterReplay = requireNotNull(first.threadDao().getThread("local-identity", "sender", threadId))
+            assertEquals(200L, threadAfterReplay.lastActivityAt)
+            assertEquals("Older content", threadAfterReplay.title)
+            assertNull(threadAfterReplay.rootMessageId)
         } finally {
             first.close()
             second.close()
@@ -216,6 +229,7 @@ class ConversationRepositoryConcurrencyTest {
         localIdentityDao = database.localIdentityDao(),
         attachmentStorage = AttachmentStorageManager(context),
         draftDao = database.draftDao(),
+        threadDao = database.threadDao(),
         database = database,
     )
 }

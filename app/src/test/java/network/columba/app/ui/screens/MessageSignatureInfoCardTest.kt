@@ -1,12 +1,15 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import androidx.annotation.StringRes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.test.core.app.ApplicationProvider
+import network.columba.app.R
 import network.columba.app.domain.model.SignatureStatus
 import network.columba.app.test.RegisterComponentActivityRule
 import org.junit.Rule
@@ -25,6 +28,9 @@ class MessageSignatureInfoCardTest {
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
+    private fun text(@StringRes resource: Int) =
+        hasText(ApplicationProvider.getApplicationContext<Application>().getString(resource))
+
     private fun render(status: SignatureStatus) {
         composeRule.setContent {
             MaterialTheme {
@@ -34,29 +40,30 @@ class MessageSignatureInfoCardTest {
     }
 
     @Test
-    fun `unknown identity explains unavailable key and automatic verification`() {
+    fun `unknown identity has its own status and automatic verification explanation`() {
         render(SignatureStatus.SOURCE_UNKNOWN)
 
-        composeRule.onNode(hasText("key", substring = true) and hasText("not", substring = true)).assertIsDisplayed()
-        composeRule.onNode(hasText("checked", substring = true) and hasText("not", substring = true)).assertIsDisplayed()
-        composeRule.onNode(hasText("automatically", substring = true)).assertIsDisplayed()
+        composeRule.onNode(text(R.string.message_detail_signature_unknown)).assertIsDisplayed()
+        composeRule.onNode(text(R.string.message_detail_signature_unknown_detail)).assertIsDisplayed()
+        composeRule.onAllNodes(text(R.string.message_detail_signature_invalid)).assertCountEquals(0)
     }
 
     @Test
     fun `invalid signature explains failed check against known identity`() {
         render(SignatureStatus.INVALID)
 
-        composeRule.onNode(hasText("failed", substring = true) and hasText("known", substring = true)).assertIsDisplayed()
-        composeRule.onNode(hasText("identity", substring = true)).assertIsDisplayed()
-        composeRule.onNode(hasText("forged", substring = true)).assertIsDisplayed()
+        composeRule.onNode(text(R.string.message_detail_signature_invalid)).assertIsDisplayed()
+        composeRule.onNode(text(R.string.message_detail_signature_invalid_detail)).assertIsDisplayed()
+        composeRule.onAllNodes(text(R.string.message_detail_signature_unknown)).assertCountEquals(0)
     }
 
     @Test
     fun `unverified result does not claim confirmed failure`() {
         render(SignatureStatus.UNVERIFIED)
 
-        composeRule.onNode(hasText("authenticated", substring = true) and hasText("not", substring = true)).assertIsDisplayed()
-        composeRule.onNode(hasText("failure", substring = true) and hasText("not", substring = true)).assertIsDisplayed()
+        composeRule.onNode(text(R.string.message_detail_signature_unverified)).assertIsDisplayed()
+        composeRule.onNode(text(R.string.message_detail_signature_unverified_detail)).assertIsDisplayed()
+        composeRule.onAllNodes(text(R.string.message_detail_signature_invalid)).assertCountEquals(0)
     }
 
     @Test
@@ -67,11 +74,13 @@ class MessageSignatureInfoCardTest {
                 MessageSignatureInfoCard(status.value)
             }
         }
-        composeRule.onNode(hasText("not available", substring = true)).assertIsDisplayed()
+        composeRule.onNode(text(R.string.message_detail_signature_unknown_detail)).assertIsDisplayed()
 
         composeRule.runOnIdle { status.value = SignatureStatus.VERIFIED }
 
-        composeRule.onAllNodes(hasText("not available", substring = true)).assertCountEquals(0)
-        composeRule.onNode(hasText("signature matches", substring = true)).assertIsDisplayed()
+        composeRule.onAllNodes(text(R.string.message_detail_signature_unknown)).assertCountEquals(0)
+        composeRule.onAllNodes(text(R.string.message_detail_signature_unknown_detail)).assertCountEquals(0)
+        composeRule.onNode(text(R.string.message_detail_signature_verified)).assertIsDisplayed()
+        composeRule.onNode(text(R.string.message_detail_signature_verified_detail)).assertIsDisplayed()
     }
 }

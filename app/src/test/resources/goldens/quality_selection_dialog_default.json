@@ -1,0 +1,18 @@
+[
+  "Select Quality",
+  "Choose a quality level for this transfer",
+  "3 hops • 128.0 kbps • 512B MTU",
+  "Low",
+  "Smallest file, slowest links",
+  "~5 sec",
+  "Medium",
+  "Recommended",
+  "Balanced size and quality",
+  "~30 sec",
+  "High",
+  "Experimental",
+  "Best quality, needs a fast link",
+  "~2 min",
+  "Cancel",
+  "Send"
+]

@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -33,6 +34,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
+import network.columba.app.R
 import network.columba.app.test.RegisterComponentActivityRule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -67,6 +70,9 @@ class IncomingCallScreenTest {
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
     val composeTestRule get() = composeRule
+
+    private fun resText(id: Int): String =
+        ApplicationProvider.getApplicationContext<Application>().getString(id)
 
     // ========== Caller Name Display Tests ==========
 
@@ -183,7 +189,7 @@ class IncomingCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Incoming Voice Call").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.incoming_voice_call)).assertIsDisplayed()
     }
 
     // ========== Answer Button Tests ==========
@@ -198,7 +204,7 @@ class IncomingCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Answer call").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_answer_content_description)).assertIsDisplayed()
     }
 
     @Test
@@ -213,7 +219,7 @@ class IncomingCallScreenTest {
 
         // Note: Label may be positioned outside visible bounds in test environment,
         // but we verify button functionality via content description
-        composeTestRule.onNodeWithContentDescription("Answer call").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_answer_content_description)).assertIsDisplayed()
     }
 
     @Test
@@ -228,7 +234,7 @@ class IncomingCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Answer call").performClick()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_answer_content_description)).performClick()
 
         assertTrue("Answer button should be clickable", clicked)
     }
@@ -245,7 +251,7 @@ class IncomingCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Answer call").performClick()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_answer_content_description)).performClick()
 
         assertTrue("onAnswer callback should be called", answerCalled)
     }
@@ -262,7 +268,7 @@ class IncomingCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Decline call").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_decline_content_description)).assertIsDisplayed()
     }
 
     @Test
@@ -277,7 +283,7 @@ class IncomingCallScreenTest {
 
         // Note: Label may be positioned outside visible bounds in test environment,
         // but we verify button functionality via content description
-        composeTestRule.onNodeWithContentDescription("Decline call").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_decline_content_description)).assertIsDisplayed()
     }
 
     @Test
@@ -292,7 +298,7 @@ class IncomingCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Decline call").performClick()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_decline_content_description)).performClick()
 
         assertTrue("Decline button should be clickable", clicked)
     }
@@ -309,7 +315,7 @@ class IncomingCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Decline call").performClick()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_decline_content_description)).performClick()
 
         assertTrue("onDecline callback should be called", declineCalled)
     }
@@ -328,9 +334,9 @@ class IncomingCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Answer call").performClick()
-        composeTestRule.onNodeWithContentDescription("Answer call").performClick()
-        composeTestRule.onNodeWithContentDescription("Answer call").performClick()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_answer_content_description)).performClick()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_answer_content_description)).performClick()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_answer_content_description)).performClick()
 
         assertEquals(3, answerCallCount)
     }
@@ -347,8 +353,8 @@ class IncomingCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Decline call").performClick()
-        composeTestRule.onNodeWithContentDescription("Decline call").performClick()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_decline_content_description)).performClick()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_decline_content_description)).performClick()
 
         assertEquals(2, declineCallCount)
     }
@@ -366,7 +372,7 @@ class IncomingCallScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Answer call").performClick()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_answer_content_description)).performClick()
 
         assertTrue("onAnswer should be called", answerCalled)
         assertTrue("onDecline should NOT be called when answer is clicked", !declineCalled)
@@ -402,10 +408,10 @@ class IncomingCallScreenTest {
 
         // Verify all key elements are displayed
         composeTestRule.onNodeWithText("Test User").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Incoming Voice Call").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.incoming_voice_call)).assertIsDisplayed()
         // Verify buttons via content description (labels may be outside visible bounds)
-        composeTestRule.onNodeWithContentDescription("Answer call").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Decline call").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_answer_content_description)).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.call_decline_content_description)).assertIsDisplayed()
     }
 
     // ========== Edge Case Tests ==========
@@ -421,7 +427,7 @@ class IncomingCallScreenTest {
         }
 
         // Screen should render without crashing - verify status text is displayed
-        composeTestRule.onNodeWithText("Incoming Voice Call").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.incoming_voice_call)).assertIsDisplayed()
     }
 
     @Test
@@ -506,7 +512,7 @@ private fun TestIncomingCallScreen(
 
             // "Incoming Voice Call" label
             Text(
-                text = "Incoming Voice Call",
+                text = stringResource(R.string.incoming_voice_call),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -532,7 +538,7 @@ private fun TestIncomingCallScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.CallEnd,
-                            contentDescription = "Decline call",
+                            contentDescription = stringResource(R.string.call_decline_content_description),
                             modifier = Modifier.size(32.dp),
                             tint = MaterialTheme.colorScheme.onError,
                         )
@@ -541,7 +547,7 @@ private fun TestIncomingCallScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Decline",
+                        text = stringResource(R.string.call_decline),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -563,7 +569,7 @@ private fun TestIncomingCallScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Call,
-                            contentDescription = "Answer call",
+                            contentDescription = stringResource(R.string.call_answer_content_description),
                             modifier = Modifier.size(32.dp),
                             tint = Color.White,
                         )
@@ -572,7 +578,7 @@ private fun TestIncomingCallScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Answer",
+                        text = stringResource(R.string.call_answer),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

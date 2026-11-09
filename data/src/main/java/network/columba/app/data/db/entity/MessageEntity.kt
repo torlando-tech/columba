@@ -32,6 +32,7 @@ import network.columba.app.domain.model.SignatureStatus
         Index("replyToMessageId"), // For efficient reply lookups
         Index("signatureStatus", "conversationHash", "id", "identityHash"), // Bounded deferred verification scans
         Index("identityHash", "isFromMe", "notificationHandled"), // Pending notification reconciliation
+        Index("conversationHash", "identityHash", "threadId", "timestamp"), // Thread grouping (spec §5); threadId NULL rows serve Main queries
     ], // Indexes for faster queries
 )
 data class MessageEntity(
@@ -78,6 +79,11 @@ data class MessageEntity(
     // Null means no recorded result. UNVERIFIED preserves ambiguous legacy failures.
     val signatureStatus: SignatureStatus? = null,
     // DB-local notification completion marker. Existing rows default to handled so the
-    // v11 → v12 migration cannot replay historical alerts; new inbound rows start pending.
+    // v12 → v13 migration cannot replay historical alerts; new inbound rows start pending.
     @ColumnInfo(defaultValue = "1") val notificationHandled: Boolean = true,
+    // LXMF FIELD_THREAD (0x08) raw wire bytes — the thread grouping key
+    // (threads-spec §4.1). Null = Main conversation. Migrated v10→v11; all
+    // pre-thread messages keep threadId = NULL. Reception is opaque: any
+    // byte length is stored as-is and grouped by exact bytes.
+    val threadId: ByteArray? = null,
 )

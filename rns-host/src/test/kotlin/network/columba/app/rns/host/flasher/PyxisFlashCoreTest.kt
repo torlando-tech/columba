@@ -1,6 +1,7 @@
 package network.columba.app.rns.host.flasher
 
 import kotlinx.coroutines.test.runTest
+import network.columba.app.rns.host.R
 import network.columba.app.rns.host.usb.UsbDeviceInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -24,7 +25,11 @@ class PyxisFlashCoreTest {
                 findDevice = { id -> if (id == 42) usbDevice(id, 0x303A, 0x1001) else null },
                 transport = PyxisEspToolTransport { request ->
                     captured = request
-                    request.progressCallback.onProgress(50, "writing")
+                    request.progressCallback.onProgress(
+                        50,
+                        ESPToolFlasher.FlashStage.FLASHING_APPLICATION,
+                        FlashText.Raw("writing"),
+                    )
                     request.progressCallback.onComplete()
                     true
                 },
@@ -43,7 +48,7 @@ class PyxisFlashCoreTest {
         assertFalse(request.performBackupHardReset)
         assertEquals(8 * 1024 * 1024, request.flashSizeBytes)
         assertEquals(setOf("manifest.json", "firmware.bin", "boot_app0.bin"), zipEntryNames(request.firmwareZipStream.readBytes()))
-        assertTrue(states.any { it == RNodeFlasher.FlashState.Progress(50, "writing") })
+        assertTrue(states.any { it == RNodeFlasher.FlashState.Progress(50, FlashText.Raw("writing")) })
         assertTrue(states.last() is RNodeFlasher.FlashState.Complete)
         assertEquals(1, states.count { it is RNodeFlasher.FlashState.Complete })
     }
@@ -94,7 +99,10 @@ class PyxisFlashCoreTest {
             )
 
         assertFalse(core.flash(1, validPackage()))
-        assertTrue((states.last() as RNodeFlasher.FlashState.Error).message.contains("USB gone"))
+        assertEquals(
+            FlashText.Resource(R.string.pyxis_flash_failed_error, listOf("USB gone")),
+            (states.last() as RNodeFlasher.FlashState.Error).message,
+        )
         assertFalse(states.any { it is RNodeFlasher.FlashState.Complete })
     }
 
@@ -105,14 +113,27 @@ class PyxisFlashCoreTest {
             PyxisFlashCore(
                 findDevice = { usbDevice(it, 0x303A, 0x1001) },
                 transport = PyxisEspToolTransport { request ->
-                    request.progressCallback.onProgress(10, "Flashing bootloader...")
-                    request.progressCallback.onProgress(20, "Flashing partition table...")
-                    throw ESPToolFlasher.ManualBootModeRequired("RNode firmware is installed")
+                    request.progressCallback.onProgress(
+                        10,
+                        ESPToolFlasher.FlashStage.FLASHING_BOOTLOADER,
+                        flashText(R.string.esptool_progress_bootloader, 1, 10),
+                    )
+                    request.progressCallback.onProgress(
+                        20,
+                        ESPToolFlasher.FlashStage.FLASHING_PARTITION_TABLE,
+                        flashText(R.string.esptool_progress_partition_table, 1, 10),
+                    )
+                    throw ESPToolFlasher.ManualBootModeRequired(R.string.esptool_manual_boot_instructions)
                 },
                 emitState = states::add,
             )
 
         assertFalse(core.flash(1, validPackage()))
+        val suppressedStageTexts =
+            setOf(
+                R.string.esptool_progress_bootloader,
+                R.string.esptool_progress_partition_table,
+            )
         val messages =
             states.mapNotNull {
                 when (it) {
@@ -121,10 +142,11 @@ class PyxisFlashCoreTest {
                     else -> null
                 }
             }
-        assertFalse(messages.any { it.contains("partition table", ignoreCase = true) })
-        assertFalse(messages.any { it.contains("Flashing bootloader", ignoreCase = true) })
-        assertFalse(messages.any { it.contains("RNode", ignoreCase = true) })
-        assertTrue(messages.last().contains("Pyxis"))
+        assertTrue(messages.none { it is FlashText.Resource && it.id in suppressedStageTexts })
+        assertEquals(
+            FlashText.Resource(R.string.pyxis_manual_boot),
+            (states.last() as RNodeFlasher.FlashState.Error).message,
+        )
         assertTrue((states.last() as RNodeFlasher.FlashState.Error).recoverable)
     }
 

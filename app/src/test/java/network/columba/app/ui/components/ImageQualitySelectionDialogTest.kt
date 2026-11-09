@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.service.ConversationLinkManager
 import network.columba.app.test.RegisterComponentActivityRule
@@ -82,10 +83,10 @@ class ImageQualitySelectionDialogTest {
         }
 
         // Verify descriptions exist (may be off-screen in scrollable dialog)
-        composeTestRule.onNodeWithText(ImageCompressionPreset.LOW.description).assertExists()
-        composeTestRule.onNodeWithText(ImageCompressionPreset.MEDIUM.description).assertExists()
-        composeTestRule.onNodeWithText(ImageCompressionPreset.HIGH.description).assertExists()
-        composeTestRule.onNodeWithText(ImageCompressionPreset.ORIGINAL.description).assertExists()
+        composeTestRule.onNodeWithText(ApplicationProvider.getApplicationContext<Application>().getString(ImageCompressionPreset.LOW.descriptionRes)).assertExists()
+        composeTestRule.onNodeWithText(ApplicationProvider.getApplicationContext<Application>().getString(ImageCompressionPreset.MEDIUM.descriptionRes)).assertExists()
+        composeTestRule.onNodeWithText(ApplicationProvider.getApplicationContext<Application>().getString(ImageCompressionPreset.HIGH.descriptionRes)).assertExists()
+        composeTestRule.onNodeWithText(ApplicationProvider.getApplicationContext<Application>().getString(ImageCompressionPreset.ORIGINAL.descriptionRes)).assertExists()
     }
 
     @Test

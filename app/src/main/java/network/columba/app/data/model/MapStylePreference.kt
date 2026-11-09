@@ -1,5 +1,8 @@
 package network.columba.app.data.model
 
+import androidx.annotation.StringRes
+import network.columba.app.R
+
 /**
  * User preference for the map base style.
  *
@@ -7,11 +10,11 @@ package network.columba.app.data.model
  * [LIGHT] and [DARK] override the system setting.
  */
 enum class MapStylePreference(
-    val displayName: String,
+    @StringRes val displayNameRes: Int,
 ) {
-    AUTO("Auto"),
-    LIGHT("Light"),
-    DARK("Dark"),
+    AUTO(R.string.map_style_auto),
+    LIGHT(R.string.map_style_light),
+    DARK(R.string.map_style_dark),
     ;
 
     companion object {

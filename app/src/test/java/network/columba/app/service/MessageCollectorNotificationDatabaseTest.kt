@@ -22,12 +22,14 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import network.columba.app.R
 import network.columba.app.data.crypto.IdentityKeyEncryptor
 import network.columba.app.data.crypto.IdentityKeyMigrator
 import network.columba.app.data.crypto.IdentityKeyProvider
 import network.columba.app.data.db.dao.MessageDao
 import network.columba.app.data.db.dao.PendingNotificationMessage
 import network.columba.app.data.db.entity.LocalIdentityEntity
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ConversationRepository
@@ -70,6 +72,8 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
     private lateinit var rnsLxmf: RnsLxmf
     private lateinit var messageFlow: MutableSharedFlow<ReceivedMessage>
     private lateinit var notificationsEnabled: MutableStateFlow<Boolean>
+    private lateinit var threadsEnabled: MutableStateFlow<Boolean>
+    private lateinit var notificationPrivacy: MutableStateFlow<NotificationPrivacyLevel>
     private var collector: MessageCollector? = null
 
     private val peerHash = "peer_hash_notification_0000000001"
@@ -84,10 +88,14 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
         shadowOf(context as Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationsEnabled = MutableStateFlow(true)
+        threadsEnabled = MutableStateFlow(false)
+        notificationPrivacy = MutableStateFlow(NotificationPrivacyLevel.FULL)
         settingsRepository = mockk()
         every { settingsRepository.notificationsEnabledFlow } returns notificationsEnabled
         every { settingsRepository.notificationReceivedMessageFlow } returns flowOf(true)
         every { settingsRepository.notificationReceivedMessageFavoriteFlow } returns flowOf(true)
+        every { settingsRepository.threadsEnabledFlow } returns threadsEnabled
+        every { settingsRepository.notificationPrivacyLevelFlow } returns notificationPrivacy
 
         activeConversationManager = ActiveConversationManager()
         notificationHelper = NotificationHelper(context, settingsRepository, activeConversationManager)
@@ -111,6 +119,7 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
                 localIdentityDao = localIdentityDao,
                 attachmentStorage = AttachmentStorageManager(context),
                 draftDao = draftDao,
+                threadDao = database.threadDao(),
                 database = database,
             )
         announceRepository = mockk()
@@ -206,6 +215,7 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
         identity: LocalIdentityEntity,
         id: String,
         content: String,
+        threadId: ByteArray? = null,
     ) {
         conversationRepository.saveMessage(
             peerHash = peerHash,
@@ -219,6 +229,7 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
                     isFromMe = false,
                     status = "delivered",
                     receivedAt = 1_000L,
+                    threadId = threadId,
                 ),
             localIdentityHash = identity.identityHash,
         )
@@ -467,6 +478,78 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
         }
 
     @Test
+    fun `catch-up notification keeps its thread when another thread is visible`() =
+        runBlocking {
+            val identity = insertTestIdentity()
+            threadsEnabled.value = true
+            notificationHelper.isAppInForeground = { true }
+            activeConversationManager.setActive(peerHash, "different-thread")
+            seedInboundBeforeStart(
+                identity,
+                "thread-catch-up",
+                "Message for another thread",
+                threadId = ByteArray(16) { it.toByte() },
+            )
+
+            startCollector()
+
+            awaitNotification(peerHash)
+            awaitHandled(identity.identityHash, "thread-catch-up")
+            val posted = requireNotNull(activeMessageNotification(peerHash))
+            val target = shadowOf(posted.notification.contentIntent).savedIntent
+            assertEquals(
+                "000102030405060708090a0b0c0d0e0f",
+                target.getStringExtra(NotificationHelper.EXTRA_THREAD_ID),
+            )
+        }
+
+    @Test
+    fun `catch-up for the displayed thread is acknowledged without an alert`() =
+        runBlocking {
+            val identity = insertTestIdentity()
+            threadsEnabled.value = true
+            notificationHelper.isAppInForeground = { true }
+            activeConversationManager.setActive(peerHash, "000102030405060708090a0b0c0d0e0f")
+            seedInboundBeforeStart(
+                identity,
+                "visible-thread",
+                "Already on screen",
+                threadId = ByteArray(16) { it.toByte() },
+            )
+
+            startCollector()
+
+            awaitHandled(identity.identityHash, "visible-thread")
+            assertNull(activeMessageNotification(peerHash))
+            activeConversationManager.setActive(null)
+            assertNoNotificationAppears(peerHash)
+        }
+
+    @Test
+    fun `private catch-up notification does not expose stored sender or message text`() =
+        runBlocking {
+            val identity = insertTestIdentity()
+            notificationPrivacy.value = NotificationPrivacyLevel.NONE
+            seedInboundBeforeStart(identity, "private-catch-up", "Secret stored message")
+
+            startCollector()
+
+            awaitNotification(peerHash)
+            awaitHandled(identity.identityHash, "private-catch-up")
+            val notification = requireNotNull(activeMessageNotification(peerHash)).notification
+            assertEquals(
+                context.getString(R.string.notif_generic_message),
+                notification.extras.getString(Notification.EXTRA_TITLE),
+            )
+            assertNull(notification.extras.getString(Notification.EXTRA_TEXT))
+            assertEquals(
+                context.getString(R.string.notif_generic_message),
+                notification.publicVersion.extras.getString(Notification.EXTRA_TITLE),
+            )
+            assertNull(notification.publicVersion.extras.getString(Notification.EXTRA_TEXT))
+        }
+
+    @Test
     fun `independent writers yield one pending delivery and one notification handling`() =
         runBlocking {
             val identity = insertTestIdentity()
@@ -480,6 +563,7 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
                     localIdentityDao = localIdentityDao,
                     attachmentStorage = AttachmentStorageManager(context),
                     draftDao = draftDao,
+                    threadDao = database.threadDao(),
                     database = database,
                 )
             val message =

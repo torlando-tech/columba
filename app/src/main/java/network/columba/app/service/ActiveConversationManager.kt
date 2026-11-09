@@ -20,6 +20,7 @@ class ActiveConversationManager
     @Inject
     constructor() {
         private val _activeConversation = MutableStateFlow<String?>(null)
+        private val _activeThread = MutableStateFlow<String?>(null)
 
         /**
          * StateFlow emitting the destination hash of the currently active conversation,
@@ -28,12 +29,24 @@ class ActiveConversationManager
         val activeConversation: StateFlow<String?> = _activeConversation.asStateFlow()
 
         /**
-         * Sets the currently active conversation.
+         * Thread shown inside the active conversation, or null for Main. With
+         * the thread flag off the app has one flat list, so this stays null and
+         * a message from any of the peer's threads counts as on-screen.
+         */
+        val activeThread: StateFlow<String?> = _activeThread.asStateFlow()
+
+        /**
+         * Sets the currently active conversation and the thread it shows.
          *
          * @param destinationHash The destination hash of the conversation being viewed,
          *                        or null if no conversation is active (user navigated away)
+         * @param threadIdHex The thread the screen is showing (null = Main)
          */
-        fun setActive(destinationHash: String?) {
+        fun setActive(
+            destinationHash: String?,
+            threadIdHex: String? = null,
+        ) {
             _activeConversation.value = destinationHash
+            _activeThread.value = if (destinationHash == null) null else threadIdHex
         }
     }

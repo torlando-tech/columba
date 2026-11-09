@@ -15,19 +15,23 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import network.columba.app.R
 import network.columba.app.micron.MicronDocument
 import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronParser
+import network.columba.app.nomadnet.DEFAULT_PAGE_PATH
 import network.columba.app.nomadnet.ImageLoadingMode
 import network.columba.app.nomadnet.NomadNetImageCache
 import network.columba.app.nomadnet.PageImageLoader
 import network.columba.app.nomadnet.PageImageState
 import network.columba.app.nomadnet.ParsedImageRef
 import network.columba.app.nomadnet.NomadNetPageCache
+import network.columba.app.nomadnet.NomadNetAddressTarget
 import network.columba.app.nomadnet.PartialManager
 import network.columba.app.nomadnet.buildNomadNetPersistPath
 import network.columba.app.nomadnet.buildNomadNetRequestData
 import network.columba.app.nomadnet.pageImageKey
+import network.columba.app.nomadnet.parseNomadNetAddress
 import network.columba.app.nomadnet.splitNomadNetPathFields
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsCore
@@ -48,7 +52,6 @@ class NomadNetBrowserViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "NomadNetBrowserVM"
-            private const val DEFAULT_PATH = "/page/index.mu"
             private const val PAGE_TIMEOUT_SECONDS = 60f
             private const val MAX_HISTORY_SIZE = 50
         }
@@ -57,7 +60,7 @@ class NomadNetBrowserViewModel
             data object Initial : BrowserState()
 
             data class Loading(
-                val statusMessage: String,
+                val statusMessage: UiMessage,
             ) : BrowserState()
 
             data class PageLoaded(
@@ -65,10 +68,17 @@ class NomadNetBrowserViewModel
                 val path: String,
                 val nodeHash: String,
                 val fieldTokens: List<String> = emptyList(),
+                /**
+                 * Request data (JSON) the node answered with if this page was
+                 * fetched by submitting a form; null for a plain GET. Saved
+                 * with a bookmark or a launcher shortcut so the page can be
+                 * reproduced instead of re-fetched with empty form values.
+                 */
+                val requestData: String? = null,
             ) : BrowserState()
 
             data class Error(
-                val message: String,
+                val message: UiMessage,
             ) : BrowserState()
         }
 
@@ -96,6 +106,7 @@ class NomadNetBrowserViewModel
             val formFields: Map<String, String>,
             val document: MicronDocument,
             val fieldTokens: List<String> = emptyList(),
+            val requestData: String? = null,
         )
 
         private val _browserState = MutableStateFlow<BrowserState>(BrowserState.Initial)
@@ -148,8 +159,8 @@ class NomadNetBrowserViewModel
         private val _identifyInProgress = MutableStateFlow(false)
         val identifyInProgress: StateFlow<Boolean> = _identifyInProgress.asStateFlow()
 
-        private val _identifyError = MutableStateFlow<String?>(null)
-        val identifyError: StateFlow<String?> = _identifyError.asStateFlow()
+        private val _identifyError = MutableStateFlow<UiMessage?>(null)
+        val identifyError: StateFlow<UiMessage?> = _identifyError.asStateFlow()
 
         private val _isPullRefreshing = MutableStateFlow(false)
         val isPullRefreshing: StateFlow<Boolean> = _isPullRefreshing.asStateFlow()
@@ -160,7 +171,7 @@ class NomadNetBrowserViewModel
             val fileName: String = "",
             val filePath: String? = null,
             val fileSize: Long = 0L,
-            val error: String? = null,
+            val error: UiMessage? = null,
         )
 
         private val _downloadState = MutableStateFlow(DownloadState())
@@ -180,7 +191,7 @@ class NomadNetBrowserViewModel
         @Volatile
         private var currentNodeHash = ""
         private var lastFetchNodeHash = ""
-        private var lastFetchPath = DEFAULT_PATH
+        private var lastFetchPath = DEFAULT_PAGE_PATH
         private var lastFetchFormDataJson: String? = null
         /** Link-field tokens (backtick block) for the last fetch, for persist-path reconstruction. */
         private var lastFetchFieldTokens: List<String> = emptyList()
@@ -445,42 +456,24 @@ class NomadNetBrowserViewModel
          * - "lxmf@hash" (emit OpenConversation event)
          */
         fun navigateToUrl(input: String) {
-            val trimmed = input.trim()
-            if (trimmed.isEmpty()) return
-
-            // Strip nomadnetwork:// scheme if present
-            val raw =
-                if (trimmed.startsWith("nomadnetwork://")) {
-                    trimmed.removePrefix("nomadnetwork://")
-                } else {
-                    trimmed
+            when (val target = parseNomadNetAddress(input)) {
+                null -> return
+                is NomadNetAddressTarget.Conversation -> {
+                    viewModelScope.launch { _navigationEvent.emit(NavigationEvent.OpenConversation(target.nodeHash)) }
                 }
-
-            // Handle lxmf@ links
-            if (raw.startsWith("lxmf@")) {
-                val hash = raw.removePrefix("lxmf@")
-                viewModelScope.launch { _navigationEvent.emit(NavigationEvent.OpenConversation(hash)) }
-                return
+                is NomadNetAddressTarget.Page -> {
+                    // Push current page to history so back button works after URL bar navigation
+                    pushCurrentPageToHistory()
+                    loadPage(target.nodeHash, target.path)
+                }
             }
-
-            // Split on first colon: "hash:/path" or just "hash"
-            val colonIdx = raw.indexOf(':')
-            val (nodeHash, path) =
-                if (colonIdx > 0) {
-                    raw.substring(0, colonIdx) to raw.substring(colonIdx + 1)
-                } else {
-                    raw to DEFAULT_PATH
-                }
-
-            // Push current page to history so back button works after URL bar navigation
-            pushCurrentPageToHistory()
-            loadPage(nodeHash.lowercase(), path)
         }
 
         fun loadPage(
             destinationHash: String,
-            path: String = DEFAULT_PATH,
+            path: String = DEFAULT_PAGE_PATH,
             fromSessionRestore: Boolean = false,
+            requestDataJson: String? = null,
         ) {
             partialManager.clear()
             if (destinationHash != currentNodeHash) {
@@ -500,18 +493,27 @@ class NomadNetBrowserViewModel
             // requested path, and route them through the same submission path
             // an in-page link tap uses.
             val (parsedPath, fieldNames) = splitNomadNetPathFields(path)
-            val requestPath = parsedPath.ifEmpty { DEFAULT_PATH }
-            val formDataJson = buildNomadNetRequestData(fieldNames, _formFields.value)
+            val requestPath = parsedPath.ifEmpty { DEFAULT_PAGE_PATH }
+            // A saved page or its pinned shortcut carries the request data its
+            // page was fetched with: replay it verbatim instead of rebuilding
+            // from the backtick tokens, whose values are not in the path (a
+            // saved search would otherwise re-submit with empty fields).
+            val formDataJson = requestDataJson ?: buildNomadNetRequestData(fieldNames, _formFields.value)
+            // A replayed saved request must never be served from the page cache:
+            // the cache is keyed by the path (which only names the submitted
+            // fields), so it can hold the response to a *different* submission
+            // of the same path. Re-fetching is also what keeps two saved
+            // searches of one path apart.
+            val replayingSavedRequest = requestDataJson != null
 
-            // Restoring the NomadNet tab session shows the page the user was
-            // looking at, immediately, from the in-memory session store -
-            // even a `#!c=0` page, which no file cache ever holds - and
-            // re-attaches the session's in-page history and form-field
-            // drafts, so Back keeps returning to earlier pages and
-            // half-typed forms come back with the page. Ordinary navigation
-            // (link taps, deep links, URL bar, pull-to-refresh) never sets
-            // [fromSessionRestore] and so still honours the site's freshness
-            // directive.
+            // The tab home's Continue row reopens the page the user was
+            // looking at from the in-memory session store - immediately, and
+            // re-attaching the session's in-page history and form-field
+            // drafts, so Back keeps returning to earlier pages and half-typed
+            // forms come back with the page. Every other entry point (link
+            // taps, deep links, URL bar, saved sites, pull-to-refresh) leaves
+            // [fromSessionRestore] false and so still honours the site's
+            // freshness directive.
             //
             // Restoring must never re-submit a var-bearing request: a site
             // whose submission changes data would redo the action without a
@@ -535,6 +537,7 @@ class NomadNetBrowserViewModel
                                 formFields = entry.formFields,
                                 document = entry.document,
                                 fieldTokens = entry.fieldTokens,
+                                requestData = entry.requestData,
                             ),
                         )
                     }
@@ -548,6 +551,7 @@ class NomadNetBrowserViewModel
                         requestPath,
                         destinationHash,
                         snapshot.current.fieldTokens,
+                        requestData = snapshot.current.requestData,
                     )
                     return
                 }
@@ -580,7 +584,7 @@ class NomadNetBrowserViewModel
             // backend's identifyIfFlagged fires on the next fetch (any
             // navigation or refresh), which is immediate for a user
             // interacting with the page.
-            val bypassCache = destinationHash in _autoIdentifyNodes.value
+            val bypassCache = destinationHash in _autoIdentifyNodes.value || replayingSavedRequest
             val cachePath = if (formDataJson != null) path else requestPath
             val cached = if (bypassCache) null else pageCache.get(destinationHash, cachePath)
             if (cached != null) {
@@ -590,7 +594,7 @@ class NomadNetBrowserViewModel
                 val document = MicronParser.parse(cached)
                 // Keep the session store warm so the next tab restore is
                 // instant even if this entry then expires from the file cache.
-                pageCache.putSession(destinationHash, path, document)
+                pageCache.putSession(nodeHash = destinationHash, path = path, document = document, requestData = formDataJson)
                 // Pass the field tokens through so re-persisting keeps the
                 // backtick block: the next restore must hit this same key.
                 emitPageLoaded(document, requestPath, destinationHash, fieldNames)
@@ -598,7 +602,13 @@ class NomadNetBrowserViewModel
             }
             if (formDataJson != null) {
                 // Miss: submit the variables (response depends on data).
-                submitFormAndNavigate(destinationHash, requestPath, formDataJson, fieldNames)
+                submitFormAndNavigate(
+                    nodeHash = destinationHash,
+                    path = requestPath,
+                    formDataJson = formDataJson,
+                    fieldTokens = fieldNames,
+                    cacheResponse = !replayingSavedRequest,
+                )
                 return
             }
 
@@ -678,6 +688,7 @@ class NomadNetBrowserViewModel
             path: String,
             formDataJson: String,
             fieldTokens: List<String> = emptyList(),
+            cacheResponse: Boolean = true,
         ) {
             val epoch = ++fetchEpoch
             // Same single-flight hygiene as fetchPage: a form submission is a
@@ -691,7 +702,7 @@ class NomadNetBrowserViewModel
             lastFetchPath = path
             lastFetchFormDataJson = formDataJson
             lastFetchFieldTokens = fieldTokens
-            _browserState.value = BrowserState.Loading("Requesting page...")
+            _browserState.value = BrowserState.Loading(UiMessage.Text(R.string.nomadnet_status_requesting_page))
             startStatusCollection(epoch)
             viewModelScope.launch(Dispatchers.IO) {
                 try {
@@ -715,18 +726,38 @@ class NomadNetBrowserViewModel
                             // block - the same key loadPage restores with - so a
                             // later restore (tab reopen, deep link) serves this
                             // response instead of re-submitting the request.
+                            // A replayed saved request is not cached: the key is
+                            // the path (field *names* only), so storing it would
+                            // serve its response to a different submission of the
+                            // same path.
                             val persistPath = buildNomadNetPersistPath(pageResult.path, lastFetchFieldTokens)
-                            pageCache.put(nodeHash, persistPath, pageResult.content, document.cacheTime)
+                            if (cacheResponse) {
+                                pageCache.put(nodeHash, persistPath, pageResult.content, document.cacheTime)
+                            }
                             // And hold it in the session store: a `#!c=0` page
                             // never reaches the file cache, yet a tab restore
                             // must still show it without re-submitting.
-                            pageCache.putSession(nodeHash, persistPath, document, lastFetchFieldTokens)
-                            emitPageLoaded(document, pageResult.path, nodeHash, lastFetchFieldTokens)
+                            pageCache.putSession(
+                                nodeHash = nodeHash,
+                                path = persistPath,
+                                document = document,
+                                fieldTokens = lastFetchFieldTokens,
+                                requestData = lastFetchFormDataJson,
+                            )
+                            // The request that produced this page, so a bookmark
+                            // or a pinned shortcut can replay it later.
+                            emitPageLoaded(
+                                document = document,
+                                path = pageResult.path,
+                                nodeHash = nodeHash,
+                                fieldTokens = lastFetchFieldTokens,
+                                requestData = formDataJson,
+                            )
                         },
                         onFailure = { error ->
                             _browserState.value =
                                 BrowserState.Error(
-                                    error.message ?: "Unknown error",
+                                    error.toUiMessage(R.string.error_unknown),
                                 )
                         },
                     )
@@ -734,7 +765,7 @@ class NomadNetBrowserViewModel
                     stopStatusCollection(epoch)
                     if (fetchEpoch != epoch) return@launch
                     Log.e(TAG, "Error navigating", e)
-                    _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
+                    _browserState.value = BrowserState.Error(e.toUiMessage(R.string.error_unknown))
                 }
             }
         }
@@ -782,7 +813,7 @@ class NomadNetBrowserViewModel
                         },
                         onFailure = { error ->
                             _downloadState.update {
-                                it.copy(isActive = false, error = error.message ?: "Download failed")
+                                it.copy(isActive = false, error = error.toUiMessage(R.string.nomadnet_download_failed))
                             }
                         },
                     )
@@ -790,7 +821,7 @@ class NomadNetBrowserViewModel
                     stopProgressCollection(downloadEpoch)
                     Log.e(TAG, "Error downloading file", e)
                     _downloadState.update {
-                        it.copy(isActive = false, error = e.message ?: "Download failed")
+                        it.copy(isActive = false, error = e.toUiMessage(R.string.nomadnet_download_failed))
                     }
                 }
             }
@@ -836,7 +867,13 @@ class NomadNetBrowserViewModel
             currentNodeHash = entry.nodeHash
             _formFields.value = entry.formFields
             // Instant back-navigation using the stored document
-            emitPageLoaded(entry.document, entry.path, entry.nodeHash, entry.fieldTokens)
+            emitPageLoaded(
+                document = entry.document,
+                path = entry.path,
+                nodeHash = entry.nodeHash,
+                fieldTokens = entry.fieldTokens,
+                requestData = entry.requestData,
+            )
             // A flagged node must never display content fetched while unflagged
             // (that content is anonymous). The stored history document can be
             // exactly that: a page visited before the node was flagged, then
@@ -961,7 +998,7 @@ class NomadNetBrowserViewModel
             val epoch = ++fetchEpoch
             stopStatusCollection()
             stopProgressCollection()
-            _browserState.value = BrowserState.Error("Cancelled")
+            _browserState.value = BrowserState.Error(UiMessage.Text(R.string.nomadnet_status_cancelled))
             _isPullRefreshing.value = false
             viewModelScope.launch(Dispatchers.IO) {
                 // Only send cancel if no new fetch has started since we were called
@@ -1039,12 +1076,12 @@ class NomadNetBrowserViewModel
                             // already left must not surface as an error for the
                             // current node.
                             if (currentNodeHash != nodeHash) return@fold
-                            _identifyError.value = it.message ?: "Unknown error"
+                            _identifyError.value = it.toUiMessage(R.string.error_unknown)
                         },
                     )
                 } catch (e: Exception) {
                     if (currentNodeHash == nodeHash) {
-                        _identifyError.value = e.message ?: "Unknown error"
+                        _identifyError.value = e.toUiMessage(R.string.error_unknown)
                     }
                 } finally {
                     _identifyInProgress.value = false
@@ -1072,9 +1109,9 @@ class NomadNetBrowserViewModel
 
         /**
          * Hand the live session - page, form-field drafts, and in-page
-         * history - to the singleton store so returning to the NomadNet tab
+         * history - to the singleton store so the tab home's Continue row
          * restores everything the entry-scoped ViewModel would otherwise
-         * lose when the tab's entries are dropped. Internal for tests,
+         * lose when the browser entry is destroyed. Internal for tests,
          * which cannot invoke the protected lifecycle callback.
          */
         internal fun saveSessionSnapshot() {
@@ -1088,6 +1125,7 @@ class NomadNetBrowserViewModel
                             document = state.document,
                             fieldTokens = state.fieldTokens,
                             formFields = _formFields.value.toMap(),
+                            requestData = state.requestData,
                         ),
                     history =
                         history.map { entry ->
@@ -1102,6 +1140,7 @@ class NomadNetBrowserViewModel
                                 document = entry.document,
                                 fieldTokens = entry.fieldTokens,
                                 formFields = entry.formFields,
+                                requestData = entry.requestData,
                             )
                         },
                 ),
@@ -1123,6 +1162,7 @@ class NomadNetBrowserViewModel
                         formFields = _formFields.value.toMap(),
                         document = currentState.document,
                         fieldTokens = currentState.fieldTokens,
+                        requestData = currentState.requestData,
                     ),
                 )
                 _canGoBack.value = true
@@ -1142,6 +1182,7 @@ class NomadNetBrowserViewModel
             path: String,
             nodeHash: String,
             fieldTokens: List<String> = emptyList(),
+            requestData: String? = null,
         ) {
             _isPullRefreshing.value = false
             _formFields.update { current -> seedFieldDefaults(document, current) }
@@ -1170,6 +1211,7 @@ class NomadNetBrowserViewModel
                     path = path,
                     nodeHash = nodeHash,
                     fieldTokens = fieldTokens,
+                    requestData = requestData,
                 )
             // Remember where the user is so the bottom-nav NomadNet tab can
             // reopen the exact page the user left on (node + deep path) instead
@@ -1235,18 +1277,18 @@ class NomadNetBrowserViewModel
             return seeded
         }
 
-        private fun formatNomadnetStatus(status: String): String =
+        private fun formatNomadnetStatus(status: String): UiMessage =
             when (status) {
-                "idle" -> "Requesting page..."
-                "connecting" -> "Connecting..."
-                "looking up path" -> "Looking up path..."
-                "establishing link" -> "Establishing link..."
-                "requesting page" -> "Requesting page..."
-                "downloading" -> "Downloading..."
-                "complete" -> "Finishing..."
-                "failed" -> "Request failed"
-                "cancelled" -> "Cancelled"
-                else -> status.replaceFirstChar { it.uppercase() }
+                "idle" -> UiMessage.Text(R.string.nomadnet_status_requesting_page)
+                "connecting" -> UiMessage.Text(R.string.nomadnet_status_connecting)
+                "looking up path" -> UiMessage.Text(R.string.nomadnet_status_looking_up_path)
+                "establishing link" -> UiMessage.Text(R.string.nomadnet_status_establishing_link)
+                "requesting page" -> UiMessage.Text(R.string.nomadnet_status_requesting_page)
+                "downloading" -> UiMessage.Text(R.string.nomadnet_status_downloading)
+                "complete" -> UiMessage.Text(R.string.nomadnet_status_finishing)
+                "failed" -> UiMessage.Text(R.string.nomadnet_status_request_failed)
+                "cancelled" -> UiMessage.Text(R.string.nomadnet_status_cancelled)
+                else -> UiMessage.Raw(status.replaceFirstChar { it.uppercase() })
             }
 
         /**
@@ -1323,7 +1365,7 @@ class NomadNetBrowserViewModel
             lastFetchPath = path
             lastFetchFormDataJson = null
             lastFetchFieldTokens = emptyList()
-            _browserState.value = BrowserState.Loading("Requesting page...")
+            _browserState.value = BrowserState.Loading(UiMessage.Text(R.string.nomadnet_status_requesting_page))
             startStatusCollection(epoch)
 
             // Wall-clock fetch timing feeds the image auto-gate's fallback
@@ -1354,7 +1396,7 @@ class NomadNetBrowserViewModel
                                 // clear loading state so screen doesn't get stuck
                                 _isPullRefreshing.value = false
                                 _browserState.value =
-                                    BrowserState.Error("Server returned a file instead of a page")
+                                    BrowserState.Error(UiMessage.Text(R.string.nomadnet_file_instead_of_page))
                                 _downloadState.value =
                                     DownloadState(
                                         isActive = false,
@@ -1380,7 +1422,7 @@ class NomadNetBrowserViewModel
                             _isPullRefreshing.value = false
                             _browserState.value =
                                 BrowserState.Error(
-                                    error.message ?: "Unknown error",
+                                    error.toUiMessage(R.string.error_unknown),
                                 )
                         },
                     )
@@ -1389,7 +1431,7 @@ class NomadNetBrowserViewModel
                     if (fetchEpoch != epoch) return@launch
                     _isPullRefreshing.value = false
                     Log.e(TAG, "Error loading page", e)
-                    _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
+                    _browserState.value = BrowserState.Error(e.toUiMessage(R.string.error_unknown))
                 }
             }
         }

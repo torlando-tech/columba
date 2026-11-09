@@ -1,6 +1,9 @@
 package network.columba.app.ui.components
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import network.columba.app.R
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.service.ConversationLinkManager
 
@@ -43,30 +46,30 @@ fun ImageQualitySelectionDialog(
         presets.map { preset ->
             QualityOption(
                 value = preset,
-                displayName = preset.displayName,
-                description = preset.description,
+                displayName = stringResource(preset.displayNameRes),
+                description = stringResource(preset.descriptionRes),
             )
         }
 
     val title =
         if (imageCount > 1) {
-            "Send $imageCount Images"
+            pluralStringResource(R.plurals.image_quality_send_images, imageCount, imageCount)
         } else {
-            "Choose Image Quality"
+            stringResource(R.string.image_quality_choose_title)
         }
 
     val confirmText =
         if (imageCount > 1) {
-            "Send $imageCount Images"
+            pluralStringResource(R.plurals.image_quality_send_images, imageCount, imageCount)
         } else {
-            "Send"
+            stringResource(R.string.image_quality_send)
         }
 
     // For multi-image shares, append " each" to transfer time estimates so the user
     // understands the time shown is per-image, not total.
     val displayEstimates =
         if (imageCount > 1) {
-            transferTimeEstimates.mapValues { (_, time) -> time?.let { "$it each" } }
+            transferTimeEstimates.mapValues { (_, time) -> time?.let { stringResource(R.string.image_quality_each_suffix, it) } }
         } else {
             transferTimeEstimates
         }

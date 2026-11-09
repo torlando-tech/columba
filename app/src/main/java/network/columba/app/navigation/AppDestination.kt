@@ -104,8 +104,8 @@ enum class AppDestination(
     QR_SCANNER("qr_scanner"),
     MESSAGING(
         routePattern = "messaging/{destinationHash}/{peerName}" +
-            "?fromNotification={fromNotification}&notificationEventId={notificationEventId}",
-        sampleRoute = "messaging/0123456789abcdef/Test?fromNotification=false&notificationEventId=0",
+            "?fromNotification={fromNotification}&notificationEventId={notificationEventId}&threadId={threadId}",
+        sampleRoute = "messaging/0123456789abcdef/Test?fromNotification=false&notificationEventId=0&threadId=",
     ),
     MESSAGE_DETAIL("message_detail/{messageId}", "message_detail/1"),
     ANNOUNCE_DETAIL(
@@ -115,8 +115,8 @@ enum class AppDestination(
         externalNavigationPolicy = ExternalNavigationPolicy.REUSE_SAME_ENTITY,
     ),
     NOMADNET_BROWSER(
-        "nomadnet_browser/{destinationHash}?path={path}",
-        "nomadnet_browser/0123456789abcdef?path=%2Fpage%2Findex.mu",
+        "nomadnet_browser/{destinationHash}?path={path}&restoreSession={restoreSession}&requestData={requestData}",
+        "nomadnet_browser/0123456789abcdef?path=%2Fpage%2Findex.mu&restoreSession=false&requestData=",
         externalIdentityArguments =
             mapOf(
                 "destinationHash" to "0123456789abcdef",

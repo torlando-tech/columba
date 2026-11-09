@@ -1,0 +1,62 @@
+# 05-chat-card-expand.yaml
+#
+# Spec §6.1: the chat-list card grows a "N threads" toggle row once the
+# contact has threads; expanding it shows Main first plus the most recent
+# thread rows; the expansion state is a per-card local preference.
+#
+# Params: APP_ID, PEER_NAME, CARD_TOKEN.
+appId: ${APP_ID}
+---
+- runFlow:
+    file: lib/open-chat.yaml
+    env:
+      APP_ID: ${APP_ID}
+      PEER_NAME: ${PEER_NAME}
+
+# Seed one thread so the card has something to expand into.
+- extendedWaitUntil:
+    visible:
+      text: "Switch thread: Main"
+    timeout: 10000
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- tapOn: "+ New"
+- tapOn: "Reply in thread…"
+- inputText: ${CARD_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${CARD_TOKEN}
+    timeout: 30000
+
+# Back to the chat list.
+- back
+- back
+
+# The expansion is a per-card preference, so a previous run can leave the
+# card open: normalize to collapsed before proving the toggle expands it.
+- runFlow:
+    when:
+      visible: "Main conversation"
+    commands:
+      - tapOn:
+          text: "[0-9]+ threads?"
+
+# Toggle row on the contact's card, then expand.
+- extendedWaitUntil:
+    visible:
+      text: "[0-9]+ threads?"
+    timeout: 10000
+- tapOn:
+    text: "[0-9]+ threads?"
+- assertVisible: "Main conversation"
+- assertVisible:
+    text: ".*${CARD_TOKEN}.*"
+- takeScreenshot: threads-card-expanded
+
+# Collapse again (per-card preference flips back).
+- tapOn:
+    text: "[0-9]+ threads?"
+- assertNotVisible: "Main conversation"

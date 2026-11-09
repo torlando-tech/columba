@@ -24,6 +24,7 @@ import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.dao.RmspServerDao
 import network.columba.app.data.db.dao.CallHistoryDao
 import network.columba.app.data.db.dao.CallHistoryDeletionDao
+import network.columba.app.data.db.dao.ThreadDao
 import network.columba.app.data.db.entity.CallHistoryDeletionEntity
 import network.columba.app.data.db.entity.CallHistoryEntity
 import network.columba.app.data.db.entity.AnnounceEntity
@@ -46,6 +47,7 @@ import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import network.columba.app.data.db.entity.ReceivedLocationEntity
 import network.columba.app.data.db.entity.RmspServerEntity
 import network.columba.app.data.db.entity.SignatureEvidenceChunkEntity
+import network.columba.app.data.db.entity.ThreadEntity
 
 @Database(
     entities = [
@@ -71,10 +73,13 @@ import network.columba.app.data.db.entity.SignatureEvidenceChunkEntity
         PeerActivityEventEntity::class,
         PendingDeliveryStatusEntity::class,
         PreferredPropagationNodeEntity::class,
+        ThreadEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
+// Room DB facade: one accessor per DAO; count grows with every new table, not complexity.
+@Suppress("TooManyFunctions")
 abstract class ColumbaDatabase : RoomDatabase() {
     companion object {
         /**
@@ -270,17 +275,6 @@ abstract class ColumbaDatabase : RoomDatabase() {
             )
         }
 
-        /**
-         * Extract the `fields[16].reactions` blob out of a legacy
-         * `fieldsJson`, returning `(newFieldsJson, reactionsJson)`.
-         * Returns null if there is no reactions blob to extract or if
-         * `fieldsJson` is unparseable.
-         *
-         * Public so [MigrationImporter] (in `:app`) can reuse it when
-         * importing pre-v2 backup bundles whose messages still carry
-         * the legacy overload.
-         */
-
         /** Add the reduced call-history tables. */
         val MIGRATION_4_5: Migration =
             object : Migration(4, 5) {
@@ -418,13 +412,127 @@ abstract class ColumbaDatabase : RoomDatabase() {
             }
 
         /**
-         * v10 → v11: distinguish unknown sources from invalid signatures.
-         * Historical false results lack the reason and signed payload, so remain UNVERIFIED.
-         * Rebuild the table to remove the obsolete column on older Android SQLite versions.
+         * v10 → v11: threads P1 (threads-spec §5) — new `threads` table plus
+         * two nullable columns on `messages` / `drafts`. Strictly additive:
+         * no data rewrite, every pre-existing message keeps
+         * `threadId = NULL` (Main). Ships ahead of the `threads_enabled`
+         * feature flag on purpose (additive migrations land early).
+         *
+         * Renumbered from the P1 branch's v4 → v5 when rebasing onto main
+         * (main's v5-v10 landed independently).
+         *
+         * Index names follow Room's `index_<table>_<columns>` convention so
+         * `runMigrationsAndValidate` against the exported v11 schema passes.
          */
         val MIGRATION_10_11: Migration =
             object : Migration(10, 11) {
                 override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `threads` (
+                            `threadId` BLOB NOT NULL,
+                            `conversationHash` TEXT NOT NULL,
+                            `identityHash` TEXT NOT NULL,
+                            `rootMessageId` TEXT,
+                            `title` TEXT,
+                            `createdAt` INTEGER NOT NULL,
+                            `lastActivityAt` INTEGER NOT NULL,
+                            `archivedAt` INTEGER,
+                            PRIMARY KEY(`conversationHash`, `identityHash`, `threadId`),
+                            FOREIGN KEY(`conversationHash`, `identityHash`)
+                                REFERENCES `conversations`(`peerHash`, `identityHash`)
+                                ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_threads_identityHash_conversationHash_lastActivityAt` " +
+                            "ON `threads` (`identityHash`, `conversationHash`, `lastActivityAt`)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_threads_rootMessageId` " +
+                            "ON `threads` (`rootMessageId`)",
+                    )
+                    db.execSQL("ALTER TABLE `messages` ADD COLUMN `threadId` BLOB")
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_messages_conversationHash_identityHash_threadId_timestamp` " +
+                            "ON `messages` (`conversationHash`, `identityHash`, `threadId`, `timestamp`)",
+                    )
+                    db.execSQL("ALTER TABLE `drafts` ADD COLUMN `threadId` BLOB")
+                }
+            }
+
+        /**
+         * v11 → v12: per-thread drafts (threads-spec §5, P2). The `drafts`
+         * primary key gains `threadId` so Main and each thread keep their own
+         * unsent composer text. SQLite cannot add a PK column in place, so
+         * this is the standard Room table-rebuild: create the new shape, copy
+         * rows with `COALESCE(threadId, X'')` (pre-thread drafts belong to
+         * Main — the empty-blob sentinel, since PK columns must be NOT NULL),
+         * drop, rename, recreate the index. No draft is lost.
+         *
+         * Renumbered from the P2 branch's v5 → v6 when rebasing onto main.
+         *
+         * Table/index names and column order follow Room's generated schema
+         * so `runMigrationsAndValidate` against the exported v12 schema passes.
+         */
+        val MIGRATION_11_12: Migration =
+            object : Migration(11, 12) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE `drafts_new` (
+                            `conversationHash` TEXT NOT NULL,
+                            `identityHash` TEXT NOT NULL,
+                            `content` TEXT NOT NULL,
+                            `updatedTimestamp` INTEGER NOT NULL,
+                            `threadId` BLOB NOT NULL,
+                            PRIMARY KEY(`conversationHash`, `identityHash`, `threadId`),
+                            FOREIGN KEY(`conversationHash`, `identityHash`)
+                                REFERENCES `conversations`(`peerHash`, `identityHash`)
+                                ON UPDATE NO ACTION ON DELETE CASCADE,
+                            FOREIGN KEY(`identityHash`)
+                                REFERENCES `local_identities`(`identityHash`)
+                                ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        """
+                        INSERT INTO `drafts_new`
+                            (conversationHash, identityHash, content, updatedTimestamp, threadId)
+                        SELECT conversationHash, identityHash, content, updatedTimestamp,
+                               COALESCE(threadId, X'')
+                        FROM `drafts`
+                        """.trimIndent(),
+                    )
+                    db.execSQL("DROP TABLE `drafts`")
+                    db.execSQL("ALTER TABLE `drafts_new` RENAME TO `drafts`")
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_drafts_identityHash` " +
+                            "ON `drafts` (`identityHash`)",
+                    )
+                }
+            }
+
+        /**
+         * v12 → v13: distinguish unknown senders from invalid signatures, retain signed
+         * payload evidence, and track durable app-owned notification completion.
+         * Historical false results lack a failure reason, so remain UNVERIFIED.
+         * Rebuild messages to remove the obsolete flag without requiring SQLite DROP COLUMN;
+         * thread grouping and all existing message metadata are preserved.
+         *
+         * Main v11/v12 contain threads and per-thread drafts; beta v11/v12 instead
+         * contain signatureStatus/evidence and then notificationHandled. Beta messages
+         * already have their final signature shape and must not be rebuilt or backfilled.
+         */
+        val MIGRATION_12_13: Migration =
+            object : Migration(12, 13) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    if (hasMessageColumn(db, "signatureStatus")) {
+                        upgradeBetaThreadsAndNotifications(db)
+                        return
+                    }
                     db.execSQL(
                         """
                         CREATE TABLE `messages_new` (
@@ -448,6 +556,8 @@ abstract class ColumbaDatabase : RoomDatabase() {
                             `receivedAt` INTEGER,
                             `sentInterface` TEXT,
                             `signatureStatus` TEXT,
+                            `notificationHandled` INTEGER NOT NULL DEFAULT 1,
+                            `threadId` BLOB,
                             PRIMARY KEY(`id`, `identityHash`),
                             FOREIGN KEY(`conversationHash`, `identityHash`)
                                 REFERENCES `conversations`(`peerHash`, `identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE,
@@ -462,56 +572,93 @@ abstract class ColumbaDatabase : RoomDatabase() {
                             id, conversationHash, identityHash, content, timestamp, isFromMe, status, isRead,
                             fieldsJson, reactionsJson, deliveryMethod, errorMessage, replyToMessageId,
                             receivedHopCount, receivedInterface, receivedRssi, receivedSnr, receivedAt, sentInterface,
-                            signatureStatus
+                            signatureStatus, threadId
                         )
                         SELECT id, conversationHash, identityHash, content, timestamp, isFromMe, status, isRead,
                             fieldsJson, reactionsJson, deliveryMethod, errorMessage, replyToMessageId,
                             receivedHopCount, receivedInterface, receivedRssi, receivedSnr, receivedAt, sentInterface,
-                            CASE signatureVerified WHEN 1 THEN 'VERIFIED' WHEN 0 THEN 'UNVERIFIED' ELSE NULL END
+                            CASE signatureVerified WHEN 1 THEN 'VERIFIED' WHEN 0 THEN 'UNVERIFIED' ELSE NULL END,
+                            threadId
                         FROM `messages`
                         """,
                     )
                     db.execSQL("DROP TABLE `messages`")
                     db.execSQL("ALTER TABLE `messages_new` RENAME TO `messages`")
-                    db.execSQL(
-                        "CREATE INDEX `index_messages_conversationHash_identityHash` ON `messages` (`conversationHash`, `identityHash`)",
-                    )
-                    db.execSQL("CREATE INDEX `index_messages_identityHash` ON `messages` (`identityHash`)")
-                    db.execSQL("CREATE INDEX `index_messages_timestamp` ON `messages` (`timestamp`)")
-                    db.execSQL(
-                        "CREATE INDEX `index_messages_conversationHash_identityHash_timestamp` " +
-                            "ON `messages` (`conversationHash`, `identityHash`, `timestamp`)",
-                    )
-                    db.execSQL(
-                        "CREATE INDEX `index_messages_conversationHash_identityHash_isFromMe_isRead` " +
-                            "ON `messages` (`conversationHash`, `identityHash`, `isFromMe`, `isRead`)",
-                    )
-                    db.execSQL("CREATE INDEX `index_messages_replyToMessageId` ON `messages` (`replyToMessageId`)")
-                    db.execSQL(
-                        "CREATE INDEX `index_messages_signatureStatus_conversationHash_id_identityHash` " +
-                            "ON `messages` (`signatureStatus`, `conversationHash`, `id`, `identityHash`)",
-                    )
+                    createMessageIndexes(db)
                     createSignatureEvidenceTable(db)
                 }
             }
 
         /**
-         * v11 → v12: add durable notification completion state. Existing rows default to
-         * handled so the migration cannot replay historical alerts; new inbound inserts
-         * start pending and are reconciled by the app-side collector.
+         * Room prefers this direct route over 11 → 12 → 13. That is required for beta
+         * v11, whose drafts do not yet have the threadId expected by main's 11 → 12.
+         * Main v11 still uses both authoritative main migrations through this route.
          */
-        val MIGRATION_11_12: Migration =
-            object : Migration(11, 12) {
+        val MIGRATION_11_13: Migration =
+            object : Migration(11, 13) {
                 override fun migrate(db: SupportSQLiteDatabase) {
-                    db.execSQL(
-                        "ALTER TABLE messages ADD COLUMN notificationHandled INTEGER NOT NULL DEFAULT 1",
-                    )
-                    db.execSQL(
-                        "CREATE INDEX IF NOT EXISTS index_messages_identityHash_isFromMe_notificationHandled " +
-                            "ON messages(identityHash, isFromMe, notificationHandled)",
-                    )
+                    if (hasMessageColumn(db, "signatureStatus")) {
+                        upgradeBetaThreadsAndNotifications(db)
+                    } else {
+                        MIGRATION_11_12.migrate(db)
+                        MIGRATION_12_13.migrate(db)
+                    }
                 }
             }
+
+        private fun upgradeBetaThreadsAndNotifications(db: SupportSQLiteDatabase) {
+            if (!hasMessageColumn(db, "notificationHandled")) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN notificationHandled INTEGER NOT NULL DEFAULT 1")
+                db.execSQL(
+                    "CREATE INDEX index_messages_identityHash_isFromMe_notificationHandled " +
+                        "ON messages(identityHash, isFromMe, notificationHandled)",
+                )
+            }
+            MIGRATION_10_11.migrate(db)
+            MIGRATION_11_12.migrate(db)
+        }
+
+        private fun hasMessageColumn(
+            db: SupportSQLiteDatabase,
+            column: String,
+        ): Boolean {
+            db.query("PRAGMA table_info(messages)").use { cursor ->
+                val nameIndex = cursor.getColumnIndexOrThrow("name")
+                while (cursor.moveToNext()) {
+                    if (cursor.getString(nameIndex) == column) return true
+                }
+            }
+            return false
+        }
+
+        private fun createMessageIndexes(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE INDEX `index_messages_conversationHash_identityHash` ON `messages` (`conversationHash`, `identityHash`)",
+            )
+            db.execSQL("CREATE INDEX `index_messages_identityHash` ON `messages` (`identityHash`)")
+            db.execSQL("CREATE INDEX `index_messages_timestamp` ON `messages` (`timestamp`)")
+            db.execSQL(
+                "CREATE INDEX `index_messages_conversationHash_identityHash_timestamp` " +
+                    "ON `messages` (`conversationHash`, `identityHash`, `timestamp`)",
+            )
+            db.execSQL(
+                "CREATE INDEX `index_messages_conversationHash_identityHash_isFromMe_isRead` " +
+                    "ON `messages` (`conversationHash`, `identityHash`, `isFromMe`, `isRead`)",
+            )
+            db.execSQL("CREATE INDEX `index_messages_replyToMessageId` ON `messages` (`replyToMessageId`)")
+            db.execSQL(
+                "CREATE INDEX `index_messages_signatureStatus_conversationHash_id_identityHash` " +
+                    "ON `messages` (`signatureStatus`, `conversationHash`, `id`, `identityHash`)",
+            )
+            db.execSQL(
+                "CREATE INDEX `index_messages_identityHash_isFromMe_notificationHandled` " +
+                    "ON `messages` (`identityHash`, `isFromMe`, `notificationHandled`)",
+            )
+            db.execSQL(
+                "CREATE INDEX `index_messages_conversationHash_identityHash_threadId_timestamp` " +
+                    "ON `messages` (`conversationHash`, `identityHash`, `threadId`, `timestamp`)",
+            )
+        }
 
         private fun createSignatureEvidenceTable(db: SupportSQLiteDatabase) {
             db.execSQL(
@@ -529,6 +676,45 @@ abstract class ColumbaDatabase : RoomDatabase() {
             )
         }
 
+        /**
+         * Every supported migration route, including the two historical v11/v12 lineages.
+         *
+         * **Both** processes install this whole array: [DatabaseModule]
+         * (app process, Hilt) and `ServiceDatabaseProvider` (the `:reticulum`
+         * service process, which cannot use Hilt). Hand-maintained per-process
+         * lists drifted and left the service unable to open a database the app
+         * process had already upgraded (missing `MIGRATION_11_12` — the
+         * Greptile P1 on PR #1224). One list, no drift.
+         *
+         * Adjacent-chain completeness and the direct v11 route are pinned by `MigrationChainTest`.
+         */
+        val MIGRATIONS: Array<Migration> =
+            arrayOf(
+                MIGRATION_1_2,
+                MIGRATION_2_3,
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6,
+                MIGRATION_6_7,
+                MIGRATION_7_8,
+                MIGRATION_8_9,
+                MIGRATION_9_10,
+                MIGRATION_10_11,
+                MIGRATION_11_12,
+                MIGRATION_11_13,
+                MIGRATION_12_13,
+            )
+
+        /**
+         * Extract the `fields[16].reactions` blob out of a legacy
+         * `fieldsJson`, returning `(newFieldsJson, reactionsJson)`.
+         * Returns null if there is no reactions blob to extract or if
+         * `fieldsJson` is unparseable.
+         *
+         * Public so [MigrationImporter] (in `:app`) can reuse it when
+         * importing pre-v2 backup bundles whose messages still carry
+         * the legacy overload.
+         */
         @Suppress("ReturnCount")
         fun splitReactionsOutOfFieldsJson(fieldsJson: String): Pair<String, String>? =
             try {
@@ -584,4 +770,5 @@ abstract class ColumbaDatabase : RoomDatabase() {
     abstract fun pendingDeliveryStatusDao(): PendingDeliveryStatusDao
 
     abstract fun preferredPropagationNodeDao(): PreferredPropagationNodeDao
+    abstract fun threadDao(): ThreadDao
 }

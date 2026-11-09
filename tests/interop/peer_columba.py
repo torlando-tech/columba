@@ -261,6 +261,24 @@ class ColumbaPeer:
             extras["try_prop"] = "true"
         self.broadcast(action, **extras)
 
+    def archive_thread(
+        self,
+        peer_hex: str,
+        thread_hex: str,
+        archived: bool = True,
+    ) -> None:
+        """Archive / un-archive one thread through the same Room write the
+        sheet's swipe and its TalkBack `Archive` action use. The reply is
+        `thread_archive_ok peer=… thread=… archived=…` (or
+        `thread_archive_err …`) under COLUMBA_TEST; callers poll logcat via
+        `_read_logcat_lines`."""
+        self.broadcast(
+            "THREAD_ARCHIVE",
+            peer=peer_hex,
+            thread=thread_hex,
+            archived="true" if archived else "false",
+        )
+
     def send_image(
         self,
         dest_hex: str,

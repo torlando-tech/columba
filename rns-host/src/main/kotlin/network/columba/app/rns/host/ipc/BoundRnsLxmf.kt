@@ -66,6 +66,7 @@ internal class BoundRnsLxmf(
         replyQuotedContent: String?,
         iconAppearance: IconAppearance?,
         extraFields: Map<Int, Any>?,
+        threadId: ByteArray?,
     ): Result<MessageReceipt> =
         awaitBound().lxmf.sendLxmfMessageWithMethod(
             destinationHash,
@@ -80,6 +81,7 @@ internal class BoundRnsLxmf(
             replyQuotedContent,
             iconAppearance,
             extraFields,
+            threadId,
         )
 
     override suspend fun sendReaction(

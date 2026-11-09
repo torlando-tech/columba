@@ -4,6 +4,7 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.map
+import network.columba.app.data.db.dao.AnnounceArrivalMarker
 import network.columba.app.data.db.dao.AnnounceDao
 import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
@@ -177,21 +178,25 @@ class AnnounceRepository
             }
 
         /**
-         * Get announces with pagination support. Combines node type filtering and search query.
-         * Initial load: 30 items, Page size: 30 items, Prefetch distance: 10 items.
-         * Includes icon data from peer_icons table.
+         * Get announces with pagination support, combining node type filtering, search
+         * query, and interface filtering. Initial load: 30 items, page size: 30 items,
+         * prefetch distance: 10 items. Includes icon data from peer_icons table.
+         *
+         * Backed by [AnnouncePagingSource], which does not self-invalidate: the list only
+         * reloads when the caller starts a new generation. That keeps the loaded pages
+         * (and therefore the scroll position) intact while announces keep arriving.
          *
          * @param nodeTypes List of node types to filter by (empty = all types)
          * @param searchQuery Search query (empty = no search filter)
+         * @param interfaceTypes Interface storage names to filter by (empty = no filter)
          * @return Flow of PagingData for infinite scroll
          */
         fun getAnnouncesPaged(
             nodeTypes: List<String>,
             searchQuery: String,
             interfaceTypes: List<String> = emptyList(),
-        ): Flow<PagingData<Announce>> {
-            val interfaceTypeCount = interfaceTypes.size
-            return Pager(
+        ): Flow<PagingData<Announce>> =
+            Pager(
                 config =
                     PagingConfig(
                         pageSize = 30,
@@ -200,41 +205,55 @@ class AnnounceRepository
                         enablePlaceholders = false,
                     ),
                 pagingSourceFactory = {
-                    when {
-                        // Filter by node types AND search query
-                        nodeTypes.isNotEmpty() && searchQuery.isNotEmpty() ->
-                            announceDao.getEnrichedAnnouncesByTypesAndSearchPaged(
-                                nodeTypes,
-                                searchQuery,
-                                interfaceTypes,
-                                interfaceTypeCount,
-                            )
-                        // Filter by node types only
-                        nodeTypes.isNotEmpty() ->
-                            announceDao.getEnrichedAnnouncesByTypesPaged(
-                                nodeTypes,
-                                interfaceTypes,
-                                interfaceTypeCount,
-                            )
-                        // Filter by search query only
-                        searchQuery.isNotEmpty() ->
-                            announceDao.searchEnrichedAnnouncesPaged(
-                                searchQuery,
-                                interfaceTypes,
-                                interfaceTypeCount,
-                            )
-                        // No filters
-                        else ->
-                            announceDao.getEnrichedAnnouncesPaged(
-                                interfaceTypes,
-                                interfaceTypeCount,
-                            )
-                    }
+                    AnnouncePagingSource(
+                        announceDao = announceDao,
+                        nodeTypes = nodeTypes,
+                        searchQuery = searchQuery,
+                        interfaceTypes = interfaceTypes,
+                    )
                 },
             ).flow.map { pagingData ->
                 pagingData.map { enriched -> enriched.toAnnounce() }
             }
-        }
+
+        /**
+         * Sort key of the row at the top of the filtered stream, used as the floor for the
+         * "N new announces" counter. Null when the filtered stream is empty.
+         */
+        suspend fun getArrivalFloor(
+            nodeTypes: List<String>,
+            searchQuery: String,
+            interfaceTypes: List<String>,
+        ): AnnounceArrivalMarker? =
+            announceDao.getArrivalFloor(
+                nodeTypes = nodeTypes,
+                nodeTypeCount = nodeTypes.size,
+                query = searchQuery,
+                interfaceTypes = interfaceTypes,
+                interfaceTypeCount = interfaceTypes.size,
+            )
+
+        /**
+         * Live count of announces that sort above the floor and that the current filters can
+         * show. Re-emits on announce writes so the UI can advertise arrivals while frozen.
+         */
+        @Suppress("LongParameterList") // Filter halves plus the floor key are bind params
+        fun observeAnnounceCountNewerThan(
+            sinceTimestamp: Long,
+            sinceHash: String,
+            nodeTypes: List<String>,
+            searchQuery: String,
+            interfaceTypes: List<String>,
+        ): Flow<Int> =
+            announceDao.observeAnnounceCountNewerThan(
+                sinceTimestamp = sinceTimestamp,
+                sinceHash = sinceHash,
+                nodeTypes = nodeTypes,
+                nodeTypeCount = nodeTypes.size,
+                query = searchQuery,
+                interfaceTypes = interfaceTypes,
+                interfaceTypeCount = interfaceTypes.size,
+            )
 
         /**
          * Get a specific announce by destination hash

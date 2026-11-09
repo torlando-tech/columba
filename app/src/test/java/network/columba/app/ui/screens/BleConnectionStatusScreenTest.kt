@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.test.core.app.ApplicationProvider
+import network.columba.app.R
 import network.columba.app.data.model.ConnectionType
 import network.columba.app.test.BleTestFixtures
 import network.columba.app.test.RegisterComponentActivityRule
@@ -39,6 +41,12 @@ class BleConnectionStatusScreenTest {
 
     val composeTestRule get() = composeRule
 
+    private fun resText(id: Int): String =
+        ApplicationProvider.getApplicationContext<Application>().getString(id)
+
+    private fun resQuantity(id: Int, count: Int): String =
+        ApplicationProvider.getApplicationContext<Application>().resources.getQuantityString(id, count, count)
+
     /**
      * Create a properly stubbed BleConnectionsViewModel mock.
      * All methods that may be called during screen rendering are stubbed.
@@ -69,7 +77,7 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText("Loading connections...").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.identity_loading_connections)).assertIsDisplayed()
         composeTestRule
             .onNode(hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate))
             .assertIsDisplayed()
@@ -90,7 +98,7 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText("BLE Connections").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.identity_ble_connections)).assertIsDisplayed()
     }
 
     // ========== Empty State Tests ==========
@@ -118,9 +126,9 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText("No Active Connections").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.ble_status_no_active_connections)).assertIsDisplayed()
         composeTestRule
-            .onNodeWithText("BLE peers will appear here when connected")
+            .onNodeWithText(resText(R.string.ble_status_peers_appear_hint))
             .assertIsDisplayed()
     }
 
@@ -146,7 +154,7 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithContentDescription("Back").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.back)).assertIsDisplayed()
     }
 
     // ========== Success State with Data Tests ==========
@@ -179,22 +187,22 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle() // Ensure LazyColumn item is fully composed
 
         // Wait for actual text content to ensure full layout completion
-        composeTestRule.waitForNodeWithText("Total", timeoutMillis = 5000)
+        composeTestRule.waitForNodeWithText(resText(R.string.identity_total), timeoutMillis = 5000)
 
         // Then - scroll to summary card to ensure visibility in LazyColumn
         composeTestRule.onNodeWithTag("summary_card").performScrollTo()
-        composeTestRule.onNodeWithText("Total").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.identity_total)).assertIsDisplayed()
         composeTestRule.onNodeWithText("3").assertIsDisplayed()
 
         // Wait for "Central" text to appear exactly 2 times
-        composeTestRule.waitForTextCount("Central", expectedCount = 2)
-        composeTestRule.onAllNodesWithText("Central").assertCountEquals(2)
+        composeTestRule.waitForTextCount(resText(R.string.identity_central), expectedCount = 2)
+        composeTestRule.onAllNodesWithText(resText(R.string.identity_central)).assertCountEquals(2)
 
         composeTestRule.onNodeWithText("2").assertIsDisplayed()
 
         // Wait for "Peripheral" text to appear exactly 2 times
-        composeTestRule.waitForTextCount("Peripheral", expectedCount = 2)
-        composeTestRule.onAllNodesWithText("Peripheral").assertCountEquals(2)
+        composeTestRule.waitForTextCount(resText(R.string.identity_peripheral), expectedCount = 2)
+        composeTestRule.onAllNodesWithText(resText(R.string.identity_peripheral)).assertCountEquals(2)
 
         composeTestRule.onNodeWithText("1").assertIsDisplayed()
     }
@@ -230,7 +238,7 @@ class BleConnectionStatusScreenTest {
         // Then
         composeTestRule.onNodeWithText("RNS-TestPeer").assertIsDisplayed()
         composeTestRule.onNodeWithText("abcd1234efgh5678").assertIsDisplayed() // Full identity hash
-        composeTestRule.onNodeWithText("Both").assertIsDisplayed() // Connection type badge
+        composeTestRule.onNodeWithText(resText(R.string.ble_status_type_both)).assertIsDisplayed() // Connection type badge
     }
 
     @Test
@@ -256,8 +264,8 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText("Signal Strength").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Good").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.message_detail_signal_strength)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.ble_status_signal_good)).assertIsDisplayed()
         composeTestRule.onNodeWithText("-60 dBm").assertIsDisplayed()
     }
 
@@ -288,8 +296,8 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText("Signal Strength").assertIsDisplayed()
-        composeTestRule.onNodeWithText("N/A").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.message_detail_signal_strength)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.ble_status_signal_unavailable)).assertIsDisplayed()
         composeTestRule.onNodeWithText("—").assertIsDisplayed()
         // Should NOT display the placeholder value
         composeTestRule.onNodeWithText("-100 dBm").assertDoesNotExist()
@@ -323,10 +331,10 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText("MAC Address").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.ble_status_mac_address)).assertIsDisplayed()
         composeTestRule.onNodeWithText("AA:BB:CC:DD:EE:FF").assertIsDisplayed()
         composeTestRule.onNodeWithText("MTU").assertIsDisplayed()
-        composeTestRule.onNodeWithText("512 bytes").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resQuantity(R.plurals.ble_status_bytes, 512)).assertIsDisplayed()
     }
 
     @Ignore("Flaky on CI: LazyColumn lazy composition race - timeout waiting for RNS-Peer1")
@@ -385,7 +393,7 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText("Error Loading Connections").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.ble_status_error_loading)).assertIsDisplayed()
         composeTestRule.onNodeWithText("Test error message").assertIsDisplayed()
     }
 
@@ -405,7 +413,7 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText("Retry").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.call_history_retry)).assertIsDisplayed()
     }
 
     // ========== User Interaction Tests ==========
@@ -425,7 +433,7 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // When
-        composeTestRule.onNodeWithContentDescription("Back").performClick()
+        composeTestRule.onNodeWithContentDescription(resText(R.string.back)).performClick()
 
         // Then
         assertTrue("Back button should trigger onBackClick", backClicked)
@@ -454,7 +462,7 @@ class BleConnectionStatusScreenTest {
         // When
         val result =
             runCatching {
-                composeTestRule.onNodeWithContentDescription("Refresh").performClick()
+                composeTestRule.onNodeWithContentDescription(resText(R.string.iface_refresh)).performClick()
             }
 
         // Then
@@ -479,7 +487,7 @@ class BleConnectionStatusScreenTest {
         // When
         val result =
             runCatching {
-                composeTestRule.onNodeWithText("Retry").performClick()
+                composeTestRule.onNodeWithText(resText(R.string.call_history_retry)).performClick()
             }
 
         // Then
@@ -553,7 +561,7 @@ class BleConnectionStatusScreenTest {
 
         // Then
         // "Central" appears in both summary card and connection badge
-        composeTestRule.onAllNodesWithText("Central").assertCountEquals(2)
+        composeTestRule.onAllNodesWithText(resText(R.string.identity_central)).assertCountEquals(2)
     }
 
     @Test
@@ -580,7 +588,7 @@ class BleConnectionStatusScreenTest {
 
         // Then
         // "Peripheral" appears in both summary card and connection badge
-        composeTestRule.onAllNodesWithText("Peripheral").assertCountEquals(2)
+        composeTestRule.onAllNodesWithText(resText(R.string.identity_peripheral)).assertCountEquals(2)
     }
 
     @Test
@@ -606,7 +614,7 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText("Both").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.ble_status_type_both)).assertIsDisplayed()
     }
 
     // ========== Signal Quality Tests ==========
@@ -634,7 +642,7 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText("Excellent").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.ble_status_signal_excellent)).assertIsDisplayed()
     }
 
     @Test
@@ -660,7 +668,7 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText("Fair").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.ble_status_signal_fair)).assertIsDisplayed()
     }
 
     @Test
@@ -686,7 +694,7 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText("Poor").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.ble_status_signal_poor)).assertIsDisplayed()
     }
 
     // ========== Performance Metrics Tests ==========
@@ -726,14 +734,14 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle() // Ensure section content is fully laid out
 
         // Wait for actual text content to ensure full layout completion
-        composeTestRule.waitForNodeWithText("Performance", timeoutMillis = 5000)
+        composeTestRule.waitForNodeWithText(resText(R.string.iface_cfg_preset_performance), timeoutMillis = 5000)
 
         // Then - scroll to performance section to ensure visibility in LazyColumn
         composeTestRule.onNodeWithTag("performance_section_$testMac").performScrollTo()
-        composeTestRule.onNodeWithText("Performance").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Data Sent").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Data Received").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Success Rate").assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.iface_cfg_preset_performance)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.ble_status_data_sent)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.ble_status_data_received)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(resText(R.string.ble_status_success_rate)).assertIsDisplayed()
         composeTestRule.onNodeWithText("95%").assertIsDisplayed()
     }
 
@@ -765,7 +773,7 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText("Performance").assertDoesNotExist()
+        composeTestRule.onNodeWithText(resText(R.string.iface_cfg_preset_performance)).assertDoesNotExist()
     }
 
     // ========== Scrolling Tests ==========

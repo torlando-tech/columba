@@ -42,9 +42,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.data.model.FrequencyRegion
 import network.columba.app.data.model.FrequencyRegions
 import network.columba.app.data.model.ModemPreset
@@ -102,12 +104,17 @@ fun TncConfigurationStep(
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
-                    text = if (isStandaloneConfig) "Transport Configuration" else "Flash Successful",
+                    text =
+                        if (isStandaloneConfig) {
+                            stringResource(R.string.flasher_title_transport_configuration)
+                        } else {
+                            stringResource(R.string.flasher_tnc_title_flash_successful)
+                        },
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "Configure transport mode",
+                    text = stringResource(R.string.flasher_tnc_configure_transport_mode),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -124,10 +131,7 @@ fun TncConfigurationStep(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text =
-                    "microReticulum operates as a standalone transport node. " +
-                        "Select your region and modem preset below. " +
-                        "These settings are saved to the device.",
+                text = stringResource(R.string.flasher_tnc_standalone_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
                 modifier = Modifier.padding(12.dp),
@@ -138,7 +142,7 @@ fun TncConfigurationStep(
 
         // Region selection
         Text(
-            text = "Region",
+            text = stringResource(R.string.flasher_tnc_region),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Medium,
         )
@@ -171,7 +175,7 @@ fun TncConfigurationStep(
         var showAllRegions by remember { mutableStateOf(false) }
         if (!showAllRegions) {
             TextButton(onClick = { showAllRegions = true }) {
-                Text("Show all regions")
+                Text(stringResource(R.string.flasher_tnc_show_all_regions))
                 Icon(Icons.Default.ExpandMore, contentDescription = null, modifier = Modifier.size(18.dp))
             }
         }
@@ -194,7 +198,7 @@ fun TncConfigurationStep(
                         }
                 }
                 TextButton(onClick = { showAllRegions = false }) {
-                    Text("Show fewer")
+                    Text(stringResource(R.string.flasher_tnc_show_fewer))
                     Icon(Icons.Default.ExpandLess, contentDescription = null, modifier = Modifier.size(18.dp))
                 }
             }
@@ -216,7 +220,7 @@ fun TncConfigurationStep(
                             fontWeight = FontWeight.Medium,
                         )
                         Text(
-                            text = "TX: ${selectedRegion.defaultTxPower} dBm (max ${selectedRegion.maxTxPower})",
+                            text = stringResource(R.string.flasher_tnc_tx_power, selectedRegion.defaultTxPower, selectedRegion.maxTxPower),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -229,7 +233,7 @@ fun TncConfigurationStep(
 
         // Modem preset selection
         Text(
-            text = "Modem Preset",
+            text = stringResource(R.string.flasher_tnc_modem_preset),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Medium,
         )
@@ -251,7 +255,7 @@ fun TncConfigurationStep(
             onClick = { showAdvanced = !showAdvanced },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Advanced Settings")
+            Text(stringResource(R.string.flasher_tnc_advanced_settings))
             Icon(
                 imageVector = if (showAdvanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                 contentDescription = null,
@@ -265,7 +269,7 @@ fun TncConfigurationStep(
                     OutlinedTextField(
                         value = frequencyMhz,
                         onValueChange = onFrequencyChanged,
-                        label = { Text("Frequency (MHz)") },
+                        label = { Text(stringResource(R.string.flasher_tnc_frequency_mhz)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         enabled = !isConfiguring,
@@ -281,7 +285,7 @@ fun TncConfigurationStep(
                         OutlinedTextField(
                             value = bandwidthKhz,
                             onValueChange = onBandwidthChanged,
-                            label = { Text("BW (kHz)") },
+                            label = { Text(stringResource(R.string.flasher_tnc_bw_khz)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
                             enabled = !isConfiguring,
@@ -290,7 +294,7 @@ fun TncConfigurationStep(
                         OutlinedTextField(
                             value = spreadingFactor,
                             onValueChange = onSpreadingFactorChanged,
-                            label = { Text("SF (7-12)") },
+                            label = { Text(stringResource(R.string.flasher_tnc_sf)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             enabled = !isConfiguring,
@@ -307,7 +311,7 @@ fun TncConfigurationStep(
                         OutlinedTextField(
                             value = codingRate,
                             onValueChange = onCodingRateChanged,
-                            label = { Text("CR (5-8)") },
+                            label = { Text(stringResource(R.string.flasher_tnc_cr)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             enabled = !isConfiguring,
@@ -316,7 +320,7 @@ fun TncConfigurationStep(
                         OutlinedTextField(
                             value = txPower,
                             onValueChange = onTxPowerChanged,
-                            label = { Text("TX Power (dBm)") },
+                            label = { Text(stringResource(R.string.flasher_tnc_tx_power_dbm)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             enabled = !isConfiguring,
@@ -361,9 +365,9 @@ fun TncConfigurationStep(
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Configuring...")
+                Text(stringResource(R.string.flasher_tnc_configuring))
             } else {
-                Text("Apply Configuration")
+                Text(stringResource(R.string.flasher_tnc_apply))
             }
         }
 
@@ -372,7 +376,7 @@ fun TncConfigurationStep(
             enabled = !isConfiguring,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(if (isStandaloneConfig) "Cancel" else "Skip (configure later)")
+            Text(if (isStandaloneConfig) stringResource(R.string.flasher_btn_cancel) else stringResource(R.string.flasher_tnc_skip))
         }
     }
 }
@@ -426,7 +430,7 @@ private fun TncPresetCard(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = preset.displayName,
+                        text = stringResource(preset.displayNameRes),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                     )
@@ -439,7 +443,7 @@ private fun TncPresetCard(
                                 ),
                         ) {
                             Text(
-                                text = "Recommended",
+                                text = stringResource(R.string.flasher_tnc_recommended),
                                 style = MaterialTheme.typography.labelSmall,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             )
@@ -448,7 +452,7 @@ private fun TncPresetCard(
                 }
 
                 Text(
-                    text = preset.description,
+                    text = stringResource(preset.descriptionRes),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -467,7 +471,7 @@ private fun TncPresetCard(
             if (isSelected) {
                 Icon(
                     imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
+                    contentDescription = stringResource(R.string.flasher_cd_selected),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }

@@ -113,7 +113,7 @@ fun PyObject.dictDouble(key: String): Double? = dictGet(key)?.toJava(Double::cla
 fun PyObject.dictBool(key: String): Boolean =
     dictGet(key)?.toJava(Boolean::class.javaObjectType) ?: false
 
-/** Reads a hex-string dict entry (event_bridge.py encodes all bytes as hex). */
+/** Reads a hex-string dict entry; raw signature_evidence uses toJava(ByteArray) instead. */
 fun PyObject.dictBytes(key: String): ByteArray? =
     dictStr(key)?.takeIf { it.isNotEmpty() }?.hexToBytes()
 

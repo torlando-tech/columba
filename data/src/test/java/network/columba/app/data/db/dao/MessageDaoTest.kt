@@ -9,6 +9,7 @@ import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.db.entity.MessageEntity
+import network.columba.app.data.di.DatabaseModule
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -21,6 +22,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import kotlinx.coroutines.flow.first
+import network.columba.app.domain.model.SignatureStatus
+import org.junit.Assert.assertArrayEquals
 
 /**
  * Tests for MessageDao operations.
@@ -170,7 +174,8 @@ class MessageDaoTest {
     @Test
     fun applyDeliveryStatus_enforcesClosedMonotonicLifecycle() =
         runTest {
-            suspend fun reduce(current: String, incoming: String): String {
+            suspend fun reduce(current: String, incoming: String,
+            ): String {
                 val id = "$current-$incoming"
                 messageDao.insertMessage(createTestMessage(id = id, status = current))
                 messageDao.applyDeliveryStatus(id, IDENTITY_HASH, incoming)
@@ -388,6 +393,212 @@ class MessageDaoTest {
             assertEquals("New", messageDao.getMessageById("msg2", IDENTITY_HASH)?.content)
         }
 
+    @Test
+    fun unknownSourceWithoutEvidenceRemainsInconclusiveRatherThanPromisingReverification() =
+        runTest {
+            for ((id, evidence) in listOf("missing-evidence" to null, "empty-evidence" to byteArrayOf())) {
+                val message =
+                    createTestMessage(id = id, isFromMe = false).copy(signatureStatus = SignatureStatus.SOURCE_UNKNOWN)
+                messageDao.insertMessageWithSignatureEvidence(message, evidence)
+                assertEquals(SignatureStatus.UNVERIFIED, messageDao.getMessageById(id, IDENTITY_HASH)?.signatureStatus)
+                assertNull(messageDao.readSignatureEvidence(id, IDENTITY_HASH))
+            }
+            assertEquals(0, messageDao.observePendingSignatureCount().first())
+        }
+
+    @Test
+    fun pendingSignatures_areBoundedAndPagedAcrossLocalIdentities() =
+        runTest {
+            val otherIdentity = "zz-identity"
+            val otherSender = "sender-z"
+            identityDao.insert(createTestIdentity().copy(identityHash = otherIdentity, destinationHash = "destination-z"))
+            conversationDao.insertConversation(createTestConversation().copy(identityHash = otherIdentity))
+            conversationDao.insertConversation(createTestConversation().copy(peerHash = otherSender))
+            val pending =
+                createTestMessage(id = "message-a", isFromMe = false).copy(
+                    signatureStatus = SignatureStatus.SOURCE_UNKNOWN,
+                )
+            for (message in listOf(
+                pending,
+                pending.copy(identityHash = otherIdentity),
+                pending.copy(id = "message-b"),
+                pending.copy(id = "other-sender", conversationHash = otherSender),
+                pending.copy(id = "legacy", signatureStatus = SignatureStatus.UNVERIFIED),
+                pending.copy(id = "outgoing", isFromMe = true),
+                pending.copy(id = "invalid", signatureStatus = SignatureStatus.INVALID),
+            )) {
+                messageDao.insertMessageWithSignatureEvidence(message, byteArrayOf(1, 2, 3))
+            }
+            messageDao.insertMessage(pending.copy(id = "missing-evidence"))
+
+            assertEquals(listOf(PEER_HASH), messageDao.getPendingSignatureSenders("", 1))
+            assertEquals(listOf(otherSender), messageDao.getPendingSignatureSenders(PEER_HASH, 1))
+            assertTrue(messageDao.getPendingSignatureSenders(otherSender, 1).isEmpty())
+            val first = messageDao.getPendingSignatureMessages(PEER_HASH, "", "", 1).single()
+            assertEquals("message-a", first.id)
+            assertEquals(IDENTITY_HASH, first.identityHash)
+            assertArrayEquals(byteArrayOf(1, 2, 3), messageDao.readSignatureEvidence(first.id, first.identityHash))
+            val second = messageDao.getPendingSignatureMessages(PEER_HASH, first.id, first.identityHash, 1).single()
+            assertEquals("message-a", second.id)
+            assertEquals(otherIdentity, second.identityHash)
+            val third = messageDao.getPendingSignatureMessages(PEER_HASH, second.id, second.identityHash, 1).single()
+            assertEquals("message-b", third.id)
+            assertTrue(messageDao.getPendingSignatureMessages(PEER_HASH, third.id, third.identityHash, 1).isEmpty())
+            assertEquals(4, messageDao.observePendingSignatureCount().first())
+        }
+
+    @Test
+    fun resolvePendingSignature_isTerminalAtomicAndIdentityScoped() =
+        runTest {
+            val otherIdentity = "identity-z"
+            identityDao.insert(createTestIdentity().copy(identityHash = otherIdentity, destinationHash = "destination-z"))
+            conversationDao.insertConversation(createTestConversation().copy(identityHash = otherIdentity))
+            for (terminal in listOf(SignatureStatus.VERIFIED, SignatureStatus.INVALID)) {
+                val original =
+                    createTestMessage(id = terminal.name, content = "unchanged", isFromMe = false).copy(
+                        signatureStatus = SignatureStatus.SOURCE_UNKNOWN,
+                    )
+                val evidence = byteArrayOf(7, 8, 9)
+                messageDao.insertMessageWithSignatureEvidence(original, evidence)
+                messageDao.insertMessageWithSignatureEvidence(original.copy(identityHash = otherIdentity), evidence)
+                assertEquals(0, messageDao.resolvePendingSignature(original.id, "wrong-identity", terminal))
+                assertEquals(0, messageDao.resolvePendingSignature(original.id, IDENTITY_HASH, SignatureStatus.UNVERIFIED))
+                assertEquals(0, messageDao.resolvePendingSignature(original.id, IDENTITY_HASH, SignatureStatus.SOURCE_UNKNOWN))
+                assertEquals(1, messageDao.resolvePendingSignature(original.id, IDENTITY_HASH, terminal))
+                assertEquals(
+                    original.copy(signatureStatus = terminal),
+                    messageDao.getMessageById(original.id, IDENTITY_HASH),
+                )
+                assertNull(messageDao.readSignatureEvidence(original.id, IDENTITY_HASH))
+                val conflicting = if (terminal == SignatureStatus.VERIFIED) SignatureStatus.INVALID else SignatureStatus.VERIFIED
+                assertEquals(0, messageDao.resolvePendingSignature(original.id, IDENTITY_HASH, conflicting))
+                val untouched = requireNotNull(messageDao.getMessageById(original.id, otherIdentity))
+                assertEquals(SignatureStatus.SOURCE_UNKNOWN, untouched.signatureStatus)
+                assertArrayEquals(evidence, messageDao.readSignatureEvidence(original.id, otherIdentity))
+            }
+        }
+
+    @Test
+    fun resolvePendingSignature_neverReclassifiesLegacyOrOutgoingRows() =
+        runTest {
+            for (status in listOf(null, SignatureStatus.UNVERIFIED, SignatureStatus.VERIFIED, SignatureStatus.INVALID)) {
+                val original = createTestMessage(id = "status-$status", isFromMe = false).copy(signatureStatus = status)
+                messageDao.insertMessage(original)
+                assertEquals(0, messageDao.resolvePendingSignature(original.id, IDENTITY_HASH, SignatureStatus.INVALID))
+                assertEquals(original, messageDao.getMessageById(original.id, IDENTITY_HASH))
+            }
+            val outgoing =
+                createTestMessage(id = "outgoing").copy(
+                    signatureStatus = SignatureStatus.SOURCE_UNKNOWN,
+                )
+            messageDao.insertMessageWithSignatureEvidence(outgoing, byteArrayOf(1))
+            assertEquals(0, messageDao.resolvePendingSignature(outgoing.id, IDENTITY_HASH, SignatureStatus.INVALID))
+            assertEquals(SignatureStatus.SOURCE_UNKNOWN, messageDao.getMessageById(outgoing.id, IDENTITY_HASH)?.signatureStatus)
+            assertNull(messageDao.readSignatureEvidence(outgoing.id, IDENTITY_HASH))
+        }
+
+    @Test
+    fun pendingSignatureObservation_emitsWhenPayloadChangesWithoutChangingCount() =
+        runTest {
+            messageDao.observePendingSignatureCount().test {
+                assertEquals(0, awaitItem())
+                val pending =
+                    createTestMessage(id = "pending", isFromMe = false).copy(
+                        signatureStatus = SignatureStatus.SOURCE_UNKNOWN,
+                    )
+                messageDao.insertMessageWithSignatureEvidence(pending, byteArrayOf(1))
+                assertEquals(1, awaitItem())
+                messageDao.insertMessageWithSignatureEvidence(pending, byteArrayOf(2))
+                assertEquals(1, awaitItem())
+                messageDao.resolvePendingSignature(pending.id, IDENTITY_HASH, SignatureStatus.VERIFIED)
+                assertEquals(0, awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun pendingEvidence_survivesDatabaseReopenAndTerminalResolution() =
+        runTest {
+            val context = ApplicationProvider.getApplicationContext<Context>()
+            val name = "pending-signatures-restart"
+            database.close()
+            context.deleteDatabase(name)
+            try {
+                database = Room.databaseBuilder(context, ColumbaDatabase::class.java, name).build()
+                database.localIdentityDao().insert(createTestIdentity())
+                database.conversationDao().insertConversation(createTestConversation())
+                database.messageDao().insertMessageWithSignatureEvidence(
+                    createTestMessage(id = "durable", isFromMe = false).copy(
+                        signatureStatus = SignatureStatus.SOURCE_UNKNOWN,
+                    ),
+                    byteArrayOf(4, 5, 6),
+                )
+                database.close()
+                database = Room.databaseBuilder(context, ColumbaDatabase::class.java, name).build()
+                val reopened = database.messageDao()
+                assertEquals(listOf(PEER_HASH), reopened.getPendingSignatureSenders("", 10))
+                val pending = reopened.getPendingSignatureMessages(PEER_HASH, "", "", 10).single()
+                assertArrayEquals(byteArrayOf(4, 5, 6), reopened.readSignatureEvidence(pending.id, pending.identityHash))
+                assertEquals(1, reopened.resolvePendingSignature(pending.id, pending.identityHash, SignatureStatus.VERIFIED))
+                database.close()
+                database = Room.databaseBuilder(context, ColumbaDatabase::class.java, name).build()
+                assertTrue(database.messageDao().getPendingSignatureSenders("", 10).isEmpty())
+                val resolved = requireNotNull(database.messageDao().getMessageById("durable", IDENTITY_HASH))
+                assertEquals(SignatureStatus.VERIFIED, resolved.signatureStatus)
+                assertNull(database.messageDao().readSignatureEvidence("durable", IDENTITY_HASH))
+            } finally {
+                database.close()
+                context.deleteDatabase(name)
+            }
+        }
+
+    @Test
+    fun largeEvidence_neverEntersMessageCursorsAndReassemblesExactly() =
+        runTest {
+            val evidence = ByteArray(3 * 1024 * 1024 + 17) { (it % 251).toByte() }
+            val pending =
+                createTestMessage(id = "large-payload", isFromMe = false).copy(
+                    signatureStatus = SignatureStatus.SOURCE_UNKNOWN,
+                )
+            messageDao.insertMessageWithSignatureEvidence(pending, evidence)
+            assertEquals(pending, messageDao.getMessageById(pending.id, IDENTITY_HASH))
+            assertEquals(listOf(pending), messageDao.getMessagesForConversation(PEER_HASH, IDENTITY_HASH).first())
+            assertEquals(listOf(PendingSignatureMessage(pending.id, IDENTITY_HASH)), messageDao.getPendingSignatureMessages(PEER_HASH, "", "", 10))
+            assertEquals(evidence.size.toLong(), messageDao.getSignatureEvidenceSize(pending.id, IDENTITY_HASH))
+            assertEquals(256 * 1024, messageDao.getSignatureEvidenceChunk(pending.id, IDENTITY_HASH, 0)?.size)
+            assertEquals(17, messageDao.getSignatureEvidenceChunk(pending.id, IDENTITY_HASH, 12)?.size)
+            assertArrayEquals(evidence, messageDao.readSignatureEvidence(pending.id, IDENTITY_HASH))
+            database.openHelper.writableDatabase.execSQL(
+                "DELETE FROM message_signature_evidence WHERE messageId = 'large-payload' AND chunkIndex = 1",
+            )
+            assertNull("incomplete evidence cannot be treated as an authentic payload", messageDao.readSignatureEvidence(pending.id, IDENTITY_HASH))
+        }
+
+    @Test
+    fun evidenceCascadesOnMessageConversationAndIdentityDeletion() =
+        runTest {
+            val otherIdentity = "other-identity"
+            identityDao.insert(createTestIdentity().copy(identityHash = otherIdentity, destinationHash = "other-destination"))
+            conversationDao.insertConversation(createTestConversation().copy(identityHash = otherIdentity))
+            val pending =
+                createTestMessage(id = "same-id", isFromMe = false).copy(
+                    signatureStatus = SignatureStatus.SOURCE_UNKNOWN,
+                )
+            val evidence = byteArrayOf(1, 2, 3)
+            messageDao.insertMessageWithSignatureEvidence(pending, evidence)
+            messageDao.insertMessageWithSignatureEvidence(pending.copy(identityHash = otherIdentity), evidence)
+            messageDao.deleteMessageById(pending.id, IDENTITY_HASH)
+            assertNull(messageDao.readSignatureEvidence(pending.id, IDENTITY_HASH))
+            assertArrayEquals(evidence, messageDao.readSignatureEvidence(pending.id, otherIdentity))
+            messageDao.insertMessageWithSignatureEvidence(pending, evidence)
+            conversationDao.deleteConversationByKey(PEER_HASH, IDENTITY_HASH)
+            assertNull(messageDao.readSignatureEvidence(pending.id, IDENTITY_HASH))
+            assertArrayEquals(evidence, messageDao.readSignatureEvidence(pending.id, otherIdentity))
+            identityDao.delete(otherIdentity)
+            assertNull(messageDao.readSignatureEvidence(pending.id, otherIdentity))
+            assertEquals(0, messageDao.observePendingSignatureCount().first())
+        }
+
     // ========== Flow Tests (validates Room 2.8.x race condition fix) ==========
 
     @Test
@@ -468,5 +679,96 @@ class MessageDaoTest {
         runTest {
             val preview = messageDao.getReplyPreviewData("nonexistent", IDENTITY_HASH)
             assertNull(preview)
+        }
+
+    // ========== Notification Reconciliation Tests ==========
+
+    @Test
+    fun pendingNotificationProjectionExcludesOutgoingTruncatesAndIncludesReadRows() =
+        runTest {
+            messageDao.insertMessage(
+                createTestMessage(
+                    id = "pending",
+                    content = "x".repeat(150),
+                    isFromMe = false,
+                ).copy(notificationHandled = false),
+            )
+            messageDao.insertMessage(
+                createTestMessage(id = "outgoing-pending", isFromMe = true)
+                    .copy(notificationHandled = false),
+            )
+            messageDao.insertMessage(
+                createTestMessage(id = "read-pending", isFromMe = false, isRead = true)
+                    .copy(notificationHandled = false),
+            )
+            messageDao.insertMessage(createTestMessage(id = "handled", isFromMe = false))
+
+            val pending = messageDao.getPendingNotificationMessages(IDENTITY_HASH, 32)
+            assertEquals(listOf("pending", "read-pending"), pending.map { it.id })
+            assertEquals("pending", pending[0].id)
+            assertEquals("x".repeat(100), pending[0].preview)
+            assertEquals(false, pending[0].isRead)
+            assertEquals(PEER_HASH, pending[0].conversationHash)
+            assertEquals(true, pending[1].isRead)
+            assertEquals(2, messageDao.observePendingNotificationCount(IDENTITY_HASH).first())
+        }
+
+    @Test
+    fun notificationAcknowledgementIsIdentityScopedAndIdempotent() =
+        runTest {
+            identityDao.insert(
+                createTestIdentity()
+                    .copy(identityHash = "other-identity", destinationHash = "other-destination"),
+            )
+            conversationDao.insertConversation(createTestConversation().copy(identityHash = "other-identity"))
+            messageDao.insertMessage(createTestMessage(id = "pending", isFromMe = false).copy(notificationHandled = false))
+            messageDao.insertMessage(
+                createTestMessage(id = "other-pending", isFromMe = false)
+                    .copy(identityHash = "other-identity", notificationHandled = false),
+            )
+
+            assertEquals(0, messageDao.ackNotificationHandled("pending", "other-identity"))
+            assertEquals(false, messageDao.getMessageById("pending", IDENTITY_HASH)?.notificationHandled)
+            assertEquals(listOf("pending"), messageDao.getPendingNotificationMessages(IDENTITY_HASH, 32).map { it.id })
+            assertEquals(1, messageDao.ackNotificationHandled("pending", IDENTITY_HASH))
+            assertEquals(0, messageDao.ackNotificationHandled("pending", IDENTITY_HASH))
+            assertEquals(true, messageDao.getMessageById("pending", IDENTITY_HASH)?.notificationHandled)
+            assertEquals(0, messageDao.getPendingNotificationMessages(IDENTITY_HASH, 32).size)
+            assertEquals(listOf("other-pending"), messageDao.getPendingNotificationMessages("other-identity", 32).map { it.id })
+        }
+
+    @Test
+    fun notificationStateSurvivesCloseAndReopen() =
+        runTest {
+            val context = ApplicationProvider.getApplicationContext<Context>()
+            val name = "notification-state-reopen"
+            context.deleteDatabase(name)
+            val first = DatabaseModule.buildColumbaDatabase(context, name, multiInstanceInvalidation = false)
+            try {
+                first.localIdentityDao().insert(createTestIdentity())
+                first.conversationDao().insertConversation(createTestConversation())
+                first.messageDao().insertMessage(
+                    createTestMessage(id = "pending", isFromMe = false).copy(notificationHandled = false),
+                )
+                first.messageDao().insertMessage(createTestMessage(id = "handled", isFromMe = false))
+                assertEquals(
+                    listOf("pending"),
+                    first.messageDao().getPendingNotificationMessages(IDENTITY_HASH, 32).map { it.id },
+                )
+            } finally {
+                first.close()
+            }
+            val second = DatabaseModule.buildColumbaDatabase(context, name, multiInstanceInvalidation = false)
+            try {
+                assertEquals(
+                    listOf("pending"),
+                    second.messageDao().getPendingNotificationMessages(IDENTITY_HASH, 32).map { it.id },
+                )
+                assertEquals(true, second.messageDao().getMessageById("handled", IDENTITY_HASH)?.notificationHandled)
+                assertEquals(1, second.messageDao().ackNotificationHandled("pending", IDENTITY_HASH))
+            } finally {
+                second.close()
+                context.deleteDatabase(name)
+            }
         }
 }

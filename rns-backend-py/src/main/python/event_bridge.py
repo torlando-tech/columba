@@ -21,8 +21,10 @@ Contract with Kotlin
 after the RNS `Reticulum` instance and `LXMRouter` are live. The `on_*`
 arguments are Kotlin objects exposing a single `onEvent(payload)` method
 (see `PyEventCallback` on the Kotlin side). Each payload is a `dict` of
-JSON-primitive values — bytes are hex-encoded strings so the Kotlin side
-never has to reason about jarray vs bytes.
+JSON-primitive values, with bytes hex-encoded except `signature_evidence`:
+original packed LXMF evidence crosses directly as Python bytes to avoid
+duplicating potentially large messages as hex strings. The event dict itself
+is not JSON-serialized; Kotlin converts that entry directly to ByteArray.
 
 The three per-object callbacks (`on_packet`, `on_link_event`,
 `on_lxmf_failure`) are stored and exposed via accessors rather than
@@ -1401,6 +1403,13 @@ def _lxmf_delivery_callback(message):
             "content": message.content.decode("utf-8", "replace") if getattr(message, "content", None) else "",
             "timestamp": getattr(message, "timestamp", None),
             "signature_validated": bool(getattr(message, "signature_validated", False)),
+            "unverified_reason": getattr(message, "unverified_reason", None),
+            "signature_evidence": (
+                getattr(message, "packed", None)
+                if not getattr(message, "signature_validated", False)
+                and getattr(message, "unverified_reason", None) == LXMF.LXMessage.SOURCE_UNKNOWN
+                else None
+            ),
             "stamp_valid": bool(getattr(message, "stamp_valid", False)),
             "method": getattr(message, "method", None),
             "fields_json": fields_json,

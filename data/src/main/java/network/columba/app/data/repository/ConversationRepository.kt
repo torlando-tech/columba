@@ -26,6 +26,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
+import androidx.room.withTransaction
+import network.columba.app.data.db.ColumbaDatabase
+import network.columba.app.domain.model.SignatureStatus
 
 data class Conversation(
     val peerHash: String,
@@ -62,13 +65,10 @@ data class Message(
     val receivedAt: Long? = null,
     // Interface name through which message was sent (null for received messages or pre-feature messages)
     val sentInterface: String? = null,
-    // For received messages: whether the LXMF signature was verified against
-    // the sender's known identity. false = potential forgery (sender identity
-    // unknown to us at receive time, or an invalid signature on the Python
-    // backend); null = sent by us or a pre-v10 legacy row. Both backends now
-    // forward a definite value for delivered messages. See
-    // MessageEntity.signatureVerified for full semantics.
-    val signatureVerified: Boolean? = null,
+    // Null means no recorded result; only INVALID proves a failed signature check.
+    val signatureStatus: SignatureStatus? = null,
+    // Original packed LXMF bytes for deferred verification, never part of MessageUi.
+    val signatureEvidence: ByteArray? = null,
     // DB-local per-target-message reactions aggregation. Flat shape:
     //   {"👍": ["sender_hex_1", ...], "❤️": [...]}
     // Never appears on the wire — the LXMF reaction wire format is
@@ -101,6 +101,7 @@ class ConversationRepository
         private val localIdentityDao: LocalIdentityDao,
         private val attachmentStorage: AttachmentStorageManager,
         private val draftDao: DraftDao,
+        private val database: ColumbaDatabase,
     ) {
         /**
          * Get all conversations for the active identity, sorted by most recent activity.
@@ -237,26 +238,26 @@ class ConversationRepository
 
         /**
          * Save a message and update the conversation
-         * Creates conversation if it doesn't exist
+         * Creates the conversation, deduplicates and persists evidence in one database transaction.
+         * Received callbacks may pin the original local identity instead of consulting mutable UI state.
          */
-        @Transaction
         suspend fun saveMessage(
             peerHash: String,
             peerName: String,
             message: Message,
             peerPublicKey: ByteArray? = null,
-        ) {
+            localIdentityHash: String? = null,
+        ) = database.withTransaction {
             // VALIDATION: Sanitize message content before storage
             val sanitizedContent = TextSanitizer.sanitizeMessage(message.content)
 
             // VALIDATION: Sanitize peer name
             val sanitizedPeerName = TextSanitizer.sanitizePeerName(peerName)
 
-            // Get active identity hash (required for all data)
-            val activeIdentity =
-                localIdentityDao.getActiveIdentitySync()
+            val identityHash =
+                localIdentityHash
+                    ?: localIdentityDao.getActiveIdentitySync()?.identityHash
                     ?: throw IllegalStateException("No active identity found")
-            val identityHash = activeIdentity.identityHash
 
             // Check if message already exists to avoid duplicate processing
             val messageExists = messageDao.messageExists(message.id, identityHash)
@@ -277,8 +278,13 @@ class ConversationRepository
                     existingConversation.copy(
                         peerName = sanitizedPeerName, // Update name (SANITIZED) in case it changed from new announce
                         peerPublicKey = peerPublicKey ?: existingConversation.peerPublicKey, // Update public key if provided
-                        lastMessage = sanitizedContent, // Store SANITIZED content
-                        lastMessageTimestamp = conversationTimestamp,
+                        lastMessage = if (messageExists) existingConversation.lastMessage else sanitizedContent,
+                        lastMessageTimestamp =
+                            if (messageExists) {
+                                existingConversation.lastMessageTimestamp
+                            } else {
+                                conversationTimestamp
+                            },
                         unreadCount =
                             if (shouldIncrementUnread) {
                                 existingConversation.unreadCount + 1 // Increment only for NEW received messages
@@ -327,7 +333,7 @@ class ConversationRepository
                         sanitizedContent = sanitizedContent,
                         processedFieldsJson = processedFieldsJson,
                     )
-                messageDao.insertMessage(messageEntity)
+                messageDao.insertMessageWithSignatureEvidence(messageEntity, message.signatureEvidence)
 
                 // Check if this message has file attachments and should supersede a pending notification
                 if (!message.isFromMe && message.fieldsJson != null) {
@@ -538,17 +544,6 @@ class ConversationRepository
         }
 
         /**
-         * Get IDs of recent received messages for the active identity.
-         * Used to pre-seed the notification dedup cache at startup so that
-         * replayed/re-broadcast messages don't trigger duplicate notifications.
-         * Bounded to [since] to avoid unbounded memory growth.
-         */
-        suspend fun getReceivedMessageIds(since: Long): List<String> {
-            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyList()
-            return messageDao.getReceivedMessageIds(activeIdentity.identityHash, since)
-        }
-
-        /**
          * Observe a message by ID for real-time updates (e.g., status changes from pending → delivered).
          * Returns a Flow that emits whenever the message changes in the database.
          */
@@ -627,7 +622,7 @@ class ConversationRepository
                 receivedInterface = receivedInterface,
                 receivedAt = receivedAt,
                 sentInterface = sentInterface,
-                signatureVerified = signatureVerified,
+                signatureStatus = signatureStatus,
                 reactionsJson = reactionsJson,
             )
 
@@ -636,8 +631,8 @@ class ConversationRepository
          * (which is at the detekt LongMethod budget) — the caller supplies the
          * resolved conversation/identity hashes plus the already-sanitized
          * content and attachment-extracted fieldsJson. Received-side routing /
-         * signal metadata and `signatureVerified` are carried straight through
-         * so the message-details screen and unverified-sender warning render.
+         * signal metadata and signature status are carried through. Original signed evidence
+         * is stored separately, never reconstructed from display fields or loaded by UI queries.
          */
         private fun buildMessageEntity(
             message: Message,
@@ -664,7 +659,8 @@ class ConversationRepository
             receivedSnr = message.receivedSnr,
             receivedAt = message.receivedAt,
             sentInterface = message.sentInterface,
-            signatureVerified = message.signatureVerified,
+            signatureStatus = message.signatureStatus,
+            notificationHandled = message.isFromMe,
         )
 
         /**
@@ -1032,7 +1028,8 @@ class ConversationRepository
          */
         @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
         @androidx.annotation.VisibleForTesting
-        internal fun extractLargeAttachments(messageId: String, fieldsJson: String?): String? {
+        internal fun extractLargeAttachments(messageId: String, fieldsJson: String?,
+        ): String? {
             if (fieldsJson == null) return null
 
             val totalSize = fieldsJson.length

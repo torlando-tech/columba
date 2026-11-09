@@ -11,6 +11,7 @@ import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.db.entity.PeerActivityType
+import network.columba.app.data.db.entity.PeerIconEntity
 import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.util.HashUtils
 import network.columba.app.data.util.TextSanitizer
@@ -18,7 +19,12 @@ import network.columba.app.data.model.InterfaceType
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.rns.host.util.PeerNameResolver
-import org.json.JSONObject
+import kotlinx.coroutines.CancellationException
+import network.columba.app.data.repository.ConversationRepository
+import network.columba.app.data.storage.AttachmentStorageManager
+import network.columba.app.rns.api.model.ReceivedMessage
+import network.columba.app.rns.api.util.toHex
+import network.columba.app.data.repository.Message as DataMessage
 
 /**
  * Manages database persistence from the service process.
@@ -80,11 +86,26 @@ class ServicePersistenceManager(
     private val localIdentityDao by lazy { database.localIdentityDao() }
     private val peerIdentityDao by lazy { database.peerIdentityDao() }
     private val peerActivityDao by lazy { database.peerActivityDao() }
+    private val peerIconDao by lazy { database.peerIconDao() }
     private val pendingDeliveryPersistence by lazy { PendingDeliveryPersistence(database) }
+    private val pendingSignatureVerification by lazy { PendingSignatureVerification(database) }
+    private val pendingFileNotificationSuperseder by lazy { PendingFileNotificationSuperseder(messageDao) }
+    private val conversationRepository by lazy {
+        ConversationRepository(
+            conversationDao,
+            messageDao,
+            peerIdentityDao,
+            localIdentityDao,
+            AttachmentStorageManager(context),
+            database.draftDao(),
+            database,
+        )
+    }
 
     init {
         if (startDeliveryReconciliation) {
             pendingDeliveryPersistence.startReconciliation(scope)
+            pendingSignatureVerification.startReconciliation(scope)
         }
     }
 
@@ -242,6 +263,77 @@ class ServicePersistenceManager(
     }
 
     /**
+     * The service-local message consumer persists complete messages even with
+     * no IPC observers. Use the same attachment extraction and atomic dedupe
+     * as the UI fallback, scoped to the recipient on the original wire.
+     */
+    suspend fun persistReceivedMessage(message: ReceivedMessage): Boolean =
+        try {
+            database.withTransaction {
+                val identity =
+                    localIdentityDao.getIdentityByDestinationHash(message.destinationHash.toHex())
+                        ?: return@withTransaction false
+                val sender = message.sourceHash.toHex()
+                if (isBlockedPeer(sender, identity.identityHash) || shouldBlockUnknownSender(sender, identity.identityHash)) {
+                    return@withTransaction false
+                }
+                val existing = conversationDao.getConversation(sender, identity.identityHash)
+                val peerName =
+                    PeerNameResolver.resolve(
+                        peerHash = sender,
+                        cachedName = existing?.peerName,
+                        contactNicknameLookup = { contactDao.getContact(sender, identity.identityHash)?.customNickname },
+                        announcePeerNameLookup = { announceDao.getAnnounce(sender)?.peerName },
+                    )
+                conversationRepository.saveMessage(
+                    peerHash = sender,
+                    peerName = peerName,
+                    message = message.toStoredMessage(sender),
+                    peerPublicKey = message.publicKey,
+                    localIdentityHash = identity.identityHash,
+                )
+                // Restore/export reads peer_identities, not conversation keys. Only
+                // retain key material deriving this sender's LXMF destination, and
+                // store its identity hash just as announce persistence does.
+                val publicKey = message.publicKey
+                if (publicKey != null && LxmfSignatureVerifier.senderHash(publicKey) == sender) {
+                    peerIdentityDao.insertPeerIdentity(
+                        PeerIdentityEntity(
+                            peerHash = HashUtils.computeIdentityHash(publicKey),
+                            publicKey = publicKey,
+                            lastSeenTimestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
+                // A live IPC callback is not guaranteed after an app restart, so icon
+                // appearance must survive from the service process itself. Invalid or
+                // missing appearance leaves any existing icon untouched.
+                message.iconAppearance?.let { appearance ->
+                    if (appearance.iconName.isNotEmpty() &&
+                        appearance.foregroundColor.isNotEmpty() &&
+                        appearance.backgroundColor.isNotEmpty()
+                    ) {
+                        peerIconDao.upsertIcon(
+                            PeerIconEntity(
+                                destinationHash = sender,
+                                iconName = appearance.iconName,
+                                foregroundColor = appearance.foregroundColor,
+                                backgroundColor = appearance.backgroundColor,
+                                updatedTimestamp = System.currentTimeMillis(),
+                            ),
+                        )
+                    }
+                }
+                true
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not persist received message ${message.messageHash}", e)
+            false
+        }
+
+    /**
      * Persist a received message to the database.
      * Called from EventHandler.handleMessageEvent() in the service process.
      *
@@ -374,13 +466,14 @@ class ServicePersistenceManager(
                     receivedRssi = receivedRssi,
                     receivedSnr = receivedSnr,
                     receivedAt = receivedAt,
+                    notificationHandled = false,
                 )
             messageDao.insertMessage(messageEntity)
             peerActivityDao.recordActivity(sourceHash, receivedAt, PeerActivityType.MESSAGE)
 
             // Check if this message has file attachments and should supersede a pending notification
             if (hasFileAttachments) {
-                supersedePendingFileNotifications(
+                pendingFileNotificationSuperseder.supersede(
                     sourceHash,
                     activeIdentity.identityHash,
                     messageHash,
@@ -535,81 +628,6 @@ class ServicePersistenceManager(
     }
 
     /**
-     * Check if an incoming message with file attachments should supersede
-     * a pending file notification, and mark it as superseded if so.
-     *
-     * Matches notifications by original_message_id (the hash of the file message).
-     * Called only when hasFileAttachments=true, so we don't need to check fieldsJson.
-     */
-    @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
-    private suspend fun supersedePendingFileNotifications(
-        peerHash: String,
-        identityHash: String,
-        incomingMessageId: String,
-    ) {
-        try {
-            Log.d(TAG, "Checking for pending notifications to supersede for message $incomingMessageId")
-
-            // Find pending notifications in this conversation
-            val pendingNotifications = messageDao.findPendingFileNotifications(peerHash, identityHash)
-            Log.d(TAG, "supersede: Found ${pendingNotifications.size} pending notifications")
-            if (pendingNotifications.isEmpty()) return
-
-            // Find matching notification using functional approach
-            val match =
-                pendingNotifications.firstNotNullOfOrNull { notification ->
-                    tryParseNotificationMatch(notification, incomingMessageId)
-                }
-
-            if (match != null) {
-                val (notification, notificationJson, field16) = match
-                Log.d(TAG, "Superseding pending notification ${notification.id} for message $incomingMessageId")
-
-                // Mark as superseded by adding "superseded": true to field 16
-                field16.put("superseded", true)
-                notificationJson.put("16", field16)
-
-                messageDao.updateMessageFieldsJson(
-                    notification.id,
-                    identityHash,
-                    notificationJson.toString(),
-                )
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error checking for pending notifications to supersede: ${e.message}")
-        }
-    }
-
-    /**
-     * Try to parse a notification and check if it matches the incoming message ID.
-     * Returns a Triple of (notification, json, field16) if matched, null otherwise.
-     */
-    @Suppress("SwallowedException", "TooGenericExceptionCaught")
-    private fun tryParseNotificationMatch(
-        notification: MessageEntity,
-        incomingMessageId: String,
-    ): Triple<MessageEntity, JSONObject, JSONObject>? {
-        return try {
-            val notificationFieldsJson = notification.fieldsJson ?: return null
-            val notificationJson = JSONObject(notificationFieldsJson)
-            val field16 = notificationJson.optJSONObject("16")
-            val pendingInfo = field16?.optJSONObject("pending_file_notification")
-            val originalMessageId = pendingInfo?.optString("original_message_id", "") ?: ""
-
-            Log.d(TAG, "supersede: Comparing incoming=$incomingMessageId vs original=$originalMessageId")
-
-            if (field16 != null && originalMessageId.isNotEmpty() && originalMessageId == incomingMessageId) {
-                Triple(notification, notificationJson, field16)
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse pending notification ${notification.id}: ${e.message}")
-            null
-        }
-    }
-
-    /**
      * Look up display name for a peer with priority:
      * 1. Contact's custom nickname (user-set, by destination hash)
      * 2. Announce peer name (from network, by destination hash)
@@ -694,3 +712,22 @@ class ServicePersistenceManager(
         Log.d(TAG, "Service database connection closed")
     }
 }
+
+private fun ReceivedMessage.toStoredMessage(sender: String) =
+    DataMessage(
+        id = messageHash,
+        destinationHash = sender,
+        content = content,
+        timestamp = timestamp,
+        isFromMe = false,
+        status = "delivered",
+        fieldsJson = fieldsJson,
+        deliveryMethod = deliveryMethod,
+        receivedHopCount = receivedHopCount,
+        receivedInterface = receivedInterface,
+        receivedRssi = receivedRssi,
+        receivedSnr = receivedSnr,
+        receivedAt = System.currentTimeMillis(),
+        signatureStatus = signatureStatus,
+        signatureEvidence = signatureEvidence,
+    )

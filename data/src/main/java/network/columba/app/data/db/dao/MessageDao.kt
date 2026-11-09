@@ -10,6 +10,23 @@ import androidx.room.Transaction
 import androidx.room.Update
 import network.columba.app.data.db.entity.MessageEntity
 import kotlinx.coroutines.flow.Flow
+import network.columba.app.data.db.entity.SignatureEvidenceChunkEntity
+import network.columba.app.domain.model.SignatureStatus
+
+/** Payload-free keyset projection for bounded service-owned reconciliation. */
+data class PendingSignatureMessage(
+    val id: String,
+    val identityHash: String,
+)
+
+/** Preview-only projection for bounded app-owned notification catch-up. */
+data class PendingNotificationMessage(
+    val id: String,
+    val identityHash: String,
+    val conversationHash: String,
+    val preview: String,
+    val isRead: Boolean,
+)
 
 @Dao
 interface MessageDao {
@@ -39,6 +56,90 @@ interface MessageDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: MessageEntity)
+
+    /** Persist the original signed payload atomically without putting it in UI-facing rows. */
+    @Transaction
+    suspend fun insertMessageWithSignatureEvidence(
+        message: MessageEntity,
+        signatureEvidence: ByteArray?,
+    ) {
+        val storedMessage =
+            if (message.signatureStatus == SignatureStatus.SOURCE_UNKNOWN && (signatureEvidence == null || signatureEvidence.isEmpty())) {
+                message.copy(signatureStatus = SignatureStatus.UNVERIFIED)
+            } else {
+                message
+            }
+        insertMessage(storedMessage)
+        if (storedMessage.isFromMe || storedMessage.signatureStatus != SignatureStatus.SOURCE_UNKNOWN || signatureEvidence == null) return
+        val chunkSize = 256 * 1024
+        var offset = 0
+        var chunkIndex = 0
+        while (offset < signatureEvidence.size) {
+            val end = offset + minOf(chunkSize, signatureEvidence.size - offset)
+            insertSignatureEvidenceChunk(
+                SignatureEvidenceChunkEntity(
+                    messageId = message.id,
+                    identityHash = message.identityHash,
+                    chunkIndex = chunkIndex++,
+                    bytes = signatureEvidence.copyOfRange(offset, end),
+                ),
+            )
+            offset = end
+        }
+    }
+
+    @Insert
+    suspend fun insertSignatureEvidenceChunk(chunk: SignatureEvidenceChunkEntity)
+
+    @Query(
+        """
+        SELECT SUM(length(bytes)) FROM message_signature_evidence
+        WHERE messageId = :messageId AND identityHash = :identityHash
+        """,
+    )
+    suspend fun getSignatureEvidenceSize(
+        messageId: String,
+        identityHash: String,
+    ): Long?
+
+    @Query(
+        """
+        SELECT bytes FROM message_signature_evidence
+        WHERE messageId = :messageId AND identityHash = :identityHash AND chunkIndex = :chunkIndex
+        """,
+    )
+    suspend fun getSignatureEvidenceChunk(
+        messageId: String,
+        identityHash: String,
+        chunkIndex: Int,
+    ): ByteArray?
+
+    /** One allocation for the packed payload; each DB cursor reads at most one 256 KiB chunk. */
+    @Suppress("ReturnCount")
+    @Transaction
+    suspend fun readSignatureEvidence(
+        messageId: String,
+        identityHash: String,
+    ): ByteArray? {
+        val size = getSignatureEvidenceSize(messageId, identityHash) ?: return null
+        if (size <= 0 || size > Int.MAX_VALUE) return null
+        val evidence = ByteArray(size.toInt())
+        var offset = 0
+        var chunkIndex = 0
+        while (offset < evidence.size) {
+            val chunk = getSignatureEvidenceChunk(messageId, identityHash, chunkIndex++) ?: return null
+            if (chunk.isEmpty() || chunk.size > evidence.size - offset) return null
+            chunk.copyInto(evidence, destinationOffset = offset)
+            offset += chunk.size
+        }
+        return evidence
+    }
+
+    @Query("DELETE FROM message_signature_evidence WHERE messageId = :messageId AND identityHash = :identityHash")
+    suspend fun deleteSignatureEvidence(
+        messageId: String,
+        identityHash: String,
+    )
 
     @Update
     suspend fun updateMessage(message: MessageEntity)
@@ -95,6 +196,138 @@ interface MessageDao {
         messageId: String,
         identityHash: String,
     ): MessageEntity?
+
+    /** Room invalidations also trigger reconciliation when an insert leaves the count unchanged. */
+    @Query(
+        """
+        SELECT COUNT(*) FROM messages
+        WHERE isFromMe = 0 AND signatureStatus = 'SOURCE_UNKNOWN'
+          AND EXISTS (SELECT 1 FROM message_signature_evidence evidence
+                      WHERE evidence.messageId = messages.id AND evidence.identityHash = messages.identityHash)
+        """,
+    )
+    fun observePendingSignatureCount(): Flow<Int>
+
+    /** Keyset-paged startup discovery without loading any packed payloads. */
+    @Query(
+        """
+        SELECT DISTINCT conversationHash FROM messages
+        WHERE signatureStatus = 'SOURCE_UNKNOWN'
+          AND EXISTS (SELECT 1 FROM message_signature_evidence evidence
+                      WHERE evidence.messageId = messages.id AND evidence.identityHash = messages.identityHash)
+          AND isFromMe = 0 AND conversationHash > :afterSenderHash
+        ORDER BY conversationHash LIMIT :limit
+        """,
+    )
+    suspend fun getPendingSignatureSenders(
+        afterSenderHash: String,
+        limit: Int,
+    ): List<String>
+
+    /** Match one bounded peer-key page without loading messages or retained evidence. */
+    @Query(
+        """
+        SELECT DISTINCT conversationHash FROM messages
+        WHERE signatureStatus = 'SOURCE_UNKNOWN'
+          AND EXISTS (SELECT 1 FROM message_signature_evidence evidence
+                      WHERE evidence.messageId = messages.id AND evidence.identityHash = messages.identityHash)
+          AND isFromMe = 0 AND conversationHash IN (:senderHashes)
+        ORDER BY conversationHash
+        """,
+    )
+    suspend fun getPendingSignatureSendersMatching(senderHashes: List<String>): List<String>
+
+    /** Advance both cursor fields from the last row, even if its source is still unknown. */
+    @Query(
+        """
+        SELECT id, identityHash FROM messages
+        WHERE conversationHash = :senderHash AND isFromMe = 0
+          AND signatureStatus = 'SOURCE_UNKNOWN'
+          AND EXISTS (SELECT 1 FROM message_signature_evidence evidence
+                      WHERE evidence.messageId = messages.id AND evidence.identityHash = messages.identityHash)
+          AND (id > :afterMessageId OR (id = :afterMessageId AND identityHash > :afterIdentityHash))
+        ORDER BY id, identityHash LIMIT :limit
+        """,
+    )
+    suspend fun getPendingSignatureMessages(
+        senderHash: String,
+        afterMessageId: String,
+        afterIdentityHash: String,
+        limit: Int,
+    ): List<PendingSignatureMessage>
+
+    /**
+     * Emits on every message-table invalidation for this identity, including inserts that
+     * leave the count unchanged; callers must reconcile rather than dedupe by count.
+     */
+    @Query(
+        """
+        SELECT COUNT(*) FROM messages
+        WHERE identityHash = :identityHash AND isFromMe = 0 AND notificationHandled = 0
+        """,
+    )
+    fun observePendingNotificationCount(identityHash: String): Flow<Int>
+
+    /**
+     * Bounded preview-only discovery for notification catch-up. Never loads fieldsJson,
+     * signature evidence, or full payloads; read rows stay discoverable for silent
+     * acknowledgement.
+     */
+    @Query(
+        """
+        SELECT id, identityHash, conversationHash, substr(content, 1, 100) AS preview, isRead
+        FROM messages
+        WHERE identityHash = :identityHash AND isFromMe = 0 AND notificationHandled = 0
+        ORDER BY COALESCE(receivedAt, timestamp), id
+        LIMIT :limit
+        """,
+    )
+    suspend fun getPendingNotificationMessages(
+        identityHash: String,
+        limit: Int,
+    ): List<PendingNotificationMessage>
+
+    /**
+     * Conditional acknowledgement scoped by identity: only a still-pending row is marked
+     * handled, so duplicate or cross-identity acks are harmless no-ops and cannot reset state.
+     */
+    @Query(
+        """
+        UPDATE messages SET notificationHandled = 1
+        WHERE id = :messageId AND identityHash = :identityHash AND notificationHandled = 0
+        """,
+    )
+    suspend fun ackNotificationHandled(
+        messageId: String,
+        identityHash: String,
+    ): Int
+
+    /** A terminal result cannot overwrite another resolution or another identity's row. */
+    @Query(
+        """
+        UPDATE messages SET signatureStatus = :signatureStatus
+        WHERE id = :messageId AND identityHash = :identityHash
+          AND signatureStatus = 'SOURCE_UNKNOWN' AND isFromMe = 0
+          AND :signatureStatus IN ('VERIFIED', 'INVALID')
+        """,
+    )
+    suspend fun applyPendingSignatureResolution(
+        messageId: String,
+        identityHash: String,
+        signatureStatus: SignatureStatus,
+    ): Int
+
+    /** Status transition and evidence removal commit together, including across process death. */
+    @Transaction
+    suspend fun resolvePendingSignature(
+        messageId: String,
+        identityHash: String,
+        signatureStatus: SignatureStatus,
+    ): Int {
+        val changed = applyPendingSignatureResolution(messageId, identityHash, signatureStatus)
+        if (changed != 0) deleteSignatureEvidence(messageId, identityHash)
+        return changed
+    }
 
     /**
      * Observe a message by ID for real-time updates (e.g., status changes).
@@ -263,17 +496,6 @@ interface MessageDao {
         peerHash: String,
         identityHash: String,
     ): PagingSource<Int, MessageEntity>
-
-    /**
-     * Get IDs of received (not from me) messages for an identity since a cutoff time.
-     * Used to pre-seed duplicate notification prevention cache at startup.
-     * Bounded to recent messages to avoid unbounded memory growth.
-     */
-    @Query("SELECT id FROM messages WHERE identityHash = :identityHash AND isFromMe = 0 AND timestamp >= :since")
-    suspend fun getReceivedMessageIds(
-        identityHash: String,
-        since: Long,
-    ): List<String>
 
     /**
      * Get all messages for an identity (sync, for export).

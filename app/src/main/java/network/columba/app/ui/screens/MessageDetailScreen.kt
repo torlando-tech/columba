@@ -53,6 +53,9 @@ import network.columba.app.viewmodel.MessageDetailViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import network.columba.app.domain.model.SignatureStatus
+import network.columba.app.ui.theme.OnWarningContainer
+import network.columba.app.ui.theme.WarningContainer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -196,31 +199,8 @@ fun MessageDetailScreen(
                 } else {
                     // Received message info: delivery method, hop count, receiving interface.
 
-                    // Signature verification card. Only emitted for received
-                    // messages where the flag is non-null. Null (sent messages,
-                    // legacy rows) renders no card — we don't claim a
-                    // verification state either way for those, matching the
-                    // bubble behavior in MessagingScreen.
-                    msg.signatureVerified?.let { verified ->
-                        if (verified) {
-                            MessageInfoCard(
-                                icon = Icons.Default.VerifiedUser,
-                                title = "Signature",
-                                content = "Verified",
-                                subtitle = "The sender's identity was confirmed against their announce.",
-                            )
-                        } else {
-                            MessageInfoCard(
-                                icon = Icons.Default.Warning,
-                                iconTint = MaterialTheme.colorScheme.error,
-                                title = "Signature",
-                                content = "Unverified",
-                                subtitle = "The sender's signature could not be verified. Their identity " +
-                                    "may be unknown to your node, or the signature check may have failed. " +
-                                    "The message could be forged. Treat with caution.",
-                                contentColor = MaterialTheme.colorScheme.error,
-                            )
-                        }
+                    msg.signatureStatus?.let { status ->
+                        MessageSignatureInfoCard(status)
                     }
 
                     // Delivery method card. Especially important for propagation-fetched
@@ -288,6 +268,55 @@ fun MessageDetailScreen(
     }
 }
 
+/** The detail view distinguishes an unavailable key from a failed signature check. */
+@Composable
+internal fun MessageSignatureInfoCard(status: SignatureStatus) {
+    when (status) {
+        SignatureStatus.VERIFIED ->
+            MessageInfoCard(
+                icon = Icons.Default.VerifiedUser,
+                title = "Signature",
+                content = "Verified",
+                subtitle = "The signature matches the sender's identity.",
+            )
+        SignatureStatus.SOURCE_UNKNOWN ->
+            MessageInfoCard(
+                icon = Icons.Default.Warning,
+                iconTint = OnWarningContainer,
+                iconContainerColor = WarningContainer,
+                title = "Signature",
+                content = "Sender identity unknown",
+                subtitle =
+                    "The sender's public key is not available, so the signature has not been checked. " +
+                        "It will be checked automatically when their identity announce is received. " +
+                        "An unknown identity does not mean the signature is invalid.",
+            )
+        SignatureStatus.INVALID ->
+            MessageInfoCard(
+                icon = Icons.Default.Error,
+                iconTint = MaterialTheme.colorScheme.onErrorContainer,
+                iconContainerColor = MaterialTheme.colorScheme.errorContainer,
+                title = "Signature",
+                content = "Invalid signature",
+                subtitle =
+                    "The signature check failed against the sender's known identity. " +
+                        "The message may be forged or altered. Do not trust its claimed sender.",
+                contentColor = MaterialTheme.colorScheme.error,
+            )
+        SignatureStatus.UNVERIFIED ->
+            MessageInfoCard(
+                icon = Icons.Default.Warning,
+                iconTint = OnWarningContainer,
+                iconContainerColor = WarningContainer,
+                title = "Signature",
+                content = "Signature not verified",
+                subtitle =
+                    "No conclusive signature verification result is available for this message. " +
+                        "The sender has not been authenticated. This is not a confirmed signature failure.",
+            )
+    }
+}
+
 @Composable
 private fun MessageInfoCard(
     icon: ImageVector,
@@ -296,6 +325,7 @@ private fun MessageInfoCard(
     subtitle: String? = null,
     iconTint: Color = MaterialTheme.colorScheme.onPrimaryContainer,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    iconContainerColor: Color = MaterialTheme.colorScheme.primaryContainer,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -319,7 +349,7 @@ private fun MessageInfoCard(
                     Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
+                        .background(iconContainerColor),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(

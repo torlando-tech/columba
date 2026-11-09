@@ -3,6 +3,7 @@ package network.columba.app.ui.model
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.ImageBitmap
 import network.columba.app.rns.api.util.LxmfFields
+import network.columba.app.domain.model.SignatureStatus
 
 /** Rendering hint authenticated in the LXMF message fields. */
 enum class MessageRenderer(
@@ -197,18 +198,11 @@ data class MessageUi(
      */
     val sentInterface: String? = null,
     /**
-     * Whether the LXMF signature was verified against the sender's known
-     * identity at receive time.
-     * - true  = signature checked against a known source identity, valid.
-     * - false = the sender's signature could not be verified — could be a
-     *           legitimate first-contact or a forgery; the UI MUST warn.
-     *           Kotlin backend: SOURCE_UNKNOWN only (LXMF-kt drops
-     *           SIGNATURE_INVALID at the router). Python backend: may also be
-     *           a failed signature check.
-     * - null  = sent messages (signed locally) or legacy rows; treated as
-     *           "no warning" to preserve historical display.
+     * Latest LXMF signature result. Unknown identity and missing verification
+     * results are warnings, not proof of an invalid signature. Null means no
+     * recorded result (sent messages or legacy rows).
      */
-    val signatureVerified: Boolean? = null,
+    val signatureStatus: SignatureStatus? = null,
 ) {
     /**
      * Whether this message should be displayed as a standalone media item without a bubble.

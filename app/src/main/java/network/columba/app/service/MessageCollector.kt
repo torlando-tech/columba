@@ -1,12 +1,23 @@
 package network.columba.app.service
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
+import network.columba.app.data.db.dao.MessageDao
 import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.entity.ContactStatus
 import network.columba.app.data.db.entity.PeerIconEntity
@@ -18,6 +29,7 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.notifications.NotificationHelper
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.api.util.ThreadFieldCodec
 import network.columba.app.rns.api.util.toHex
 import network.columba.app.rns.host.util.PeerNameResolver
@@ -55,23 +67,28 @@ class MessageCollector
         private val identityRepository: IdentityRepository,
         private val notificationHelper: NotificationHelper,
         private val peerIconDao: PeerIconDao,
+        private val messageDao: MessageDao,
     ) {
         companion object {
             private const val TAG = "MessageCollector"
-            private const val PRESEED_WINDOW_MS = 30L * 24 * 60 * 60 * 1000 // 30 days
+            private const val NOTIFICATION_BATCH_SIZE = 32
+            private const val NOTIFICATION_RETRY_BASE_MS = 1_000L
+            private const val NOTIFICATION_RETRY_MAX_MS = 30_000L
         }
 
         // Application-scoped coroutine for background message collection
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-        // Track processed message IDs to avoid duplicates
-        private val processedMessageIds = ConcurrentHashMap.newKeySet<String>()
+        // Single-owner lifecycle: every started job is tracked so stop/start cannot
+        // leave duplicate persistence or notification processors running.
+        private var messageCollectionJob: Job? = null
+        private var announceCollectionJob: Job? = null
+        private var notificationCollectionJob: Job? = null
 
         // Map of peer hashes to names (populated from announces)
         private val peerNames = ConcurrentHashMap<String, String>()
 
         init {
-            MemoryDiagnostics.registerCounter(MemoryDiagnosticCounter.PROCESSED_MESSAGE_IDS) { processedMessageIds.size }
             MemoryDiagnostics.registerCounter(MemoryDiagnosticCounter.PEER_NAMES) { peerNames.size }
         }
 
@@ -93,89 +110,22 @@ class MessageCollector
             isStarted = true
             Log.i(TAG, "Starting message collection service")
 
-            // Collect messages from the Reticulum protocol
-            scope.launch {
-                // Pre-seed processedMessageIds with recent received messages from the DB.
-                // This prevents duplicate notifications when messages are replayed via SharedFlow
-                // or re-broadcast by drainPendingMessages() after a service restart.
-                // Bounded to last 30 days to avoid unbounded memory growth.
-                // Done inside the collection coroutine to ensure it completes before we subscribe.
-                try {
-                    val thirtyDaysAgo = System.currentTimeMillis() - PRESEED_WINDOW_MS
-                    val existingIds = conversationRepository.getReceivedMessageIds(since = thirtyDaysAgo)
-                    processedMessageIds.addAll(existingIds)
-                    Log.i(TAG, "Pre-seeded ${existingIds.size} existing message IDs for notification dedup")
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to pre-seed message IDs - duplicate notifications may occur", e)
-                }
-
+            // Collect messages from the Reticulum protocol. Database existence is not
+            // notification completion: pending notifications are reconciled separately below.
+            suspend fun collectIncomingMessages() {
                 try {
                     rnsLxmf.observeMessages().collect { receivedMessage ->
-                        // De-duplicate: Skip if we've already processed this message in-memory
-                        if (receivedMessage.messageHash in processedMessageIds) {
-                            Log.d(TAG, "Skipping duplicate message ${receivedMessage.messageHash.take(16)} (in-memory cache)")
-                            return@collect
-                        }
-
-                        // De-duplicate: Check if message already exists in database
+                        // Check if message already exists in database
                         // (may have been persisted by ServicePersistenceManager in service process)
                         val existingMessage = conversationRepository.getMessageById(receivedMessage.messageHash)
                         if (existingMessage != null) {
-                            processedMessageIds.add(receivedMessage.messageHash) // Add to cache to avoid repeat DB checks
-                            Log.d(TAG, "Message ${receivedMessage.messageHash.take(16)} already in database - checking if notification needed")
+                            Log.d(TAG, "Message ${receivedMessage.messageHash.take(16)} already in database - persisting icon only")
 
-                            // Even though message is persisted, we may still need to show notification
-                            // and save icon appearance (service process can't do these)
+                            // Service-side persistence also saves icons; retain callback enrichment
+                            // for messages stored through paths without icon data.
                             val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
-                            val peerName = getPeerNameWithFallback(sourceHash)
 
-                            // Save icon appearance even for already-persisted messages
-                            // (ServicePersistenceManager doesn't have access to icon data)
-                            receivedMessage.iconAppearance?.let { appearance ->
-                                if (appearance.iconName.isNotEmpty() &&
-                                    appearance.foregroundColor.isNotEmpty() &&
-                                    appearance.backgroundColor.isNotEmpty()
-                                ) {
-                                    try {
-                                        peerIconDao.upsertIcon(
-                                            PeerIconEntity(
-                                                destinationHash = sourceHash,
-                                                iconName = appearance.iconName,
-                                                foregroundColor = appearance.foregroundColor,
-                                                backgroundColor = appearance.backgroundColor,
-                                                updatedTimestamp = System.currentTimeMillis(),
-                                            ),
-                                        )
-                                        Log.d(TAG, "Saved icon appearance for $sourceHash: ${appearance.iconName} (from duplicate message)")
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Failed to save icon appearance for $sourceHash", e)
-                                    }
-                                }
-                            }
-
-                            val isFavorite = isSavedPeer(sourceHash)
-
-                            // Only notify if the message hasn't been read yet
-                            // This prevents duplicate notifications after service restart
-                            // for messages the user has already seen
-                            if (!existingMessage.isRead) {
-                                try {
-                                    notificationHelper.notifyMessageReceived(
-                                        destinationHash = sourceHash,
-                                        peerName = peerName,
-                                        messagePreview = receivedMessage.content.take(100),
-                                        isFavorite = isFavorite,
-                                        threadIdHex = ThreadFieldCodec
-                                            .threadIdFromFieldsJson(receivedMessage.fieldsJson)
-                                            ?.toHex(),
-                                    )
-                                    Log.d(TAG, "Posted notification for already-persisted unread message")
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Failed to post notification for already-persisted message", e)
-                                }
-                            } else {
-                                Log.d(TAG, "Skipping notification for already-read message ${receivedMessage.messageHash.take(16)}")
-                            }
+                            persistIconAppearance(sourceHash, receivedMessage.iconAppearance)
 
                             return@collect
                         }
@@ -198,7 +148,6 @@ class MessageCollector
                             return@collect
                         }
 
-                        processedMessageIds.add(receivedMessage.messageHash)
                         _messagesCollected.value++
 
                         val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
@@ -232,20 +181,10 @@ class MessageCollector
                                 deliveryMethod = receivedMessage.deliveryMethod,
                                 // Local reception time for sort ordering
                                 receivedAt = now,
-                                // LXMF signature-verification state from the backend.
-                                // false = sender identity was unknown to our RNS at
-                                // receive time (potential forgery — see MessageEntity
-                                // for full semantics); the UI renders an "unverified
-                                // sender" warning on these.
-                                signatureVerified = receivedMessage.signatureVerified,
-                                // Threads-spec §4.3: convKey = (identityHash,
-                                // peerHash, T). T = fieldsJson key "8" (raw
-                                // FIELD_THREAD bytes, hex over the bridge);
-                                // null => Main. The resolved 0x30 target is
-                                // persisted too so the thread root hook and
-                                // reply previews resolve from the DB column.
-                                threadId = ThreadFieldCodec
-                                    .threadIdFromFieldsJson(receivedMessage.fieldsJson),
+                                signatureStatus = receivedMessage.signatureStatus,
+                                signatureEvidence = receivedMessage.signatureEvidence,
+                                threadId =
+                                    ThreadFieldCodec.threadIdFromFieldsJson(receivedMessage.fieldsJson),
                                 replyToMessageId = parseReplyToFromFields(receivedMessage.fieldsJson),
                             )
 
@@ -268,69 +207,29 @@ class MessageCollector
                                 Log.d(TAG, "Stored sender's public key for $sourceHash")
                             }
 
-                            // Store sender's icon appearance if present (Sideband/MeshChat interop)
-                            // Icons are stored in peer_icons table (LXMF concept), separate from announces (Reticulum concept)
-                            receivedMessage.iconAppearance?.let { appearance ->
-                                if (appearance.iconName.isNotEmpty() &&
-                                    appearance.foregroundColor.isNotEmpty() &&
-                                    appearance.backgroundColor.isNotEmpty()
-                                ) {
-                                    try {
-                                        peerIconDao.upsertIcon(
-                                            PeerIconEntity(
-                                                destinationHash = sourceHash,
-                                                iconName = appearance.iconName,
-                                                foregroundColor = appearance.foregroundColor,
-                                                backgroundColor = appearance.backgroundColor,
-                                                updatedTimestamp = System.currentTimeMillis(),
-                                            ),
-                                        )
-                                        Log.d(TAG, "Saved icon appearance for $sourceHash: ${appearance.iconName}")
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Failed to save icon appearance for $sourceHash", e)
-                                    }
-                                }
-                            }
+                            persistIconAppearance(sourceHash, receivedMessage.iconAppearance)
 
                             conversationRepository.saveMessage(sourceHash, peerName, dataMessage, publicKey)
                             Log.d(TAG, "Message saved to database for peer ${sourceHash.take(16)} (hasPublicKey=${publicKey != null})")
-
-                            // Check if sender is a saved peer (favorite)
-                            val isFavorite = isSavedPeer(sourceHash)
-
-                            // Show notification for received message
-                            try {
-                                notificationHelper.notifyMessageReceived(
-                                    destinationHash = sourceHash,
-                                    peerName = peerName,
-                                    // Truncate preview
-                                    messagePreview = receivedMessage.content.take(100),
-                                    isFavorite = isFavorite,
-                                    threadIdHex = ThreadFieldCodec
-                                        .threadIdFromFieldsJson(receivedMessage.fieldsJson)
-                                        ?.toHex(),
-                                )
-                                Log.d(TAG, "Posted notification for message (favorite: $isFavorite)")
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Failed to post message notification", e)
-                            }
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed to save message to database", e)
                         }
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Error in message collection loop", e)
-                    // Restart collection after error
+                    // Restart only this loop; notification processing stays single-owner.
                     if (isStarted) {
                         Log.w(TAG, "Restarting message collection after error")
-                        isStarted = false
-                        startCollecting()
+                        messageCollectionJob = scope.launch { collectIncomingMessages() }
                     }
                 }
             }
+            messageCollectionJob = scope.launch { collectIncomingMessages() }
 
             // Also observe announces to build peer name mapping, store public keys, and persist to database
-            scope.launch {
+            announceCollectionJob = scope.launch {
                 try {
                     rnsCore.observeAnnounces().collect { announce ->
                         // Conversations are keyed by destination hash (LXMF destination)
@@ -464,6 +363,101 @@ class MessageCollector
                     Log.e(TAG, "Error observing announces for names", e)
                 }
             }
+
+            notificationCollectionJob = scope.launch { observePendingNotifications() }
+        }
+
+        private suspend fun persistIconAppearance(
+            sourceHash: String,
+            appearance: IconAppearance?,
+        ) {
+            if (appearance == null) return
+            if (appearance.iconName.isEmpty() ||
+                appearance.foregroundColor.isEmpty() ||
+                appearance.backgroundColor.isEmpty()
+            ) {
+                return
+            }
+            try {
+                peerIconDao.upsertIcon(
+                    PeerIconEntity(
+                        destinationHash = sourceHash,
+                        iconName = appearance.iconName,
+                        foregroundColor = appearance.foregroundColor,
+                        backgroundColor = appearance.backgroundColor,
+                        updatedTimestamp = System.currentTimeMillis(),
+                    ),
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to save icon appearance for $sourceHash", e)
+            }
+        }
+
+        /**
+         * Reconcile durable notification state owned by this app process. Every message-table
+         * invalidation for the active identity is a signal, even when the pending count is
+         * unchanged, because the marker - not the message row - means "notified".
+         */
+        @OptIn(ExperimentalCoroutinesApi::class)
+        private suspend fun observePendingNotifications() {
+            identityRepository.activeIdentity
+                .flatMapLatest { identity ->
+                    if (identity == null) {
+                        emptyFlow()
+                    } else {
+                        messageDao
+                            .observePendingNotificationCount(identity.identityHash)
+                            .map { identity.identityHash }
+                    }
+                }
+                .onEach { identityHash -> reconcilePendingNotifications(identityHash) }
+                .retryWhen { cause, attempt ->
+                    if (cause is CancellationException) throw cause
+                    Log.w(TAG, "Notification observation interrupted; retrying", cause)
+                    delay(
+                        minOf(
+                            NOTIFICATION_RETRY_MAX_MS,
+                            NOTIFICATION_RETRY_BASE_MS shl attempt.coerceAtMost(5).toInt(),
+                        ),
+                    )
+                    true
+                }.collect()
+        }
+
+        /**
+         * Process pending rows in bounded batches. A normal return from
+         * [NotificationHelper.notifyMessageReceived] means handled (posted or intentionally
+         * suppressed); a throw stops this pass without acknowledging so the row is retried
+         * on a later invalidation or collector restart.
+         */
+        private suspend fun reconcilePendingNotifications(identityHash: String) {
+            while (identityRepository.getActiveIdentitySync()?.identityHash == identityHash) {
+                val batch = messageDao.getPendingNotificationMessages(identityHash, NOTIFICATION_BATCH_SIZE)
+                if (batch.isEmpty()) return
+                for (pending in batch) {
+                    if (identityRepository.getActiveIdentitySync()?.identityHash != identityHash) return
+                    try {
+                        if (!pending.isRead) {
+                            val peerName = getPeerNameWithFallback(pending.conversationHash)
+                            notificationHelper.notifyMessageReceived(
+                                destinationHash = pending.conversationHash,
+                                peerName = peerName,
+                                messagePreview = pending.preview,
+                                isFavorite = isSavedPeer(pending.conversationHash),
+                                threadIdHex = pending.threadId?.toHex(),
+                            )
+                        }
+                        messageDao.ackNotificationHandled(pending.id, identityHash)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to process pending notification ${pending.id.take(16)}", e)
+                        return
+                    }
+                }
+            }
         }
 
         /**
@@ -564,10 +558,15 @@ class MessageCollector
          */
         fun stopCollecting() {
             isStarted = false
+            messageCollectionJob?.cancel()
+            messageCollectionJob = null
+            announceCollectionJob?.cancel()
+            announceCollectionJob = null
+            notificationCollectionJob?.cancel()
+            notificationCollectionJob = null
             // CRITICAL: Clear peer names cache to prevent stale data after identity switch
             // This ensures fresh data is fetched from database or announces when restarted
             peerNames.clear()
-            processedMessageIds.clear()
             Log.i(TAG, "Stopped message collection service (caches cleared)")
         }
 

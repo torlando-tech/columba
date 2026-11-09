@@ -85,6 +85,7 @@ class SettingsViewModelTest {
     private lateinit var contactRepository: ContactRepository
     private lateinit var updateChecker: network.columba.app.service.UpdateChecker
     private lateinit var crashReportManager: network.columba.app.util.CrashReportManager
+    private lateinit var notificationHelper: network.columba.app.notifications.NotificationHelper
     private lateinit var context: android.content.Context
     private lateinit var viewModel: SettingsViewModel
 
@@ -142,6 +143,8 @@ class SettingsViewModelTest {
         updateChecker = mockk()
         crashReportManager = mockk()
         coEvery { crashReportManager.updateCrashReportingConsent(any(), any(), any()) } returns Unit
+        notificationHelper = mockk()
+        coEvery { notificationHelper.setMessagePrivacyLevel(any()) } just Runs
         context =
             mockk {
                 val mockEditor =
@@ -214,6 +217,8 @@ class SettingsViewModelTest {
         every { settingsRepository.blockUnknownSendersFlow } returns flowOf(false)
         every { settingsRepository.allowCallsFromContactsOnlyFlow } returns flowOf(false)
         every { settingsRepository.allowVoiceCallsFlow } returns flowOf(true)
+        every { settingsRepository.notificationPrivacyLevelFlow } returns
+            flowOf(network.columba.app.data.model.NotificationPrivacyLevel.DEFAULT)
         every { settingsRepository.telemetryCollectorEnabledFlow } returns flowOf(false)
         every { settingsRepository.telemetryCollectorAddressFlow } returns flowOf(null)
         every { settingsRepository.telemetrySendIntervalSecondsFlow } returns flowOf(60)
@@ -323,6 +328,7 @@ class SettingsViewModelTest {
             contactRepository = contactRepository,
             updateChecker = updateChecker,
             crashReportManager = crashReportManager,
+            notificationHelper = notificationHelper,
         )
 
     @Test
@@ -1681,6 +1687,7 @@ class SettingsViewModelTest {
                     contactRepository = contactRepository,
                     updateChecker = updateChecker,
                     crashReportManager = crashReportManager,
+                    notificationHelper = notificationHelper,
                 )
 
             viewModel.state.test {
@@ -1739,6 +1746,7 @@ class SettingsViewModelTest {
                     contactRepository = contactRepository,
                     updateChecker = updateChecker,
                     crashReportManager = crashReportManager,
+                    notificationHelper = notificationHelper,
                 )
 
             viewModel.state.test {
@@ -1794,6 +1802,7 @@ class SettingsViewModelTest {
                     contactRepository = contactRepository,
                     updateChecker = updateChecker,
                     crashReportManager = crashReportManager,
+                    notificationHelper = notificationHelper,
                 )
 
             viewModel.state.test {
@@ -2457,6 +2466,7 @@ class SettingsViewModelTest {
                     contactRepository = contactRepository,
                     updateChecker = updateChecker,
                     crashReportManager = crashReportManager,
+                    notificationHelper = notificationHelper,
                 )
 
             // Wait for any potential async operations to settle
@@ -2880,6 +2890,7 @@ class SettingsViewModelTest {
                     contactRepository = contactRepository,
                     updateChecker = updateChecker,
                     crashReportManager = crashReportManager,
+                    notificationHelper = notificationHelper,
                 )
 
             // The ViewModel should be created successfully with NativeReticulumProtocol
@@ -3577,6 +3588,108 @@ class SettingsViewModelTest {
                 assertTrue(
                     "MAP_SOURCES should still be expanded after toggle",
                     state.cardExpansionStates[SettingsCardId.MAP_SOURCES.name] == true,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `state collects notificationPrivacyLevel from repository`() =
+        runTest {
+            val privacyFlow =
+                MutableStateFlow(network.columba.app.data.model.NotificationPrivacyLevel.DEFAULT)
+            every { settingsRepository.notificationPrivacyLevelFlow } returns privacyFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertEquals(
+                    network.columba.app.data.model.NotificationPrivacyLevel.DEFAULT,
+                    state.notificationPrivacyLevel,
+                )
+
+                privacyFlow.value = network.columba.app.data.model.NotificationPrivacyLevel.NONE
+                state = awaitItem()
+                assertEquals(
+                    network.columba.app.data.model.NotificationPrivacyLevel.NONE,
+                    state.notificationPrivacyLevel,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setNotificationPrivacyLevel saves through helper and state follows the stored level`() =
+        runTest {
+            val privacyFlow =
+                MutableStateFlow(network.columba.app.data.model.NotificationPrivacyLevel.DEFAULT)
+            every { settingsRepository.notificationPrivacyLevelFlow } returns privacyFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                viewModel.setNotificationPrivacyLevel(
+                    network.columba.app.data.model.NotificationPrivacyLevel.NAME_ONLY,
+                )
+                privacyFlow.value = network.columba.app.data.model.NotificationPrivacyLevel.NAME_ONLY
+                state = expectMostRecentItem()
+
+                assertEquals(
+                    network.columba.app.data.model.NotificationPrivacyLevel.NAME_ONLY,
+                    state.notificationPrivacyLevel,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+
+            coVerify(exactly = 1) {
+                notificationHelper.setMessagePrivacyLevel(
+                    network.columba.app.data.model.NotificationPrivacyLevel.NAME_ONLY,
+                )
+            }
+        }
+
+    @Test
+    fun `notificationPrivacyLevel survives a settings state rebuild`() =
+        runTest {
+            val privacyFlow =
+                MutableStateFlow(network.columba.app.data.model.NotificationPrivacyLevel.NONE)
+            every { settingsRepository.notificationPrivacyLevelFlow } returns privacyFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+                assertEquals(
+                    network.columba.app.data.model.NotificationPrivacyLevel.NONE,
+                    state.notificationPrivacyLevel,
+                )
+
+                // Any flow in the loadSettings() combine rebuilds the snapshot; a theme
+                // change must not reset the chooser to FULL.
+                themePreferenceFlow.value = PresetTheme.FOREST
+                state = expectMostRecentItem()
+                assertEquals(
+                    network.columba.app.data.model.NotificationPrivacyLevel.NONE,
+                    state.notificationPrivacyLevel,
                 )
 
                 cancelAndConsumeRemainingEvents()

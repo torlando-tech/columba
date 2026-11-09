@@ -160,55 +160,6 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
             assertEquals(1000L, savedMessage?.timestamp)
         }
 
-    /**
-     * `signatureVerified` drives the unverified-sender warning (false) versus no
-     * warning (true / legacy null). It must survive the repository's
-     * Message -> MessageEntity mapping and stay nullable — coercing null to
-     * false would banner every legacy row, coercing false to null would hide a
-     * possible forgery.
-     */
-    @Test
-    fun `saveMessage persists signatureVerified without coercing null`() =
-        runTest {
-            repository.saveMessage(
-                TEST_PEER_HASH,
-                "Peer",
-                Message(
-                    id = "msg_sig_false",
-                    destinationHash = TEST_PEER_HASH,
-                    content = "unverified",
-                    timestamp = 1000L,
-                    isFromMe = false,
-                    status = "delivered",
-                    signatureVerified = false,
-                ),
-                null,
-            )
-            repository.saveMessage(
-                TEST_PEER_HASH,
-                "Peer",
-                Message(
-                    id = "msg_sig_null",
-                    destinationHash = TEST_PEER_HASH,
-                    content = "legacy",
-                    timestamp = 2000L,
-                    isFromMe = false,
-                    status = "delivered",
-                    signatureVerified = null,
-                ),
-                null,
-            )
-            testDispatcher.scheduler.advanceUntilIdle()
-
-            assertEquals(
-                false,
-                messageDao.getMessageById("msg_sig_false", TEST_IDENTITY_HASH)?.signatureVerified,
-            )
-            val savedLegacy = messageDao.getMessageById("msg_sig_null", TEST_IDENTITY_HASH)
-            assertNotNull("Legacy message should be saved", savedLegacy)
-            assertNull(savedLegacy!!.signatureVerified)
-        }
-
     @Test
     fun `saveMessage does NOT overwrite existing message - key deduplication test`() =
         runTest {

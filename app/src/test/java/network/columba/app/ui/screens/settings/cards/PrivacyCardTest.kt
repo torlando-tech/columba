@@ -6,10 +6,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.test.RegisterComponentActivityRule
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -37,11 +41,13 @@ class PrivacyCardTest {
 
     private var blockUnknownSendersChanged: Boolean? = null
     private var allowCallsFromContactsOnlyChanged: Boolean? = null
+    private var notificationPrivacyLevelChanged: NotificationPrivacyLevel? = null
 
     @Before
     fun resetCallbackTrackers() {
         blockUnknownSendersChanged = null
         allowCallsFromContactsOnlyChanged = null
+        notificationPrivacyLevelChanged = null
     }
 
     // ========== Setup Helper ==========
@@ -50,6 +56,7 @@ class PrivacyCardTest {
         isExpanded: Boolean = true,
         blockUnknownSenders: Boolean = false,
         allowCallsFromContactsOnly: Boolean = false,
+        notificationPrivacyLevel: NotificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
     ) {
         composeTestRule.setContent {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -60,6 +67,8 @@ class PrivacyCardTest {
                     onBlockUnknownSendersChange = { blockUnknownSendersChanged = it },
                     allowCallsFromContactsOnly = allowCallsFromContactsOnly,
                     onAllowCallsFromContactsOnlyChange = { allowCallsFromContactsOnlyChanged = it },
+                    notificationPrivacyLevel = notificationPrivacyLevel,
+                    onNotificationPrivacyLevelChange = { notificationPrivacyLevelChanged = it },
                 )
             }
         }
@@ -154,4 +163,48 @@ class PrivacyCardTest {
             "Only contacts can call you. Other callers' link attempts are silently dropped.",
         ).assertIsDisplayed()
     }
+
+    // ========== Message privacy chooser ==========
+
+    @Test
+    fun privacyCard_displaysMessagePrivacySection_and_selectedLevel() {
+        setUpCard(
+            isExpanded = true,
+            notificationPrivacyLevel = NotificationPrivacyLevel.NAME_ONLY,
+        )
+
+        composeTestRule.onNodeWithText("Message Privacy").performScrollTo().assertIsDisplayed()
+        // All three levels render, so the card exposes the same control as
+        // Notification Settings without needing a separate screen.
+        NotificationPrivacyLevel.entries.forEach { level ->
+            composeTestRule
+                .onNodeWithText(levelName(level))
+                .performScrollTo()
+                .assertIsDisplayed()
+        }
+        composeTestRule.onNodeWithText("Name only").assertIsSelected()
+    }
+
+    @Test
+    fun privacyCard_choosingLevelTriggersCallback() {
+        setUpCard(isExpanded = true)
+
+        composeTestRule.onNodeWithText("No name or message").performScrollTo().performClick()
+
+        assertEquals(NotificationPrivacyLevel.NONE, notificationPrivacyLevelChanged)
+    }
+
+    @Test
+    fun privacyCard_messagePrivacySectionHiddenWhenCollapsed() {
+        setUpCard(isExpanded = false)
+
+        composeTestRule.onNodeWithText("Message Privacy").assertDoesNotExist()
+    }
+
+    private fun levelName(level: NotificationPrivacyLevel): String =
+        when (level) {
+            NotificationPrivacyLevel.FULL -> "Name and message"
+            NotificationPrivacyLevel.NAME_ONLY -> "Name only"
+            NotificationPrivacyLevel.NONE -> "No name or message"
+        }
 }

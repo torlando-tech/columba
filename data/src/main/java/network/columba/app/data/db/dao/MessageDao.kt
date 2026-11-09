@@ -224,6 +224,19 @@ interface MessageDao {
         limit: Int,
     ): List<String>
 
+    /** Match one bounded peer-key page without loading messages or retained evidence. */
+    @Query(
+        """
+        SELECT DISTINCT conversationHash FROM messages
+        WHERE signatureStatus = 'SOURCE_UNKNOWN'
+          AND EXISTS (SELECT 1 FROM message_signature_evidence evidence
+                      WHERE evidence.messageId = messages.id AND evidence.identityHash = messages.identityHash)
+          AND isFromMe = 0 AND conversationHash IN (:senderHashes)
+        ORDER BY conversationHash
+        """,
+    )
+    suspend fun getPendingSignatureSendersMatching(senderHashes: List<String>): List<String>
+
     /** Advance both cursor fields from the last row, even if its source is still unknown. */
     @Query(
         """

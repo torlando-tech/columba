@@ -49,8 +49,8 @@ class Codec2AudioTest {
 
     @Test
     fun `codec2 recorder writes raw concatenated frames and reports duration`() {
-        val capturedFrames = CountDownLatch(2)
-        val capture = FakePcmCapture(capturedFrames)
+        val processedFrames = CountDownLatch(2)
+        val capture = FakePcmCapture(processedFrames)
         val backend =
             Codec2VoiceRecorderBackend(
                 mode = Codec2.CODEC2_3200,
@@ -60,7 +60,7 @@ class Codec2AudioTest {
         val output = File(context.cacheDir, "codec2-recorder-test-${System.nanoTime()}.c2")
 
         backend.start(output)
-        assertTrue(capturedFrames.await(2, TimeUnit.SECONDS))
+        assertTrue(processedFrames.await(2, TimeUnit.SECONDS))
         val recording = backend.stop()
 
         assertArrayEquals(byteArrayOf(1, 2, 2, 3), output.readBytes())
@@ -159,13 +159,14 @@ class Codec2AudioTest {
 
         override fun read(buffer: ShortArray, offset: Int, size: Int): Int {
             if (!active.get()) return 0
+            // A new read starts only after the preceding frame was encoded and buffered.
+            if (nextSample > 1) frames.countDown()
             if (frames.count == 0L) {
                 Thread.sleep(5)
                 return 0
             }
             repeat(size) { buffer[offset + it] = nextSample }
             nextSample = (nextSample + 1).toShort()
-            frames.countDown()
             return size
         }
 

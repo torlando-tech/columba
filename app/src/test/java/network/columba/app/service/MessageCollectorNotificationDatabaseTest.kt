@@ -5,15 +5,19 @@ import android.app.Application
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -21,12 +25,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 import network.columba.app.data.crypto.IdentityKeyEncryptor
 import network.columba.app.data.crypto.IdentityKeyMigrator
 import network.columba.app.data.crypto.IdentityKeyProvider
+import network.columba.app.data.db.dao.MessageDao
+import network.columba.app.data.db.dao.PendingNotificationMessage
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
-import network.columba.app.data.repository.Message as DataMessage
 import network.columba.app.data.storage.AttachmentStorageManager
 import network.columba.app.notifications.NotificationHelper
 import network.columba.app.repository.SettingsRepository
@@ -36,14 +41,14 @@ import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.test.DatabaseTest
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
+import java.util.concurrent.atomic.AtomicBoolean
+import network.columba.app.data.repository.Message as DataMessage
 
 /**
  * Real-Room, real-NotificationManager coverage of durable notification catch-up.
@@ -94,9 +99,9 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
                 database = database,
                 context = context,
                 ioDispatcher = Dispatchers.IO,
-                keyEncryptor = mockk<IdentityKeyEncryptor>(relaxed = true),
-                keyMigrator = mockk<IdentityKeyMigrator>(relaxed = true),
-                keyProvider = mockk<IdentityKeyProvider>(relaxed = true),
+                keyEncryptor = mockk<IdentityKeyEncryptor>(),
+                keyMigrator = mockk<IdentityKeyMigrator>(),
+                keyProvider = mockk<IdentityKeyProvider>(),
             )
         conversationRepository =
             ConversationRepository(
@@ -128,7 +133,7 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
         clearAllMocks()
     }
 
-    private fun startCollector() {
+    private fun startCollector(notificationDao: MessageDao = messageDao) {
         collector =
             MessageCollector(
                 rnsCore = rnsCore,
@@ -139,7 +144,7 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
                 identityRepository = identityRepository,
                 notificationHelper = notificationHelper,
                 peerIconDao = database.peerIconDao(),
-                messageDao = messageDao,
+                messageDao = notificationDao,
             ).also { it.startCollecting() }
     }
 
@@ -189,7 +194,6 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
     private fun inbound(
         id: String,
         content: String,
-        peers: String = peerHash,
     ) = ReceivedMessage(
         messageHash = id,
         content = content,
@@ -234,6 +238,64 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
             val posted = requireNotNull(activeMessageNotification(peerHash))
             assertEquals("Hello before start", posted.notification.extras.getString(Notification.EXTRA_TEXT))
             assertEquals("Peer", posted.notification.extras.getString(Notification.EXTRA_TITLE))
+        }
+
+    @Test
+    fun `transient pending read failure recovers without restarting collector`() =
+        runBlocking {
+            val identity = insertTestIdentity()
+            seedInboundBeforeStart(identity, "read-retry", "Recovered pending message")
+            val failOnce = AtomicBoolean(true)
+            val notificationDao =
+                object : MessageDao by messageDao {
+                    override suspend fun getPendingNotificationMessages(
+                        identityHash: String,
+                        limit: Int,
+                    ): List<PendingNotificationMessage> {
+                        if (failOnce.getAndSet(false)) throw SQLiteException("Transient pending read failure")
+                        return messageDao.getPendingNotificationMessages(identityHash, limit)
+                    }
+                }
+
+            startCollector(notificationDao)
+
+            awaitNotification(peerHash)
+            awaitHandled(identity.identityHash, "read-retry")
+            assertEquals(
+                "Recovered pending message",
+                activeMessageNotification(peerHash)?.notification?.extras?.getString(Notification.EXTRA_TEXT),
+            )
+            seedInboundBeforeStart(identity, "after-read-retry", "Later message still notifies")
+            awaitHandled(identity.identityHash, "after-read-retry")
+            assertEquals(
+                "Later message still notifies",
+                activeMessageNotification(peerHash)?.notification?.extras?.getString(Notification.EXTRA_TEXT),
+            )
+        }
+
+    @Test
+    fun `transient notification observation failure resubscribes without a backend event`() =
+        runBlocking {
+            val identity = insertTestIdentity()
+            seedInboundBeforeStart(identity, "observe-retry", "Recovered observation")
+            val failOnce = AtomicBoolean(true)
+            val notificationDao =
+                object : MessageDao by messageDao {
+                    override fun observePendingNotificationCount(identityHash: String): Flow<Int> =
+                        flow {
+                            if (failOnce.getAndSet(false)) throw SQLiteException("Transient observation failure")
+                            emitAll(messageDao.observePendingNotificationCount(identityHash))
+                        }
+                }
+
+            startCollector(notificationDao)
+
+            awaitNotification(peerHash)
+            awaitHandled(identity.identityHash, "observe-retry")
+            assertEquals(
+                "Recovered observation",
+                activeMessageNotification(peerHash)?.notification?.extras?.getString(Notification.EXTRA_TEXT),
+            )
         }
 
     @Test
@@ -303,14 +365,16 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
     @Test
     fun `active identity switch processes only the newly active identity's pending rows`() =
         runBlocking {
-            val first = insertTestIdentity(
-                identityHash = "first-identity",
-                isActive = true,
-            )
-            val second = insertTestIdentity(
-                identityHash = "second-identity",
-                isActive = false,
-            )
+            val first =
+                insertTestIdentity(
+                    identityHash = "first-identity",
+                    isActive = true,
+                )
+            val second =
+                insertTestIdentity(
+                    identityHash = "second-identity",
+                    isActive = false,
+                )
             startCollector()
 
             seedInboundBeforeStart(first, "first-message", "First identity message")

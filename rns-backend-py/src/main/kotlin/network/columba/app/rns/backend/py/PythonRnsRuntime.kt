@@ -3,13 +3,11 @@ package network.columba.app.rns.backend.py
 import android.content.Context
 import android.util.Log
 import network.columba.app.rns.api.annotation.ReflectivelyKept
-import network.columba.app.rns.api.util.StampGenerator
 import network.columba.app.rns.api.util.toHex
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.ReticulumConfig
 import java.io.File
@@ -37,7 +35,6 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class PythonRnsRuntime(
     private val appContext: Context,
-    private val stampGenerator: StampGenerator = StampGenerator(),
 ) {
     private companion object {
         const val TAG = "PythonRnsRuntime"
@@ -433,52 +430,8 @@ class PythonRnsRuntime(
             KotlinDestinationResolverBridge(this),
         )
 
-        // Bypass upstream LXMF's multiprocessing-based stamp generation,
-        // which hangs on Android (Chaquopy lacks `sem_open` and the
-        // platform aggressively kills idle helper processes). The
-        // torlando-tech LXMF fork exposes `LXStamper.set_external_generator`
-        // for exactly this case — we hand it a Kotlin coroutine-based
-        // generator wrapped in a BiFunction (Chaquopy's `get_sam` rejects
-        // bound method references because they implement multiple
-        // functional interfaces; BiFunction is a single, unambiguous SAM).
-        // Ported from release/v0.10.x's `PythonWrapperManager.setStampGeneratorCallback`.
-        registerExternalStampGenerator()
-
         running.set(true)
         Log.i(TAG, "Python RNS/LXMF stack started")
-    }
-
-    /**
-     * Register the native Kotlin [StampGenerator] as upstream LXMF's
-     * external stamp generator.
-     *
-     * Called from [start] once the `LXMF` module is loaded. Registration
-     * goes through `event_bridge.install_external_stamp_generator(...)`,
-     * which wraps the Kotlin callback in a Python closure before handing
-     * it to `LXStamper.set_external_generator(...)`. The Python-closure
-     * indirection avoids a Chaquopy quirk where SAM-callable invocation
-     * (`BiFunction.apply` from Python's `__call__`) boxes the args as
-     * `Object[]` instead of typed `byte[] / int`; routing through a
-     * Python closure that calls our typed `generate(...)` method makes
-     * Chaquopy apply the proper bytes→byte[] conversion.
-     *
-     * Best-effort — registration failure logs a warning and falls back
-     * to upstream's default generator, which works on desktop platforms
-     * but hangs on Android (Chaquopy lacks `sem_open`, Android kills
-     * idle helper processes, `multiprocessing.Manager` deadlocks).
-     */
-    private fun registerExternalStampGenerator() {
-        try {
-            val callback = StampGeneratorCallback(stampGenerator)
-            eventBridge.callAttr("install_external_stamp_generator", callback)
-            Log.i(TAG, "Native Kotlin stamp generator registered with LXMF.LXStamper")
-        } catch (e: Exception) {
-            Log.w(
-                TAG,
-                "Failed to register external stamp generator with LXMF.LXStamper: ${e.message}",
-                e,
-            )
-        }
     }
 
     /**
@@ -507,17 +460,12 @@ class PythonRnsRuntime(
     }
 
     /**
-     * Tear the stack down. Best-effort — RNS 1.1.x has no clean per-instance
-     * shutdown, so this deregisters the event bridge, asks RNS to run its exit
-     * handler, and drops every cached reference. The "Apply & Restart" flow
-     * (Phase B verification) exercises start->stop->start; restart correctness
-     * is on-device integration work.
+     * Stop LXMF jobs and the Reticulum instance, then clear process-global state
+     * for an in-process restart. Stamp workers are cancelled and reaped by RNS.
      */
     @Synchronized
     fun stop() {
         if (!running.get()) return
-        runCatching { eventBridge.callAttr("uninstall_external_stamp_generator") }
-            .onFailure { Log.w(TAG, "External stamp generator unregister failed", it) }
         runCatching { eventBridge.callAttr("deregister_callbacks") }
             .onFailure { Log.w(TAG, "event_bridge deregister failed", it) }
         // The destination resolver must outlive the callbacks: the telemetry
@@ -526,6 +474,8 @@ class PythonRnsRuntime(
         // during deregistration is not dropped for a missing resolver.
         runCatching { eventBridge.callAttr("uninstall_destination_resolver") }
             .onFailure { Log.w(TAG, "Destination resolver unregister failed", it) }
+        runCatching { eventBridge.callAttr("stop_lxmf_router", lxmRouter) }
+            .onFailure { Log.w(TAG, "LXMF router shutdown failed", it) }
         runCatching {
             // RNS.Reticulum.exit_handler() flushes path tables + closes
             // interfaces without the os._exit() that RNS.exit() would do.
@@ -694,68 +644,3 @@ internal class KotlinDestinationResolverBridge(
     }
 }
 
-/**
- * Python-callable bridge to [StampGenerator].
- *
- * Exposed as a top-level class (not a lambda or BiFunction) because
- * Chaquopy's SAM-callable dispatch (`JavaObject.__call__` → bridge
- * apply) boxes args as `Object[]` instead of typed `byte[] / int`,
- * causing `ClassCastException` in the synthetic apply wrapper. A
- * normal class with typed `generate` overloads makes Chaquopy take its typed-method
- * dispatch path (`JavaMethod.__call__`), which correctly converts
- * Python `bytes → byte[]`, `int → int`, and the cancellation token before invocation.
- *
- * Invoked from Python via
- * `event_bridge.install_external_stamp_generator(callback)`, which
- * wraps this in a closure registered with
- * `LXMF.LXStamper.set_external_generator(...)`.
- *
- * Returns a Python `list` rather than a Kotlin `Pair` because
- * Chaquopy serializes Python tuples back through the `list` builtin
- * most cleanly. The stamp bytes are wrapped via Python's `bytes()`
- * builtin so they expose the buffer protocol that LXStamper then
- * concatenates with the workblock.
- */
-@ReflectivelyKept // event_bridge.py calls generate(workblock, cost, token) by name via Chaquopy — R8 must not rename/strip it
-internal class StampGeneratorCallback(
-    private val generator: StampGenerator,
-) {
-    private companion object {
-        const val TAG = "StampGeneratorCallback"
-    }
-
-    fun generate(
-        workblock: ByteArray,
-        stampCost: Int,
-    ): PyObject = generate(workblock, stampCost, null)
-
-    fun generate(
-        workblock: ByteArray,
-        stampCost: Int,
-        cancellationToken: PyObject?,
-    ): PyObject {
-        Log.d(
-            TAG,
-            "External stamp generator invoked: cost=$stampCost, " +
-                "workblock=${workblock.size} bytes",
-        )
-
-        val result =
-            runBlocking(Dispatchers.Default) {
-                generator.generateStamp(workblock, stampCost) {
-                    cancellationToken?.callAttr("is_cancelled")?.toBoolean() == true
-                }
-            }
-
-        Log.d(TAG, "Stamp generated: value=${result.value}, rounds=${result.rounds}")
-
-        val py = Python.getInstance()
-        val builtins = py.builtins
-        val stamp = result.stamp ?: ByteArray(0)
-        val pyBytes = builtins.callAttr("bytes", stamp)
-        val pyList = builtins.callAttr("list")
-        pyList.callAttr("append", pyBytes)
-        pyList.callAttr("append", result.rounds)
-        return pyList
-    }
-}

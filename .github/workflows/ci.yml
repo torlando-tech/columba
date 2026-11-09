@@ -440,15 +440,6 @@ jobs:
       - name: Run RNS, stats, data, and micron module tests
         run: ./gradlew :detekt-rules:test :rns-api:testDebugUnitTest :rns-ipc:testDebugUnitTest :rns-host:testKotlinBackendDebugUnitTest :rns-host:testPythonBackendDebugUnitTest :rns-backend-kt:testDebugUnitTest :rns-backend-py:testDebugUnitTest :rns-stats:testDebugUnitTest :data:testDebugUnitTest :micron:test --stacktrace --max-workers=4
 
-      - name: Run rns-backend-py Python unit tests
-        # The event-bridge / RNS Python unit tests (rns-backend-py/src/test/
-        # python/) are self-contained unittest.TestCase modules - they stub the
-        # RNS + LXMF modules and need no third-party deps - so they run under
-        # the stdlib unittest runner. The Gradle unit-test tasks above do not
-        # pick them up, so a later regression there would otherwise pass CI
-        # silently; run them explicitly.
-        run: python -m unittest discover -s rns-backend-py/src/test/python -p "test_*.py" -v
-
       - name: Upload unit test results
         if: always()
         uses: actions/upload-artifact@v7
@@ -479,13 +470,9 @@ jobs:
 
   python-rns-contract-tests:
     name: Python RNS Interface Contract Tests
-    # Runs the rns-backend-py python suite against the REAL pinned RNS/LXMF
-    # (installed from the exact SHAs in rns-backend-py/build.gradle.kts).
-    # The stub-based unit tests pass anywhere; the contract test drives real
-    # announce traffic through RNS's own transport (Transport.inbound +
-    # process_announce_queue) so a drift in the RNS<->adapter callback contract
-    # (e.g. the RNS 1.5.x `size=` keyword on the Interface announce callbacks)
-    # is caught here instead of on-device. No emulator, no JDK.
+    # Owns all Python backend tests. The runner installs the immutable pins
+    # and isolates each file so stub imports cannot contaminate real-stack
+    # radio and interface regressions.
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

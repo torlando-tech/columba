@@ -17,8 +17,8 @@ moved into the Gradle build script).
 
 | Package | Ref | Pinned to | Notes |
 |---|---|---|---|
-| `rns` (Reticulum) | `git+https://github.com/torlando-tech/Reticulum` | **`3759488eba880489562268d9a1a993f443d1b8bd`** (SHA ✓) | RNS 1.5.5 (branch `rebase/columba-1.5.5`), the torlando-tech 6-commit hardening patch set rebased on top of upstream 1.5.5: socket cleanup, narrow PHY-stats RPC backoff, ratchet file-handle fixes, deterministic AutoInterface teardown, and lifecycle-race fixes. 1.5.5 adds the live interface attach/detach/reload API (`Reticulum.attach_interface` / `detach_interface` / `reload_interface`) that the Python backend now uses for hot-reload instead of a full RNS restart; `RNS/Reticulum.py` and `RNS/Transport.py` are untouched upstream 1.5.5, so that API is pure upstream code. The fork is exactly upstream tag 1.5.5 + those 6 commits. Verified: the fork's own suite (`tests/all.py`, 100 tests incl. the `AutoInterfaceTeardownTests` hardening class that exercises the rebased `AutoInterface.py`) is green on this SHA, plus a standalone attach/reload/detach smoke test confirming the reload replaces the interface object while leaving untouched interfaces live. The former pin was `754654fe` (upstream 1.5.2 + the same 6 commits); 4/6 patch-ids are byte-identical across the rebase, the other 2 differ only by the 1.5.5 `AutoInterface.discovery_sockets` compatibility line preserved during conflict resolution. |
-| `lxmf` (LXMF) | `git+https://github.com/torlando-tech/LXMF` | **`8912186e48b482a76bf04e2ac4b6c8940991aecc`** (SHA ✓) | LXMF 1.1.0 with validated external native stamping, cooperative cancellation and stale-result rejection, plus `receiving_interface` and `receiving_hops` on opportunistic delivery. |
+| `rns` (Reticulum) | `git+https://github.com/torlando-tech/Reticulum` | **`9aa9d29e1ee0eaa58e6d810c42a29b348c8168ed`** | Branch `columba-android-minimal-1.6.0`, based exactly on upstream RNS 1.6.0 (`cb1260891d1b6da8f6e9b21542c4f0cc0725cac4`). Only Android AutoInterface teardown/hot-reload fixes and packet-local RSSI/SNR/Q snapshots before the asynchronous receive queue are carried. `RNS/Stamps.py` and `RNS/Resource.py` remain identical to upstream 1.6.0; no external stamper, Link RPC shim, socket or ratchet patches. |
+| `lxmf` (LXMF) | `git+https://github.com/torlando-tech/LXMF` | **`09cd6be4324345ed07964e9f6e5372308f6d6883`** | LXMF 1.3.0 with `receiving_interface` and `receiving_hops` on opportunistic delivery, plus mutex-protected SQLite compatibility. `LXStamper.py` is unchanged upstream and delegates generation and cancellation to `RNS.Stamps`. |
 | `ble-reticulum` | `git+https://github.com/torlando-tech/ble-reticulum.git` | **`63557acfe5c923dcdafeb7bc37508bf835f16514`** (SHA ✓) | Provides `BLEInterface` + `bluetooth_driver` that the bundled `ble_modules/` adapters subclass. SHA is the `v0.2.3` release tag (main tip, 2026-10-03); builds as `ble-reticulum-0.2.3`. Carries the `BLEPeerInterface.ifac_size` fix (#45: RNS 1.5.2 reads `interface.ifac_size` on every inbound packet, and the spawned BLE peer interface previously did not inherit it, so every inbound packet raised `AttributeError` and no peer announce was ever ingested) plus the BLE data-path fixes: `BLEPeerInterface.announce_rate_grace`/`_penalty` for the RNS stats RPC (#47), same-address duplicate-identity normalization so a fixed-MAC peer reconnecting via the other BLE mode is not misread as Android MAC rotation (#48), and the scanner-wedge health check that disambiguates a quiet RF room from a genuinely wedged adapter via the adapter's own `Powered` state, without a false "reboot required" (#49). Behavior-only change: no `Interface` callback signature or inbound-path attribute contract changes. |
 | `cryptography` | PyPI | `>=42.0.0` | Range, not pinned — Chaquopy resolves a native wheel for the target ABI. Acceptable: it's a well-tested transitive dep, not a protocol-correctness surface. |
 | `u-msgpack-python` | PyPI | unpinned | Sideband-compatible telemetry + LXST signalling wire format. Pure-Python, stable API. |
@@ -27,23 +27,52 @@ moved into the Gradle build script).
 
 ### `patches/` tree — intentionally NOT restored
 
-`release/v0.10.x`'s `python/patches/RNS/{Destination.py,__init__.py}` carried
-context-manager fixes for RNS file-handle leaks (ratchet I/O + the `log()`
-function). They are **not restored** here because:
+The Python backend does not deploy replacement RNS modules or patch installed
+source files at runtime. Platform changes belong in the pinned Android fork;
+the protocol stack and stamper stay upstream-owned.
 
-1. The pinned RNS fork commit `3759488e` **already includes** the ratchet I/O
-   context-manager fixes (carried by hardening commit `2f3cf488`, present on the
-   rebased 1.5.5 branch), while upstream RNS 1.5.5 includes the equivalent
-   `log()` context-manager fix. The plan's instruction is to skip the `patches/`
-   tree when the pinned commit already has the fixes — it does.
-2. The patch *deployment* mechanism — `reticulum_wrapper.py::_deploy_rns_patches()`,
-   which copied the patched files over the pip-installed RNS at runtime — is
-   **not** being restored (the slim-Python design deletes `reticulum_wrapper.py`).
-   Restoring `patches/` without a deployer would be dead weight.
+The fork leaves upstream PHY-stat RPC exception handling intact. Radio delivery
+metrics come from the received message's packet/link snapshot, not the latest
+interface reading; opportunistic interface/hop annotations remain in the LXMF
+fork. Missing RSSI/SNR stays absent, while valid zero values are preserved.
 
-If a future RNS pin regresses on those fixes, the correct response is to bump
-the pin to a fork commit that has them — **not** to re-introduce a runtime
-file-patcher.
+### Upstream Android stamping
+
+LXMF 1.3.0 uses RNS 1.6.0's stock `RNS.Stamps.generate_stamp` dispatcher,
+including fractional costs. On Android it selects the upstream persistent
+fork/Manager/mmap worker path without semaphore-backed Event/Queue objects.
+There is no Kotlin stamper injection, external-generator registry, replacement
+dispatcher, or native hook. The packaged environment has no multiprocessing
+stub.
+
+Runtime stop shuts down the LXMF router, cancels deferred messages through
+`LXMRouter.cancel_outbound`, and signals `RNS.Stamps.cancel_work` until upstream
+workers release their jobs. The upstream worker owns process joins and Manager
+shutdown. Cancellation is repeated during teardown because workblock expansion
+precedes upstream job registration.
+
+The LXMF SQLite compatibility patch permits `sqlite3.threadsafety >= 1`;
+single-thread SQLite builds still fail. The store's existing connection mutex
+serializes shared-connection operations, including close. Constructor-only
+schema initialization happens before the router exposes the store. No Android
+validation errors are suppressed.
+
+Device regressions use the actual Chaquopy packages to observe persistent-worker
+dispatch, independently verify an 8.5-cost SHA-256 proof, and cover deferred
+cancellation, child-process cleanup, host stop and runtime reuse:
+
+```sh
+./gradlew :rns-backend-py:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.rns.backend.py.PythonRnsUpstreamStamperInstrumentedTest
+```
+
+Host Python tests run through `python3 rns-backend-py/run_python_tests.py`.
+The dedicated Python CI job installs the exact pins and runs each file in an
+isolated interpreter. Do not use dependency-free unittest discovery for this
+mixed stub/integration suite.
+
+Cold Gradle bootstrap uses a 60-second network timeout for distribution
+downloads, including the official URL's GitHub redirect, before CI checks start.
 
 ### `TorClientInterface.py` — not restored (Tor out of scope)
 

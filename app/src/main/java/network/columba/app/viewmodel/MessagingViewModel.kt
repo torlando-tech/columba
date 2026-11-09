@@ -3536,7 +3536,7 @@ class MessagingViewModel
         private suspend fun reconstructImageForRetry(fieldsJson: String?): Pair<Boolean, ByteArray?> {
             val hasImage = fieldsJson?.let { runCatching { JSONObject(it).has("6") }.getOrDefault(false) } == true
             if (!hasImage) return false to null
-            return true to withContext(Dispatchers.IO) { loadImageBytes(fieldsJson) }
+            return true to withContext(attachmentIoDispatcher) { loadImageBytes(fieldsJson) }
         }
 
         /**

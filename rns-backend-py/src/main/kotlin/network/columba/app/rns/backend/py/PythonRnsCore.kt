@@ -885,7 +885,7 @@ class PythonRnsCore(
         // Create RNS.Link and poll status until ACTIVE — same pattern as
         // PythonRnsNomadnet.establishLink. We deliberately skip the
         // established_callback indirection: it would need a SAM-callable
-        // Kotlin->Python bridge (cf. StampGeneratorCallback), and the
+        // Kotlin->Python bridge, and the
         // status field flips to ACTIVE inside link's internal handshake
         // path before the callback returns, so polling sees the same
         // state.

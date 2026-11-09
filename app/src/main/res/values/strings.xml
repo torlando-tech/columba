@@ -402,6 +402,11 @@
     <string name="notif_call_ongoing_title">Voice Call</string>
     <string name="notif_call_ongoing_text">%1$s - %2$s</string>
     <string name="notif_call_action_end">End Call</string>
+    <string name="notif_perm_blocked_title">Notifications are blocked</string>
+    <string name="notif_perm_blocked_body">Notifications are enabled, but Android is blocking them. Grant the notification permission to receive them.</string>
+    <string name="notif_perm_denied_forever_body">Android is no longer showing the permission dialog. Grant the notification permission in system settings to receive notifications.</string>
+    <string name="notif_perm_grant">Grant permission</string>
+    <string name="notif_perm_open_settings">Open app settings</string>
     <string name="nav_chats">Chats</string>
     <string name="nav_voice">Voice</string>
     <string name="nav_announces">Announces</string>

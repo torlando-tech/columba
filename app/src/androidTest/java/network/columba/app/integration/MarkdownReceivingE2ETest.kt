@@ -80,6 +80,7 @@ class MarkdownReceivingE2ETest {
                     localIdentityDao = database.localIdentityDao(),
                     attachmentStorage = AttachmentStorageManager(context),
                     draftDao = database.draftDao(),
+                    database = database,
                 )
             database.localIdentityDao().insert(
                 LocalIdentityEntity(

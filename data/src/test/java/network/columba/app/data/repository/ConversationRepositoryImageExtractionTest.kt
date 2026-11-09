@@ -56,6 +56,7 @@ class ConversationRepositoryImageExtractionTest {
                 mockk<LocalIdentityDao>(),
                 attachmentStorage,
                 mockk<DraftDao>(),
+                mockk(),
             )
     }
 

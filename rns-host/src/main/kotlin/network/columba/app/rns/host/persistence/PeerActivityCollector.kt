@@ -34,6 +34,7 @@ class PeerActivityCollector(
             supervisorScope {
                 launch(start = CoroutineStart.UNDISPATCHED) {
                     backend.lxmf.observeMessages().collect { message ->
+                        persistence.persistReceivedMessage(message)
                         persistence.persistIncomingMessageActivity(
                             messageHash = message.messageHash,
                             sourceHash = message.sourceHash.toHex(),

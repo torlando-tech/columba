@@ -233,6 +233,8 @@ class ColumbaRNodeInterface(Interface):
         # consistent on its own.
         self.IN = True
         self.OUT = True
+        # Transport copies these per-frame KISS readings onto inbound packets.
+        self.reports_phy_stats = True
         self.bitrate = 10000  # Approximate LoRa bitrate (varies with SF/BW)
         self.rxb = 0
         self.txb = 0

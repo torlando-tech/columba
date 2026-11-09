@@ -82,11 +82,10 @@ class PropagationFallbackOrderingTest(unittest.TestCase):
         sys.modules["RNS"] = rns
 
         lxmf = types.ModuleType("LXMF")
-        setattr(lxmf, "LXStamper", type("LXStamper", (), {}))
         setattr(
             lxmf,
             "LXMessage",
-            type("LXMessage", (), {"PROPAGATED": 3, "SENT": 4, "DELIVERED": 8}),
+            type("LXMessage", (), {"PROPAGATED": 3, "SENT": 4, "DELIVERED": 8, "CANCELLED": 254}),
         )
         sys.modules["LXMF"] = lxmf
 
@@ -121,6 +120,26 @@ class PropagationFallbackOrderingTest(unittest.TestCase):
         self.assertEqual(0, message.delivery_attempts)
         self.assertIsNone(message.packed)
         self.assertIsNone(message.propagation_packed)
+
+    def test_cancelled_stamp_does_not_restart_as_propagated_delivery(self):
+        events = []
+        message = Message()
+        router = PinnedLockRouter(events)
+        setattr(self.module, "_lxmf_router", router)
+        self.module.attach_lxmessage_callbacks(
+            message,
+            Callback(events, "delivered"),
+            Callback(events, "failed"),
+            Callback(events, "retrying"),
+            try_propagation_on_fail=True,
+        )
+
+        message.state = 254
+        message.failed_callback(message)
+
+        self.assertEqual([("failed", message.hash.hex())], events)
+        self.assertEqual(2, message.desired_method)
+        self.assertFalse(router.submitted.is_set())
 
     def test_duplicate_primary_failure_owns_one_enqueue(self):
         events = []

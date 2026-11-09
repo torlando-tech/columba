@@ -123,9 +123,6 @@ class SerializeDiscoveredInterfacesTests(unittest.TestCase):
         sys.modules["RNS"] = rns
 
         lxmf = types.ModuleType("LXMF")
-        setattr(lxmf, "LXStamper", types.SimpleNamespace(
-            set_external_generator=lambda *args: None,
-        ))
         sys.modules["LXMF"] = lxmf
 
         spec = importlib.util.spec_from_file_location(

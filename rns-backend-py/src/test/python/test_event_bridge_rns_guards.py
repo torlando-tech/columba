@@ -48,7 +48,6 @@ class RnsGuardTests(unittest.TestCase):
         sys.modules["RNS.Interfaces"] = interfaces_pkg
         sys.modules["RNS.Interfaces.AutoInterface"] = auto_mod
         lxmf = types.ModuleType("LXMF")
-        setattr(lxmf, "LXStamper", types.SimpleNamespace(set_external_generator=lambda *a: None))
         sys.modules["LXMF"] = lxmf
 
         spec = importlib.util.spec_from_file_location("event_bridge_rns_guards_test", EVENT_BRIDGE_PATH)

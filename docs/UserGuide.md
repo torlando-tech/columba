@@ -105,6 +105,18 @@ If not:
 * Message is **stored securely**
 * Delivered automatically when the recipient becomes available
 
+### Sender verification warnings
+
+* **Yellow: Sender identity unknown** means Columba does not yet have the sender's public key. This can happen with genuine first-contact messages; it does not mean a signature check failed.
+* **Red: Invalid signature** means the signature failed verification against the claimed sender's key. Treat the message as potentially forged or modified.
+* **Yellow: Signature not verified** means no conclusive verification result is available, including older messages whose original verification reason was not recorded.
+
+For newly received unknown-key messages, Columba retains the original signed message until it can verify it. When an announce supplies the matching key, the background Reticulum service checks pending messages automatically: a valid signature removes the warning, and an invalid signature changes it to red. This works with the conversation open, elsewhere in the app, or while only the service is running. Pending verification survives restarts.
+
+Learning a key alone never marks a message verified. Older messages without retained signed evidence cannot be rechecked automatically. Open message details to see the recorded verification result.
+
+Messages received while only the service is running retain sender keys and icons for restoration after restart. Message notifications catch up when the app starts, and temporary database read failures are retried automatically.
+
 ---
 
 ## Step 5 – Offline and Mesh Usage

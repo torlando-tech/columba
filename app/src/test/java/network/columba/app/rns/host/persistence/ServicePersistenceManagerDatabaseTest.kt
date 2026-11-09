@@ -1,5 +1,14 @@
 package network.columba.app.rns.host.persistence
 
+import androidx.room.Room
+import network.columba.app.data.db.ColumbaDatabase
+import network.columba.app.data.repository.ConversationRepository
+import network.columba.app.data.storage.AttachmentStorageManager
+import network.columba.app.data.util.HashUtils
+import network.columba.app.domain.model.SignatureStatus
+import network.columba.app.rns.api.model.ReceivedMessage
+import network.reticulum.crypto.Hashes
+import network.reticulum.destination.Destination
 import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.db.entity.ConversationEntity
@@ -11,6 +20,7 @@ import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTelemetry
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.util.toHex
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.test.DatabaseTest
 import io.mockk.clearAllMocks
@@ -31,6 +41,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -967,6 +978,289 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             assertNotNull(activity)
             assertTrue(activity!!.lastReceivedAt in before..after)
             assertEquals("MESSAGE", activity.activityType)
+        }
+
+    @Test
+    fun `service-only received key survives database reopen in peer retrieval and restoration`() =
+        testScope.runTest {
+            val databaseName = "service-received-peer-key"
+            database.close()
+            context.deleteDatabase(databaseName)
+            database = Room.databaseBuilder(context, ColumbaDatabase::class.java, databaseName).allowMainThreadQueries().build()
+            try {
+                every { ServiceDatabaseProvider.getDatabase(any()) } returns database
+                persistenceManager = ServicePersistenceManager(context, testScope, settingsAccessor, false)
+                val destination = ByteArray(16) { (it + 40).toByte() }
+                localIdentityDao.insert(createTestIdentity().copy(destinationHash = destination.toHex()))
+                val sender = Destination.hash(Hashes.truncatedHash(testPublicKey), "lxmf", "delivery")
+                val identityHash = HashUtils.computeIdentityHash(testPublicKey)
+                val received =
+                    ReceivedMessage(
+                        messageHash = "service-peer-key",
+                        content = "Received without an app observer",
+                        sourceHash = sender,
+                        destinationHash = destination,
+                        timestamp = 1_000L,
+                        publicKey = testPublicKey,
+                        signatureStatus = SignatureStatus.VERIFIED,
+                    )
+
+                assertTrue(persistenceManager.persistReceivedMessage(received))
+                assertArrayEquals(testPublicKey, peerIdentityDao.getPeerIdentity(identityHash)?.publicKey)
+                assertNull("restorable identities must not use destination-hash aliases", peerIdentityDao.getPeerIdentity(sender.toHex()))
+
+                // Reopen the actual file, rather than retaining a manager or an in-memory DAO cache.
+                database.close()
+                database = Room.databaseBuilder(context, ColumbaDatabase::class.java, databaseName).allowMainThreadQueries().build()
+                every { ServiceDatabaseProvider.getDatabase(any()) } returns database
+                persistenceManager = ServicePersistenceManager(context, testScope, settingsAccessor, false)
+                val repository =
+                    ConversationRepository(
+                        conversationDao = conversationDao,
+                        messageDao = messageDao,
+                        peerIdentityDao = peerIdentityDao,
+                        localIdentityDao = localIdentityDao,
+                        attachmentStorage = AttachmentStorageManager(context),
+                        draftDao = draftDao,
+                        threadDao = database.threadDao(),
+                        database = database,
+                    )
+                assertArrayEquals(testPublicKey, repository.getPeerPublicKey(identityHash))
+                val restored = repository.getPeerIdentitiesBatch(limit = 500, offset = 0).single()
+                assertEquals(identityHash, restored.first)
+                assertArrayEquals(testPublicKey, restored.second)
+                assertArrayEquals(testPublicKey, repository.getAllPeerIdentities().single().second)
+                assertTrue(persistenceManager.persistReceivedMessage(received))
+                assertEquals(1, peerIdentityDao.getAllPeerIdentities().size)
+            } finally {
+                database.close()
+                context.deleteDatabase(databaseName)
+            }
+        }
+
+    @Test
+    fun `received malformed or mismatched keys are not restorable but matching keys preserve enrichment`() =
+        testScope.runTest {
+            val destination = ByteArray(16) { (it + 40).toByte() }
+            localIdentityDao.insert(createTestIdentity().copy(destinationHash = destination.toHex()))
+            val sender = Destination.hash(Hashes.truncatedHash(testPublicKey), "lxmf", "delivery")
+            val received =
+                ReceivedMessage(
+                    messageHash = "untrusted-peer-key",
+                    content = "Retain the message, not an untrusted restorable key",
+                    sourceHash = sender,
+                    destinationHash = destination,
+                    timestamp = 1_000L,
+                    publicKey = testPublicKey,
+                    signatureStatus = SignatureStatus.VERIFIED,
+                )
+            val rejectedKeys =
+                listOf(
+                    received.copy(messageHash = "mismatched-key", publicKey = ByteArray(64) { (it + 1).toByte() }),
+                    received.copy(messageHash = "malformed-key", publicKey = byteArrayOf(1, 2, 3)),
+                )
+            for (message in rejectedKeys) {
+                assertTrue("key validation must not change message admission", persistenceManager.persistReceivedMessage(message))
+                assertNotNull(messageDao.getMessageById(message.messageHash, TEST_IDENTITY_HASH))
+                assertTrue("untrusted key must not enter the global restoration/export table", peerIdentityDao.getAllPeerIdentities().isEmpty())
+            }
+
+            // Key/source binding is independent of whether this particular message's
+            // signature verified. Preserve enrichment for pending, invalid and legacy messages.
+            val statuses = listOf(null, SignatureStatus.VERIFIED, SignatureStatus.SOURCE_UNKNOWN, SignatureStatus.INVALID, SignatureStatus.UNVERIFIED)
+            for (status in statuses) {
+                assertTrue(persistenceManager.persistReceivedMessage(received.copy(messageHash = "matching-key-$status", signatureStatus = status)))
+                assertArrayEquals(testPublicKey, peerIdentityDao.getPeerIdentity(HashUtils.computeIdentityHash(testPublicKey))?.publicKey)
+            }
+        }
+
+    @Test
+    fun `blocked and unaddressed service messages do not persist peer keys`() =
+        testScope.runTest {
+            val destination = ByteArray(16) { (it + 40).toByte() }
+            localIdentityDao.insert(createTestIdentity().copy(destinationHash = destination.toHex()))
+            val sender = Destination.hash(Hashes.truncatedHash(testPublicKey), "lxmf", "delivery")
+            val received =
+                ReceivedMessage(
+                    messageHash = "blocked-peer-key",
+                    content = "Must not persist",
+                    sourceHash = sender,
+                    destinationHash = destination,
+                    timestamp = 1_000L,
+                    publicKey = testPublicKey,
+                    signatureStatus = SignatureStatus.VERIFIED,
+                )
+            database.blockedPeerDao().insertBlockedPeer(
+                network.columba.app.data.db.entity.BlockedPeerEntity(
+                    peerHash = sender.toHex(),
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerIdentityHash = null,
+                    displayName = "Blocked",
+                    blockedTimestamp = 1L,
+                    isBlackholeEnabled = false,
+                ),
+            )
+            assertFalse(persistenceManager.persistReceivedMessage(received))
+            assertTrue(peerIdentityDao.getAllPeerIdentities().isEmpty())
+            assertNull(messageDao.getMessageById(received.messageHash, TEST_IDENTITY_HASH))
+
+            val otherKey = ByteArray(64) { (it + 1).toByte() }
+            val unknown =
+                received.copy(
+                    messageHash = "unknown-peer-key",
+                    sourceHash = Destination.hash(Hashes.truncatedHash(otherKey), "lxmf", "delivery"),
+                    publicKey = otherKey,
+                )
+            every { settingsAccessor.getBlockUnknownSenders() } returns true
+            assertFalse(persistenceManager.persistReceivedMessage(unknown))
+            assertTrue(peerIdentityDao.getAllPeerIdentities().isEmpty())
+            assertNull(messageDao.getMessageById(unknown.messageHash, TEST_IDENTITY_HASH))
+
+            every { settingsAccessor.getBlockUnknownSenders() } returns false
+            val unaddressed = unknown.copy(messageHash = "unaddressed-peer-key", destinationHash = ByteArray(16))
+            assertFalse(persistenceManager.persistReceivedMessage(unaddressed))
+            assertTrue(peerIdentityDao.getAllPeerIdentities().isEmpty())
+            assertNull(messageDao.getMessageById(unaddressed.messageHash, TEST_IDENTITY_HASH))
+        }
+
+    @Test
+    fun `persistReceivedMessage stores icon and pending state without a UI observer`() =
+        testScope.runTest {
+            val destination = ByteArray(16) { (it + 40).toByte() }
+            val destinationHex = destination.toHex()
+            localIdentityDao.insert(
+                network.columba.app.data.db.entity.LocalIdentityEntity(
+                    identityHash = "service-identity",
+                    displayName = "Service Identity",
+                    destinationHash = destinationHex,
+                    filePath = "/data/service-identity.key",
+                    keyData = null,
+                    createdTimestamp = 1L,
+                    lastUsedTimestamp = 1L,
+                    isActive = true,
+                ),
+            )
+            val source = ByteArray(16) { (it + 60).toByte() }
+            val sourceHex = source.toHex()
+
+            assertTrue(
+                persistenceManager.persistReceivedMessage(
+                    network.columba.app.rns.api.model.ReceivedMessage(
+                        messageHash = "service-icon-message",
+                        content = "Icon arrives with the message",
+                        sourceHash = source,
+                        destinationHash = destination,
+                        timestamp = 1_000L,
+                        iconAppearance =
+                            network.columba.app.rns.api.model.IconAppearance(
+                                iconName = "account",
+                                foregroundColor = "00FF00",
+                                backgroundColor = "000000",
+                            ),
+                    ),
+                ),
+            )
+
+            val stored =
+                requireNotNull(
+                    messageDao.getMessageById("service-icon-message", "service-identity"),
+                )
+            assertFalse("new inbound rows must start pending", stored.notificationHandled)
+            assertEquals(
+                "the service write alone must leave one pending delivery",
+                1,
+                messageDao.observePendingNotificationCount("service-identity").first(),
+            )
+            val icon = requireNotNull(database.peerIconDao().getIcon(sourceHex))
+            assertEquals("account", icon.iconName)
+            assertEquals("00FF00", icon.foregroundColor)
+            assertEquals("000000", icon.backgroundColor)
+
+            assertTrue(
+                persistenceManager.persistReceivedMessage(
+                    network.columba.app.rns.api.model.ReceivedMessage(
+                        messageHash = "service-empty-icon",
+                        content = "No icon on this one",
+                        sourceHash = source,
+                        destinationHash = destination,
+                        timestamp = 2_000L,
+                        iconAppearance =
+                            network.columba.app.rns.api.model.IconAppearance(
+                                iconName = "",
+                                foregroundColor = "",
+                                backgroundColor = "",
+                            ),
+                    ),
+                ),
+            )
+            assertEquals(
+                "invalid appearance must not overwrite the stored icon",
+                "account",
+                database.peerIconDao().getIcon(sourceHex)?.iconName,
+            )
+        }
+
+    @Test
+    fun `service received thread creates root and replay preserves verification notification and activity`() =
+        testScope.runTest {
+            val destination = ByteArray(16) { (it + 40).toByte() }
+            val source = ByteArray(16) { (it + 60).toByte() }
+            val sender = source.toHex()
+            val threadId = ByteArray(16) { (it + 1).toByte() }
+            val rootId = "aa".repeat(32)
+            val evidence = byteArrayOf(1, 2, 3)
+            localIdentityDao.insert(createTestIdentity().copy(destinationHash = destination.toHex()))
+            val root =
+                ReceivedMessage(
+                    messageHash = rootId,
+                    content = "Main root",
+                    sourceHash = source,
+                    destinationHash = destination,
+                    timestamp = 1_000L,
+                )
+            assertTrue(persistenceManager.persistReceivedMessage(root))
+            val threaded =
+                root.copy(
+                    messageHash = "threaded-service-message",
+                    content = "First thread reply",
+                    fieldsJson = """{"8":"${threadId.toHex()}","48":"$rootId"}""",
+                    signatureStatus = SignatureStatus.SOURCE_UNKNOWN,
+                    signatureEvidence = evidence,
+                )
+            assertTrue(persistenceManager.persistReceivedMessage(threaded))
+            val stored = requireNotNull(messageDao.getMessageById(threaded.messageHash, TEST_IDENTITY_HASH))
+            assertArrayEquals(threadId, stored.threadId)
+            assertEquals(rootId, stored.replyToMessageId)
+            assertFalse(stored.notificationHandled)
+            assertArrayEquals(evidence, messageDao.readSignatureEvidence(threaded.messageHash, TEST_IDENTITY_HASH))
+            val threadBefore = requireNotNull(database.threadDao().getThread(TEST_IDENTITY_HASH, sender, threadId))
+            assertEquals(rootId, threadBefore.rootMessageId)
+            assertEquals("First thread reply", threadBefore.title)
+            assertEquals(stored.receivedAt, threadBefore.lastActivityAt)
+            val conversationBefore = requireNotNull(conversationDao.getConversation(sender, TEST_IDENTITY_HASH))
+            assertEquals(2, conversationBefore.unreadCount)
+
+            messageDao.resolvePendingSignature(threaded.messageHash, TEST_IDENTITY_HASH, SignatureStatus.VERIFIED)
+            messageDao.ackNotificationHandled(threaded.messageHash, TEST_IDENTITY_HASH)
+            assertTrue(
+                persistenceManager.persistReceivedMessage(
+                    threaded.copy(content = "Stale replay", timestamp = 9_000L),
+                ),
+            )
+            val replayed = requireNotNull(messageDao.getMessageById(threaded.messageHash, TEST_IDENTITY_HASH))
+            assertEquals("First thread reply", replayed.content)
+            assertEquals(SignatureStatus.VERIFIED, replayed.signatureStatus)
+            assertTrue(replayed.notificationHandled)
+            assertNull(messageDao.readSignatureEvidence(threaded.messageHash, TEST_IDENTITY_HASH))
+            assertEquals(2, messageDao.getAllMessagesForIdentity(TEST_IDENTITY_HASH).size)
+            val conversationAfter = requireNotNull(conversationDao.getConversation(sender, TEST_IDENTITY_HASH))
+            assertEquals(conversationBefore.lastMessage, conversationAfter.lastMessage)
+            assertEquals(conversationBefore.lastMessageTimestamp, conversationAfter.lastMessageTimestamp)
+            assertEquals(2, conversationAfter.unreadCount)
+            val threadAfter = requireNotNull(database.threadDao().getThread(TEST_IDENTITY_HASH, sender, threadId))
+            assertEquals(threadBefore.lastActivityAt, threadAfter.lastActivityAt)
+            assertEquals(rootId, threadAfter.rootMessageId)
+            assertEquals("First thread reply", threadAfter.title)
         }
 
     @Test

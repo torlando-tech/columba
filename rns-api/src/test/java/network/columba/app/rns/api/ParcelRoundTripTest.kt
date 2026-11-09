@@ -21,12 +21,13 @@ import network.columba.app.rns.api.model.PeerIdentityEntry
 import network.columba.app.rns.api.model.ReticulumConfig
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import network.columba.app.domain.model.SignatureStatus
+import network.columba.app.rns.api.model.ReceivedMessage
 
 /**
  * Parcel round-trip tests for the manual-Parcelable sealed classes ([RnsError],
@@ -82,6 +83,32 @@ class ParcelRoundTripTest {
         val original = DeliveryStatusUpdate("message", DeliveryStatus.PROPAGATED, 123L, "identity-a")
 
         assertEquals(original, roundTripViaFramework(original))
+    }
+
+    @Test
+    fun `ReceivedMessage preserves signature state and original evidence over Parcel`() {
+        val original =
+            ReceivedMessage(
+                messageHash = "message",
+                content = "hello",
+                sourceHash = ByteArray(16) { it.toByte() },
+                destinationHash = ByteArray(16) { (it + 1).toByte() },
+                timestamp = 123L,
+                signatureStatus = SignatureStatus.SOURCE_UNKNOWN,
+                signatureEvidence = ByteArray(512) { it.toByte() },
+            )
+        val restored = roundTripViaFramework(original)
+        assertEquals(original, restored)
+        assertEquals(original.hashCode(), restored.hashCode())
+        assertArrayEquals(original.signatureEvidence, restored.signatureEvidence)
+        SignatureStatus.entries.forEach { status ->
+            val message = original.copy(signatureStatus = status, signatureEvidence = null)
+            assertEquals(message, roundTripViaFramework(message))
+        }
+        assertEquals(
+            original.copy(signatureStatus = null, signatureEvidence = null),
+            roundTripViaFramework(original.copy(signatureStatus = null, signatureEvidence = null)),
+        )
     }
 
     @Test

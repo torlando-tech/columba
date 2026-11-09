@@ -117,6 +117,9 @@ class ServicePersistenceManagerTest {
         coEvery { peerIdentityDao.getPeerIdentity(any()) } returns null
         coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
         coEvery { localIdentityDao.getActiveIdentitySync() } returns null
+        // New deliveries pass both the preflight and transactional dedupe checks.
+        // Duplicate fixtures override getMessageById and return before the latter.
+        coEvery { messageDao.messageExists(any(), any()) } returns false
 
         // Mock ServiceDatabaseProvider singleton
         mockkObject(ServiceDatabaseProvider)

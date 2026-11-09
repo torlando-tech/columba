@@ -7,6 +7,7 @@ import network.columba.app.data.db.dao.ThreadUnreadCount
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.db.entity.ThreadEntity
 import network.columba.app.data.util.ThreadPolicy
+import network.columba.app.domain.model.SignatureStatus
 import network.columba.app.ui.model.ThreadRowSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -282,6 +283,21 @@ class ThreadUiDerivationTest {
 
         // Thread row not written yet (nothing persisted) -> no header.
         assertNull(ThreadUiDerivation.deriveHeader(null, message("m1"), root))
+    }
+
+    @Test
+    fun `header preserves every root signature verification state`() {
+        (SignatureStatus.entries + null).forEach { status ->
+            val root = message("root-1").copy(signatureStatus = status)
+            val header =
+                ThreadUiDerivation.deriveHeader(
+                    thread(1, rootMessageId = root.id),
+                    firstMessage = message("reply", replyToMessageId = root.id),
+                    rootMessage = root,
+                ) as ThreadHeaderUi.Root
+
+            assertEquals(status, header.signatureStatus)
+        }
     }
 
     @Test

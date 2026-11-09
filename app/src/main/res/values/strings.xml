@@ -1873,7 +1873,6 @@
     <string name="messaging_sync_downloading">Downloading...</string>
     <string name="messaging_sync_processing">Processing...</string>
     <string name="messaging_sync_download_complete">Download complete</string>
-    <string name="messaging_unverified_sender_chip">Unverified sender — may be forged</string>
     <!-- MessageDetailScreen -->
     <string name="message_detail_title">Message Details</string>
     <string name="message_detail_loading">Loading...</string>
@@ -1916,9 +1915,14 @@
     </plurals>
     <string name="message_detail_signature_title">Signature</string>
     <string name="message_detail_signature_verified">Verified</string>
-    <string name="message_detail_signature_verified_detail">The sender\'s identity was confirmed against their announce.</string>
-    <string name="message_detail_signature_unverified">Unverified</string>
-    <string name="message_detail_signature_unverified_detail">The sender\'s signature could not be verified. Their identity may be unknown to your node, or the signature check may have failed. The message could be forged. Treat with caution.</string>
+    <string name="message_detail_signature_verified_detail">The signature matches the sender\'s identity.</string>
+    <string name="message_detail_signature_unknown">Sender identity unknown</string>
+    <string name="message_detail_signature_unknown_detail">The sender\'s public key is not available, so the signature has not been checked. It will be checked automatically when their identity announce is received. An unknown identity does not mean the signature is invalid.</string>
+    <string name="message_detail_signature_invalid">Invalid signature</string>
+    <string name="message_detail_signature_invalid_detail">The signature check failed against the sender\'s known identity. The message may be forged or altered. Do not trust its claimed sender.</string>
+    <string name="message_detail_signature_unverified">Signature not verified</string>
+    <string name="message_detail_signature_unverified_detail">No conclusive signature verification result is available for this message. The sender has not been authenticated. This is not a confirmed signature failure.</string>
+    <string name="signature_verification_failed">Signature verification failed</string>
     <!-- ChatsScreen -->
     <string name="chats_saved_contact">Saved contact</string>
     <string name="chats_removed_contact">Removed contact</string>

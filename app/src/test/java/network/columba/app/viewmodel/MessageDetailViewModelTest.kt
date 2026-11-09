@@ -28,6 +28,7 @@ import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import network.columba.app.domain.model.SignatureStatus
 
 /**
  * Unit tests for MessageDetailViewModel.
@@ -200,6 +201,44 @@ class MessageDetailViewModelTest {
         }
 
     // ========== Reactive Update Tests ==========
+
+    @Test
+    fun `open message details update when unknown sender signature becomes verified`() =
+        assertLiveSignatureResolution(SignatureStatus.VERIFIED)
+
+    @Test
+    fun `open message details update when unknown sender signature proves invalid`() =
+        assertLiveSignatureResolution(SignatureStatus.INVALID)
+
+    private fun assertLiveSignatureResolution(resolvedStatus: SignatureStatus) =
+        runTest {
+            val unknownMessage =
+                createTestMessageEntity(
+                    status = "delivered",
+                    isFromMe = false,
+                ).copy(signatureStatus = SignatureStatus.SOURCE_UNKNOWN)
+            val messageFlow = MutableStateFlow<MessageEntity?>(unknownMessage)
+            every { conversationRepository.observeMessageById(testMessageId) } returns messageFlow
+            viewModel = MessageDetailViewModel(conversationRepository)
+
+            // Keep the details observer subscribed throughout the signature-only update.
+            val observedStatuses = mutableListOf<SignatureStatus?>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.message.collect { message ->
+                    if (message != null) observedStatuses += message.signatureStatus
+                }
+            }
+            viewModel.loadMessage(testMessageId)
+            advanceUntilIdle()
+            assertEquals(SignatureStatus.SOURCE_UNKNOWN, viewModel.message.value?.signatureStatus)
+
+            messageFlow.value = unknownMessage.copy(signatureStatus = resolvedStatus)
+            advanceUntilIdle()
+
+            assertEquals(resolvedStatus, viewModel.message.value?.signatureStatus)
+            assertEquals(listOf(SignatureStatus.SOURCE_UNKNOWN, resolvedStatus), observedStatuses)
+            verify(exactly = 1) { conversationRepository.observeMessageById(testMessageId) }
+        }
 
     @Test
     fun `message state updates when status changes from pending to delivered`() =

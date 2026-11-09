@@ -1,6 +1,5 @@
 package network.columba.app.rns.ipc.client
 
-import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +33,7 @@ import network.columba.app.rns.ipc.callback.IRnsMessageCallback
 import network.columba.app.rns.ipc.callback.IRnsPropagationStateCallback
 import network.columba.app.rns.ipc.callback.IRnsTransferProgressCallback
 import java.io.File
+import android.util.Log
 
 internal class ClientRnsLxmf(
     private val remote: IRnsLxmf,
@@ -138,22 +138,23 @@ internal class ClientRnsLxmf(
 
     override fun observeMessages(): Flow<ReceivedMessage> = callbackFlow {
         val cb = object : IRnsMessageCallback.Stub() {
-            override fun onMessage(message: ReceivedMessage?, fieldsBlob: ParcelFileDescriptor?) {
+            override fun onMessage(message: ReceivedMessage?, fieldsBlob: ParcelFileDescriptor?,
+                    ) {
                 if (message == null) {
                     runCatching { fieldsBlob?.close() }
                     return
                 }
-                // Large messages (received image/file) arrive with fieldsJson
-                // stripped and carried out-of-band; reconstitute it. FieldsBlob
-                // closes the fd on success. On a read failure fall back to the
-                // (fieldsJson-less) message rather than dropping it, and never
-                // leak the fd.
-                val full = if (fieldsBlob != null) {
-                    val fields = runCatching { FieldsBlob.readFromPfd(fieldsBlob) }
-                        .onFailure { runCatching { fieldsBlob.close() } }
-                        .getOrNull()
-                    if (fields != null) message.copy(fieldsJson = fields) else message
-                } else {
+                        // Large fields and original signature evidence arrive together
+                        // out-of-band. Reject a broken blob rather than permanently
+                        // persisting a stripped message with missing fields/evidence.
+                        val full = if (fieldsBlob != null) {
+                    val payload =
+                                    try { FieldsBlob.readFromPfd(fieldsBlob) } catch (e: Exception) { runCatching { fieldsBlob.close() }
+                                        Log.e("ClientRnsLxmf", "Rejecting inbound message with unreadable fields blob", e)
+                                        return
+                                    }
+                                message.copy(fieldsJson = payload.fieldsJson, signatureEvidence = payload.signatureEvidence)
+                            } else {
                     message
                 }
                 trySend(full)

@@ -7,6 +7,7 @@ import network.columba.app.data.db.dao.ThreadUnreadCount
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.db.entity.ThreadEntity
 import network.columba.app.data.util.ThreadPolicy
+import network.columba.app.domain.model.SignatureStatus
 import network.columba.app.rns.api.util.toHex
 
 /**
@@ -106,7 +107,7 @@ sealed interface ThreadHeaderUi {
         val content: String,
         val isFromMe: Boolean,
         val timestamp: Long,
-        val signatureVerified: Boolean? = null,
+        val signatureStatus: SignatureStatus? = null,
     ) : ThreadHeaderUi
 
     /** Case-2 thread whose root was never received (or was deleted locally). */
@@ -289,6 +290,6 @@ object ThreadUiDerivation {
             content = content,
             isFromMe = isFromMe,
             timestamp = receivedAt ?: timestamp,
-            signatureVerified = signatureVerified,
+            signatureStatus = signatureStatus,
         )
 }

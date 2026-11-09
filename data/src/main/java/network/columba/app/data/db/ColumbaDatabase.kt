@@ -46,12 +46,14 @@ import network.columba.app.data.db.entity.PendingDeliveryStatusEntity
 import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import network.columba.app.data.db.entity.ReceivedLocationEntity
 import network.columba.app.data.db.entity.RmspServerEntity
+import network.columba.app.data.db.entity.SignatureEvidenceChunkEntity
 import network.columba.app.data.db.entity.ThreadEntity
 
 @Database(
     entities = [
         ConversationEntity::class,
         MessageEntity::class,
+        SignatureEvidenceChunkEntity::class,
         AnnounceEntity::class,
         AnnounceInterfaceSightingEntity::class,
         PeerIdentityEntity::class,
@@ -73,7 +75,7 @@ import network.columba.app.data.db.entity.ThreadEntity
         PreferredPropagationNodeEntity::class,
         ThreadEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
 // Room DB facade: one accessor per DAO; count grows with every new table, not complexity.
@@ -401,15 +403,7 @@ abstract class ColumbaDatabase : RoomDatabase() {
                 }
             }
 
-        /**
-         * v9 → v10: add nullable `messages.signatureVerified INTEGER`.
-         *
-         * Surfaces LXMF signature-verification state per received message so
-         * the UI can warn on unverified senders. Pure additive `ALTER` — no
-         * data transform. Existing rows backfill to NULL, which the UI treats
-         * as "no warning": showing every legacy message as unverified would be
-         * inaccurate (most are from peers we already had on file) and alarming.
-         */
+        /** v9 → v10: record the original nullable verification flag without backfilling legacy rows. */
         val MIGRATION_9_10: Migration =
             object : Migration(9, 10) {
                 override fun migrate(db: SupportSQLiteDatabase) {
@@ -522,7 +516,168 @@ abstract class ColumbaDatabase : RoomDatabase() {
             }
 
         /**
-         * Every migration this database version requires, in ascending order.
+         * v12 → v13: distinguish unknown senders from invalid signatures, retain signed
+         * payload evidence, and track durable app-owned notification completion.
+         * Historical false results lack a failure reason, so remain UNVERIFIED.
+         * Rebuild messages to remove the obsolete flag without requiring SQLite DROP COLUMN;
+         * thread grouping and all existing message metadata are preserved.
+         *
+         * Main v11/v12 contain threads and per-thread drafts; beta v11/v12 instead
+         * contain signatureStatus/evidence and then notificationHandled. Beta messages
+         * already have their final signature shape and must not be rebuilt or backfilled.
+         */
+        val MIGRATION_12_13: Migration =
+            object : Migration(12, 13) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    if (hasMessageColumn(db, "signatureStatus")) {
+                        upgradeBetaThreadsAndNotifications(db)
+                        return
+                    }
+                    db.execSQL(
+                        """
+                        CREATE TABLE `messages_new` (
+                            `id` TEXT NOT NULL,
+                            `conversationHash` TEXT NOT NULL,
+                            `identityHash` TEXT NOT NULL,
+                            `content` TEXT NOT NULL,
+                            `timestamp` INTEGER NOT NULL,
+                            `isFromMe` INTEGER NOT NULL,
+                            `status` TEXT NOT NULL,
+                            `isRead` INTEGER NOT NULL,
+                            `fieldsJson` TEXT,
+                            `reactionsJson` TEXT,
+                            `deliveryMethod` TEXT,
+                            `errorMessage` TEXT,
+                            `replyToMessageId` TEXT,
+                            `receivedHopCount` INTEGER,
+                            `receivedInterface` TEXT,
+                            `receivedRssi` INTEGER,
+                            `receivedSnr` REAL,
+                            `receivedAt` INTEGER,
+                            `sentInterface` TEXT,
+                            `signatureStatus` TEXT,
+                            `notificationHandled` INTEGER NOT NULL DEFAULT 1,
+                            `threadId` BLOB,
+                            PRIMARY KEY(`id`, `identityHash`),
+                            FOREIGN KEY(`conversationHash`, `identityHash`)
+                                REFERENCES `conversations`(`peerHash`, `identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                            FOREIGN KEY(`identityHash`)
+                                REFERENCES `local_identities`(`identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """,
+                    )
+                    db.execSQL(
+                        """
+                        INSERT INTO `messages_new` (
+                            id, conversationHash, identityHash, content, timestamp, isFromMe, status, isRead,
+                            fieldsJson, reactionsJson, deliveryMethod, errorMessage, replyToMessageId,
+                            receivedHopCount, receivedInterface, receivedRssi, receivedSnr, receivedAt, sentInterface,
+                            signatureStatus, threadId
+                        )
+                        SELECT id, conversationHash, identityHash, content, timestamp, isFromMe, status, isRead,
+                            fieldsJson, reactionsJson, deliveryMethod, errorMessage, replyToMessageId,
+                            receivedHopCount, receivedInterface, receivedRssi, receivedSnr, receivedAt, sentInterface,
+                            CASE signatureVerified WHEN 1 THEN 'VERIFIED' WHEN 0 THEN 'UNVERIFIED' ELSE NULL END,
+                            threadId
+                        FROM `messages`
+                        """,
+                    )
+                    db.execSQL("DROP TABLE `messages`")
+                    db.execSQL("ALTER TABLE `messages_new` RENAME TO `messages`")
+                    createMessageIndexes(db)
+                    createSignatureEvidenceTable(db)
+                }
+            }
+
+        /**
+         * Room prefers this direct route over 11 → 12 → 13. That is required for beta
+         * v11, whose drafts do not yet have the threadId expected by main's 11 → 12.
+         * Main v11 still uses both authoritative main migrations through this route.
+         */
+        val MIGRATION_11_13: Migration =
+            object : Migration(11, 13) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    if (hasMessageColumn(db, "signatureStatus")) {
+                        upgradeBetaThreadsAndNotifications(db)
+                    } else {
+                        MIGRATION_11_12.migrate(db)
+                        MIGRATION_12_13.migrate(db)
+                    }
+                }
+            }
+
+        private fun upgradeBetaThreadsAndNotifications(db: SupportSQLiteDatabase) {
+            if (!hasMessageColumn(db, "notificationHandled")) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN notificationHandled INTEGER NOT NULL DEFAULT 1")
+                db.execSQL(
+                    "CREATE INDEX index_messages_identityHash_isFromMe_notificationHandled " +
+                        "ON messages(identityHash, isFromMe, notificationHandled)",
+                )
+            }
+            MIGRATION_10_11.migrate(db)
+            MIGRATION_11_12.migrate(db)
+        }
+
+        private fun hasMessageColumn(
+            db: SupportSQLiteDatabase,
+            column: String,
+        ): Boolean {
+            db.query("PRAGMA table_info(messages)").use { cursor ->
+                val nameIndex = cursor.getColumnIndexOrThrow("name")
+                while (cursor.moveToNext()) {
+                    if (cursor.getString(nameIndex) == column) return true
+                }
+            }
+            return false
+        }
+
+        private fun createMessageIndexes(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE INDEX `index_messages_conversationHash_identityHash` ON `messages` (`conversationHash`, `identityHash`)",
+            )
+            db.execSQL("CREATE INDEX `index_messages_identityHash` ON `messages` (`identityHash`)")
+            db.execSQL("CREATE INDEX `index_messages_timestamp` ON `messages` (`timestamp`)")
+            db.execSQL(
+                "CREATE INDEX `index_messages_conversationHash_identityHash_timestamp` " +
+                    "ON `messages` (`conversationHash`, `identityHash`, `timestamp`)",
+            )
+            db.execSQL(
+                "CREATE INDEX `index_messages_conversationHash_identityHash_isFromMe_isRead` " +
+                    "ON `messages` (`conversationHash`, `identityHash`, `isFromMe`, `isRead`)",
+            )
+            db.execSQL("CREATE INDEX `index_messages_replyToMessageId` ON `messages` (`replyToMessageId`)")
+            db.execSQL(
+                "CREATE INDEX `index_messages_signatureStatus_conversationHash_id_identityHash` " +
+                    "ON `messages` (`signatureStatus`, `conversationHash`, `id`, `identityHash`)",
+            )
+            db.execSQL(
+                "CREATE INDEX `index_messages_identityHash_isFromMe_notificationHandled` " +
+                    "ON `messages` (`identityHash`, `isFromMe`, `notificationHandled`)",
+            )
+            db.execSQL(
+                "CREATE INDEX `index_messages_conversationHash_identityHash_threadId_timestamp` " +
+                    "ON `messages` (`conversationHash`, `identityHash`, `threadId`, `timestamp`)",
+            )
+        }
+
+        private fun createSignatureEvidenceTable(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE `message_signature_evidence` (
+                    `messageId` TEXT NOT NULL,
+                    `identityHash` TEXT NOT NULL,
+                    `chunkIndex` INTEGER NOT NULL,
+                    `bytes` BLOB NOT NULL,
+                    PRIMARY KEY(`messageId`, `identityHash`, `chunkIndex`),
+                    FOREIGN KEY(`messageId`, `identityHash`)
+                        REFERENCES `messages`(`id`, `identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """,
+            )
+        }
+
+        /**
+         * Every supported migration route, including the two historical v11/v12 lineages.
          *
          * **Both** processes install this whole array: [DatabaseModule]
          * (app process, Hilt) and `ServiceDatabaseProvider` (the `:reticulum`
@@ -531,7 +686,7 @@ abstract class ColumbaDatabase : RoomDatabase() {
          * process had already upgraded (missing `MIGRATION_11_12` — the
          * Greptile P1 on PR #1224). One list, no drift.
          *
-         * Contiguity and completeness are pinned by `MigrationChainTest`.
+         * Adjacent-chain completeness and the direct v11 route are pinned by `MigrationChainTest`.
          */
         val MIGRATIONS: Array<Migration> =
             arrayOf(
@@ -546,6 +701,8 @@ abstract class ColumbaDatabase : RoomDatabase() {
                 MIGRATION_9_10,
                 MIGRATION_10_11,
                 MIGRATION_11_12,
+                MIGRATION_11_13,
+                MIGRATION_12_13,
             )
 
         /**

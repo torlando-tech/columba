@@ -33,6 +33,11 @@ val MeshConnected = Color(0xFF4CAF50) // Green
 val MeshLimited = Color(0xFFFFC107) // Amber
 val MeshOffline = Color(0xFF9E9E9E) // Gray
 
+// Warning surfaces reuse the existing amber palette, with dark content for
+// readable contrast in both light and dark themes.
+val WarningContainer = MeshLimited
+val OnWarningContainer = Color.Black
+
 // Message bubble colors (updated to match new vibrant theme)
 val SentMessageBackground = Color(0xFFB844C8) // Vibrant magenta-purple
 val ReceivedMessageBackground = Color(0xFFF0F0F0) // Slightly lighter grey for better contrast

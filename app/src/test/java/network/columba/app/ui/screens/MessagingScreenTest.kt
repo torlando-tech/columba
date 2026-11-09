@@ -28,6 +28,7 @@ import androidx.paging.PagingData
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.testing.TestLifecycleOwner
+import network.columba.app.R
 import network.columba.app.audio.VoiceMessageRecordingState
 import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.service.SyncProgress
@@ -2357,7 +2358,7 @@ class MessagingScreenTest {
                             content = "Root text",
                             isFromMe = false,
                             timestamp = System.currentTimeMillis() - 86_400_000L,
-                            signatureVerified = false,
+                            signatureStatus = network.columba.app.domain.model.SignatureStatus.INVALID,
                         ),
                     replyCount = 12,
                 ),
@@ -2375,11 +2376,13 @@ class MessagingScreenTest {
         }
         composeTestRule.waitForIdle()
 
-        // Then - root text, reply count and the unverified warning share one row
+        // Then - root text, reply count and the invalid signature warning share one row
+        val invalidSignatureLabel =
+            RuntimeEnvironment.getApplication().getString(R.string.message_detail_signature_invalid)
         composeTestRule.onNodeWithText("Root text").assertIsDisplayed()
         composeTestRule.onNodeWithText("12 replies").assertIsDisplayed()
         composeTestRule
-            .onNodeWithContentDescription("Unverified sender — may be forged")
+            .onNodeWithContentDescription(invalidSignatureLabel)
             .assertIsDisplayed()
 
         // When - the reader scrolls into history
@@ -2393,7 +2396,7 @@ class MessagingScreenTest {
         composeTestRule.onNodeWithText("Root text").assertIsDisplayed()
         composeTestRule.onNodeWithText("12 replies").assertIsDisplayed()
         composeTestRule
-            .onNodeWithContentDescription("Unverified sender — may be forged")
+            .onNodeWithContentDescription(invalidSignatureLabel)
             .assertIsDisplayed()
     }
 }

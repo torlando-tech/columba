@@ -1,6 +1,7 @@
 package network.columba.app.migration
 
 import network.columba.app.data.db.entity.CustomThemeEntity
+import network.columba.app.viewmodel.UiMessage
 import kotlinx.serialization.Serializable
 import java.io.File
 
@@ -15,6 +16,8 @@ data class MigrationBundle(
     val identities: List<IdentityExport>,
     val conversations: List<ConversationExport>,
     val messages: List<MessageExport>,
+    /** Thread rows (threads-spec §5); empty in bundles from before v9. */
+    val threads: List<ThreadExport> = emptyList(),
     val contacts: List<ContactExport>,
     val announces: List<AnnounceExport> = emptyList(),
     val peerIdentities: List<PeerIdentityExport> = emptyList(),
@@ -29,7 +32,7 @@ data class MigrationBundle(
     val keysEncrypted: Boolean = false,
 ) {
     companion object {
-        const val CURRENT_VERSION = 8
+        const val CURRENT_VERSION = 9
 
         // Minimum version we can import - older files may have incompatible structure
         const val MINIMUM_VERSION = 1
@@ -103,6 +106,24 @@ data class MessageExport(
     // `fieldsJson.field16.reactions`; MigrationImporter routes either
     // shape into the new column.
     val reactionsJson: String? = null,
+    /** Hex of the raw `FIELD_THREAD` (0x08) bytes; null = Main (pre-v9 bundles: null). */
+    val threadId: String? = null,
+)
+
+/**
+ * Exported thread row (threads-spec §5). `threadId` is hex of the raw wire
+ * bytes; `rootMessageId` is a soft reference (same caveat as ThreadEntity).
+ */
+@Serializable
+data class ThreadExport(
+    val threadId: String,
+    val conversationHash: String,
+    val identityHash: String,
+    val rootMessageId: String? = null,
+    val title: String? = null,
+    val createdAt: Long,
+    val lastActivityAt: Long,
+    val archivedAt: Long? = null,
 )
 
 /**
@@ -385,7 +406,7 @@ sealed class ExportResult {
     ) : ExportResult()
 
     data class Error(
-        val message: String,
+        val message: UiMessage,
         val cause: Throwable? = null,
     ) : ExportResult()
 }
@@ -407,10 +428,20 @@ sealed class ImportResult {
     ) : ImportResult()
 
     data class Error(
-        val message: String,
+        val message: UiMessage,
         val cause: Throwable? = null,
     ) : ImportResult()
 }
+
+/**
+ * Thrown when a migration failure has a localized user-facing message. The
+ * ViewModel maps [uiMessage] straight into the error state instead of
+ * wrapping the raw exception text, so the render site resolves the resource.
+ */
+class MigrationLocalizedException(
+    val uiMessage: UiMessage,
+    cause: Throwable? = null,
+) : Exception(cause)
 
 /**
  * Preview of migration data before import.

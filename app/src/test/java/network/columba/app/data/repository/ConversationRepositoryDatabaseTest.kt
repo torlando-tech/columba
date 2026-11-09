@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.storage.AttachmentStorageManager
+import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.test.DatabaseTest
 import io.mockk.every
 import io.mockk.mockk
@@ -65,6 +66,7 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
                 localIdentityDao = localIdentityDao,
                 attachmentStorage = mockAttachmentStorage,
                 draftDao = draftDao,
+                threadDao = threadDao,
                 database = database,
             )
     }
@@ -72,6 +74,63 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
     @After
     fun teardownDispatcher() {
         Dispatchers.resetMain()
+    }
+
+    // ========== An unsent target is not a thread (threads-spec §5) ==========
+
+    @Test
+    fun `a draft on a fresh thread stores text without creating a thread`() =
+        runTest {
+            insertConversationFor(TEST_PEER_HASH)
+            val threadId = "02000000000000000000000000000002".hexToBytes()
+
+            repository.saveDraft(TEST_PEER_HASH, "> quoted root", threadId)
+
+            assertNull(
+                "a draft is not a thread: the row appears only on the first send",
+                threadDao.getThread(TEST_IDENTITY_HASH, TEST_PEER_HASH, threadId),
+            )
+            assertEquals("> quoted root", repository.getDraft(TEST_PEER_HASH, threadId))
+        }
+
+    @Test
+    fun `discarding an unsent draft removes the text and leaves no thread`() =
+        runTest {
+            insertConversationFor(TEST_PEER_HASH)
+            val threadId = "03000000000000000000000000000003".hexToBytes()
+            repository.saveDraft(TEST_PEER_HASH, "> quoted root", threadId)
+
+            repository.discardDraftIfUnsent(TEST_PEER_HASH, threadId)
+
+            assertNull("the abandoned target keeps no text", repository.getDraft(TEST_PEER_HASH, threadId))
+            assertNull(threadDao.getThread(TEST_IDENTITY_HASH, TEST_PEER_HASH, threadId))
+        }
+
+    @Test
+    fun `a named thread keeps its draft when the target is left`() =
+        runTest {
+            insertConversationFor(TEST_PEER_HASH)
+            val threadId = "04000000000000000000000000000004".hexToBytes()
+            repository.saveDraft(TEST_PEER_HASH, "> quoted root", threadId)
+            repository.renameThread(TEST_PEER_HASH, threadId, "Build notes")
+
+            repository.discardDraftIfUnsent(TEST_PEER_HASH, threadId)
+
+            assertNotNull("the name is a thread the user created", threadDao.getThread(TEST_IDENTITY_HASH, TEST_PEER_HASH, threadId))
+            assertEquals("a named target keeps its text for the next open", "> quoted root", repository.getDraft(TEST_PEER_HASH, threadId))
+        }
+
+    private suspend fun insertConversationFor(peerHash: String) {
+        conversationDao.insertConversation(
+            ConversationEntity(
+                peerHash = peerHash,
+                identityHash = TEST_IDENTITY_HASH,
+                peerName = "Peer",
+                lastMessage = "",
+                lastMessageTimestamp = 0L,
+                unreadCount = 0,
+            ),
+        )
     }
 
     // ========== Message Deduplication Tests ==========

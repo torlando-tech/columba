@@ -1022,6 +1022,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                         localIdentityDao = localIdentityDao,
                         attachmentStorage = AttachmentStorageManager(context),
                         draftDao = draftDao,
+                        threadDao = database.threadDao(),
                         database = database,
                     )
                 assertArrayEquals(testPublicKey, repository.getPeerPublicKey(identityHash))
@@ -1197,6 +1198,69 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                 "account",
                 database.peerIconDao().getIcon(sourceHex)?.iconName,
             )
+        }
+
+    @Test
+    fun `service received thread creates root and replay preserves verification notification and activity`() =
+        testScope.runTest {
+            val destination = ByteArray(16) { (it + 40).toByte() }
+            val source = ByteArray(16) { (it + 60).toByte() }
+            val sender = source.toHex()
+            val threadId = ByteArray(16) { (it + 1).toByte() }
+            val rootId = "aa".repeat(32)
+            val evidence = byteArrayOf(1, 2, 3)
+            localIdentityDao.insert(createTestIdentity().copy(destinationHash = destination.toHex()))
+            val root =
+                ReceivedMessage(
+                    messageHash = rootId,
+                    content = "Main root",
+                    sourceHash = source,
+                    destinationHash = destination,
+                    timestamp = 1_000L,
+                )
+            assertTrue(persistenceManager.persistReceivedMessage(root))
+            val threaded =
+                root.copy(
+                    messageHash = "threaded-service-message",
+                    content = "First thread reply",
+                    fieldsJson = """{"8":"${threadId.toHex()}","48":"$rootId"}""",
+                    signatureStatus = SignatureStatus.SOURCE_UNKNOWN,
+                    signatureEvidence = evidence,
+                )
+            assertTrue(persistenceManager.persistReceivedMessage(threaded))
+            val stored = requireNotNull(messageDao.getMessageById(threaded.messageHash, TEST_IDENTITY_HASH))
+            assertArrayEquals(threadId, stored.threadId)
+            assertEquals(rootId, stored.replyToMessageId)
+            assertFalse(stored.notificationHandled)
+            assertArrayEquals(evidence, messageDao.readSignatureEvidence(threaded.messageHash, TEST_IDENTITY_HASH))
+            val threadBefore = requireNotNull(database.threadDao().getThread(TEST_IDENTITY_HASH, sender, threadId))
+            assertEquals(rootId, threadBefore.rootMessageId)
+            assertEquals("First thread reply", threadBefore.title)
+            assertEquals(stored.receivedAt, threadBefore.lastActivityAt)
+            val conversationBefore = requireNotNull(conversationDao.getConversation(sender, TEST_IDENTITY_HASH))
+            assertEquals(2, conversationBefore.unreadCount)
+
+            messageDao.resolvePendingSignature(threaded.messageHash, TEST_IDENTITY_HASH, SignatureStatus.VERIFIED)
+            messageDao.ackNotificationHandled(threaded.messageHash, TEST_IDENTITY_HASH)
+            assertTrue(
+                persistenceManager.persistReceivedMessage(
+                    threaded.copy(content = "Stale replay", timestamp = 9_000L),
+                ),
+            )
+            val replayed = requireNotNull(messageDao.getMessageById(threaded.messageHash, TEST_IDENTITY_HASH))
+            assertEquals("First thread reply", replayed.content)
+            assertEquals(SignatureStatus.VERIFIED, replayed.signatureStatus)
+            assertTrue(replayed.notificationHandled)
+            assertNull(messageDao.readSignatureEvidence(threaded.messageHash, TEST_IDENTITY_HASH))
+            assertEquals(2, messageDao.getAllMessagesForIdentity(TEST_IDENTITY_HASH).size)
+            val conversationAfter = requireNotNull(conversationDao.getConversation(sender, TEST_IDENTITY_HASH))
+            assertEquals(conversationBefore.lastMessage, conversationAfter.lastMessage)
+            assertEquals(conversationBefore.lastMessageTimestamp, conversationAfter.lastMessageTimestamp)
+            assertEquals(2, conversationAfter.unreadCount)
+            val threadAfter = requireNotNull(database.threadDao().getThread(TEST_IDENTITY_HASH, sender, threadId))
+            assertEquals(threadBefore.lastActivityAt, threadAfter.lastActivityAt)
+            assertEquals(rootId, threadAfter.rootMessageId)
+            assertEquals("First thread reply", threadAfter.title)
         }
 
     @Test

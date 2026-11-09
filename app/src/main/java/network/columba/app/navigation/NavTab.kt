@@ -1,5 +1,6 @@
 package network.columba.app.navigation
 
+import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Call
@@ -9,6 +10,7 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
+import network.columba.app.R
 
 /**
  * Registry of destinations that may appear in the user-configurable bottom
@@ -29,23 +31,23 @@ enum class NavTab(
     val id: String,
     val routePrefix: String,
     val tabRoute: String,
-    val label: String,
+    @StringRes val labelRes: Int,
     val icon: ImageVector,
 ) {
-    CHATS("chats", "chats", "chats", "Chats", Icons.Default.Chat),
+    CHATS("chats", "chats", "chats", R.string.nav_chats, Icons.Default.Chat),
     // Lands on the dedicated voice/call-history screen (voice_calls), which is
     // the Chats voice view without the Text|Voice selector; its prefix is
     // disjoint from `chats` so the two tabs never highlight each other.
-    VOICE("voice", "voice_calls", "voice_calls", "Voice", Icons.Default.Call),
-    ANNOUNCES("announces", "announce_stream", "announce_stream", "Announces", Icons.Default.Sensors),
-    CONTACTS("contacts", "contacts", "contacts", "Contacts", Icons.Default.People),
-    MAP("map", "map", "map", "Map", Icons.Default.Map),
+    VOICE("voice", "voice_calls", "voice_calls", R.string.nav_voice, Icons.Default.Call),
+    ANNOUNCES("announces", "announce_stream", "announce_stream", R.string.nav_announces, Icons.Default.Sensors),
+    CONTACTS("contacts", "contacts", "contacts", R.string.nav_contacts, Icons.Default.People),
+    MAP("map", "map", "map", R.string.nav_map, Icons.Default.Map),
 
     // The NomadNet tab lands on nomadnet_home (which resolves the last-browsed
     // node); its selection prefix also covers nomadnet_browser/... so the tab
     // stays highlighted while browsing pages with the bar visible.
-    NOMADNET("nomadnet", "nomadnet", "nomadnet_home", "NomadNet", Icons.Default.Language),
-    SETTINGS("settings", "settings", "settings", "Settings", Icons.Default.Settings),
+    NOMADNET("nomadnet", "nomadnet", "nomadnet_home", R.string.nav_nomadnet, Icons.Default.Language),
+    SETTINGS("settings", "settings", "settings", R.string.nav_settings, Icons.Default.Settings),
     ;
 
     /** True when [currentRoute] belongs to this tab. */

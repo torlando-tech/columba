@@ -148,6 +148,7 @@ class MessagingViewModelImageLoadingTest {
         contactRepository = mockk()
         activeConversationManager = mockk()
         settingsRepository = mockk()
+        every { settingsRepository.threadsEnabledFlow } returns flowOf(false)
         propagationNodeManager = mockk()
         locationSharingManager = mockk()
         identityRepository = mockk()
@@ -166,7 +167,7 @@ class MessagingViewModelImageLoadingTest {
         every { locationSharingManager.sharingEvents } returns MutableSharedFlow()
 
         // Mock activeConversationManager
-        every { activeConversationManager.setActive(any()) } just Runs
+        every { activeConversationManager.setActive(any(), any()) } just Runs
 
         // Mock settingsRepository
         every { settingsRepository.messageFontScaleFlow } returns flowOf(1.0f)

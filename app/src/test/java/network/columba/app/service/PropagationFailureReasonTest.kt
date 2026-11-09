@@ -1,6 +1,8 @@
 package network.columba.app.service
 
 import network.columba.app.rns.api.model.PropagationState
+import network.columba.app.service.PropagationFailureReason.Explanation
+import network.columba.app.service.PropagationFailureReason.Reason
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -41,31 +43,31 @@ class PropagationFailureReasonTest {
 
     @Test
     fun `specific state names map to specific reasons`() {
-        assertEquals("No path to relay", PropagationFailureReason.explanation(state("no_path", 9)))
-        assertEquals("No link to relay", PropagationFailureReason.explanation(state("no_link", 10)))
+        assertEquals(Explanation(Reason.NO_PATH), PropagationFailureReason.explanation(state("no_path", 9)))
+        assertEquals(Explanation(Reason.NO_LINK), PropagationFailureReason.explanation(state("no_link", 10)))
     }
 
     @Test
     fun `generic failed is disambiguated by the raw code across both backend code spaces`() {
         // Python 0xf0+ terminals.
-        assertEquals("No path to relay", PropagationFailureReason.explanation(state("failed", 0xf0)))
-        assertEquals("Connection failed", PropagationFailureReason.explanation(state("failed", 0xf1)))
-        assertEquals("Transfer failed", PropagationFailureReason.explanation(state("failed", 0xf2)))
-        assertEquals("Identity not received", PropagationFailureReason.explanation(state("failed", 0xf3)))
-        assertEquals("Access denied", PropagationFailureReason.explanation(state("failed", 0xf4)))
+        assertEquals(Explanation(Reason.NO_PATH), PropagationFailureReason.explanation(state("failed", 0xf0)))
+        assertEquals(Explanation(Reason.CONNECTION_FAILED), PropagationFailureReason.explanation(state("failed", 0xf1)))
+        assertEquals(Explanation(Reason.TRANSFER_FAILED), PropagationFailureReason.explanation(state("failed", 0xf2)))
+        assertEquals(Explanation(Reason.IDENTITY_NOT_RECEIVED), PropagationFailureReason.explanation(state("failed", 0xf3)))
+        assertEquals(Explanation(Reason.ACCESS_DENIED), PropagationFailureReason.explanation(state("failed", 0xf4)))
         // Native LXMRouter$PropagationTransferState ordinals: FAILED(8), NO_PATH(9), NO_LINK(10).
-        assertEquals("Relay unreachable", PropagationFailureReason.explanation(state("failed", 8)))
-        assertEquals("No path to relay", PropagationFailureReason.explanation(state("failed", 9)))
-        assertEquals("No link to relay", PropagationFailureReason.explanation(state("failed", 10)))
+        assertEquals(Explanation(Reason.RELAY_UNREACHABLE), PropagationFailureReason.explanation(state("failed", 8)))
+        assertEquals(Explanation(Reason.NO_PATH), PropagationFailureReason.explanation(state("failed", 9)))
+        assertEquals(Explanation(Reason.NO_LINK), PropagationFailureReason.explanation(state("failed", 10)))
     }
 
     @Test
     fun `unknown failed code falls back to a message that preserves the code`() {
-        assertEquals("Relay unreachable (code 0x123)", PropagationFailureReason.explanation(state("failed", 0x123)))
+        assertEquals(Explanation(Reason.RELAY_UNREACHABLE_CODE, listOf("123")), PropagationFailureReason.explanation(state("failed", 0x123)))
     }
 
     @Test
     fun `unknown non-failure state name yields a generic sync-failed message`() {
-        assertEquals("Sync failed (weird)", PropagationFailureReason.explanation(state("weird", 0)))
+        assertEquals(Explanation(Reason.SYNC_FAILED, listOf("weird")), PropagationFailureReason.explanation(state("weird", 0)))
     }
 }

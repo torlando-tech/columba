@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -30,9 +31,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
+import network.columba.app.data.model.NotificationPrivacyLevel
+import network.columba.app.ui.components.NotificationPrivacyChooser
 
 /**
  * Permissions page - explains and requests notification and battery permissions.
@@ -41,8 +46,10 @@ import androidx.compose.ui.unit.dp
 fun PermissionsPage(
     notificationsGranted: Boolean,
     batteryOptimizationExempt: Boolean,
+    notificationPrivacyLevel: NotificationPrivacyLevel,
     onEnableNotifications: () -> Unit,
     onEnableBatteryOptimization: () -> Unit,
+    onNotificationPrivacyLevelChange: (NotificationPrivacyLevel) -> Unit,
     onBack: () -> Unit,
     onContinue: () -> Unit,
     modifier: Modifier = Modifier,
@@ -69,7 +76,7 @@ fun PermissionsPage(
 
         // Title
         Text(
-            text = "Stay Connected",
+            text = stringResource(R.string.onboarding_perms_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -80,7 +87,7 @@ fun PermissionsPage(
 
         // Subtitle
         Text(
-            text = "Columba can notify you when:",
+            text = stringResource(R.string.onboarding_perms_subtitle),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -93,9 +100,9 @@ fun PermissionsPage(
             modifier = Modifier.padding(horizontal = 32.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            FeatureItem("New messages arrive")
-            FeatureItem("Someone adds you as a contact")
-            FeatureItem("Delivery confirmations are received")
+            FeatureItem(stringResource(R.string.onboarding_perms_feat_messages))
+            FeatureItem(stringResource(R.string.onboarding_perms_feat_contact))
+            FeatureItem(stringResource(R.string.onboarding_perms_feat_delivery))
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -103,10 +110,18 @@ fun PermissionsPage(
         // Notification permission card
         PermissionCard(
             icon = Icons.Default.Notifications,
-            title = "Notifications",
-            description = "Get alerts for new messages",
+            title = stringResource(R.string.onboarding_perms_notif_title),
+            description = stringResource(R.string.onboarding_perms_notif_desc),
             isGranted = notificationsGranted,
             onEnable = onEnableNotifications,
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Message privacy choice (text exposure is app-controlled, not just an OS setting)
+        MessagePrivacySection(
+            privacyLevel = notificationPrivacyLevel,
+            onPrivacyLevelChange = onNotificationPrivacyLevelChange,
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -114,9 +129,9 @@ fun PermissionsPage(
         // Battery optimization card
         PermissionCard(
             icon = Icons.Default.BatteryChargingFull,
-            title = "Unrestricted Battery",
-            description = "Receive messages even when phone is idle",
-            secondaryDescription = "Prevents Android from pausing Columba",
+            title = stringResource(R.string.onboarding_perms_battery_title),
+            description = stringResource(R.string.onboarding_perms_battery_desc),
+            secondaryDescription = stringResource(R.string.onboarding_perms_battery_secondary),
             isGranted = batteryOptimizationExempt,
             onEnable = onEnableBatteryOptimization,
         )
@@ -136,7 +151,7 @@ fun PermissionsPage(
                         .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
-                Text("Back")
+                Text(stringResource(R.string.onboarding_back))
             }
 
             Button(
@@ -147,7 +162,7 @@ fun PermissionsPage(
                         .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
-                Text("Continue")
+                Text(stringResource(R.string.onboarding_continue))
             }
         }
 
@@ -175,6 +190,57 @@ private fun FeatureItem(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun MessagePrivacySection(
+    privacyLevel: NotificationPrivacyLevel,
+    onPrivacyLevelChange: (NotificationPrivacyLevel) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(R.string.onboarding_message_privacy_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+
+            Text(
+                text = stringResource(R.string.onboarding_message_privacy_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            NotificationPrivacyChooser(
+                selected = privacyLevel,
+                onSelect = onPrivacyLevelChange,
+            )
+        }
     }
 }
 
@@ -265,7 +331,7 @@ private fun PermissionCard(
             if (isGranted) {
                 Icon(
                     imageVector = Icons.Default.Check,
-                    contentDescription = "Granted",
+                    contentDescription = stringResource(R.string.onboarding_perms_granted_cd),
                     modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.primary,
                 )
@@ -274,7 +340,7 @@ private fun PermissionCard(
                     onClick = onEnable,
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Text("Enable")
+                    Text(stringResource(R.string.onboarding_perms_enable))
                 }
             }
         }

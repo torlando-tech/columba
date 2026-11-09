@@ -52,6 +52,19 @@ object LxmfFields {
     const val AM_CODEC2_1600 = 0x07
     const val AM_CODEC2_2400 = 0x08
     const val AM_CODEC2_3200 = 0x09
+    /**
+     * Thread grouping key — `fields[0x08] = ByteArray(16)` fresh random
+     * bytes (CSPRNG) chosen by the thread creator, reused unchanged for the
+     * thread's lifetime. Upstream LXMF declares this as
+     * `FIELD_THREAD = 0x08  # Bytes, full thread ID hash` (`LXMF/LXMF.py:15`)
+     * and enforces no length; reception is opaque (group by exact bytes,
+     * accept any length). Absent field = the conversation's Main stream.
+     * Nobody else writes 0x08 today (Sideband/rsLXMF/Ratspeak: zero uses),
+     * so Columba's 16B-random convention (threads-spec §4.1) is the de facto
+     * standard. Threads never touch presentation state: dormancy/archives
+     * are local-only.
+     */
+    const val FIELD_THREAD = 0x08
 
     /** Canonical LXMF audio mode for Ogg/Opus voice notes. */
     const val AM_OPUS_OGG = 0x10

@@ -1,6 +1,7 @@
 package network.columba.app.viewmodel
 
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,12 +28,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.columba.app.BuildConfig
+import network.columba.app.R
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.model.ImageCompressionPreset
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.map.MapTileSourceManager
 import network.columba.app.navigation.NavTab
+import network.columba.app.notifications.NotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.BatteryProfile
@@ -97,7 +101,7 @@ data class SettingsState(
     val nextAutoAnnounceTime: Long? = null,
     val isManualAnnouncing: Boolean = false,
     val showManualAnnounceSuccess: Boolean = false,
-    val manualAnnounceError: String? = null,
+    val manualAnnounceError: AnnounceError? = null,
     val identityHash: String? = null,
     val destinationHash: String? = null,
     val showQrDialog: Boolean = false,
@@ -167,6 +171,7 @@ data class SettingsState(
     val blockUnknownSenders: Boolean = false,
     val allowCallsFromContactsOnly: Boolean = false,
     val allowVoiceCalls: Boolean = true,
+    val notificationPrivacyLevel: NotificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
     // Incoming message size limit (default 1MB)
     val incomingMessageSizeLimitKb: Int = 1024,
     // Image compression state
@@ -241,6 +246,7 @@ class SettingsViewModel
         private val contactRepository: ContactRepository,
         private val updateChecker: network.columba.app.service.UpdateChecker,
         private val crashReportManager: network.columba.app.util.CrashReportManager,
+        private val notificationHelper: NotificationHelper,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -605,6 +611,10 @@ class SettingsViewModel
                             blockUnknownSenders = _state.value.blockUnknownSenders,
                             allowCallsFromContactsOnly = _state.value.allowCallsFromContactsOnly,
                             allowVoiceCalls = _state.value.allowVoiceCalls,
+                            // Set by loadPrivacySettings() from DataStore; the combine above
+                            // rebuilds this snapshot on any flow change, so carry it over or
+                            // the chooser snaps back to FULL.
+                            notificationPrivacyLevel = _state.value.notificationPrivacyLevel,
                             // Preserve message size limit from loadLocationSharingSettings()
                             incomingMessageSizeLimitKb = _state.value.incomingMessageSizeLimitKb,
                             // Preserve message sorting from loadLocationSharingSettings()
@@ -984,13 +994,17 @@ class SettingsViewModel
                         delay(3000)
                         clearManualAnnounceStatus()
                     } else {
-                        val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                        val error =
+                            AnnounceError(
+                                AnnounceErrorReason.UNKNOWN,
+                                result.exceptionOrNull()?.message,
+                            )
                         _state.value =
                             _state.value.copy(
                                 isManualAnnouncing = false,
                                 manualAnnounceError = error,
                             )
-                        Log.e(TAG, "Manual announce failed: $error")
+                        Log.e(TAG, "Manual announce failed: ${error.detail}")
 
                         // Auto-dismiss error message after 5 seconds
                         delay(5000)
@@ -1000,7 +1014,7 @@ class SettingsViewModel
                     _state.value =
                         _state.value.copy(
                             isManualAnnouncing = false,
-                            manualAnnounceError = e.message ?: "Error triggering announce",
+                            manualAnnounceError = AnnounceError(AnnounceErrorReason.TRIGGER_FAILED, e.message),
                         )
                     Log.e(TAG, "Error triggering manual announce", e)
 
@@ -1033,7 +1047,7 @@ class SettingsViewModel
         fun setTheme(theme: AppTheme) {
             viewModelScope.launch {
                 settingsRepository.saveThemePreference(theme)
-                Log.d(TAG, "Theme changed to: ${theme.displayName}")
+                Log.d(TAG, "Theme changed to: ${theme.getIdentifier()}")
             }
         }
 
@@ -1864,6 +1878,11 @@ class SettingsViewModel
                     _state.update { it.copy(allowVoiceCalls = enabled) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.notificationPrivacyLevelFlow.collect { level ->
+                    _state.update { it.copy(notificationPrivacyLevel = level) }
+                }
+            }
         }
 
         /**
@@ -1890,6 +1909,22 @@ class SettingsViewModel
                 settingsRepository.saveAllowCallsFromContactsOnly(enabled)
                 _state.update { it.copy(allowCallsFromContactsOnly = enabled) }
                 Log.d(TAG, "Calls-from-contacts-only ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set how much a received-message notification reveals. Delegates to
+         * [NotificationHelper.setMessagePrivacyLevel] so the save runs under the same lock
+         * as notification posting, and tightening drops message notifications already shown.
+         */
+        fun setNotificationPrivacyLevel(level: NotificationPrivacyLevel) {
+            viewModelScope.launch {
+                try {
+                    notificationHelper.setMessagePrivacyLevel(level)
+                    Log.d(TAG, "Message privacy level: ${level.name}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error saving message privacy level", e)
+                }
             }
         }
 
@@ -1945,6 +1980,28 @@ class SettingsViewModel
                     settingsRepository.setCrashReportingConsent(granted)
                 }
                 Log.d(TAG, "Crash reporting ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Threads P2 feature flag (`threads_enabled`, default off). Exposed as a
+         * separate flow rather than through the big combined UiState so toggling
+         * it does not recompose the whole settings screen.
+         */
+        val threadsEnabled: StateFlow<Boolean> =
+            settingsRepository
+                .threadsEnabledFlow
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = false,
+                )
+
+        /** Persist the Threads P2 feature flag. */
+        fun setThreadsEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveThreadsEnabled(enabled)
+                Log.d(TAG, "Threads ${if (enabled) "enabled" else "disabled"}")
             }
         }
 
@@ -2439,7 +2496,7 @@ class SettingsViewModel
             viewModelScope.launch {
                 telemetryCollectorManager.setEnabledRefused.collect {
                     _telemetryCollectorMessage.emit(
-                        "Location sharing is off. Enable it above (master toggle) to share with a group.",
+                        UiMessage.Text(R.string.location_sharing_off_group_hint),
                     )
                 }
             }
@@ -2450,8 +2507,8 @@ class SettingsViewModel
         // subscribes and renders a Toast. Belt-and-suspenders alongside
         // the preemptive UI disable in LocationSharingCard's
         // TelemetryCollectorSection.
-        private val _telemetryCollectorMessage = MutableSharedFlow<String>(extraBufferCapacity = 4)
-        val telemetryCollectorMessage: SharedFlow<String> = _telemetryCollectorMessage.asSharedFlow()
+        private val _telemetryCollectorMessage = MutableSharedFlow<UiMessage>(extraBufferCapacity = 4)
+        val telemetryCollectorMessage: SharedFlow<UiMessage> = _telemetryCollectorMessage.asSharedFlow()
 
         /**
          * Set the telemetry collector enabled state.

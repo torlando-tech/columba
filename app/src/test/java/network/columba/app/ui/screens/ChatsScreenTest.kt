@@ -1,15 +1,23 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.test.TestFactories
+import network.columba.app.ui.model.ChatCardThreadsUi
+import network.columba.app.ui.model.ThreadMainRowUi
+import network.columba.app.ui.model.ThreadRowUi
+import network.columba.app.ui.model.ThreadSheetUiState
 import network.columba.app.viewmodel.ChatsViewModel
 import io.mockk.every
 import io.mockk.mockk
@@ -34,7 +42,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34], application = Application::class)
 class ChatsScreenTest {
     private val registerActivityRule = RegisterComponentActivityRule()
-    private val composeRule = createComposeRule()
+    private val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
@@ -390,6 +398,164 @@ class ChatsScreenTest {
         // Then
         composeTestRule.onNodeWithText("Test User").assertIsDisplayed()
     }
+
+    @Test
+    fun conversationCard_expandedMainRow_showsMainPreviewAndUnread() {
+        // The conversation row carries a THREAD message: opening Main cannot
+        // show it, so the card's Main row must use Main's own preview/unread.
+        val conversation =
+            TestFactories.createConversation(
+                lastMessage = "thread reply from Alice",
+                unreadCount = 0,
+            )
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet =
+                    ThreadSheetUiState(
+                        active =
+                            listOf(
+                                ThreadRowUi(
+                                    threadIdHex = "01000000000000000000000000000001",
+                                    title = "Trip",
+                                    autoTitle = null,
+                                    preview = "latest in thread",
+                                    timestamp = 3_000L,
+                                    unreadCount = 0,
+                                ),
+                            ),
+                        main = ThreadMainRowUi(preview = "main thread text", timestamp = 4_000L, unreadCount = 1),
+                    ),
+            )
+
+        composeTestRule.setContent {
+            ConversationCard(
+                conversation = conversation,
+                threadsUi = threadsUi,
+                isExpanded = true,
+            )
+        }
+
+        composeTestRule.onNodeWithText("main thread text").assertIsDisplayed()
+
+        // The thread message appears once — the card's own preview — never twice
+        // as the Main row's preview, which opening Main could not show.
+        composeTestRule.onAllNodesWithText("thread reply from Alice").assertCountEquals(1)
+    }
+
+    @Test
+    fun conversationCard_expandedThreadRow_showsAutomaticTitle() {
+        val conversation = TestFactories.createConversation()
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet =
+                    ThreadSheetUiState(
+                        active =
+                            listOf(
+                                ThreadRowUi(
+                                    threadIdHex = "02000000000000000000000000000002",
+                                    title = null,
+                                    autoTitle = "automatic excerpt",
+                                    preview = "latest in thread",
+                                    timestamp = 1_000L,
+                                    unreadCount = 0,
+                                ),
+                            ),
+                    ),
+            )
+
+        composeTestRule.setContent {
+            ConversationCard(
+                conversation = conversation,
+                threadsUi = threadsUi,
+                isExpanded = true,
+            )
+        }
+
+        composeTestRule.onNodeWithText("automatic excerpt").assertIsDisplayed()
+    }
+
+    @Test
+    fun conversationCard_countsOnlyUnarchivedThreads() {
+        val conversation = TestFactories.createConversation()
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet =
+                    ThreadSheetUiState(
+                        active = listOf(threadRow("01")),
+                        archived = List(3) { threadRow("a$it") },
+                    ),
+            )
+
+        composeTestRule.setContent {
+            ConversationCard(conversation = conversation, threadsUi = threadsUi)
+        }
+
+        composeTestRule.onNodeWithText("1 thread").assertIsDisplayed()
+        composeTestRule.onNodeWithText("4 threads").assertDoesNotExist()
+    }
+
+    @Test
+    fun conversationCard_allArchived_labelNamesTheArchiveAndOpensTheSheet() {
+        val conversation = TestFactories.createConversation()
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet = ThreadSheetUiState(archived = List(2) { threadRow("a$it") }),
+            )
+        var toggled = 0
+        var viewedAll = 0
+
+        composeTestRule.setContent {
+            ConversationCard(
+                conversation = conversation,
+                threadsUi = threadsUi,
+                onToggleExpand = { toggled++ },
+                onViewAllThreads = { viewedAll++ },
+            )
+        }
+
+        composeTestRule.onNodeWithText("2 archived").assertIsDisplayed()
+        composeTestRule.onNodeWithText("0 threads").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Open archived threads").performClick()
+
+        assertEquals("archived-only cards have nothing to expand", 0, toggled)
+        assertEquals("the archived rows live in the sheet", 1, viewedAll)
+    }
+
+    @Test
+    fun conversationCard_allArchived_expandedStillCollapses() {
+        val conversation = TestFactories.createConversation()
+        val threadsUi =
+            ChatCardThreadsUi(
+                sheet = ThreadSheetUiState(archived = List(2) { threadRow("a$it") }),
+            )
+        var toggled = 0
+        var viewedAll = 0
+
+        composeTestRule.setContent {
+            ConversationCard(
+                conversation = conversation,
+                threadsUi = threadsUi,
+                isExpanded = true,
+                onToggleExpand = { toggled++ },
+                onViewAllThreads = { viewedAll++ },
+            )
+        }
+
+        composeTestRule.onNodeWithText("2 archived").performClick()
+
+        assertEquals("an open archive-only card must still close", 1, toggled)
+        assertEquals("collapsing is not a jump to the sheet", 0, viewedAll)
+    }
+
+    private fun threadRow(suffix: String) =
+        ThreadRowUi(
+            threadIdHex = suffix.padStart(32, '0'),
+            title = "Thread $suffix",
+            autoTitle = null,
+            preview = "preview $suffix",
+            timestamp = 1_000L,
+            unreadCount = 0,
+        )
 
     @Test
     fun conversationCard_displaysLastMessage() {
@@ -981,7 +1147,154 @@ class ChatsScreenTest {
         // Default: contacts are not saved
         every { mockViewModel.isContactSaved(any()) } returns MutableStateFlow(false)
 
+        // Threads (P2) defaults: flag off, nothing expanded, empty bundle
+        every { mockViewModel.threadsEnabled } returns MutableStateFlow(false)
+        every { mockViewModel.expandedCards } returns MutableStateFlow(emptySet())
+        every { mockViewModel.cardThreads(any()) } returns MutableStateFlow(ChatCardThreadsUi())
+
         return mockViewModel
+    }
+
+    // ========== Active Search Filter Visibility Tests ==========
+
+    @Test
+    fun chatsScreen_dismissedSearch_withNonBlankQuery_keepsFilterVisible() {
+        // Given - a live query that filters the list
+        val mockViewModel = createMockChatsViewModel(searchQuery = "bob", isLoading = false)
+
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
+            )
+        }
+
+        // While the search bar is open the chip stays out of the way
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        composeTestRule.onNodeWithText("Filtering: \"bob\"").assertDoesNotExist()
+
+        // When - dismissing the search bar
+        composeTestRule.onNodeWithContentDescription("Close search").performClick()
+
+        // Then - the still-active filter stays visible outside the bar
+        composeTestRule.onNodeWithText("Filtering: \"bob\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun chatsScreen_backWhileSearchOpen_collapsesSearchInsteadOfPoppingTheTab() {
+        // Given - search surface open over a live query, plus a host handler that
+        // stands in for the tab's navigation handler
+        var hostBackInvoked = false
+        val mockViewModel = createMockChatsViewModel(searchQuery = "bob", isLoading = false)
+
+        composeTestRule.setContent {
+            BackHandler { hostBackInvoked = true }
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        // The screen's BackHandler only becomes enabled once the toggle recomposes
+        composeTestRule.waitForIdle()
+
+        // When - system back
+        composeTestRule.runOnUiThread { composeTestRule.activity.onBackPressedDispatcher.onBackPressed() }
+
+        // Then - the bar collapsed instead of the tab popping, query retained and visible
+        assertEquals(false, hostBackInvoked)
+        assertEquals("bob", mockViewModel.searchQuery.value)
+        composeTestRule.onNodeWithText("Filtering: \"bob\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun chatsScreen_backWhileSearchClosed_fallsThroughToTheHost() {
+        // Given - search bar collapsed (its BackHandler is disabled)
+        var hostBackInvoked = false
+        val mockViewModel = createMockChatsViewModel(searchQuery = "bob", isLoading = false)
+
+        composeTestRule.setContent {
+            BackHandler { hostBackInvoked = true }
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
+            )
+        }
+
+        // When - system back
+        composeTestRule.runOnUiThread { composeTestRule.activity.onBackPressedDispatcher.onBackPressed() }
+
+        // Then - the host sees back normally, as before this change
+        assertEquals(true, hostBackInvoked)
+    }
+
+    @Test
+    fun chatsScreen_chipClearButton_clearsQuery() {
+        val mockViewModel = createMockChatsViewModel(searchQuery = "bob", isLoading = false)
+        val queryFlow = mockViewModel.searchQuery
+
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Clear search").performClick()
+
+        assertEquals("", queryFlow.value)
+    }
+
+    @Test
+    fun chatsScreen_filteredEmpty_showsQueryAwareEmptyState() {
+        // Given - filter active, nothing matches
+        val mockViewModel = createMockChatsViewModel(conversations = emptyList(), searchQuery = "bob", isLoading = false)
+
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
+            )
+        }
+
+        composeTestRule.onNodeWithText("No conversations match \"bob\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No conversations yet").assertDoesNotExist()
+    }
+
+    @Test
+    fun chatsScreen_noResultsClearButton_clearsQuery() {
+        val mockViewModel = createMockChatsViewModel(conversations = emptyList(), searchQuery = "bob", isLoading = false)
+        val queryFlow = mockViewModel.searchQuery
+
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Clear search").performClick()
+
+        assertEquals("", queryFlow.value)
     }
 
     @Suppress("NoRelaxedMocks")

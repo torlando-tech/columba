@@ -119,8 +119,9 @@ interface RnsTelephony {
     val isPttActive: StateFlow<Boolean>
 
     /**
-     * Abbreviation of the active LXST codec profile for the current call
-     * (LXST Profile Negotiation). Null when no call is active.
+     * Id of the active LXST codec profile for the current call (LXST Profile
+     * Negotiation), one of the `Profile` ids in 0x10-0x80. Null when no call
+     * is active.
      *
      * Updated reactively on local-initiated and remote-initiated profile
      * changes mid-call. Backends populate this by polling the shared
@@ -129,18 +130,22 @@ interface RnsTelephony {
      * poll-based approach keeps the observable honest across both backends
      * without requiring a library bump.
      */
-    val activeProfile: StateFlow<String?>
+    val activeProfileCode: StateFlow<Int?>
 
     /**
-     * Cycle to the next LXST audio profile and signal it to the remote
-     * peer (LXST Profile Negotiation). No-op unless a call is established.
+     * Switch the LXST audio profile to [profileCode] and signal it to the
+     * remote peer (LXST Profile Negotiation). No-op unless a call is
+     * established, and a no-op when [profileCode] is not a known LXST
+     * profile id.
      *
-     * The backend picks the next profile from the current `Telephone`
-     * active profile (via `Profile.next`) and routes the switch through
-     * the LXST-kt stack, which sends the `PREFERRED_PROFILE` signalling
-     * frame and reconfigures the transmit pipeline.
+     * The id is resolved to an LXST-kt `Profile` and routed through the
+     * stack, which sends the `PREFERRED_PROFILE` signalling frame and
+     * reconfigures the transmit pipeline. Requesting the profile the call is
+     * already on is dropped by LXST against its live `activeProfile`, so
+     * re-selecting it puts nothing on the wire. The applied profile is read
+     * back through [activeProfileCode].
      */
-    suspend fun cycleCallProfile()
+    suspend fun switchCallProfile(profileCode: Int)
 
     /**
      * Abbreviation of the active LXST call mode for the current call

@@ -17,16 +17,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import network.columba.app.nomadnet.NomadNetPageCache
+import network.columba.app.R
 import network.columba.app.micron.MicronParser
+import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsNomadnet
@@ -40,6 +41,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Tests for [NomadNetBrowserViewModel] — navigation state machine, caching,
@@ -62,8 +64,7 @@ class NomadNetBrowserViewModelTest {
     private val simplePage = ">Hello World"
 
     /** Fake of the singleton session store, shared across VM instances. */
-    private val sessionSnapshot =
-        java.util.concurrent.atomic.AtomicReference<NomadNetPageCache.SessionSnapshot?>(null)
+    private val sessionSnapshot = AtomicReference<NomadNetPageCache.SessionSnapshot?>(null)
 
     @Before
     fun setUp() {
@@ -83,6 +84,7 @@ class NomadNetBrowserViewModelTest {
         val docSlot = slot<network.columba.app.micron.MicronDocument>()
         val tokensSlot = slot<List<String>>()
         val fieldsSlot = slot<Map<String, String>>()
+        val requestSlot = slot<String?>()
         every {
             pageCache.putSession(
                 capture(nodeSlot),
@@ -90,6 +92,7 @@ class NomadNetBrowserViewModelTest {
                 capture(docSlot),
                 capture(tokensSlot),
                 capture(fieldsSlot),
+                captureNullable(requestSlot),
             )
         } answers {
             sessionSnapshot.set(
@@ -100,6 +103,7 @@ class NomadNetBrowserViewModelTest {
                         docSlot.captured,
                         tokensSlot.captured,
                         fieldsSlot.captured,
+                        requestSlot.captured,
                     ),
                 ),
             )
@@ -458,6 +462,51 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
+    fun `the session keeps the request of a form-result page across a tab switch`() =
+        runTest(testDispatcher) {
+            // Continue restores the stored page; it must remember the request it
+            // was fetched with, or the bookmark star would report the saved
+            // search as not saved and tapping it would add a second bookmark.
+            every { pageCache.get(any(), any()) } returns null
+            val request = "{\"query\":\"rngit\"}"
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
+                Result.success(NomadnetPageResult(simplePage, "/page/search.mu"))
+
+            viewModel.loadPage(
+                destinationHash = nodeHash,
+                path = "/page/search.mu`query",
+                requestDataJson = request,
+            )
+            advanceUntilIdle()
+            Thread.sleep(200)
+            advanceUntilIdle()
+            assertEquals(
+                request,
+                (viewModel.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded).requestData,
+            )
+            viewModel.saveSessionSnapshot()
+
+            val restoredVm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+            restoredVm.loadPage(
+                nodeHash,
+                path = "/page/search.mu`query",
+                fromSessionRestore = true,
+            )
+            advanceUntilIdle()
+            Thread.sleep(200)
+            advanceUntilIdle()
+
+            assertEquals(
+                "Continue must restore the saved request, was ${restoredVm.browserState.value}",
+                request,
+                (restoredVm.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded).requestData,
+            )
+            // Restore is free: only the initial request was made.
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
+        }
+
+    @Test
     fun `leaving the tab preserves the in-page back history`() =
         runTest(testDispatcher) {
             // Back must keep returning to earlier pages after a tab switch:
@@ -730,7 +779,7 @@ class NomadNetBrowserViewModelTest {
 
             val state = viewModel.browserState.value
             assertTrue("Should be Error", state is NomadNetBrowserViewModel.BrowserState.Error)
-            assertEquals("Connection timed out", (state as NomadNetBrowserViewModel.BrowserState.Error).message)
+            assertEquals(UiMessage.Raw("Connection timed out"), (state as NomadNetBrowserViewModel.BrowserState.Error).message)
         }
 
     @Test
@@ -879,6 +928,54 @@ class NomadNetBrowserViewModelTest {
             advanceUntilIdle()
 
             assertEquals("Alice", viewModel.formFields.value["display_name"])
+        }
+
+    @Test
+    fun `loadPage replays saved request data instead of rebuilding empty form values`() =
+        runTest(testDispatcher) {
+            // A saved search page: the path only names the field, so without
+            // replaying the stored request the node would be asked with "".
+            every { pageCache.get(any(), any()) } returns null
+            val formDataSlot = slot<String>()
+            coEvery {
+                protocol.requestNomadnetPage(any(), any(), capture(formDataSlot), any())
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/search.mu"))
+
+            viewModel.loadPage(
+                destinationHash = nodeHash,
+                path = "/page/search.mu`query",
+                requestDataJson = "{\"query\":\"rngit\"}",
+            )
+            advanceUntilIdle()
+            Thread.sleep(200) // the page request runs on Dispatchers.IO
+            advanceUntilIdle()
+
+            assertEquals("{\"query\":\"rngit\"}", formDataSlot.captured)
+        }
+
+    @Test
+    fun `loadPage replays a saved request instead of serving the path's cached page`() =
+        runTest(testDispatcher) {
+            // The page cache is keyed by path, which only names the submitted
+            // fields: it can hold the response to a *different* submission of
+            // the same search.
+            every { pageCache.get(any(), any()) } returns ">Stale results of another search"
+            val formDataSlot = slot<String>()
+            coEvery {
+                protocol.requestNomadnetPage(any(), any(), capture(formDataSlot), any())
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/search.mu"))
+
+            viewModel.loadPage(
+                destinationHash = nodeHash,
+                path = "/page/search.mu`query",
+                requestDataJson = "{\"query\":\"rngit\"}",
+            )
+            advanceUntilIdle()
+            Thread.sleep(200) // the page request runs on Dispatchers.IO
+            advanceUntilIdle()
+
+            verify(exactly = 0) { pageCache.get(any(), any()) }
+            assertEquals("{\"query\":\"rngit\"}", formDataSlot.captured)
         }
 
     @Test
@@ -1227,7 +1324,7 @@ class NomadNetBrowserViewModelTest {
 
             val state = viewModel.browserState.value
             assertTrue(state is NomadNetBrowserViewModel.BrowserState.Error)
-            assertEquals("Cancelled", (state as NomadNetBrowserViewModel.BrowserState.Error).message)
+            assertEquals(UiMessage.Text(R.string.nomadnet_status_cancelled), (state as NomadNetBrowserViewModel.BrowserState.Error).message)
         }
 
     // ── updateField ──
@@ -1360,7 +1457,7 @@ class NomadNetBrowserViewModelTest {
             Thread.sleep(100) // Wait for Dispatchers.IO coroutine
 
             assertFalse(viewModel.isIdentified.value)
-            assertEquals("Link failed", viewModel.identifyError.value)
+            assertEquals(UiMessage.Raw("Link failed"), viewModel.identifyError.value)
             assertFalse(viewModel.identifyInProgress.value)
         }
 
@@ -1620,8 +1717,10 @@ class NomadNetBrowserViewModelTest {
             // The form page is still the loaded page (not re-submitted into a new
             // in-flight state by the identify refresh).
             val state = vm.browserState.value
-            assertTrue("the form page should remain loaded after the flag",
-                state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertTrue(
+                "the form page should remain loaded after the flag",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
             assertEquals(nodeHash, (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).nodeHash)
         }
 

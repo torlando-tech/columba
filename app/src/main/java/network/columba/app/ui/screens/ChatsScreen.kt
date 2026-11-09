@@ -1,9 +1,12 @@
 package network.columba.app.ui.screens
 
+import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +32,8 @@ import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MarkEmailUnread
@@ -83,8 +88,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import network.columba.app.R
 import network.columba.app.data.repository.Conversation
+import network.columba.app.ui.model.ChatCardThreadsUi
+import network.columba.app.navigation.ConversationNavigation.NEW_THREAD_ARG
+import androidx.compose.ui.res.pluralStringResource
 import network.columba.app.service.SyncResult
 import network.columba.app.ui.components.ProfileIcon
+import network.columba.app.ui.components.SearchFilterSummary
+import network.columba.app.ui.components.SearchNoResultsState
 import network.columba.app.ui.components.SearchableTopAppBar
 import network.columba.app.ui.components.StarToggleButton
 import network.columba.app.ui.components.SyncStatusBottomSheet
@@ -94,6 +104,7 @@ import network.columba.app.viewmodel.ChatsSegment
 import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
+import network.columba.app.viewmodel.messageResource
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -109,6 +120,7 @@ fun ChatsScreen(
         remoteIdentityHash: String,
         profileCode: Int,
     ) -> Unit = { _, _, _, _ -> },
+    onThreadClick: (peerHash: String, peerName: String, threadIdHex: String) -> Unit = { _, _, _ -> },
     onViewPeerDetails: (peerHash: String) -> Unit = {},
     onLocateOnMap: (peerHash: String) -> Unit = {},
     onNavigateToQrScanner: () -> Unit = {},
@@ -130,7 +142,14 @@ fun ChatsScreen(
     val syncProgress by viewModel.syncProgress.collectAsState()
     val draftsMap by viewModel.draftsMap.collectAsState()
     val isTransportEnabled by viewModel.isTransportEnabled.collectAsState()
+    val threadsEnabled by viewModel.threadsEnabled.collectAsState()
+    val expandedCards by viewModel.expandedCards.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
+
+    // M3: back collapses the search surface before it can pop the tab. The
+    // query stays live (and stays visible via SearchFilterSummary below the
+    // segment selector), matching a collapsed search bar that keeps its text.
+    BackHandler(enabled = isSearching) { isSearching = false }
 
     val context = LocalContext.current
     val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
@@ -154,6 +173,9 @@ fun ChatsScreen(
     // Sync status bottom sheet state
     var showSyncStatusSheet by remember { mutableStateOf(false) }
     val syncStatusSheetState = rememberModalBottomSheetState()
+
+    // Threads P2: thread sheet opened from a card ("View all")
+    var threadSheetConversation by remember { mutableStateOf<Conversation?>(null) }
 
     // QR code state
     var showQrBottomSheet by remember { mutableStateOf(false) }
@@ -186,13 +208,13 @@ fun ChatsScreen(
                 when (result) {
                     is SyncResult.Success ->
                         if (result.messagesReceived > 0) {
-                            "Sync complete: ${result.messagesReceived} new messages"
+                            context.getString(R.string.messaging_sync_complete_count, result.messagesReceived)
                         } else {
-                            "Sync complete"
+                            context.getString(R.string.messaging_sync_complete)
                         }
-                    is SyncResult.Error -> "Sync failed: ${result.message}"
-                    is SyncResult.NoRelay -> "No relay configured"
-                    is SyncResult.Timeout -> "Sync timed out"
+                    is SyncResult.Error -> context.getString(R.string.messaging_sync_failed, result.message.resolve(context))
+                    is SyncResult.NoRelay -> context.getString(R.string.messaging_sync_no_relay)
+                    is SyncResult.Timeout -> context.getString(R.string.messaging_sync_timeout)
                 }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
@@ -202,9 +224,10 @@ fun ChatsScreen(
         viewModel.contactToggleResult.collect { result ->
             val message =
                 when (result) {
-                    ContactToggleResult.Added -> "Saved contact"
-                    ContactToggleResult.Removed -> "Removed contact"
-                    is ContactToggleResult.Error -> result.message
+                    ContactToggleResult.Added -> context.getString(R.string.chats_saved_contact)
+                    ContactToggleResult.Removed -> context.getString(R.string.chats_removed_contact)
+                    is ContactToggleResult.Error ->
+                        result.detail ?: context.getString(result.reason.messageResource())
                 }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
@@ -238,7 +261,7 @@ fun ChatsScreen(
                     IconButton(onClick = { showQrBottomSheet = true }) {
                         Icon(
                             imageVector = Icons.Default.QrCode2,
-                            contentDescription = "QR Code",
+                            contentDescription = stringResource(R.string.chats_qr_code),
                         )
                     }
                     // Sync button - shows spinner during sync, tapping opens status sheet
@@ -259,7 +282,7 @@ fun ChatsScreen(
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
-                                contentDescription = "Sync messages",
+                                contentDescription = stringResource(R.string.messaging_sync_messages),
                             )
                         }
                     }
@@ -301,6 +324,30 @@ fun ChatsScreen(
                         },
                     )
                 }
+                // Dismissing the search bar must not strand the filter: the
+                // query outlives the bar in the view model (and survives process
+                // death for the voice segment), so surface it as a removable
+                // chip next to the list it filters.
+                if (!isSearching) {
+                    val activeQuery =
+                        if (effectiveSegment == ChatsSegment.TEXT) searchQuery else voiceSearchQuery
+                    SearchFilterSummary(
+                        query = activeQuery.trim(),
+                        matchCount =
+                            if (effectiveSegment == ChatsSegment.TEXT) {
+                                chatsState.conversations.size.takeUnless { chatsState.isLoading }
+                            } else {
+                                voiceHistoryState.records.size.takeUnless { voiceHistoryState.isLoading }
+                            },
+                        onClearSearch = {
+                            if (effectiveSegment == ChatsSegment.TEXT) {
+                                viewModel.searchQuery.value = ""
+                            } else {
+                                viewModel.voiceSearchQuery.value = ""
+                            }
+                        },
+                    )
+                }
             }
         },
     ) { paddingValues ->
@@ -313,6 +360,8 @@ fun ChatsScreen(
                     state = voiceHistoryState,
                     onRecordClick = viewModel::openCallHistory,
                     onRetry = viewModel::retryVoiceHistory,
+                    searchQuery = voiceSearchQuery.trim(),
+                    onClearSearch = { viewModel.voiceSearchQuery.value = "" },
                     listState = voiceListState,
                     modifier =
                         Modifier
@@ -339,6 +388,17 @@ fun ChatsScreen(
         when {
             chatsState.isLoading && chatsState.conversations.isEmpty() -> {
                 LoadingConversationsState(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
+                )
+            }
+            !chatsState.isLoading && chatsState.conversations.isEmpty() && searchQuery.isNotBlank() -> {
+                SearchNoResultsState(
+                    query = searchQuery.trim(),
+                    titleRes = R.string.search_no_results_title_conversations,
+                    onClearSearch = { viewModel.searchQuery.value = "" },
                     modifier =
                         Modifier
                             .fillMaxSize()
@@ -392,6 +452,15 @@ fun ChatsScreen(
 
                         val draftText = draftsMap[conversation.peerHash]
 
+                        // Threads P2: per-card thread bundle (expanding card + sheet).
+                        val threadsUi: ChatCardThreadsUi? =
+                            if (threadsEnabled) {
+                                viewModel.cardThreads(conversation.peerHash).collectAsState().value
+                            } else {
+                                null
+                            }
+                        val isCardExpanded = conversation.peerHash in expandedCards
+
                         // Wrap card and menu in Box to anchor menu to card
                         Box(modifier = Modifier.fillMaxWidth()) {
                             ConversationCard(
@@ -419,6 +488,20 @@ fun ChatsScreen(
                                     }
                                     showMenu = false
                                 },
+                                threadsUi = threadsUi,
+                                isExpanded = isCardExpanded,
+                                onToggleExpand = {
+                                    viewModel.setCardExpanded(
+                                        conversation.peerHash,
+                                        !isCardExpanded,
+                                    )
+                                },
+                                onThreadRowClick = { threadIdHex ->
+                                    onThreadClick(conversation.peerHash, conversation.displayName, threadIdHex)
+                                },
+                                onViewAllThreads = {
+                                    threadSheetConversation = conversation
+                                },
                             )
 
                             // Context menu anchored to this card
@@ -437,7 +520,7 @@ fun ChatsScreen(
                                 onMarkAsUnread = {
                                     viewModel.markAsUnread(conversation.peerHash)
                                     showMenu = false
-                                    Toast.makeText(context, "Marked as unread", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.chats_marked_unread), Toast.LENGTH_SHORT).show()
                                 },
                                 onDeleteConversation = {
                                     showMenu = false
@@ -502,7 +585,7 @@ fun ChatsScreen(
                     viewModel.deleteConversation(conversationToDelete.peerHash)
                     showDeleteDialog = false
                     selectedConversation = null
-                    Toast.makeText(context, "Deleted conversation with $deletedName", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.chats_deleted_conversation, deletedName), Toast.LENGTH_SHORT).show()
                 },
                 onDismiss = {
                     showDeleteDialog = false
@@ -530,7 +613,7 @@ fun ChatsScreen(
                     )
                     showBlockDialog = false
                     selectedConversation = null
-                    Toast.makeText(context, "Blocked ${conversationToBlock.displayName}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.messaging_blocked_user, conversationToBlock.displayName), Toast.LENGTH_SHORT).show()
                 },
                 onDismiss = {
                     showBlockDialog = false
@@ -544,6 +627,47 @@ fun ChatsScreen(
                 syncProgress = syncProgress,
                 onDismiss = { showSyncStatusSheet = false },
                 sheetState = syncStatusSheetState,
+            )
+        }
+
+        // Threads P2: thread sheet ("View all (N)" from an expanding card).
+        val sheetConversation = threadSheetConversation
+        if (sheetConversation != null) {
+            val sheetThreads by viewModel.cardThreads(sheetConversation.peerHash).collectAsState()
+            ThreadSheet(
+                state = sheetThreads.sheet,
+                onDismiss = { threadSheetConversation = null },
+                onThreadClick = { threadIdHex ->
+                    threadSheetConversation = null
+                    onThreadClick(sheetConversation.peerHash, sheetConversation.displayName, threadIdHex)
+                },
+                onMainClick = {
+                    threadSheetConversation = null
+                    // Empty thread id = conversation Main (no `threadId` route argument).
+                    onThreadClick(sheetConversation.peerHash, sheetConversation.displayName, "")
+                },
+                onCreateThread = {
+                    threadSheetConversation = null
+                    onThreadClick(sheetConversation.peerHash, sheetConversation.displayName, NEW_THREAD_ARG)
+                },
+                onRename = { threadIdHex, newTitle ->
+                    viewModel.renameThread(sheetConversation.peerHash, threadIdHex, newTitle)
+                },
+                onMarkRead = { threadIdHex ->
+                    viewModel.markThreadRead(sheetConversation.peerHash, threadIdHex)
+                },
+                onArchive = { threadIdHexes ->
+                    viewModel.archiveThreads(sheetConversation.peerHash, threadIdHexes)
+                },
+                onUnarchive = { threadIdHexes ->
+                    viewModel.unarchiveThreads(sheetConversation.peerHash, threadIdHexes)
+                },
+                // No message screen is open here: undo restores the archive
+                // state only (there is nothing to re-open).
+                onReopenThread = {},
+                onDelete = { threadIdHex ->
+                    viewModel.deleteThread(sheetConversation.peerHash, threadIdHex)
+                },
             )
         }
 
@@ -573,7 +697,7 @@ fun ChatsScreen(
                                 putExtra(android.content.Intent.EXTRA_TEXT, shareText)
                                 type = "text/plain"
                             }
-                        val shareIntent = android.content.Intent.createChooser(sendIntent, "Share Identity")
+                        val shareIntent = android.content.Intent.createChooser(sendIntent, context.getString(R.string.chats_share_identity))
                         context.startActivity(shareIntent)
                     }
                 },
@@ -591,15 +715,15 @@ fun ConversationCard(
     onClick: () -> Unit = {},
     onLongPress: () -> Unit = {},
     onStarClick: () -> Unit = {},
+    threadsUi: ChatCardThreadsUi? = null,
+    isExpanded: Boolean = false,
+    onToggleExpand: () -> Unit = {},
+    onThreadRowClick: (threadIdHex: String) -> Unit = {},
+    onViewAllThreads: () -> Unit = {},
 ) {
+    val context = LocalContext.current
     Card(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onLongPress,
-                ),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors =
@@ -612,6 +736,10 @@ fun ConversationCard(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .combinedClickable(
+                            onClick = onClick,
+                            onLongClick = onLongPress,
+                        )
                         .padding(16.dp)
                         .padding(end = 32.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -654,7 +782,7 @@ fun ConversationCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Star,
-                                contentDescription = "Saved contact",
+                                contentDescription = stringResource(R.string.chats_saved_contact),
                                 tint = MaterialTheme.colorScheme.onTertiaryContainer,
                                 modifier =
                                     Modifier
@@ -684,6 +812,7 @@ fun ConversationCard(
                     )
 
                     // Last message preview (or draft indicator)
+                    val draftPrefix = stringResource(R.string.chats_draft_prefix)
                     if (draftText != null) {
                         Text(
                             text =
@@ -694,7 +823,7 @@ fun ConversationCard(
                                             fontStyle = FontStyle.Italic,
                                         ),
                                     ) {
-                                        append("Draft: ")
+                                        append(draftPrefix)
                                     }
                                     withStyle(
                                         SpanStyle(
@@ -728,7 +857,7 @@ fun ConversationCard(
 
                 // Timestamp
                 Text(
-                    text = formatTimestamp(conversation.lastMessageTimestamp),
+                    text = formatTimestamp(context, conversation.lastMessageTimestamp),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.align(Alignment.Top),
@@ -745,6 +874,160 @@ fun ConversationCard(
                         .padding(4.dp),
             )
         }
+
+        // Threads P2: expanding card (spec §6.1). The toggle row shows when
+        // the contact has threads; expansion state is a per-card preference.
+        val bundle = threadsUi
+        if (bundle != null && bundle.sheet.totalThreadCount > 0) {
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+            if (isExpanded) {
+                // Main first — always the anchor conversation of the card.
+                ChatCardThreadRow(
+                    title = stringResource(R.string.thread_row_main),
+                    // Main's own preview/unread: the conversation row may carry a
+                    // thread message, which opening Main cannot show.
+                    preview = bundle.sheet.main.preview,
+                    timestamp = bundle.sheet.main.timestamp,
+                    unreadCount = bundle.sheet.main.unreadCount,
+                    onClick = onClick,
+                )
+                bundle.nonArchived.take(2).forEach { row ->
+                    ChatCardThreadRow(
+                        title = row.displayTitle ?: stringResource(R.string.thread_untitled),
+                        preview = row.preview,
+                        timestamp = row.timestamp,
+                        unreadCount = row.unreadCount,
+                        onClick = { onThreadRowClick(row.threadIdHex) },
+                    )
+                }
+                if (bundle.sheet.totalThreadCount > bundle.nonArchived.take(2).size) {
+                    TextButton(
+                        onClick = onViewAllThreads,
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.thread_view_all, bundle.sheet.totalThreadCount),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+            // The card reveals active + dormant threads only, so its count
+            // says the same. Counting archived rows here promised content the
+            // control never shows (5 threads, 4 of them behind the sheet's
+            // Archived footer); when nothing is unarchived the label names the
+            // archive instead of reading "0 threads".
+            val nonArchivedCount = bundle.nonArchived.size
+            val archivedCount = bundle.sheet.archived.size
+            val onlyArchived = nonArchivedCount == 0 && archivedCount > 0
+            // An archive-only card has nothing to expand into, so the row opens
+            // the sheet instead — unless it is already open, where collapse
+            // must stay reachable (the rows on it can still be dismissed).
+            val opensSheet = onlyArchived && !isExpanded
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { if (opensSheet) onViewAllThreads() else onToggleExpand() }
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text =
+                        if (onlyArchived) {
+                            pluralStringResource(
+                                R.plurals.thread_card_archived_count,
+                                archivedCount,
+                                archivedCount,
+                            )
+                        } else {
+                            pluralStringResource(
+                                R.plurals.thread_card_thread_count,
+                                nonArchivedCount,
+                                nonArchivedCount,
+                            )
+                        },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector =
+                        if (isExpanded) {
+                            Icons.Default.ExpandLess
+                        } else {
+                            Icons.Default.ExpandMore
+                        },
+                    contentDescription =
+                        stringResource(
+                            when {
+                                // Nothing to expand: the row opens the sheet,
+                                // where the Archived section lives.
+                                opensSheet -> R.string.thread_open_archived
+                                isExpanded -> R.string.thread_collapse_threads
+                                else -> R.string.thread_expand_threads
+                            },
+                        ),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+    }
+}
+
+/** One row inside the expanding chat card (Main row or a thread row). */
+@Composable
+private fun ChatCardThreadRow(
+    title: String,
+    preview: String,
+    timestamp: Long,
+    unreadCount: Int,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (unreadCount > 0) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+            )
+        }
+        Text(
+            text = preview,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = formatTimestamp(context, timestamp),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -779,7 +1062,7 @@ fun ConversationContextMenu(
                 )
             },
             text = {
-                Text(if (isSaved) "Remove from Contacts" else "Save to Contacts")
+                Text(if (isSaved) stringResource(R.string.chats_remove_from_contacts) else stringResource(R.string.chats_save_to_contacts))
             },
             onClick = {
                 if (isSaved) {
@@ -801,7 +1084,7 @@ fun ConversationContextMenu(
                 )
             },
             text = {
-                Text("Mark as Unread")
+                Text(stringResource(R.string.chats_mark_unread))
             },
             onClick = onMarkAsUnread,
         )
@@ -815,7 +1098,7 @@ fun ConversationContextMenu(
                 )
             },
             text = {
-                Text("View Peer Details")
+                Text(stringResource(R.string.chats_view_peer_details))
             },
             onClick = onViewDetails,
         )
@@ -850,7 +1133,7 @@ fun ConversationContextMenu(
             },
             text = {
                 Text(
-                    text = "Delete Conversation",
+                    text = stringResource(R.string.chats_delete_conversation),
                     color = MaterialTheme.colorScheme.error,
                 )
             },
@@ -868,7 +1151,7 @@ fun ConversationContextMenu(
             },
             text = {
                 Text(
-                    text = "Block User",
+                    text = stringResource(R.string.messaging_block_user),
                     color = MaterialTheme.colorScheme.error,
                 )
             },
@@ -893,10 +1176,10 @@ fun DeleteConversationDialog(
             )
         },
         title = {
-            Text("Delete Conversation?")
+            Text(stringResource(R.string.chats_delete_conversation_confirm))
         },
         text = {
-            Text("Are you sure you want to delete your conversation with $peerName? This will permanently delete all messages.")
+            Text(stringResource(R.string.chats_delete_conversation_body, peerName))
         },
         confirmButton = {
             TextButton(
@@ -906,12 +1189,12 @@ fun DeleteConversationDialog(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
             ) {
-                Text("Delete")
+                Text(stringResource(R.string.delete))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         },
     )
@@ -937,11 +1220,11 @@ fun BlockUserDialog(
             )
         },
         title = {
-            Text("Block $peerName?")
+            Text(stringResource(R.string.chats_block_title, peerName))
         },
         text = {
             Column {
-                Text("They won't be able to send you messages. Their conversation will be hidden from the chat list.")
+                Text(stringResource(R.string.chats_block_body))
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -953,7 +1236,7 @@ fun BlockUserDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Also delete conversation and messages",
+                        text = stringResource(R.string.chats_block_delete_messages),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -967,13 +1250,13 @@ fun BlockUserDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Also blackhole (don't relay their announces)",
+                        text = stringResource(R.string.chats_block_blackhole),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
                 if (blackholeEnabled && !isTransportEnabled) {
                     Text(
-                        text = "Transport is currently disabled. This identity will be blackholed whenever transport is later enabled.",
+                        text = stringResource(R.string.chats_block_transport_disabled),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 48.dp, top = 4.dp),
@@ -989,12 +1272,12 @@ fun BlockUserDialog(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
             ) {
-                Text("Block")
+                Text(stringResource(R.string.chats_block_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         },
     )
@@ -1012,7 +1295,7 @@ fun LoadingConversationsState(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Loading conversations...",
+            text = stringResource(R.string.chats_loading_conversations),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1034,13 +1317,13 @@ fun EmptyChatsState(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "No conversations yet",
+            text = stringResource(R.string.chats_empty_title),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Messages from peers will appear here",
+            text = stringResource(R.string.chats_empty_body),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
         )
@@ -1051,12 +1334,12 @@ fun EmptyChatsState(modifier: Modifier = Modifier) {
 private fun String.hexStringToByteArray(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
 // Reuse timestamp formatting from MessagingScreen
-private fun formatTimestamp(timestamp: Long): String {
+private fun formatTimestamp(context: Context, timestamp: Long): String {
     val now = System.currentTimeMillis()
     val diff = now - timestamp
 
     return when {
-        diff < 60_000 -> "Now"
+        diff < 60_000 -> context.getString(R.string.chats_now)
         diff < 3600_000 -> {
             val minutes = (diff / 60_000).toInt()
             "${minutes}m"

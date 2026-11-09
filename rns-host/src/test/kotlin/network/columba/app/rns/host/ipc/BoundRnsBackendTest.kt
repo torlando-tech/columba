@@ -324,8 +324,8 @@ class BoundRnsBackendTest {
         override suspend fun declineCall() {}
         override suspend fun setCallMuted(muted: Boolean) {}
         override suspend fun setCallSpeaker(speakerOn: Boolean) {}
-        var cycleCallProfileCount = 0
-        override suspend fun cycleCallProfile() { cycleCallProfileCount++ }
+        var switchCallProfileCount = 0
+        override suspend fun switchCallProfile(profileCode: Int) { switchCallProfileCount++ }
         var cycleCallModeCount = 0
         override suspend fun cycleCallMode() { cycleCallModeCount++ }
         var pttActiveCalls: MutableList<Boolean> = mutableListOf()
@@ -337,7 +337,7 @@ class BoundRnsBackendTest {
         override val isSpeakerOn: StateFlow<Boolean> = MutableStateFlow(false).asStateFlow()
         override val isPttMode: StateFlow<Boolean> = MutableStateFlow(false).asStateFlow()
         override val isPttActive: StateFlow<Boolean> = MutableStateFlow(false).asStateFlow()
-        override val activeProfile: StateFlow<String?> = MutableStateFlow(null).asStateFlow()
+        override val activeProfileCode: StateFlow<Int?> = MutableStateFlow(null).asStateFlow()
         override val callMode: StateFlow<String?> = MutableStateFlow(null).asStateFlow()
         override suspend fun setConnecting(destinationHash: String) {}
         override suspend fun setEnded() {}
@@ -393,7 +393,7 @@ class BoundRnsBackendTest {
         val transferProgressEmitter = MutableSharedFlow<TransferProgressUpdate>(extraBufferCapacity = 1)
 
         override suspend fun sendLxmfMessage(destinationHash: ByteArray, content: String, sourceIdentity: Identity, imageData: ByteArray?, imageFormat: String?, fileAttachments: List<Pair<String, ByteArray>>?): Result<MessageReceipt> = error("not used")
-        override suspend fun sendLxmfMessageWithMethod(destinationHash: ByteArray, content: String, sourceIdentity: Identity, deliveryMethod: DeliveryMethod, tryPropagationOnFail: Boolean, imageData: ByteArray?, imageFormat: String?, fileAttachments: List<Pair<String, ByteArray>>?, replyToMessageId: String?, replyQuotedContent: String?, iconAppearance: IconAppearance?, extraFields: Map<Int, Any>?): Result<MessageReceipt> = error("not used")
+        override suspend fun sendLxmfMessageWithMethod(destinationHash: ByteArray, content: String, sourceIdentity: Identity, deliveryMethod: DeliveryMethod, tryPropagationOnFail: Boolean, imageData: ByteArray?, imageFormat: String?, fileAttachments: List<Pair<String, ByteArray>>?, replyToMessageId: String?, replyQuotedContent: String?, iconAppearance: IconAppearance?, extraFields: Map<Int, Any>?, threadId: ByteArray?): Result<MessageReceipt> = error("not used")
         override suspend fun sendReaction(destinationHash: ByteArray, targetMessageId: String, emoji: String, sourceIdentity: Identity): Result<MessageReceipt> = error("not used")
         override fun observeMessages() = kotlinx.coroutines.flow.emptyFlow<ReceivedMessage>()
         override fun observeDeliveryStatus() = kotlinx.coroutines.flow.emptyFlow<DeliveryStatusUpdate>()

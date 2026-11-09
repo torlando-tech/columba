@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -53,6 +54,7 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import network.columba.app.R
 
 /** Unwrap a Context to find the Activity, since Dialog wraps context in ContextThemeWrapper. */
 internal fun Context.findActivity(): Activity {
@@ -79,7 +81,7 @@ fun QrCodeImage(
 ) {
     var qrBitmap by remember(data) { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember(data) { mutableStateOf(true) }
-    var error by remember(data) { mutableStateOf<String?>(null) }
+    var error by remember(data) { mutableStateOf<Int?>(null) }
     var expanded by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
@@ -87,7 +89,7 @@ fun QrCodeImage(
     LaunchedEffect(data) {
         if (data.isBlank()) {
             isLoading = false
-            error = "No data to encode"
+            error = R.string.qr_composables_no_data
             return@LaunchedEffect
         }
 
@@ -104,7 +106,7 @@ fun QrCodeImage(
                 qrBitmap = bitmap
                 isLoading = false
             } catch (e: Exception) {
-                error = "Failed to generate QR code"
+                error = R.string.qr_composables_generate_failed
                 isLoading = false
             }
         }
@@ -136,7 +138,7 @@ fun QrCodeImage(
 
                 error != null -> {
                     Text(
-                        text = error!!,
+                        text = stringResource(error!!),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -145,7 +147,7 @@ fun QrCodeImage(
                 qrBitmap != null -> {
                     Image(
                         bitmap = qrBitmap!!.asImageBitmap(),
-                        contentDescription = "QR Code",
+                        contentDescription = stringResource(R.string.qr_composables_qr_code),
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -191,7 +193,7 @@ fun QrCodeImage(
                 ) {
                     Image(
                         bitmap = qrBitmap!!.asImageBitmap(),
-                        contentDescription = "QR Code (tap to close)",
+                        contentDescription = stringResource(R.string.qr_composables_qr_code_expanded),
                         modifier =
                             Modifier
                                 .fillMaxWidth()
@@ -282,7 +284,7 @@ fun HashSection(
                 IconButton(onClick = onCopy) {
                     Icon(
                         imageVector = Icons.Default.ContentCopy,
-                        contentDescription = "Copy",
+                        contentDescription = stringResource(R.string.qr_composables_copy),
                         modifier = Modifier.size(20.dp),
                     )
                 }

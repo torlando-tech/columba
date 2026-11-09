@@ -484,10 +484,47 @@ class CodecProfileTest {
     }
 
     @Test
-    fun `each CodecProfile has displayName and description`() {
+    fun `each CodecProfile has label and description resources`() {
         CodecProfile.entries.forEach { profile ->
-            assertTrue("displayName should not be blank", profile.displayName.isNotBlank())
-            assertTrue("description should not be blank", profile.description.isNotBlank())
+            assertTrue("labelRes should be set", profile.labelRes != 0)
+            assertTrue("descriptionRes should be set", profile.descriptionRes != 0)
+        }
+    }
+
+    @Test
+    fun `abbreviations match the LXST-kt profile ids`() {
+        // Ground truth read off LXST-kt's Profile subclasses (id -> abbreviation);
+        // the compact in-call control shows these verbatim, and the picker sends
+        // the ids through the IPC boundary, so a drift here mislabels a live call.
+        val expected =
+            mapOf(
+                0x10 to "ULBW",
+                0x20 to "VLBW",
+                0x30 to "LBW",
+                0x40 to "MQ",
+                0x50 to "HQ",
+                0x60 to "SHQ",
+                0x70 to "ULL",
+                0x80 to "LL",
+            )
+
+        assertEquals(expected.keys, CodecProfile.entries.map { it.code }.toSet())
+
+        expected.forEach { (code, abbreviation) ->
+            assertEquals(
+                "abbreviation for id 0x${code.toString(16)}",
+                abbreviation,
+                CodecProfile.fromCode(code)?.abbreviation,
+            )
+        }
+    }
+
+    @Test
+    fun `abbreviations are unique and uppercase wire tokens`() {
+        val abbreviations = CodecProfile.entries.map { it.abbreviation }
+        assertEquals(abbreviations.size, abbreviations.toSet().size)
+        abbreviations.forEach { abbreviation ->
+            assertEquals("$abbreviation should be uppercase", abbreviation, abbreviation.uppercase())
         }
     }
 

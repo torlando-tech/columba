@@ -6,8 +6,11 @@ import androidx.lifecycle.viewModelScope
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.audio.CallMicrophoneAdmissionCoordinator
+import network.columba.app.rns.api.RnsError
+import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
+import network.columba.app.ui.model.CodecProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,7 +75,7 @@ class CallViewModel
         val isPttMode: StateFlow<Boolean> = telephony.isPttMode
         val isPttActive: StateFlow<Boolean> = telephony.isPttActive
         val remoteIdentity: StateFlow<String?> = telephony.remoteIdentity
-        val activeProfile: StateFlow<String?> = telephony.activeProfile
+        val activeProfileCode: StateFlow<Int?> = telephony.activeProfileCode
         val callMode: StateFlow<String?> = telephony.callMode
 
         // Call duration (updated every second during active call)
@@ -229,10 +232,12 @@ class CallViewModel
                             return@launch
                         }
 
-                        val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
+                        val error = result.exceptionOrNull()
+                        val errorMsg = error?.message ?: "Unknown error"
 
-                        // Retry if CallManager not initialized yet
-                        if (errorMsg.contains("not initialized", ignoreCase = true)) {
+                        // Retry while the backend's CallManager is still initializing (typed marker;
+                        // i18n ticket 02 — never sniff display text)
+                        if ((error as? RnsException)?.error is RnsError.CallManagerNotInitialized) {
                             retryCount++
                             if (retryCount < maxRetries) {
                                 Log.w(TAG, "📞 CallManager not ready, retrying in ${retryDelayMs}ms...")
@@ -320,19 +325,24 @@ class CallViewModel
         }
 
         /**
-         * Cycle to the next LXST audio profile and signal it to the remote
-         * peer (LXST Profile Negotiation).
+         * Switch to [profile] and signal it to the remote peer (LXST Profile
+         * Negotiation).
          *
          * Only meaningful while a call is established: the backend's
-         * `Telephone.switchProfile` is a no-op otherwise. The next profile is
-         * chosen by the backend from the current active one (via
-         * `Profile.next`); the UI reads the result back through [activeProfile].
+         * `Telephone.switchProfile` is a no-op otherwise. A selection is always
+         * forwarded: LXST drops a request for the profile the call is already
+         * on, and that check runs against the live `Telephone.activeProfile`.
+         * Repeating it here against [activeProfileCode] would be wrong, because
+         * the observable is polled (~500 ms) and can lag a peer-initiated
+         * switch — a user choosing what the mirror still calls active would be
+         * silently ignored. The UI reads the applied profile back through
+         * [activeProfileCode].
          */
-        fun cycleProfile() {
+        fun switchProfile(profile: CodecProfile) {
             if (callState.value !is CallState.Active) return
-            Log.d(TAG, "Cycling LXST profile (current=${activeProfile.value})")
+            Log.d(TAG, "Switching LXST profile to ${profile.abbreviation} (0x${profile.code.toString(16)})")
             viewModelScope.launch {
-                telephony.cycleCallProfile()
+                telephony.switchCallProfile(profile.code)
             }
         }
 
@@ -387,18 +397,4 @@ class CallViewModel
             return String.format(Locale.US, "%02d:%02d", mins, secs)
         }
 
-        /**
-         * Get call status text for UI display.
-         */
-        fun getStatusText(state: CallState): String =
-            when (state) {
-                is CallState.Idle -> ""
-                is CallState.Connecting -> "Connecting..."
-                is CallState.Ringing -> "Ringing..."
-                is CallState.Incoming -> "Incoming Call"
-                is CallState.Active -> "Connected"
-                is CallState.Busy -> "Line Busy"
-                is CallState.Rejected -> "Call Rejected"
-                is CallState.Ended -> "Call Ended"
-            }
     }

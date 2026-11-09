@@ -34,9 +34,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
+import network.columba.app.rns.host.R as RnsHostR
 
 /**
  * Step 4: Flash Progress
@@ -150,7 +153,7 @@ private fun FlashingContent(
 
         // Title
         Text(
-            text = "Flashing Firmware",
+            text = stringResource(R.string.flasher_title_flashing_firmware),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -201,7 +204,7 @@ private fun FlashingContent(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = "Do not disconnect the device while flashing is in progress.",
+                text = stringResource(R.string.flasher_do_not_disconnect),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
                 textAlign = TextAlign.Center,
@@ -215,7 +218,7 @@ private fun FlashingContent(
         OutlinedButton(
             onClick = onShowCancelConfirmation,
         ) {
-            Text("Cancel")
+            Text(stringResource(R.string.flasher_btn_cancel))
         }
     }
 }
@@ -247,7 +250,7 @@ private fun ManualResetContent(
 
         // Title
         Text(
-            text = "Reset Required",
+            text = stringResource(R.string.flasher_title_reset_required),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -263,7 +266,7 @@ private fun ManualResetContent(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
-                    text = "Flashing complete!",
+                    text = stringResource(RnsHostR.string.nordic_flash_complete),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -287,7 +290,7 @@ private fun ManualResetContent(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = "Press the RESET (RST) button on your device, then tap the button below to continue with provisioning.",
+                text = stringResource(R.string.flasher_reset_instructions),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                 textAlign = TextAlign.Center,
@@ -302,7 +305,7 @@ private fun ManualResetContent(
             onClick = onDeviceReset,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("I've Reset the Device")
+            Text(stringResource(R.string.flasher_btn_device_reset))
         }
     }
 }
@@ -333,7 +336,7 @@ private fun ProvisioningContent(
 
         // Title
         Text(
-            text = "Provisioning Device",
+            text = stringResource(R.string.flasher_title_provisioning),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -375,7 +378,7 @@ private fun ProvisioningContent(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = "Setting up device identity and firmware verification. This may take a moment.",
+                text = stringResource(R.string.flasher_provisioning_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                 textAlign = TextAlign.Center,
@@ -392,26 +395,23 @@ private fun CancelConfirmationDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Cancel Flashing?") },
+        title = { Text(stringResource(R.string.flasher_dialog_cancel_title)) },
         text = {
-            Text(
-                "Interrupting the flash process may leave your device in an unusable state. " +
-                    "You may need to use the bootloader to recover.",
-            )
+            Text(stringResource(R.string.flasher_dialog_cancel_text))
         },
         confirmButton = {
             TextButton(
                 onClick = onConfirm,
             ) {
                 Text(
-                    text = "Cancel Flash",
+                    text = stringResource(R.string.flasher_btn_cancel_flash),
                     color = MaterialTheme.colorScheme.error,
                 )
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Continue Flashing")
+                Text(stringResource(R.string.flasher_btn_continue_flashing))
             }
         },
     )

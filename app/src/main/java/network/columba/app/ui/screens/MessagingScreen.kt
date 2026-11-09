@@ -1,5 +1,7 @@
+@file:Suppress("TooManyFunctions") // Single cohesive messaging surface; chip bar, thread view, and hook-pill helpers live with the screen
 package network.columba.app.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -55,6 +57,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -66,6 +69,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Call
@@ -73,6 +77,7 @@ import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
@@ -82,6 +87,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -114,6 +120,8 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
@@ -148,8 +156,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
@@ -159,6 +169,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -187,7 +198,10 @@ import network.columba.app.rns.api.BackendCapabilities.Support
 import network.columba.app.rns.api.model.Direction
 import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.data.config.InterfaceConfigCodec
+import network.columba.app.domain.model.SignatureStatus
 import network.columba.app.ui.components.AttachmentPanel
+import network.columba.app.ui.components.ThreadPill
+import network.columba.app.ui.components.ThreadRenameDialog
 import network.columba.app.ui.components.OVERLAY_MAX_CAPTURE_HEIGHT_PX
 import network.columba.app.ui.components.VoiceMessageBubble
 import network.columba.app.ui.components.VoiceDraftPreview
@@ -229,6 +243,9 @@ import network.columba.app.audio.VoiceMessageMetadata
 import network.columba.app.audio.VoiceMessagePlayerState
 import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.ui.model.AudioAttachmentUi
+import network.columba.app.navigation.ConversationNavigation
+import network.columba.app.ui.model.ThreadHeaderUi
+import network.columba.app.ui.model.ThreadHookUi
 import network.columba.app.ui.theme.MeshConnected
 import network.columba.app.ui.theme.MeshOffline
 import network.columba.app.ui.util.rememberLifecycleTickerMillis
@@ -247,11 +264,14 @@ import network.columba.app.viewmodel.InterfaceImportViewModel
 import network.columba.app.viewmodel.MessagingViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
+import network.columba.app.viewmodel.messageResource
 import android.Manifest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import network.columba.app.ui.components.SignatureStatusChip
+import network.columba.app.ui.theme.OnWarningContainer
+import network.columba.app.ui.theme.WarningContainer
 
 private const val URL_ANNOTATION_TAG = "url"
 private const val VOICE_PREVIEW_KEY = "voice-recording-preview"
@@ -361,7 +381,7 @@ private fun LinkifiedMessageText(
                         context.startActivity(Intent(Intent.ACTION_VIEW, toBrowsableUri(url)))
                     } catch (e: Exception) {
                         Log.w("MessagingScreen", "Unable to open link: $url", e)
-                        Toast.makeText(context, "Unable to open link", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.messaging_unable_to_open_link), Toast.LENGTH_SHORT).show()
                     }
                 }
             },
@@ -381,18 +401,40 @@ fun MessagingScreen(
     onUpdatePyxisPackage: (Uri) -> Unit = {},
     fromNotification: Boolean = false,
     notificationEventId: Long = 0L,
+    initialThreadId: String? = null,
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
     val peerActivity by viewModel.peerActivity.collectAsStateWithLifecycle()
     val currentConversationHash by viewModel.currentConversationHash.collectAsStateWithLifecycle()
     val conversationLinkState by viewModel.conversationLinkState.collectAsStateWithLifecycle()
-    val listState = rememberLazyListState()
+    // Threads P2 state (every surface is gated by threads_enabled).
+    val threadsEnabled by viewModel.threadsEnabled.collectAsStateWithLifecycle()
+    val selectedThread by viewModel.selectedThread.collectAsStateWithLifecycle()
+    val threadPill by viewModel.threadPill.collectAsStateWithLifecycle()
+    val threadSheetState by viewModel.threadSheetState.collectAsStateWithLifecycle()
+    val threadHooks by viewModel.threadHooks.collectAsStateWithLifecycle()
+    val threadView by viewModel.threadView.collectAsStateWithLifecycle()
+    var showThreadSheet by remember { mutableStateOf(false) }
+    // Null when the flag is off: the screen behaves exactly like pre-P2.
+    val activeThread = if (threadsEnabled) selectedThread else null
+
+    // Threads P2: one scroll state per target so switching to a thread and
+    // back preserves Main's scroll position (spec §6.2).
+    val scrollStates = remember { mutableStateMapOf<String, LazyListState>() }
+    val listState =
+        remember(activeThread) {
+            scrollStates.getOrPut(activeThread ?: "main") { LazyListState() }
+        }
 
     var messageText by remember { mutableStateOf("") }
     // Track whether the initial draft has been restored to avoid overwriting user typing
     // Keyed to destinationHash so it resets when switching between conversations
     var draftRestored by remember(destinationHash) { mutableStateOf(false) }
+    // Threads P2: which target the composer currently holds text for; a chip
+    // switch retargets it to the new thread's draft (spec §6.7).
+    var composerThread by remember(destinationHash) { mutableStateOf<String?>(null) }
+    var composerThreadSet by remember(destinationHash) { mutableStateOf(false) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -402,10 +444,43 @@ fun MessagingScreen(
 
     // Restore draft text when opening a conversation
     val draftText by viewModel.draftText.collectAsStateWithLifecycle()
-    LaunchedEffect(draftText, destinationHash) {
-        if (!draftRestored && draftText != null) {
-            messageText = draftText ?: ""
-            draftRestored = true
+    LaunchedEffect(draftText, destinationHash, activeThread) {
+        when {
+            composerThreadSet && composerThread != activeThread -> {
+                // Chip switch: the VM swaps draftText to the new target before
+                // announcing the selection, so reading it here is race-free.
+                messageText = draftText.orEmpty()
+                composerThread = activeThread
+            }
+            !draftRestored && draftText != null -> {
+                messageText = draftText ?: ""
+                draftRestored = true
+                composerThread = activeThread
+                composerThreadSet = true
+            }
+            !composerThreadSet -> {
+                composerThread = activeThread
+                composerThreadSet = true
+            }
+        }
+    }
+
+    // Threads P2: "Thread from here" prefills the composer with an editable quote.
+    LaunchedEffect(Unit) {
+        viewModel.threadComposerPrefill.collect { prefill ->
+            // Bound to the target it was created for: a switch while the root
+            // was persisting must not put the quote in another thread's draft.
+            if (viewModel.selectedThread.value != prefill.threadIdHex) return@collect
+            val merged =
+                if (messageText.isBlank()) {
+                    prefill.text
+                } else {
+                    messageText.trimEnd() + "\n" + prefill.text
+                }
+            messageText = merged
+            // Same path as typing: an untouched quoted draft must still be
+            // flushed to the thread when the user switches away.
+            viewModel.onDraftTextChanged(merged)
         }
     }
 
@@ -507,6 +582,10 @@ fun MessagingScreen(
     var showVoiceMessageQualityDialog by remember { mutableStateOf(false) }
     var voiceMessageFormat by remember(destinationHash) { mutableStateOf(VoiceMessageFormat.DEFAULT) }
 
+    // Threads: app-bar rename of the open thread (threads-spec §6.2). Holds the
+    // thread id whose title is being edited; null closes the dialog.
+    var renameThreadId by remember { mutableStateOf<String?>(null) }
+
     // Location permission launcher
     val locationPermissionLauncher =
         rememberLauncherForActivityResult(
@@ -550,13 +629,13 @@ fun MessagingScreen(
                 when (result) {
                     is SyncResult.Success ->
                         if (result.messagesReceived > 0) {
-                            "Sync complete: ${result.messagesReceived} new messages"
+                            context.getString(R.string.messaging_sync_complete_count, result.messagesReceived)
                         } else {
-                            "Sync complete"
+                            context.getString(R.string.messaging_sync_complete)
                         }
-                    is SyncResult.Error -> "Sync failed: ${result.message}"
-                    is SyncResult.NoRelay -> "No relay configured"
-                    is SyncResult.Timeout -> "Sync timed out"
+                    is SyncResult.Error -> context.getString(R.string.messaging_sync_failed, result.message.resolve(context))
+                    is SyncResult.NoRelay -> context.getString(R.string.messaging_sync_no_relay)
+                    is SyncResult.Timeout -> context.getString(R.string.messaging_sync_timeout)
                 }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
@@ -567,9 +646,10 @@ fun MessagingScreen(
         viewModel.contactToggleResult.collect { result ->
             val message =
                 when (result) {
-                    is ContactToggleResult.Added -> "Saved $peerName to Contacts"
-                    is ContactToggleResult.Removed -> "Removed $peerName from Contacts"
-                    is ContactToggleResult.Error -> result.message
+                    is ContactToggleResult.Added -> context.getString(R.string.messaging_saved_to_contacts, peerName)
+                    is ContactToggleResult.Removed -> context.getString(R.string.messaging_removed_from_contacts, peerName)
+                    is ContactToggleResult.Error ->
+                        result.detail ?: context.getString(result.reason.messageResource())
                 }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
@@ -577,15 +657,15 @@ fun MessagingScreen(
 
     // Observe file attachment errors and show Toast
     LaunchedEffect(Unit) {
-        viewModel.fileAttachmentError.collect { errorMessage ->
-            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+        viewModel.fileAttachmentError.collect { message ->
+            Toast.makeText(context, message.resolve(context), Toast.LENGTH_SHORT).show()
         }
     }
 
     // Observe shared image compression errors and show Toast
     LaunchedEffect(Unit) {
-        viewModel.sharedImageError.collect { errorMessage ->
-            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+        viewModel.sharedImageError.collect { message ->
+            Toast.makeText(context, message.resolve(context), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -595,7 +675,7 @@ fun MessagingScreen(
     // user feedback so the tap doesn't feel silently dropped.
     LaunchedEffect(Unit) {
         viewModel.locationSharingMessage.collect { message ->
-            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            Toast.makeText(context, message.resolve(context), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -635,7 +715,7 @@ fun MessagingScreen(
                                 Toast
                                     .makeText(
                                         context,
-                                        "File too large (${actualSizeKb}KB). Max size is ${maxSizeKb}KB.",
+                                        context.getString(R.string.messaging_file_too_large, actualSizeKb, maxSizeKb),
                                         Toast.LENGTH_LONG,
                                     ).show()
                             }
@@ -643,7 +723,7 @@ fun MessagingScreen(
                                 Toast
                                     .makeText(
                                         context,
-                                        "Failed to attach file: ${result.message}",
+                                        context.getString(R.string.messaging_attach_failed, result.message.resolve(context)),
                                         Toast.LENGTH_SHORT,
                                     ).show()
                             }
@@ -677,7 +757,7 @@ fun MessagingScreen(
                                 destinationUri,
                             )
                         withContext(Dispatchers.Main) {
-                            val message = if (success) "File saved" else "Failed to save file"
+                            val message = context.getString(if (success) R.string.messaging_file_saved else R.string.messaging_file_save_failed)
                             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         }
                     }
@@ -708,7 +788,7 @@ fun MessagingScreen(
                     scope.launch(Dispatchers.IO) {
                         val success = viewModel.saveImage(context, messageId, destinationUri)
                         withContext(Dispatchers.Main) {
-                            val message = if (success) "Image saved" else "Failed to save image"
+                            val message = context.getString(if (success) R.string.messaging_image_saved else R.string.messaging_image_save_failed)
                             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         }
                     }
@@ -771,13 +851,18 @@ fun MessagingScreen(
 
     var showVoiceControls by remember { mutableStateOf(false) }
     var audioPermissionPermanentlyDenied by remember { mutableStateOf(false) }
+    // The collect coroutine outlives recompositions; read the live thread so a
+    // send completing after a thread switch cannot clear the NEW target's
+    // composer when both happen to hold the same text.
+    val currentActiveThread by rememberUpdatedState(activeThread)
     LaunchedEffect(destinationHash, viewModel) {
         viewModel.composerSendResult.collect { result ->
-            if (
+            val clearsComposer =
                 result.destinationHash == destinationHash &&
-                result.clearComposer &&
-                messageText == result.submittedText
-            ) {
+                    result.clearComposer &&
+                    messageText == result.submittedText &&
+                    result.threadId == currentActiveThread
+            if (clearsComposer) {
                 messageText = ""
                 showVoiceControls = false
             }
@@ -849,15 +934,17 @@ fun MessagingScreen(
         }
     }
 
-    // Track if we've done the initial scroll for this conversation
-    // Resets when switching to a different conversation
-    var hasScrolledToBottom by remember(destinationHash) { mutableStateOf(false) }
+    // Per-target initial-scroll flag: each thread (or Main) scrolls to the
+    // bottom once per conversation; returning to a target keeps the reader's
+    // position in that target's saved LazyListState.
+    val scrolledTargets = remember(destinationHash) { mutableStateMapOf<String, Boolean>() }
+    val scrollTargetKey = activeThread ?: "main"
 
     // Detect if user is at the bottom (index 0 with reverseLayout)
     // Wrapped in derivedStateOf to avoid recomposition on every scroll
     // Note: Use <= 1 instead of == 0 because when a new message arrives, it takes index 0
     // and the previously-newest message shifts to index 1 BEFORE the scroll effect runs
-    val isAtBottom by remember {
+    val isAtBottom by remember(listState) {
         derivedStateOf { listState.firstVisibleItemIndex <= 1 }
     }
 
@@ -873,10 +960,10 @@ fun MessagingScreen(
     // Initial scroll to bottom when messages first load for a conversation
     // This ensures opening a conversation always shows the most recent messages
     // Uses newestMessageId instead of itemCount to avoid triggering on pagination
-    LaunchedEffect(destinationHash, newestMessageId) {
-        if (newestMessageId != null && !hasScrolledToBottom) {
+    LaunchedEffect(destinationHash, activeThread, newestMessageId) {
+        if (newestMessageId != null && scrolledTargets[scrollTargetKey] != true) {
             listState.scrollToItem(0) // Instant scroll to index 0 (newest message)
-            hasScrolledToBottom = true
+            scrolledTargets[scrollTargetKey] = true
         }
     }
 
@@ -902,7 +989,7 @@ fun MessagingScreen(
         if (notifScrollCoordinator.shouldScroll()) {
             Log.d("MessagingScreen", "Notification entry: scrolling to newest message")
             listState.scrollToItem(0)
-            hasScrolledToBottom = true
+            scrolledTargets[scrollTargetKey] = true
         }
     }
 
@@ -913,7 +1000,7 @@ fun MessagingScreen(
     // - itemCount changes when loading old messages during scroll → caused snap-back bug
     // - newestMessageId only changes when a NEW message arrives → correct behavior
     LaunchedEffect(newestMessageId) {
-        if (newestMessageId != null && hasScrolledToBottom) {
+        if (newestMessageId != null && scrolledTargets[scrollTargetKey] == true) {
             // Check if we should auto-scroll for this new message
             val newestMessage = pagingItems.itemSnapshotList.firstOrNull()
             val shouldScroll =
@@ -949,12 +1036,48 @@ fun MessagingScreen(
         viewModel.loadMessages(destinationHash, peerName)
     }
 
+    // Threads P2: apply the thread the route asked for (hook pill, sheet row,
+    // expanding-card thread row, "+ New" via NEW_THREAD_ARG, or the thread of
+    // the message a notification was tapped for). Keyed on [initialThreadId]
+    // too: a notification can reuse the entry that is already showing this
+    // conversation, and only its argument changes.
+    // "+ New" must create exactly one thread per saved entry: activity
+    // recreation re-runs the effect, and the reload resets the selection to
+    // Main, so the created id is saved and re-selected instead of re-created.
+    var startedThreadHex by rememberSaveable(destinationHash, initialThreadId) {
+        mutableStateOf<String?>(null)
+    }
+    // Keyed on threadsEnabled too: a notification tap that lands before the
+    // setting loads must still reach its thread once the flag says threads are
+    // on. With the flag off there is one flat list, so the app shows Main -
+    // selecting a thread there would put the composer in a view no surface
+    // renders.
+    LaunchedEffect(destinationHash, initialThreadId, currentConversationHash, threadsEnabled) {
+        if (currentConversationHash != destinationHash) return@LaunchedEffect
+        if (!threadsEnabled) return@LaunchedEffect
+        when (initialThreadId) {
+            null -> Unit
+            ConversationNavigation.NEW_THREAD_ARG -> {
+                val existing = startedThreadHex
+                // selectThread is idempotent, so re-applying after a reload is
+                // what restores the thread the user was reading.
+                if (existing != null) viewModel.selectThread(existing) else startedThreadHex = viewModel.startNewThread()
+            }
+            else -> viewModel.selectThread(initialThreadId)
+        }
+    }
+
     // Mark conversation as read continuously while viewing
     // Uses newestMessageId to only trigger on new messages, not pagination
     LaunchedEffect(destinationHash, newestMessageId) {
         if (newestMessageId != null) {
             viewModel.markAsRead(destinationHash)
         }
+    }
+
+    // Threads P2: back from a thread view returns to Main, keeping the chat.
+    BackHandler(enabled = activeThread != null) {
+        viewModel.selectThread(null)
     }
 
     // Handle back button when reaction mode is active
@@ -1017,10 +1140,10 @@ fun MessagingScreen(
                                 else -> MeshOffline
                             }
                             val dotContentDescription = when {
-                                isEstablishing -> "Connecting"
-                                hasActiveLink -> "Online — link active"
-                                hasRecentActivity -> "Last seen recently"
-                                else -> "Offline"
+                                isEstablishing -> stringResource(R.string.messaging_status_connecting)
+                                hasActiveLink -> stringResource(R.string.messaging_status_online_link_active)
+                                hasRecentActivity -> stringResource(R.string.messaging_status_last_seen_recently)
+                                else -> stringResource(R.string.messaging_status_offline)
                             }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -1072,9 +1195,13 @@ fun MessagingScreen(
                                 // expect a reply.
                                 val statusText =
                                     when {
-                                        isEstablishing -> "Connecting..."
-                                        hasActiveLink -> "Online"
-                                        lastActivity > 0 -> "Last seen ${formatTimeSince(lastActivity, timestampTick)}"
+                                        isEstablishing -> stringResource(R.string.messaging_status_connecting_long)
+                                        hasActiveLink -> stringResource(R.string.messaging_status_online)
+                                        lastActivity > 0 ->
+                                            stringResource(
+                                                R.string.messaging_status_last_seen,
+                                                formatTimeSince(context, lastActivity, timestampTick),
+                                            )
                                         else -> ""
                                     }
                                 Text(
@@ -1092,7 +1219,7 @@ fun MessagingScreen(
                                 if (hasActiveLink) {
                                     Icon(
                                         imageVector = Icons.Default.Link,
-                                        contentDescription = "Active link",
+                                        contentDescription = stringResource(R.string.messaging_active_link),
                                         tint = MeshConnected,
                                         modifier = Modifier.size(12.dp),
                                     )
@@ -1112,7 +1239,7 @@ fun MessagingScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.back),
                         )
                     }
                 },
@@ -1136,7 +1263,7 @@ fun MessagingScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Call,
-                            contentDescription = "Voice call",
+                            contentDescription = stringResource(R.string.messaging_voice_call),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -1166,7 +1293,7 @@ fun MessagingScreen(
                                 } else {
                                     Icons.Outlined.LocationOn
                                 },
-                            contentDescription = "Share location",
+                            contentDescription = stringResource(R.string.messaging_share_location),
                             tint =
                                 if (locationSharingState != LocationSharingState.NONE) {
                                     MaterialTheme.colorScheme.primary
@@ -1201,7 +1328,7 @@ fun MessagingScreen(
                         IconButton(onClick = { showOverflowMenu = true }) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More options",
+                                contentDescription = stringResource(R.string.messaging_more_options),
                                 tint =
                                     if (isSyncing) {
                                         MaterialTheme.colorScheme.primary
@@ -1230,7 +1357,13 @@ fun MessagingScreen(
                                     }
                                 },
                                 text = {
-                                    Text(if (isSyncing) "Syncing\u2026" else "Sync messages")
+                                    Text(
+                                        if (isSyncing) {
+                                            stringResource(R.string.messaging_syncing)
+                                        } else {
+                                            stringResource(R.string.messaging_sync_messages)
+                                        },
+                                    )
                                 },
                                 onClick = {
                                     showOverflowMenu = false
@@ -1248,12 +1381,32 @@ fun MessagingScreen(
                                         contentDescription = null,
                                     )
                                 },
-                                text = { Text("Text size") },
+                                text = { Text(stringResource(R.string.messaging_text_size)) },
                                 onClick = {
                                     showOverflowMenu = false
                                     showTextSizeDialog = true
                                 },
                             )
+                            // Threads: rename the open thread from the app bar
+                            // (threads-spec §6.2 entry point; the sheet row's
+                            // `⋮ → Rename` is the other one). Main has no
+                            // `threads` row — its label is the resource default.
+                            val openThreadId = activeThread
+                            if (threadsEnabled && openThreadId != null) {
+                                DropdownMenuItem(
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = null,
+                                        )
+                                    },
+                                    text = { Text(stringResource(R.string.thread_action_rename)) },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        renameThreadId = openThreadId
+                                    },
+                                )
+                            }
                             HorizontalDivider()
                             DropdownMenuItem(
                                 leadingIcon = {
@@ -1265,7 +1418,7 @@ fun MessagingScreen(
                                 },
                                 text = {
                                     Text(
-                                        "Block User",
+                                        stringResource(R.string.messaging_block_user),
                                         color = MaterialTheme.colorScheme.error,
                                     )
                                 },
@@ -1290,6 +1443,17 @@ fun MessagingScreen(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
 
+            // Threads P2: the header pill (threads-spec §5.1) is the single
+            // thread control on this screen — it names the open target and
+            // opens the sheets switcher. Replaces the old chip bar.
+            if (threadsEnabled) {
+                ThreadPill(
+                    pill = threadPill,
+                    onClick = { showThreadSheet = true },
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
+                )
+            }
+
             // Messages + Input area using Google's official pattern
             Column(
                 modifier =
@@ -1297,6 +1461,15 @@ fun MessagingScreen(
                         .weight(1f)
                         .fillMaxWidth(),
             ) {
+                    // Threads P2: pinned root header for the thread view (spec §6.5).
+                    val threadHeader = threadView?.header
+                    if (activeThread != null && threadHeader != null) {
+                        ThreadPinnedHeader(
+                            header = threadHeader,
+                            replyCount = threadView?.replyCount ?: 0,
+                        )
+                    }
+
                 Box(
                     modifier =
                         Modifier
@@ -1407,6 +1580,8 @@ fun MessagingScreen(
                                             message = displayMessage,
                                             isFromMe = displayMessage.isFromMe,
                                             clipboardManager = clipboardManager,
+                                            threadHook = threadHooks[message.id],
+                                            onThreadHookClick = { viewModel.selectThread(it) },
                                             myIdentityHash = myIdentityHash,
                                             peerName = peerName,
                                             syncProgress = syncProgress,
@@ -1515,6 +1690,12 @@ fun MessagingScreen(
                 } else {
                     // Message Input Bar - at bottom of Column
                     MessageInputBar(
+                    placeholder =
+                        if (activeThread != null) {
+                            stringResource(R.string.thread_reply_placeholder)
+                        } else {
+                            null
+                        },
                     modifier =
                         Modifier
                             .fillMaxWidth(),
@@ -1656,8 +1837,8 @@ fun MessagingScreen(
                             showDeleteConfirmation = false
                             viewModel.exitReactionMode()
                         },
-                        title = { Text("Delete message") },
-                        text = { Text("This message will be permanently deleted from this device.") },
+                        title = { Text(stringResource(R.string.messaging_delete_message)) },
+                        text = { Text(stringResource(R.string.messaging_delete_message_body)) },
                         confirmButton = {
                             androidx.compose.material3.TextButton(
                                 onClick = {
@@ -1666,7 +1847,7 @@ fun MessagingScreen(
                                     viewModel.exitReactionMode()
                                 },
                             ) {
-                                Text("Delete", color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                             }
                         },
                         dismissButton = {
@@ -1676,7 +1857,7 @@ fun MessagingScreen(
                                     viewModel.exitReactionMode()
                                 },
                             ) {
-                                Text("Cancel")
+                                Text(stringResource(R.string.cancel))
                             }
                         },
                     )
@@ -1744,6 +1925,17 @@ fun MessagingScreen(
                             null
                         },
                     onDelete = { showDeleteConfirmation = true },
+                    onThreadFromHere =
+                        if (threadsEnabled && activeThread == null) {
+                            {
+                                val rootContent =
+                                    pagingItems.itemSnapshotList
+                                        .find { it?.id == state.messageId }?.content.orEmpty()
+                                viewModel.startThreadFromMessage(state.messageId, rootContent)
+                            }
+                        } else {
+                            null
+                        },
                     onDismissStarted = {
                         // Show original message immediately when dismiss animation starts
                         viewModel.showOriginalMessage()
@@ -1789,12 +1981,12 @@ fun MessagingScreen(
                             context.startActivity(Intent.createChooser(intent, null))
                         } catch (e: Exception) {
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(context, "No app found to open this file", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.messaging_no_app_open_file), Toast.LENGTH_SHORT).show()
                             }
                         }
                     } else {
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Failed to load file", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.messaging_failed_to_load_file), Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -1863,15 +2055,15 @@ fun MessagingScreen(
                             }
                         @Suppress("SwallowedException") // User is notified via Toast
                         try {
-                            context.startActivity(Intent.createChooser(intent, "Share image"))
+                            context.startActivity(Intent.createChooser(intent, context.getString(R.string.messaging_share_image)))
                         } catch (e: Exception) {
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(context, "No app found to share", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.messaging_no_app_to_share), Toast.LENGTH_SHORT).show()
                             }
                         }
                     } else {
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Failed to load image", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.messaging_failed_to_load_image), Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -1880,6 +2072,51 @@ fun MessagingScreen(
                 showImageOptionsSheet = false
                 selectedImageMessageId = null
             },
+        )
+    }
+
+    // Threads P2: threads sheet (header pill entry point; chat-card "View all"
+    // opens the same sheet from the chat list).
+    if (showThreadSheet) {
+        ThreadSheet(
+            state = threadSheetState,
+            onDismiss = { showThreadSheet = false },
+            onThreadClick = { threadIdHex ->
+                showThreadSheet = false
+                viewModel.selectThread(threadIdHex)
+            },
+            onMainClick = { viewModel.selectThread(null) },
+            onCreateThread = {
+                showThreadSheet = false
+                viewModel.startNewThread()
+            },
+            onRename = viewModel::renameThread,
+            onMarkRead = viewModel::markThreadRead,
+            onArchive = viewModel::archiveThreads,
+            onUnarchive = viewModel::unarchiveThreads,
+            onReopenThread = viewModel::selectThread,
+            onDelete = viewModel::deleteThread,
+        )
+    }
+
+    // Rename the open thread from the chat app bar (threads-spec §6.2). Seeded
+    // with the stored local title, so "Reset to automatic" appears only when
+    // one exists — the same rules as the sheet's dialog.
+    val renameTarget = renameThreadId
+    if (renameTarget != null) {
+        val localTitle =
+            threadSheetState.allRows.firstOrNull { it.threadIdHex == renameTarget }?.title.orEmpty()
+        ThreadRenameDialog(
+            initialTitle = localTitle,
+            onConfirm = { newTitle ->
+                viewModel.renameThread(renameTarget, newTitle)
+                renameThreadId = null
+            },
+            onResetToAutomatic = {
+                viewModel.renameThread(renameTarget, null)
+                renameThreadId = null
+            },
+            onDismiss = { renameThreadId = null },
         )
     }
 
@@ -1894,7 +2131,7 @@ fun MessagingScreen(
                 )
             },
             sheetState = locationPermissionSheetState,
-            primaryActionLabel = "Allow Location",
+            primaryActionLabel = stringResource(R.string.messaging_allow_location),
         )
     }
 
@@ -1922,8 +2159,8 @@ fun MessagingScreen(
                     tint = MaterialTheme.colorScheme.error,
                 )
             },
-            title = { Text("Stop Sharing Location?") },
-            text = { Text("Stop sharing your location with $peerName?") },
+            title = { Text(stringResource(R.string.messaging_stop_sharing_title)) },
+            text = { Text(stringResource(R.string.messaging_stop_sharing_body, peerName)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -1935,12 +2172,12 @@ fun MessagingScreen(
                             containerColor = MaterialTheme.colorScheme.error,
                         ),
                 ) {
-                    Text("Stop Sharing")
+                    Text(stringResource(R.string.messaging_stop_sharing))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showStopSharingDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             },
         )
@@ -2057,7 +2294,7 @@ fun MessagingScreen(
                 showBlockDialog = false
                 onBackClick()
                 android.widget.Toast
-                    .makeText(context, "Blocked $peerName", android.widget.Toast.LENGTH_SHORT)
+                    .makeText(context, context.getString(R.string.messaging_blocked_user, peerName), android.widget.Toast.LENGTH_SHORT)
                     .show()
             },
             onDismiss = { showBlockDialog = false },
@@ -2138,6 +2375,9 @@ fun MessageBubble(
         width: Int,
         height: Int,
     ) -> Unit = { _, _, _, _, _, _, _, _ -> },
+    /** Threads P2: "N replies" hook under this bubble (Main roots only). */
+    threadHook: ThreadHookUi? = null,
+    onThreadHookClick: (threadIdHex: String) -> Unit = {},
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     val graphicsLayer = rememberGraphicsLayer()
@@ -2288,7 +2528,7 @@ fun MessageBubble(
                             .crossfade(true)
                             .build(),
                     imageLoader = AnimatedImageLoader.getInstance(context),
-                    contentDescription = "Animated GIF",
+                    contentDescription = stringResource(R.string.messaging_animated_gif),
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -2312,7 +2552,7 @@ fun MessageBubble(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = formatTimestamp(message.receivedAt ?: message.timestamp, timestampTick),
+                            text = formatTimestamp(context, message.receivedAt ?: message.timestamp, timestampTick),
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White,
                         )
@@ -2442,7 +2682,7 @@ fun MessageBubble(
                                         .crossfade(true)
                                         .build(),
                                 imageLoader = AnimatedImageLoader.getInstance(context),
-                                contentDescription = "Animated image attachment",
+                                contentDescription = stringResource(R.string.messaging_animated_image_attachment),
                                 modifier =
                                     Modifier
                                         .widthIn(max = 268.dp)
@@ -2455,7 +2695,7 @@ fun MessageBubble(
                             // Static image - use pre-decoded bitmap for efficiency
                             Image(
                                 bitmap = imageBitmap,
-                                contentDescription = "Image attachment",
+                                contentDescription = stringResource(R.string.messaging_image_attachment),
                                 modifier =
                                     Modifier
                                         .widthIn(max = 268.dp)
@@ -2494,13 +2734,13 @@ fun MessageBubble(
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(
                                         imageVector = Icons.Default.BrokenImage,
-                                        contentDescription = "Image unavailable",
+                                        contentDescription = stringResource(R.string.messaging_image_unavailable),
                                         modifier = Modifier.size(32.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        "Not available",
+                                        stringResource(R.string.messaging_not_available),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                     )
@@ -2519,16 +2759,15 @@ fun MessageBubble(
                                         contentDescription = null,
                                     )
                                 },
-                                title = { Text("Image Not Available") },
+                                title = { Text(stringResource(R.string.messaging_image_not_available_title)) },
                                 text = {
                                     Text(
-                                        "The original image could not be found. This can happen when " +
-                                            "importing data without attachments included.",
+                                        stringResource(R.string.messaging_image_not_available_body),
                                     )
                                 },
                                 confirmButton = {
                                     TextButton(onClick = { showMissingImageInfo = false }) {
-                                        Text("OK")
+                                        Text(stringResource(R.string.messaging_ok))
                                     }
                                 },
                             )
@@ -2627,7 +2866,7 @@ fun MessageBubble(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = formatTimestamp(message.receivedAt ?: message.timestamp, timestampTick),
+                                text = formatTimestamp(context, message.receivedAt ?: message.timestamp, timestampTick),
                                 style = MaterialTheme.typography.labelSmall,
                                 color =
                                     if (isFromMe) {
@@ -2667,6 +2906,14 @@ fun MessageBubble(
                 modifier = Modifier.offset(y = (-8).dp),
             )
         }
+
+        // Threads P2: replies hook under the root bubble (spec §6.6).
+        threadHook?.let { hook ->
+            ThreadHookPill(
+                hook = hook,
+                onClick = { onThreadHookClick(hook.threadIdHex) },
+            )
+        }
     }
 }
 
@@ -2697,7 +2944,7 @@ fun MessageContextMenu(
                         contentDescription = null,
                     )
                 },
-                text = { Text("Retry") },
+                text = { Text(stringResource(R.string.messaging_retry)) },
                 onClick = onRetry,
             )
         }
@@ -2711,7 +2958,7 @@ fun MessageContextMenu(
                         contentDescription = null,
                     )
                 },
-                text = { Text("Reply") },
+                text = { Text(stringResource(R.string.messaging_reply)) },
                 onClick = onReply,
             )
         }
@@ -2723,7 +2970,7 @@ fun MessageContextMenu(
                     contentDescription = null,
                 )
             },
-            text = { Text("Copy") },
+            text = { Text(stringResource(R.string.messaging_copy)) },
             onClick = onCopy,
         )
 
@@ -2736,7 +2983,7 @@ fun MessageContextMenu(
                         contentDescription = null,
                     )
                 },
-                text = { Text("View Details") },
+                text = { Text(stringResource(R.string.messaging_view_details)) },
                 onClick = onViewDetails,
             )
         }
@@ -2765,6 +3012,8 @@ fun MessageInputBar(
     isSending: Boolean = false,
     onAttachmentPanelToggle: () -> Unit = {},
     isAttachmentPanelActive: Boolean = false,
+    /** Threads P2: composer hint override when replying inside a thread. */
+    placeholder: String? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2821,7 +3070,7 @@ fun MessageInputBar(
                                     .crossfade(true)
                                     .build(),
                             imageLoader = AnimatedImageLoader.getInstance(context),
-                            contentDescription = "Selected animated image",
+                            contentDescription = stringResource(R.string.messaging_selected_animated_image),
                             modifier =
                                 Modifier
                                     .size(80.dp)
@@ -2839,7 +3088,7 @@ fun MessageInputBar(
                         bitmap?.let { imageBitmap ->
                             Image(
                                 bitmap = imageBitmap,
-                                contentDescription = "Selected image",
+                                contentDescription = stringResource(R.string.messaging_selected_image),
                                 modifier =
                                     Modifier
                                         .size(80.dp)
@@ -2852,9 +3101,9 @@ fun MessageInputBar(
                     Text(
                         text =
                             if (selectedImageIsAnimated) {
-                                "GIF attached (${selectedImageData.size / 1024} KB)"
+                                stringResource(R.string.messaging_gif_attached, selectedImageData.size / 1024)
                             } else {
-                                "Image attached (${selectedImageData.size / 1024} KB)"
+                                stringResource(R.string.messaging_image_attached, selectedImageData.size / 1024)
                             },
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
@@ -2863,7 +3112,7 @@ fun MessageInputBar(
                     IconButton(onClick = onClearImage) {
                         Icon(
                             imageVector = androidx.compose.material.icons.Icons.Default.Close,
-                            contentDescription = "Remove image",
+                            contentDescription = stringResource(R.string.messaging_remove_image),
                         )
                     }
                 }
@@ -2882,7 +3131,7 @@ fun MessageInputBar(
             val remaining = ValidationConstants.MAX_MESSAGE_LENGTH - messageText.length
             if (remaining < 100) {
                 Text(
-                    text = "$remaining characters remaining",
+                    text = stringResource(R.string.messaging_characters_remaining, remaining),
                     style = MaterialTheme.typography.bodySmall,
                     color =
                         if (remaining < 20) {
@@ -2902,6 +3151,8 @@ fun MessageInputBar(
                         messageText.isNotBlank() || selectedImageData != null ||
                             selectedFileAttachments.isNotEmpty() || hasVoiceAttachment
                     )
+            val sendContentDescription = stringResource(R.string.messaging_send_message)
+            val sendingStateDescription = stringResource(R.string.messaging_sending_message)
 
             Row(
                 modifier =
@@ -3005,7 +3256,7 @@ fun MessageInputBar(
                             Box {
                                 if (textFieldState.text.isEmpty()) {
                                     Text(
-                                        text = "Type a message...",
+                                        text = placeholder ?: stringResource(R.string.messaging_type_a_message),
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -3026,7 +3277,12 @@ fun MessageInputBar(
                 ) {
                     Icon(
                         imageVector = if (isAttachmentPanelActive) Icons.Default.Close else Icons.Default.Add,
-                        contentDescription = if (isAttachmentPanelActive) "Close attachments" else "Attach",
+                        contentDescription =
+                            if (isAttachmentPanelActive) {
+                                stringResource(R.string.messaging_close_attachments)
+                            } else {
+                                stringResource(R.string.messaging_attach)
+                            },
                         modifier = Modifier.size(24.dp),
                     )
                 }
@@ -3038,8 +3294,8 @@ fun MessageInputBar(
                         Modifier
                             .size(48.dp)
                             .semantics {
-                                contentDescription = "Send message"
-                                if (isSending) stateDescription = "Sending message"
+                                contentDescription = sendContentDescription
+                                if (isSending) stateDescription = sendingStateDescription
                             },
                     shape = CircleShape,
                     colors =
@@ -3085,12 +3341,12 @@ fun EmptyMessagesState() {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
             )
             Text(
-                text = "No messages yet",
+                text = stringResource(R.string.messaging_no_messages_yet),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "Send a message to start the conversation",
+                text = stringResource(R.string.messaging_start_conversation),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             )
@@ -3099,16 +3355,17 @@ fun EmptyMessagesState() {
 }
 
 private fun formatTimestamp(
+    context: Context,
     timestamp: Long,
     now: Long,
 ): String {
     val diff = now - timestamp
 
     return when {
-        diff < 60_000 -> "Just now"
+        diff < 60_000 -> context.getString(R.string.time_relative_just_now)
         diff < 3600_000 -> {
             val minutes = (diff / 60_000).toInt()
-            "$minutes min ago"
+            context.getString(R.string.messaging_minutes_ago, minutes)
         }
         diff < 86400_000 -> {
             SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
@@ -3157,7 +3414,7 @@ private fun FullscreenImageDialog(
         ) {
             Image(
                 bitmap = bitmap,
-                contentDescription = "Fullscreen image",
+                contentDescription = stringResource(R.string.messaging_fullscreen_image),
                 modifier =
                     Modifier
                         .fillMaxSize()
@@ -3185,7 +3442,7 @@ private fun FullscreenImageDialog(
             ) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More options",
+                    contentDescription = stringResource(R.string.messaging_more_options),
                 )
             }
         }
@@ -3237,7 +3494,7 @@ private fun FullscreenAnimatedImageDialog(
                         .crossfade(true)
                         .build(),
                 imageLoader = AnimatedImageLoader.getInstance(context),
-                contentDescription = "Fullscreen animated image",
+                contentDescription = stringResource(R.string.messaging_fullscreen_animated_image),
                 modifier =
                     Modifier
                         .fillMaxSize()
@@ -3265,7 +3522,7 @@ private fun FullscreenAnimatedImageDialog(
             ) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More options",
+                    contentDescription = stringResource(R.string.messaging_more_options),
                 )
             }
         }
@@ -3293,6 +3550,7 @@ fun PendingFileNotificationBubble(
     modifier: Modifier = Modifier,
 ) {
     val isSyncing = syncProgress !is SyncProgress.Idle
+    val context = LocalContext.current
 
     Box(
         modifier =
@@ -3331,7 +3589,12 @@ fun PendingFileNotificationBubble(
                     }
                     Column {
                         Text(
-                            text = if (isSyncing) "Fetching file..." else "$peerName sent a large file",
+                            text =
+                                if (isSyncing) {
+                                    stringResource(R.string.messaging_fetching_file)
+                                } else {
+                                    stringResource(R.string.messaging_peer_sent_large_file, peerName)
+                                },
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Medium,
                         )
@@ -3342,14 +3605,14 @@ fun PendingFileNotificationBubble(
                         )
                         if (!isSyncing && pendingFileInfo.fileCount > 1) {
                             Text(
-                                text = "+${pendingFileInfo.fileCount - 1} more file${if (pendingFileInfo.fileCount > 2) "s" else ""}",
+                                text = pluralStringResource(R.plurals.messaging_more_files, pendingFileInfo.fileCount - 1, pendingFileInfo.fileCount - 1),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = getSyncStatusText(syncProgress),
+                            text = getSyncStatusText(context, syncProgress),
                             style = MaterialTheme.typography.labelSmall,
                             color =
                                 if (isSyncing) {
@@ -3376,25 +3639,25 @@ fun PendingFileNotificationBubble(
 /**
  * Get status text for pending file notification based on sync progress.
  */
-private fun getSyncStatusText(syncProgress: SyncProgress): String =
+private fun getSyncStatusText(context: Context, syncProgress: SyncProgress): String =
     when (syncProgress) {
-        is SyncProgress.Idle -> "Tap to fetch from relay"
-        is SyncProgress.Starting -> "Connecting to relay..."
+        is SyncProgress.Idle -> context.getString(R.string.messaging_sync_tap_to_fetch)
+        is SyncProgress.Starting -> context.getString(R.string.messaging_sync_connecting_relay)
         is SyncProgress.InProgress ->
             when (syncProgress.stateName.lowercase()) {
-                "path_requested" -> "Discovering network path..."
-                "link_establishing" -> "Establishing connection..."
-                "link_established" -> "Connected, preparing..."
-                "request_sent" -> "Requesting messages..."
+                "path_requested" -> context.getString(R.string.messaging_sync_discovering_path)
+                "link_establishing" -> context.getString(R.string.messaging_sync_establishing)
+                "link_established" -> context.getString(R.string.messaging_sync_connected)
+                "request_sent" -> context.getString(R.string.messaging_sync_requesting)
                 "receiving", "downloading" ->
                     if (syncProgress.progress > 0f) {
-                        "Downloading: ${(syncProgress.progress * 100).toInt()}%"
+                        context.getString(R.string.messaging_sync_downloading_pct, (syncProgress.progress * 100).toInt())
                     } else {
-                        "Downloading..."
+                        context.getString(R.string.messaging_sync_downloading)
                     }
-                else -> "Processing..."
+                else -> context.getString(R.string.messaging_sync_processing)
             }
-        is SyncProgress.Complete -> "Download complete"
+        is SyncProgress.Complete -> context.getString(R.string.messaging_sync_download_complete)
     }
 
 /**
@@ -3424,12 +3687,12 @@ private fun TextSizeDialog(
                 contentDescription = null,
             )
         },
-        title = { Text("Text size") },
+        title = { Text(stringResource(R.string.messaging_text_size)) },
         text = {
             Column {
                 // Preview text
                 Text(
-                    text = "Preview message text",
+                    text = stringResource(R.string.messaging_preview_message_text),
                     style =
                         MaterialTheme.typography.bodyLarge.copy(
                             fontSize = MaterialTheme.typography.bodyLarge.fontSize * sliderValue,
@@ -3475,13 +3738,134 @@ private fun TextSizeDialog(
                 onScaleChange(sliderValue)
                 onDismiss()
             }) {
-                Text("OK")
+                Text(stringResource(R.string.messaging_ok))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         },
     )
+}
+
+/**
+ * Threads P2 pinned root header of the thread view (spec §6.5, mockup D2):
+ * the root message stays pinned above the replies, always as one line — root
+ * text (or the off-screen placeholder) plus the reply count. The card form
+ * cost ~90dp of viewport; one line keeps the root identifiable while the
+ * message list gets the space. Signature warnings stay as a compact inline
+ * icon, with the same unknown/inconclusive versus invalid distinction as the bubble.
+ */
+@Composable
+internal fun ThreadPinnedHeader(
+    header: ThreadHeaderUi,
+    replyCount: Int,
+) {
+    val text =
+        when (header) {
+            is ThreadHeaderUi.Root -> header.content
+            ThreadHeaderUi.OffScreen -> stringResource(R.string.thread_offscreen_placeholder)
+        }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (header is ThreadHeaderUi.Root && !header.isFromMe) {
+                val warningLabel =
+                    when (header.signatureStatus) {
+                        SignatureStatus.SOURCE_UNKNOWN -> stringResource(R.string.message_detail_signature_unknown)
+                        SignatureStatus.INVALID -> stringResource(R.string.message_detail_signature_invalid)
+                        SignatureStatus.UNVERIFIED -> stringResource(R.string.message_detail_signature_unverified)
+                        SignatureStatus.VERIFIED, null -> null
+                    }
+                if (warningLabel != null) {
+                    val invalid = header.signatureStatus == SignatureStatus.INVALID
+                    val verificationError = stringResource(R.string.signature_verification_failed)
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = warningLabel,
+                        tint = if (invalid) MaterialTheme.colorScheme.onErrorContainer else OnWarningContainer,
+                        modifier =
+                            Modifier
+                                .padding(start = 8.dp)
+                                .background(
+                                    if (invalid) MaterialTheme.colorScheme.errorContainer else WarningContainer,
+                                    RoundedCornerShape(4.dp),
+                                ).padding(2.dp)
+                                .size(14.dp)
+                                .semantics {
+                                    if (invalid) error(verificationError)
+                                },
+                    )
+                }
+            }
+            Text(
+                text = pluralStringResource(R.plurals.thread_replies_count, replyCount, replyCount),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 12.dp),
+            )
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+}
+
+/**
+ * Threads P2 "N replies" hook pill under Main root bubbles (spec §6.6):
+ * accent-colored, unread dot when the thread has unread replies, tap opens
+ * the thread.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ThreadHookPill(
+    hook: ThreadHookUi,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.padding(top = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Reply,
+                contentDescription = stringResource(R.string.thread_open_thread),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                text = pluralStringResource(R.plurals.thread_replies_count, hook.replyCount, hook.replyCount),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            if (hook.unreadCount > 0) {
+                Icon(
+                    imageVector = Icons.Default.Circle,
+                    contentDescription = stringResource(R.string.thread_unread_indicator),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(8.dp),
+                )
+            }
+        }
+    }
 }

@@ -26,6 +26,7 @@ data class PendingNotificationMessage(
     val conversationHash: String,
     val preview: String,
     val isRead: Boolean,
+    val threadId: ByteArray?,
 )
 
 @Dao
@@ -275,7 +276,7 @@ interface MessageDao {
      */
     @Query(
         """
-        SELECT id, identityHash, conversationHash, substr(content, 1, 100) AS preview, isRead
+        SELECT id, identityHash, conversationHash, substr(content, 1, 100) AS preview, isRead, threadId
         FROM messages
         WHERE identityHash = :identityHash AND isFromMe = 0 AND notificationHandled = 0
         ORDER BY COALESCE(receivedAt, timestamp), id
@@ -568,6 +569,360 @@ interface MessageDao {
         peerHash: String,
         identityHash: String,
     ): List<MessageEntity>
+
+    // ==================== Threads (P1, threads-spec §5) ====================
+
+    /**
+     * Messages of one thread, oldest first (thread view: pinned root +
+     * replies in time order). `threadId` is the raw FIELD_THREAD bytes;
+     * exact-byte grouping, any length.
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId = :threadId
+        ORDER BY COALESCE(receivedAt, timestamp) ASC
+        """,
+    )
+    fun getMessagesForThread(
+        peerHash: String,
+        identityHash: String,
+        threadId: ByteArray,
+    ): Flow<List<MessageEntity>>
+
+    /**
+     * Oldest message of one thread (thread-view header preview). LIMIT 1 so
+     * deriving the header never reads the whole reply history.
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId = :threadId
+        ORDER BY COALESCE(receivedAt, timestamp) ASC
+        LIMIT 1
+        """,
+    )
+    suspend fun getFirstMessageForThread(
+        peerHash: String,
+        identityHash: String,
+        threadId: ByteArray,
+    ): MessageEntity?
+
+    /** Paged thread messages (newest first), mirroring the Main conversation paging. */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId = :threadId
+        ORDER BY COALESCE(receivedAt, timestamp) DESC
+        """,
+    )
+    fun getMessagesForThreadPaged(
+        peerHash: String,
+        identityHash: String,
+        threadId: ByteArray,
+    ): PagingSource<Int, MessageEntity>
+
+    /** Paged thread messages by sender timestamp (the "sort by sent time" preference). */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId = :threadId
+        ORDER BY timestamp DESC
+        """,
+    )
+    fun getMessagesForThreadPagedBySentTime(
+        peerHash: String,
+        identityHash: String,
+        threadId: ByteArray,
+    ): PagingSource<Int, MessageEntity>
+
+    /**
+     * Main-conversation messages only (threadId IS NULL) — the Main chip /
+     * message list once threads are enabled.
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NULL
+        ORDER BY COALESCE(receivedAt, timestamp) ASC
+        """,
+    )
+    fun getMainMessages(
+        peerHash: String,
+        identityHash: String,
+    ): Flow<List<MessageEntity>>
+
+    /** Unread received-message count for one thread (chip unread dot). */
+    @Query(
+        """
+        SELECT COUNT(*) FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId = :threadId AND isFromMe = 0 AND isRead = 0
+        """,
+    )
+    suspend fun getUnreadCountForThread(
+        peerHash: String,
+        identityHash: String,
+        threadId: ByteArray,
+    ): Int
+
+    /** Unread received-message count for Main (threadId IS NULL). */
+    @Query(
+        """
+        SELECT COUNT(*) FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NULL AND isFromMe = 0 AND isRead = 0
+        """,
+    )
+    suspend fun getUnreadCountForMain(
+        peerHash: String,
+        identityHash: String,
+    ): Int
+
+    /**
+     * Unread received-message counts grouped by thread ID. The row with
+     * `threadId == null` is Main's count; every other row maps to a thread
+     * (thread sheet / chip bar roll-up).
+     */
+    @Query(
+        """
+        SELECT threadId, COUNT(*) AS unreadCount FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND isFromMe = 0 AND isRead = 0
+        GROUP BY threadId
+        """,
+    )
+    fun observeUnreadCountsPerThread(
+        peerHash: String,
+        identityHash: String,
+    ): Flow<List<ThreadUnreadCount>>
+
+    /** Mark one thread's received messages read (opening a thread view). */
+    @Query(
+        """
+        UPDATE messages SET isRead = 1
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId = :threadId AND isFromMe = 0
+        """,
+    )
+    suspend fun markThreadMessagesAsRead(
+        peerHash: String,
+        identityHash: String,
+        threadId: ByteArray,
+    )
+
+    /** Paged Main-conversation messages only (threads enabled): newest first, `threadId IS NULL`. */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NULL
+        ORDER BY COALESCE(receivedAt, timestamp) DESC
+        """,
+    )
+    fun getMainMessagesPaged(
+        peerHash: String,
+        identityHash: String,
+    ): PagingSource<Int, MessageEntity>
+
+    /** Paged Main-conversation messages by sender timestamp (the "sort by sent time" preference). */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NULL
+        ORDER BY timestamp DESC
+        """,
+    )
+    fun getMainMessagesPagedBySentTime(
+        peerHash: String,
+        identityHash: String,
+    ): PagingSource<Int, MessageEntity>
+
+    /**
+     * Total message counts grouped by thread ID (the "N replies" hook count).
+     * The row with `threadId == null` is Main's count.
+     */
+    @Query(
+        """
+        SELECT threadId, COUNT(*) AS messageCount FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        GROUP BY threadId
+        """,
+    )
+    fun observeMessageCountsPerThread(
+        peerHash: String,
+        identityHash: String,
+    ): Flow<List<ThreadMessageCount>>
+
+    /**
+     * Newest message per thread (title preview row in the thread sheet /
+     * expanding chat card). SQLite's bare-column-with-MAX special case makes
+     * `content` come from the max-timestamp row of each group. Main
+     * (`threadId IS NULL`) is excluded — the conversation row already carries
+     * Main's last message.
+     */
+    @Query(
+        """
+        SELECT threadId, content, MAX(COALESCE(receivedAt, timestamp)) AS timestamp
+        FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NOT NULL
+        GROUP BY threadId
+        """,
+    )
+    fun observeLastMessagesPerThread(
+        peerHash: String,
+        identityHash: String,
+    ): Flow<List<ThreadLastMessage>>
+
+    /**
+     * Oldest message per thread — the automatic-title source when
+     * `threads.title` is NULL ("Reset to automatic", threads-spec D8).
+     * SQLite's bare-column-with-MIN special case makes `content` come from
+     * the min-timestamp row of each group; ties yield one row per tied
+     * message, so callers de-duplicate by thread id (earliest wins).
+     * Main (`threadId IS NULL`) is excluded — its title is a resource.
+     */
+    @Query(
+        """
+        SELECT threadId, content, MIN(COALESCE(receivedAt, timestamp)) AS timestamp
+        FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NOT NULL
+        GROUP BY threadId
+        """,
+    )
+    fun observeFirstMessagesPerThread(
+        peerHash: String,
+        identityHash: String,
+    ): Flow<List<ThreadFirstMessage>>
+
+    /**
+     * Newest Main message of one conversation (the expanding chat card's
+     * Main-row preview — the conversation row's `lastMessage` may be a
+     * thread message, so Main needs its own lookup). Empty blob threadId:
+     * Main rows store NULL.
+     */
+    @Query(
+        """
+        SELECT IFNULL(threadId, x'') AS threadId, content, COALESCE(receivedAt, timestamp) AS timestamp
+        FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NULL
+        ORDER BY COALESCE(receivedAt, timestamp) DESC LIMIT 1
+        """,
+    )
+    fun observeMainLastMessage(
+        peerHash: String,
+        identityHash: String,
+    ): Flow<ThreadLastMessage?>
+
+    /** Mark Main (threadId IS NULL) received messages read — thread-aware read path. */
+    @Query(
+        """
+        UPDATE messages SET isRead = 1
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId IS NULL AND isFromMe = 0
+        """,
+    )
+    suspend fun markMainMessagesAsRead(
+        peerHash: String,
+        identityHash: String,
+    )
+
+    /** Delete a thread's messages (local thread delete; Main rows untouched). */
+    @Query(
+        """
+        DELETE FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        AND threadId = :threadId
+        """,
+    )
+    suspend fun deleteMessagesForThread(
+        peerHash: String,
+        identityHash: String,
+        threadId: ByteArray,
+    )
+}
+
+/** One row of [MessageDao.observeUnreadCountsPerThread]; null [threadId] = Main. */
+data class ThreadUnreadCount(
+    val threadId: ByteArray?,
+    val unreadCount: Int,
+) {
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            (other is ThreadUnreadCount &&
+                unreadCount == other.unreadCount &&
+                threadId.contentEquals(other.threadId))
+
+    override fun hashCode(): Int = 31 * (threadId?.contentHashCode() ?: 0) + unreadCount
+}
+
+/** One row of [MessageDao.observeMessageCountsPerThread]; null [threadId] = Main. */
+data class ThreadMessageCount(
+    val threadId: ByteArray?,
+    val messageCount: Int,
+) {
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            (other is ThreadMessageCount &&
+                messageCount == other.messageCount &&
+                threadId.contentEquals(other.threadId))
+
+    override fun hashCode(): Int = 31 * (threadId?.contentHashCode() ?: 0) + messageCount
+}
+
+/** One row of [MessageDao.observeLastMessagesPerThread] (newest message per thread). */
+data class ThreadLastMessage(
+    val threadId: ByteArray,
+    val content: String,
+    val timestamp: Long,
+) {
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            (
+                other is ThreadLastMessage &&
+                    content == other.content &&
+                    timestamp == other.timestamp &&
+                    threadId.contentEquals(other.threadId)
+            )
+
+    override fun hashCode(): Int {
+        var result = content.hashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + threadId.contentHashCode()
+        return result
+    }
+}
+
+/** One row of [MessageDao.observeFirstMessagesPerThread] (oldest message per thread). */
+data class ThreadFirstMessage(
+    val threadId: ByteArray,
+    val content: String,
+    val timestamp: Long,
+) {
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            (
+                other is ThreadFirstMessage &&
+                    content == other.content &&
+                    timestamp == other.timestamp &&
+                    threadId.contentEquals(other.threadId)
+            )
+
+    override fun hashCode(): Int {
+        var result = content.hashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + threadId.contentHashCode()
+        return result
+    }
 }
 
 /**

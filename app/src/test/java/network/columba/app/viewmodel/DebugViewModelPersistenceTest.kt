@@ -56,7 +56,7 @@ class DebugViewModelPersistenceTest {
                 failedInterfaceCount = 1,
             )
 
-        val copied = original.copy(error = "Test error")
+        val copied = original.copy(error = UiMessage.Raw("Test error"))
 
         assertEquals(3L, copied.heartbeatAgeSeconds)
         assertTrue(copied.healthCheckRunning)
@@ -64,7 +64,7 @@ class DebugViewModelPersistenceTest {
         assertTrue(copied.maintenanceRunning)
         assertEquals(60L, copied.lastLockRefreshAgeSeconds)
         assertEquals(1, copied.failedInterfaceCount)
-        assertEquals("Test error", copied.error)
+        assertEquals(UiMessage.Raw("Test error"), copied.error)
     }
 
     @Test

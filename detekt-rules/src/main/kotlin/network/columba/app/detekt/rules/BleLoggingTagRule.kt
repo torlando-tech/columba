@@ -40,7 +40,7 @@ class BleLoggingTagRule(config: Config = Config.empty) : Rule(config) {
     )
 
     private val tagPattern = Regex("""^Columba:BLE:K:[A-Za-z]+$""")
-    private val blePackagePattern = Regex("""com\.lxmf\.messenger\.reticulum\.ble\.""")
+    private val blePackagePattern = Regex("""network\.columba\.app\.rns\.host\.ble\.""")
 
     override fun visitKtFile(file: KtFile) {
         super.visitKtFile(file)

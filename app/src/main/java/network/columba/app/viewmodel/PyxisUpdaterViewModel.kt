@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.columba.app.MainActivity
 import network.columba.app.R
+import network.columba.app.rns.host.flasher.FlashText
 import network.columba.app.rns.host.flasher.PyxisFirmwarePackage
 import network.columba.app.rns.host.flasher.RNodeFlasher
 import network.columba.app.rns.host.usb.UsbDeviceInfo
@@ -36,9 +37,9 @@ data class PyxisUpdaterUiState(
     val isLoadingPackage: Boolean = false,
     val isFlashing: Boolean = false,
     val flashProgress: Int = 0,
-    val flashMessage: String = "",
+    val flashMessage: FlashText? = null,
     val flashSucceeded: Boolean = false,
-    val flashError: String? = null,
+    val flashError: FlashText? = null,
 )
 
 internal class PyxisPackageLoadGuard {
@@ -88,7 +89,7 @@ class PyxisUpdaterViewModel
                                 it.copy(
                                     isFlashing = false,
                                     flashProgress = 100,
-                                    flashMessage = context.getString(R.string.pyxis_update_status_installed),
+                                    flashMessage = FlashText.Resource(R.string.pyxis_update_status_installed),
                                     flashSucceeded = true,
                                     flashError = null,
                                 )
@@ -250,7 +251,7 @@ class PyxisUpdaterViewModel
                 it.copy(
                     isFlashing = true,
                     flashProgress = 0,
-                    flashMessage = context.getString(R.string.pyxis_update_status_starting),
+                    flashMessage = FlashText.Resource(R.string.pyxis_update_status_starting),
                     flashSucceeded = false,
                     flashError = null,
                 )
@@ -263,7 +264,9 @@ class PyxisUpdaterViewModel
                             it.copy(
                                 isFlashing = false,
                                 flashSucceeded = false,
-                                flashError = error.message ?: context.getString(R.string.pyxis_update_failed),
+                                flashError =
+                                    error.message?.let { FlashText.Raw(it) }
+                                        ?: FlashText.Resource(R.string.pyxis_update_failed),
                             )
                         }
                     }

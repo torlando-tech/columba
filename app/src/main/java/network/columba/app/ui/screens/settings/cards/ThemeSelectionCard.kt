@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import network.columba.app.R
 import network.columba.app.ui.components.CollapsibleSettingsCard
 import network.columba.app.ui.theme.AppTheme
+import network.columba.app.ui.theme.CustomTheme
 import network.columba.app.ui.theme.PresetTheme
 import network.columba.app.ui.theme.ThemeMode
 
@@ -48,7 +49,7 @@ fun ThemeSelectionCard(
     onNavigateToCustomThemes: () -> Unit = {},
 ) {
     CollapsibleSettingsCard(
-        title = "Theme",
+        title = stringResource(R.string.settings_theme_title),
         icon = Icons.Default.Palette,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
@@ -60,7 +61,7 @@ fun ThemeSelectionCard(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Custom Themes")
+                Text(stringResource(R.string.settings_theme_custom_themes_button))
             }
         },
     ) {
@@ -95,7 +96,7 @@ fun ThemeSelectionCard(
 
         // Built-in themes section
         Text(
-            text = "Built-in Themes",
+            text = stringResource(R.string.settings_theme_builtin_themes),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
@@ -105,12 +106,17 @@ fun ThemeSelectionCard(
             options = PresetTheme.entries.toList(),
             selected = selectedTheme,
             onSelect = onThemeChange,
-        ) { it.displayName }
+        ) { theme ->
+            when (theme) {
+                is PresetTheme -> stringResource(theme.displayNameRes)
+                is CustomTheme -> theme.displayName
+            }
+        }
 
         // Custom themes section (only show if there are custom themes)
         if (customThemes.isNotEmpty()) {
             Text(
-                text = "Custom Themes",
+                text = stringResource(R.string.settings_theme_custom_themes_section),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
@@ -120,12 +126,21 @@ fun ThemeSelectionCard(
                 options = customThemes,
                 selected = selectedTheme,
                 onSelect = onThemeChange,
-            ) { it.displayName }
+            ) { theme ->
+                when (theme) {
+                    is PresetTheme -> stringResource(theme.displayNameRes)
+                    is CustomTheme -> theme.displayName
+                }
+            }
         }
 
         // Description of selected theme
         Text(
-            text = selectedTheme.description,
+            text =
+                when (selectedTheme) {
+                    is PresetTheme -> stringResource(selectedTheme.descriptionRes)
+                    is CustomTheme -> selectedTheme.description
+                },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Medium,
@@ -149,7 +164,7 @@ fun ThemeColorPreview(theme: AppTheme, isDark: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "Preview:",
+            text = stringResource(R.string.settings_theme_preview_label),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -178,7 +193,7 @@ fun ThemeColorPreview(theme: AppTheme, isDark: Boolean) {
         Spacer(modifier = Modifier.weight(1f))
 
         Text(
-            text = if (isDark) "Dark mode" else "Light mode",
+            text = if (isDark) stringResource(R.string.settings_theme_dark_mode) else stringResource(R.string.settings_theme_light_mode),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

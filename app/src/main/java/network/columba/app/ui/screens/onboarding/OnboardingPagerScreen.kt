@@ -37,12 +37,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import network.columba.app.BuildConfig
+import network.columba.app.R
 import network.columba.app.ui.screens.onboarding.pages.CompletePage
 import network.columba.app.ui.screens.onboarding.pages.ConnectivityPage
 import network.columba.app.ui.screens.onboarding.pages.CrashReportingPage
@@ -225,6 +227,7 @@ fun OnboardingPagerScreen(
                             PermissionsPage(
                                 notificationsGranted = state.notificationsGranted,
                                 batteryOptimizationExempt = state.batteryOptimizationExempt,
+                                notificationPrivacyLevel = state.notificationPrivacyLevel,
                                 onEnableNotifications = {
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                         notificationPermissionLauncher.launch(
@@ -243,6 +246,7 @@ fun OnboardingPagerScreen(
                                         BatteryOptimizationManager.requestBatteryOptimizationExemption(context)
                                     }
                                 },
+                                onNotificationPrivacyLevelChange = viewModel::setNotificationPrivacyLevel,
                                 onBack = { goBack() },
                                 onContinue = { goNext() },
                             )
@@ -310,7 +314,7 @@ private fun TopBar(
                 modifier = Modifier.align(Alignment.CenterEnd),
             ) {
                 Text(
-                    text = "Skip",
+                    text = stringResource(R.string.onboarding_skip),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

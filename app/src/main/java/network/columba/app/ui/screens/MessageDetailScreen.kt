@@ -43,19 +43,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
+import network.columba.app.domain.model.SignatureStatus
+import network.columba.app.ui.theme.OnWarningContainer
+import network.columba.app.ui.theme.WarningContainer
 import network.columba.app.ui.util.getInterfaceInfo
 import network.columba.app.ui.util.getRssiInfo
 import network.columba.app.ui.util.getSnrInfo
+import network.columba.app.ui.util.resolvedText
 import network.columba.app.viewmodel.MessageDetailViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import network.columba.app.domain.model.SignatureStatus
-import network.columba.app.ui.theme.OnWarningContainer
-import network.columba.app.ui.theme.WarningContainer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,7 +79,7 @@ fun MessageDetailScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Message Details",
+                        text = stringResource(R.string.message_detail_title),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
@@ -84,7 +88,7 @@ fun MessageDetailScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.back),
                         )
                     }
                 },
@@ -108,7 +112,7 @@ fun MessageDetailScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "Loading...",
+                    text = stringResource(R.string.message_detail_loading),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -128,24 +132,24 @@ fun MessageDetailScreen(
                     // Sent messages: show sent time
                     MessageInfoCard(
                         icon = Icons.Default.AccessTime,
-                        title = "Sent",
+                        title = stringResource(R.string.message_detail_sent),
                         content = formatFullTimestamp(msg.timestamp),
                     )
                 } else {
                     // Received messages: show received time prominently, sent time as secondary
                     MessageInfoCard(
                         icon = Icons.Default.AccessTime,
-                        title = "Received",
+                        title = stringResource(R.string.message_detail_received),
                         content = formatFullTimestamp(msg.receivedAt ?: msg.timestamp),
                     )
                     // Show sender's claimed time (may differ if their clock is wrong)
                     MessageInfoCard(
                         icon = Icons.AutoMirrored.Filled.Send,
-                        title = "Sent by Sender",
+                        title = stringResource(R.string.message_detail_sent_by_sender),
                         content = formatFullTimestamp(msg.timestamp),
                         subtitle =
                             if (msg.receivedAt != null && msg.receivedAt != msg.timestamp) {
-                                "Sender's local time (may differ from yours)"
+                                stringResource(R.string.message_detail_sender_local_time_note)
                             } else {
                                 null
                             },
@@ -159,7 +163,7 @@ fun MessageDetailScreen(
                     MessageInfoCard(
                         icon = statusInfo.icon,
                         iconTint = statusInfo.color,
-                        title = "Status",
+                        title = stringResource(R.string.message_detail_status),
                         content = statusInfo.text,
                         subtitle = statusInfo.subtitle,
                     )
@@ -169,7 +173,7 @@ fun MessageDetailScreen(
                         val methodInfo = getDeliveryMethodInfo(method)
                         MessageInfoCard(
                             icon = methodInfo.icon,
-                            title = "Delivery Method",
+                            title = stringResource(R.string.message_detail_delivery_method),
                             content = methodInfo.text,
                             subtitle = methodInfo.subtitle,
                         )
@@ -180,7 +184,7 @@ fun MessageDetailScreen(
                         val interfaceInfo = getInterfaceInfo(interfaceName)
                         MessageInfoCard(
                             icon = interfaceInfo.icon,
-                            title = "Sent Via",
+                            title = stringResource(R.string.message_detail_sent_via),
                             content = interfaceInfo.text,
                             subtitle = interfaceInfo.subtitle,
                         )
@@ -191,7 +195,7 @@ fun MessageDetailScreen(
                         MessageInfoCard(
                             icon = Icons.Default.Error,
                             iconTint = MaterialTheme.colorScheme.error,
-                            title = "Error Details",
+                            title = stringResource(R.string.message_detail_error_details),
                             content = msg.errorMessage,
                             contentColor = MaterialTheme.colorScheme.error,
                         )
@@ -211,7 +215,7 @@ fun MessageDetailScreen(
                         val methodInfo = getDeliveryMethodInfo(method)
                         MessageInfoCard(
                             icon = methodInfo.icon,
-                            title = "Delivery Method",
+                            title = stringResource(R.string.message_detail_delivery_method),
                             content = methodInfo.text,
                             subtitle = methodInfo.subtitle,
                         )
@@ -222,7 +226,7 @@ fun MessageDetailScreen(
                         val hopInfo = getHopCountInfo(hops)
                         MessageInfoCard(
                             icon = Icons.Default.Hub,
-                            title = "Hop Count",
+                            title = stringResource(R.string.message_detail_hop_count),
                             content = hopInfo.text,
                             subtitle = hopInfo.subtitle,
                         )
@@ -233,7 +237,7 @@ fun MessageDetailScreen(
                         val interfaceInfo = getInterfaceInfo(interfaceName)
                         MessageInfoCard(
                             icon = interfaceInfo.icon,
-                            title = "Received Via",
+                            title = stringResource(R.string.message_detail_received_via),
                             content = interfaceInfo.text,
                             subtitle = interfaceInfo.subtitle,
                         )
@@ -245,9 +249,9 @@ fun MessageDetailScreen(
                         MessageInfoCard(
                             icon = rssiInfo.icon,
                             iconTint = rssiInfo.color,
-                            title = "Signal Strength",
-                            content = rssiInfo.text,
-                            subtitle = rssiInfo.subtitle,
+                            title = stringResource(R.string.message_detail_signal_strength),
+                            content = rssiInfo.resolvedText(),
+                            subtitle = stringResource(rssiInfo.subtitleRes),
                         )
                     }
 
@@ -257,9 +261,9 @@ fun MessageDetailScreen(
                         MessageInfoCard(
                             icon = snrInfo.icon,
                             iconTint = snrInfo.color,
-                            title = "Signal Quality",
-                            content = snrInfo.text,
-                            subtitle = snrInfo.subtitle,
+                            title = stringResource(R.string.message_detail_signal_quality),
+                            content = snrInfo.resolvedText(),
+                            subtitle = stringResource(snrInfo.subtitleRes),
                         )
                     }
                 }
@@ -275,32 +279,27 @@ internal fun MessageSignatureInfoCard(status: SignatureStatus) {
         SignatureStatus.VERIFIED ->
             MessageInfoCard(
                 icon = Icons.Default.VerifiedUser,
-                title = "Signature",
-                content = "Verified",
-                subtitle = "The signature matches the sender's identity.",
+                title = stringResource(R.string.message_detail_signature_title),
+                content = stringResource(R.string.message_detail_signature_verified),
+                subtitle = stringResource(R.string.message_detail_signature_verified_detail),
             )
         SignatureStatus.SOURCE_UNKNOWN ->
             MessageInfoCard(
                 icon = Icons.Default.Warning,
                 iconTint = OnWarningContainer,
                 iconContainerColor = WarningContainer,
-                title = "Signature",
-                content = "Sender identity unknown",
-                subtitle =
-                    "The sender's public key is not available, so the signature has not been checked. " +
-                        "It will be checked automatically when their identity announce is received. " +
-                        "An unknown identity does not mean the signature is invalid.",
+                title = stringResource(R.string.message_detail_signature_title),
+                content = stringResource(R.string.message_detail_signature_unknown),
+                subtitle = stringResource(R.string.message_detail_signature_unknown_detail),
             )
         SignatureStatus.INVALID ->
             MessageInfoCard(
                 icon = Icons.Default.Error,
                 iconTint = MaterialTheme.colorScheme.onErrorContainer,
                 iconContainerColor = MaterialTheme.colorScheme.errorContainer,
-                title = "Signature",
-                content = "Invalid signature",
-                subtitle =
-                    "The signature check failed against the sender's known identity. " +
-                        "The message may be forged or altered. Do not trust its claimed sender.",
+                title = stringResource(R.string.message_detail_signature_title),
+                content = stringResource(R.string.message_detail_signature_invalid),
+                subtitle = stringResource(R.string.message_detail_signature_invalid_detail),
                 contentColor = MaterialTheme.colorScheme.error,
             )
         SignatureStatus.UNVERIFIED ->
@@ -308,11 +307,9 @@ internal fun MessageSignatureInfoCard(status: SignatureStatus) {
                 icon = Icons.Default.Warning,
                 iconTint = OnWarningContainer,
                 iconContainerColor = WarningContainer,
-                title = "Signature",
-                content = "Signature not verified",
-                subtitle =
-                    "No conclusive signature verification result is available for this message. " +
-                        "The sender has not been authenticated. This is not a confirmed signature failure.",
+                title = stringResource(R.string.message_detail_signature_title),
+                content = stringResource(R.string.message_detail_signature_unverified),
+                subtitle = stringResource(R.string.message_detail_signature_unverified_detail),
             )
     }
 }
@@ -406,29 +403,29 @@ private fun getStatusInfo(status: String): StatusInfo =
                 icon = Icons.Default.CheckCircle,
                 // Green
                 color = Color(0xFF4CAF50),
-                text = "Delivered",
-                subtitle = "Message was successfully delivered to recipient",
+                text = stringResource(R.string.message_detail_status_delivered),
+                subtitle = stringResource(R.string.message_detail_status_delivered_sub),
             )
         "failed" ->
             StatusInfo(
                 icon = Icons.Default.Error,
                 color = MaterialTheme.colorScheme.error,
-                text = "Failed",
-                subtitle = "Message delivery failed",
+                text = stringResource(R.string.message_detail_status_failed),
+                subtitle = stringResource(R.string.message_detail_status_failed_sub),
             )
         "pending" ->
             StatusInfo(
                 icon = Icons.Default.HourglassEmpty,
                 color = MaterialTheme.colorScheme.tertiary,
-                text = "Pending",
-                subtitle = "Waiting for delivery confirmation",
+                text = stringResource(R.string.message_detail_status_pending),
+                subtitle = stringResource(R.string.message_detail_status_pending_sub),
             )
         else ->
             StatusInfo(
                 icon = Icons.AutoMirrored.Filled.Send,
                 color = MaterialTheme.colorScheme.primary,
-                text = "Sent",
-                subtitle = "Message has been sent",
+                text = stringResource(R.string.message_detail_sent),
+                subtitle = stringResource(R.string.message_detail_status_sent_sub),
             )
     }
 
@@ -438,31 +435,32 @@ private data class DeliveryMethodInfo(
     val subtitle: String,
 )
 
+@Composable
 private fun getDeliveryMethodInfo(method: String): DeliveryMethodInfo =
     when (method) {
         "opportunistic" ->
             DeliveryMethodInfo(
                 icon = Icons.AutoMirrored.Filled.Send,
-                text = "Opportunistic",
-                subtitle = "Single packet delivery for small messages, no link required",
+                text = stringResource(R.string.message_detail_method_opportunistic),
+                subtitle = stringResource(R.string.message_detail_method_opportunistic_sub),
             )
         "direct" ->
             DeliveryMethodInfo(
                 icon = Icons.Default.Link,
-                text = "Direct",
-                subtitle = "Link-based delivery with retries, supports large messages",
+                text = stringResource(R.string.message_detail_direct),
+                subtitle = stringResource(R.string.message_detail_method_direct_sub),
             )
         "propagated" ->
             DeliveryMethodInfo(
                 icon = Icons.Default.Hub,
-                text = "Propagated",
-                subtitle = "Delivered via relay node for offline recipients",
+                text = stringResource(R.string.message_detail_method_propagated),
+                subtitle = stringResource(R.string.message_detail_method_propagated_sub),
             )
         else ->
             DeliveryMethodInfo(
                 icon = Icons.AutoMirrored.Filled.Send,
                 text = method.replaceFirstChar { it.uppercase() },
-                subtitle = "Unknown delivery method",
+                subtitle = stringResource(R.string.message_detail_method_unknown),
             )
     }
 
@@ -477,26 +475,22 @@ private data class HopCountInfo(
     val subtitle: String,
 )
 
+@Composable
 private fun getHopCountInfo(hops: Int): HopCountInfo =
     when {
         hops < 0 ->
             HopCountInfo(
-                text = "Unknown",
-                subtitle = "Hop count unavailable",
+                text = stringResource(R.string.message_detail_hops_unknown),
+                subtitle = stringResource(R.string.message_detail_hops_unavailable),
             )
         hops == 0 ->
             HopCountInfo(
-                text = "Direct",
-                subtitle = "Message received directly from sender",
-            )
-        hops == 1 ->
-            HopCountInfo(
-                text = "1 hop",
-                subtitle = "Message traveled through 1 relay",
+                text = stringResource(R.string.message_detail_direct),
+                subtitle = stringResource(R.string.message_detail_hops_direct_sub),
             )
         else ->
             HopCountInfo(
-                text = "$hops hops",
-                subtitle = "Message traveled through $hops relays",
+                text = pluralStringResource(R.plurals.message_detail_hops, hops, hops),
+                subtitle = pluralStringResource(R.plurals.message_detail_hops_subtitle, hops, hops),
             )
     }

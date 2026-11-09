@@ -79,6 +79,7 @@ class SettingsViewModelIncomingMessageLimitTest {
     private lateinit var contactRepository: network.columba.app.data.repository.ContactRepository
     private lateinit var updateChecker: network.columba.app.service.UpdateChecker
     private lateinit var crashReportManager: network.columba.app.util.CrashReportManager
+    private lateinit var notificationHelper: network.columba.app.notifications.NotificationHelper
     private lateinit var context: android.content.Context
     private lateinit var viewModel: SettingsViewModel
 
@@ -111,6 +112,9 @@ class SettingsViewModelIncomingMessageLimitTest {
         settingsRepository = mockk()
         every { settingsRepository.bottomNavTabsFlow } returns flowOf(null)
         every { settingsRepository.nomadNetLastPageFlow } returns flowOf(NomadNetLastPage(null, null))
+        every { settingsRepository.threadsEnabledFlow } returns flowOf(false)
+        every { settingsRepository.notificationPrivacyLevelFlow } returns
+            flowOf(network.columba.app.data.model.NotificationPrivacyLevel.DEFAULT)
         identityRepository = mockk()
         rnsBackend = mockk()
         rnsCore = mockk()
@@ -130,6 +134,8 @@ class SettingsViewModelIncomingMessageLimitTest {
         updateChecker = mockk()
         crashReportManager = mockk()
         coEvery { crashReportManager.updateCrashReportingConsent(any(), any(), any()) } returns Unit
+        notificationHelper = mockk()
+        coEvery { notificationHelper.setMessagePrivacyLevel(any()) } just Runs
         context =
             mockk {
                 val mockEditor =
@@ -276,6 +282,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             contactRepository = contactRepository,
             updateChecker = updateChecker,
             crashReportManager = crashReportManager,
+            notificationHelper = notificationHelper,
         )
 
     // ========== Initial State Tests ==========

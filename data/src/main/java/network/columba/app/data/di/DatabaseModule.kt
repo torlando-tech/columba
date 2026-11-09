@@ -31,6 +31,7 @@ import network.columba.app.data.db.dao.PeerIdentityDao
 import network.columba.app.data.db.dao.PreferredPropagationNodeDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.dao.RmspServerDao
+import network.columba.app.data.db.dao.ThreadDao
 import javax.inject.Singleton
 
 @Module
@@ -120,21 +121,13 @@ object DatabaseModule {
         val builder =
             Room
                 .databaseBuilder(context.applicationContext, ColumbaDatabase::class.java, name)
-                .addMigrations(
-                    ColumbaDatabase.MIGRATION_1_2,
-                    ColumbaDatabase.MIGRATION_2_3,
-                    ColumbaDatabase.MIGRATION_3_4,
-                    ColumbaDatabase.MIGRATION_4_5,
-                    ColumbaDatabase.MIGRATION_5_6,
-                    ColumbaDatabase.MIGRATION_6_7,
-                    ColumbaDatabase.MIGRATION_7_8,
-                    ColumbaDatabase.MIGRATION_8_9,
-                    ColumbaDatabase.MIGRATION_9_10,
-                    ColumbaDatabase.MIGRATION_10_11,
-                    ColumbaDatabase.MIGRATION_11_12,
-                ).openHelperFactory(
+                .openHelperFactory(
                     BusyRetryingOpenHelperFactory(FrameworkSQLiteOpenHelperFactory()),
                 ).addCallback(DURABILITY_CALLBACK)
+        // Registered one by one: a spread would copy the whole array on every
+        // call, and the list is shared with the service process so the two
+        // can never drift.
+        ColumbaDatabase.MIGRATIONS.forEach { builder.addMigrations(it) }
         if (multiInstanceInvalidation) {
             builder.enableMultiInstanceInvalidation()
         }
@@ -195,6 +188,9 @@ object DatabaseModule {
 
     @Provides
     fun provideInterfaceFirstSeenDao(database: ColumbaDatabase): InterfaceFirstSeenDao = database.interfaceFirstSeenDao()
+
+    @Provides
+    fun provideThreadDao(database: ColumbaDatabase): ThreadDao = database.threadDao()
 
     @Provides
     @Singleton

@@ -87,6 +87,7 @@ internal class ClientRnsLxmf(
         replyQuotedContent: String?,
         iconAppearance: IconAppearance?,
         extraFields: Map<Int, Any>?,
+        threadId: ByteArray?,
     ): Result<MessageReceipt> = runCatching {
         // Attachment bytes ride out-of-band via a PFD, never inline in the
         // Binder transaction (see AttachmentBlob). The PFD is ours to close once
@@ -107,6 +108,7 @@ internal class ClientRnsLxmf(
                     replyQuotedContent,
                     iconAppearance,
                     null,
+                    threadId,
                     cb,
                 )
             }

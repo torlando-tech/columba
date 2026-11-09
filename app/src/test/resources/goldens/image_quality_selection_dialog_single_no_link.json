@@ -1,0 +1,18 @@
+[
+  "Choose Image Quality",
+  "Low",
+  "32KB max - optimized for LoRa and BLE",
+  "~5 sec",
+  "Medium",
+  "Recommended",
+  "128KB max - balanced for mixed networks",
+  "~30 sec",
+  "High",
+  "512KB max - good quality for general use",
+  "~2 min",
+  "Original",
+  "25MB max - minimal compression for fast networks",
+  "~10 min",
+  "Cancel",
+  "Send"
+]

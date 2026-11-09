@@ -15,11 +15,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.domain.model.SignatureStatus
 import network.columba.app.ui.theme.ColumbaTheme
 import network.columba.app.ui.theme.OnWarningContainer
@@ -33,17 +35,18 @@ fun SignatureStatusChip(
 ) {
     val label =
         when (status) {
-            SignatureStatus.SOURCE_UNKNOWN -> "Sender identity unknown"
-            SignatureStatus.INVALID -> "Invalid signature"
-            SignatureStatus.UNVERIFIED -> "Signature not verified"
+            SignatureStatus.SOURCE_UNKNOWN -> stringResource(R.string.message_detail_signature_unknown)
+            SignatureStatus.INVALID -> stringResource(R.string.message_detail_signature_invalid)
+            SignatureStatus.UNVERIFIED -> stringResource(R.string.message_detail_signature_unverified)
             SignatureStatus.VERIFIED, null -> return
         }
     val invalid = status == SignatureStatus.INVALID
+    val verificationError = stringResource(R.string.signature_verification_failed)
     val contentColor = if (invalid) MaterialTheme.colorScheme.onErrorContainer else OnWarningContainer
     Surface(
         modifier =
             modifier.semantics(mergeDescendants = true) {
-                if (invalid) error("Signature verification failed")
+                if (invalid) error(verificationError)
             },
         color = if (invalid) MaterialTheme.colorScheme.errorContainer else WarningContainer,
         shape = RoundedCornerShape(8.dp),

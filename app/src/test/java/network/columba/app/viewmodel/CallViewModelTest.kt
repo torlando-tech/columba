@@ -8,8 +8,11 @@ import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.audio.CallMicrophoneAdmissionCoordinator
 import network.columba.app.audio.MicrophoneAdmissionArbiter
+import network.columba.app.rns.api.RnsError
+import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
+import network.columba.app.ui.model.CodecProfile
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -23,6 +26,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -62,7 +66,7 @@ class CallViewModelTest {
     private lateinit var isPttModeFlow: MutableStateFlow<Boolean>
     private lateinit var isPttActiveFlow: MutableStateFlow<Boolean>
     private lateinit var remoteIdentityFlow: MutableStateFlow<String?>
-    private lateinit var activeProfileFlow: MutableStateFlow<String?>
+    private lateinit var activeProfileCodeFlow: MutableStateFlow<Int?>
     private lateinit var callModeFlow: MutableStateFlow<String?>
 
     // Slots to capture arguments passed to mocks
@@ -86,7 +90,7 @@ class CallViewModelTest {
         isPttModeFlow = MutableStateFlow(false)
         isPttActiveFlow = MutableStateFlow(false)
         remoteIdentityFlow = MutableStateFlow<String?>(null)
-        activeProfileFlow = MutableStateFlow<String?>(null)
+        activeProfileCodeFlow = MutableStateFlow<Int?>(null)
         callModeFlow = MutableStateFlow<String?>(null)
 
         // RnsTelephony surface
@@ -96,7 +100,7 @@ class CallViewModelTest {
         every { mockTelephony.isPttMode } returns isPttModeFlow
         every { mockTelephony.isPttActive } returns isPttActiveFlow
         every { mockTelephony.remoteIdentity } returns remoteIdentityFlow
-        every { mockTelephony.activeProfile } returns activeProfileFlow
+        every { mockTelephony.activeProfileCode } returns activeProfileCodeFlow
         every { mockTelephony.callMode } returns callModeFlow
         every { mockTelephony.hasActiveCall() } answers {
             when (callStateFlow.value) {
@@ -138,7 +142,7 @@ class CallViewModelTest {
         coEvery { mockTelephony.declineCall() } answers { }
         coEvery { mockTelephony.setCallMuted(any()) } answers { }
         coEvery { mockTelephony.setCallSpeaker(any()) } answers { }
-        coEvery { mockTelephony.cycleCallProfile() } answers { }
+        coEvery { mockTelephony.switchCallProfile(any()) } answers { }
         coEvery { mockTelephony.cycleCallMode() } answers { }
         coEvery { mockTelephony.setPttActive(any()) } answers { }
 
@@ -236,6 +240,39 @@ class CallViewModelTest {
         }
 
     @Test
+    fun `initiateCall retries while CallManagerNotInitialized then succeeds`() =
+        runTest {
+            var attempts = 0
+            coEvery { mockTelephony.initiateCall(any(), any()) } coAnswers {
+                attempts++
+                if (attempts < 3) {
+                    Result.failure(RnsException(RnsError.CallManagerNotInitialized))
+                } else {
+                    Result.success(Unit)
+                }
+            }
+
+            viewModel.initiateCall("abc123def456789012345678901234567890")
+            advanceUntilIdle()
+
+            assertEquals(3, attempts)
+            coVerify(exactly = 0) { mockTelephony.setEnded() }
+        }
+
+    @Test
+    fun `initiateCall does not retry other typed errors`() =
+        runTest {
+            coEvery { mockTelephony.initiateCall(any(), any()) } returns
+                Result.failure(RnsException(RnsError.BackendNotReady))
+
+            viewModel.initiateCall("abc123def456789012345678901234567890")
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { mockTelephony.initiateCall(any(), any()) }
+            coVerify(exactly = 1) { mockTelephony.setEnded() }
+        }
+
+    @Test
     fun `duplicate outgoing call cannot clear active admission`() =
         runTest {
             val gate = CompletableDeferred<Unit>()
@@ -319,34 +356,52 @@ class CallViewModelTest {
             assertEquals(true, speakerSlot.captured)
         }
 
-    // ========== LXST Profile Cycling Tests ==========
+    // ========== LXST Profile Switching Tests ==========
 
     @Test
-    fun `cycleProfile invokes telephony when call is active`() =
+    fun `switchProfile sends the requested profile id when call is active`() =
         runTest {
             callStateFlow.value = CallState.Active("abc123")
-            activeProfileFlow.value = "MQ"
+            activeProfileCodeFlow.value = CodecProfile.QUALITY_MEDIUM.code
 
-            viewModel.cycleProfile()
+            viewModel.switchProfile(CodecProfile.QUALITY_HIGH)
             // Bounded advance: the Active duration timer reschedules forever,
             // so advanceUntilIdle() would never settle - one tick is enough to
             // flush the launched telephony call on the unconfined dispatcher.
             testDispatcher.scheduler.advanceTimeBy(1000L)
 
-            coVerify(exactly = 1) { mockTelephony.cycleCallProfile() }
+            coVerify(exactly = 1) { mockTelephony.switchCallProfile(CodecProfile.QUALITY_HIGH.code) }
             callStateFlow.value = CallState.Idle // Stop duration timer
         }
 
     @Test
-    fun `cycleProfile is a no-op when no call is active`() =
+    fun `switchProfile forwards a selection the stale mirror still calls active`() =
+        runTest {
+            // The peer moved off QUALITY_HIGH, but activeProfileCode is polled
+            // (~500 ms) and still reports it. Choosing the row the UI shows as
+            // active must still reach the backend: LXST is the only place that
+            // can compare against the live Telephone.activeProfile, and a
+            // drop here would silently discard the user's choice.
+            callStateFlow.value = CallState.Active("abc123")
+            activeProfileCodeFlow.value = CodecProfile.QUALITY_HIGH.code
+
+            viewModel.switchProfile(CodecProfile.QUALITY_HIGH)
+            testDispatcher.scheduler.advanceTimeBy(1000L)
+
+            coVerify(exactly = 1) { mockTelephony.switchCallProfile(CodecProfile.QUALITY_HIGH.code) }
+            callStateFlow.value = CallState.Idle // Stop duration timer
+        }
+
+    @Test
+    fun `switchProfile is a no-op when no call is active`() =
         runTest {
             // Initial state is Idle; nothing established to switch on.
             callStateFlow.value = CallState.Idle
 
-            viewModel.cycleProfile()
+            viewModel.switchProfile(CodecProfile.BANDWIDTH_LOW)
             testDispatcher.scheduler.advanceTimeBy(1000L)
 
-            coVerify(exactly = 0) { mockTelephony.cycleCallProfile() }
+            coVerify(exactly = 0) { mockTelephony.switchCallProfile(any()) }
         }
 
     // ========== hasActiveCall Tests ==========
@@ -467,48 +522,6 @@ class CallViewModelTest {
     fun `formatDuration formats longer durations correctly`() {
         assertEquals("60:00", viewModel.formatDuration(3600))
         assertEquals("90:45", viewModel.formatDuration(5445))
-    }
-
-    // ========== Status Text Tests ==========
-
-    @Test
-    fun `getStatusText returns Connecting for Connecting state`() {
-        assertEquals("Connecting...", viewModel.getStatusText(CallState.Connecting("abc")))
-    }
-
-    @Test
-    fun `getStatusText returns Ringing for Ringing state`() {
-        assertEquals("Ringing...", viewModel.getStatusText(CallState.Ringing("abc")))
-    }
-
-    @Test
-    fun `getStatusText returns Incoming for Incoming state`() {
-        assertEquals("Incoming Call", viewModel.getStatusText(CallState.Incoming("abc")))
-    }
-
-    @Test
-    fun `getStatusText returns Connected for Active state`() {
-        assertEquals("Connected", viewModel.getStatusText(CallState.Active("abc")))
-    }
-
-    @Test
-    fun `getStatusText returns Call Ended for Ended state`() {
-        assertEquals("Call Ended", viewModel.getStatusText(CallState.Ended))
-    }
-
-    @Test
-    fun `getStatusText returns Line Busy for Busy state`() {
-        assertEquals("Line Busy", viewModel.getStatusText(CallState.Busy))
-    }
-
-    @Test
-    fun `getStatusText returns Rejected for Rejected state`() {
-        assertEquals("Call Rejected", viewModel.getStatusText(CallState.Rejected))
-    }
-
-    @Test
-    fun `getStatusText returns empty for Idle state`() {
-        assertEquals("", viewModel.getStatusText(CallState.Idle))
     }
 
     // ========== Peer Name Resolution Tests ==========

@@ -58,6 +58,8 @@ object TestController {
         fun interfaceRepository(): InterfaceRepository
         fun interfaceConfigManager(): InterfaceConfigManager
         fun identityRepository(): network.columba.app.data.repository.IdentityRepository
+        fun draftDao(): network.columba.app.data.db.dao.DraftDao
+        fun conversationRepository(): network.columba.app.data.repository.ConversationRepository
         fun settingsRepository(): network.columba.app.repository.SettingsRepository
     }
 
@@ -86,6 +88,8 @@ object TestController {
     private var interfaceRepo: InterfaceRepository? = null
     private var interfaceConfigManager: InterfaceConfigManager? = null
     private var identityRepo: network.columba.app.data.repository.IdentityRepository? = null
+    private var draftDao: network.columba.app.data.db.dao.DraftDao? = null
+    private var conversationRepo: network.columba.app.data.repository.ConversationRepository? = null
     private var settingsRepo: network.columba.app.repository.SettingsRepository? = null
     private val rxQueue = mutableListOf<ReceivedMessage>()
     private val rxLock = Any()
@@ -110,6 +114,8 @@ object TestController {
         interfaceRepo = ep.interfaceRepository()
         interfaceConfigManager = ep.interfaceConfigManager()
         identityRepo = ep.identityRepository()
+        draftDao = ep.draftDao()
+        conversationRepo = ep.conversationRepository()
         settingsRepo = ep.settingsRepository()
         receiveJob = scope.launch {
             rnsLxmf!!.observeMessages().collect { msg ->
@@ -252,6 +258,9 @@ object TestController {
         toHex: String,
         text: String,
         tryPropagationOnFail: Boolean = false,
+        threadHex: String? = null,
+        replyToMessageId: String? = null,
+        replyQuotedContent: String? = null,
     ) {
         ensureInit(context)
         scope.launch {
@@ -263,18 +272,26 @@ object TestController {
                 Log.i(LOGCAT_TAG, "msg_send_err method=$method reason=no_active_identity")
                 return@launch
             }
+            val threadId = threadHex?.fromHex()
+            if (threadHex != null && threadId == null) {
+                Log.i(LOGCAT_TAG, "msg_send_err method=$method reason=bad_thread_hex thread=$threadHex")
+                return@launch
+            }
             val result = rnsLxmf!!.sendLxmfMessageWithMethod(
                 destinationHash = toBytes,
                 content = text,
                 sourceIdentity = identity,
                 deliveryMethod = method,
                 tryPropagationOnFail = tryPropagationOnFail,
+                replyToMessageId = replyToMessageId,
+                replyQuotedContent = replyQuotedContent,
+                threadId = threadId,
             )
             result.onSuccess { receipt ->
                 val idHex = receipt.messageHash.toHex()
                 Log.i(
                     LOGCAT_TAG,
-                    "msg_sent id=$idHex method=$method to=$toHex",
+                    "msg_sent id=$idHex method=$method to=$toHex thread=${threadHex ?: "none"}",
                 )
                 // Stamp initial state so GET_MSG_STATE works before the first
                 // observeDeliveryStatus event arrives.
@@ -588,7 +605,114 @@ object TestController {
         }
     }
 
+    // ─── threads (local label / archive state) ─────────────────────────
+
+    /**
+     * Archive / un-archive one thread over the harness surface, so the
+     * UIAutomator/interop side can drive the same state the sheet's swipe and
+     * TalkBack `Archive` action write (threads-spec §5.3, issue 07).
+     *
+     * `thread` is the FIELD_THREAD hex; Main (`""`) has no `threads` row and
+     * is rejected instead of silently archiving nothing.
+     */
+    fun handleThreadArchive(
+        context: Context,
+        peerHash: String,
+        threadHex: String,
+        archived: Boolean,
+    ) {
+        ensureInit(context)
+        val repo =
+            conversationRepo ?: run {
+                Log.i(LOGCAT_TAG, "thread_archive_err reason=no_repo")
+                return
+            }
+        val threadId = decodeInlineHex(threadHex)
+        if (peerHash.isEmpty() || threadId == null || threadId.isEmpty()) {
+            Log.i(
+                LOGCAT_TAG,
+                "thread_archive_err reason=bad_args peer=$peerHash thread=$threadHex",
+            )
+            return
+        }
+        scope.launch {
+            try {
+                repo.setThreadArchived(peerHash, threadId, archived)
+                Log.i(
+                    LOGCAT_TAG,
+                    "thread_archive_ok peer=$peerHash thread=$threadHex archived=$archived",
+                )
+            } catch (t: Throwable) {
+                Log.i(
+                    LOGCAT_TAG,
+                    "thread_archive_err reason=${escape(t.message ?: "unknown")} thread=$threadHex",
+                )
+            }
+        }
+    }
+
+    /**
+     * Deletes every persisted draft for the active identity.
+     *
+     * Flows leave drafts behind (03 types one on purpose), and a lingering
+     * Main draft hides the composer placeholder the next flow taps, so the
+     * runner clears drafts before each flow instead of relying on ordering.
+     */
+    fun handleClearDrafts(context: Context) {
+        ensureInit(context)
+        val dao =
+            draftDao ?: run {
+                Log.i(LOGCAT_TAG, "drafts_clear_err reason=no_dao")
+                return
+            }
+        val repo =
+            identityRepo ?: run {
+                Log.i(LOGCAT_TAG, "drafts_clear_err reason=no_identity_repo")
+                return
+            }
+        scope.launch {
+            try {
+                val identity = repo.getActiveIdentitySync()
+                if (identity == null) {
+                    Log.i(LOGCAT_TAG, "drafts_clear_err reason=no_identity")
+                    return@launch
+                }
+                dao.deleteAllDraftsForIdentity(identity.identityHash)
+                Log.i(LOGCAT_TAG, "drafts_clear_ok identity=${identity.identityHash}")
+            } catch (t: Throwable) {
+                Log.i(LOGCAT_TAG, "drafts_clear_err reason=${escape(t.message ?: "unknown")}")
+            }
+        }
+    }
+
     // ─── interface management ──────────────────────────────────────────
+
+    /**
+     * Sets the threads feature flag from the harness.
+     *
+     * The Settings switch is a Compose node with no accessibility text of its
+     * own, so a UI flow cannot tap it deterministically; the Maestro suite
+     * broadcasts this instead of driving Settings.
+     */
+    fun handleSetThreadsFlag(
+        context: Context,
+        enabled: Boolean,
+    ) {
+        ensureInit(context)
+        val repo =
+            settingsRepo ?: run {
+                Log.i(LOGCAT_TAG, "threads_flag_err reason=no_repo")
+                return
+            }
+        scope.launch {
+            try {
+                repo.saveThreadsEnabled(enabled)
+                Log.i(LOGCAT_TAG, "threads_flag_ok enabled=$enabled")
+            } catch (t: Throwable) {
+                Log.i(LOGCAT_TAG, "threads_flag_err reason=${escape(t.message ?: "unknown")}")
+            }
+        }
+    }
 
     fun handleListInterfaces(context: Context) {
         ensureInit(context)

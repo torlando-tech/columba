@@ -48,6 +48,7 @@ import androidx.core.content.ContextCompat
 import network.columba.app.R
 import network.columba.app.data.model.CallHistoryRecord
 import network.columba.app.ui.components.ProfileIcon
+import network.columba.app.ui.components.SearchNoResultsState
 import network.columba.app.viewmodel.ChatsSegment
 import network.columba.app.viewmodel.VoiceHistoryState
 import kotlinx.coroutines.awaitCancellation
@@ -88,6 +89,8 @@ fun VoiceHistoryContent(
     state: VoiceHistoryState,
     onRecordClick: (CallHistoryRecord) -> Unit,
     onRetry: () -> Unit = {},
+    searchQuery: String = "",
+    onClearSearch: () -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier,
 ) {
@@ -101,6 +104,12 @@ fun VoiceHistoryContent(
             title = stringResource(R.string.call_history_error_title),
             body = stringResource(R.string.call_history_error_body),
             onRetry = onRetry,
+            modifier = modifier,
+        )
+        state.records.isEmpty() && searchQuery.isNotBlank() -> SearchNoResultsState(
+            query = searchQuery,
+            titleRes = R.string.search_no_results_title_calls,
+            onClearSearch = onClearSearch,
             modifier = modifier,
         )
         state.records.isEmpty() -> VoiceHistoryMessage(

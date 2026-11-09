@@ -9,7 +9,6 @@ package network.columba.app.rns.host.flasher
 sealed class FirmwareSource(
     /** Used as the cache subdirectory name under `firmware/`. */
     val id: String,
-    val displayName: String,
     /** GitHub owner, or null for Custom. */
     val owner: String?,
     /** GitHub repo name, or null for Custom. */
@@ -17,28 +16,24 @@ sealed class FirmwareSource(
 ) {
     object Official : FirmwareSource(
         id = "official",
-        displayName = "RNode Official",
         owner = "markqvist",
         repo = "RNode_Firmware",
     )
 
     object MicroReticulum : FirmwareSource(
         id = "microreticulum",
-        displayName = "microReticulum",
         owner = "attermann",
         repo = "microReticulum_Firmware",
     )
 
     object CommunityEdition : FirmwareSource(
         id = "ce",
-        displayName = "RNode Community Edition",
         owner = "liberatedsystems",
         repo = "RNode_Firmware_CE",
     )
 
     object Custom : FirmwareSource(
         id = "custom",
-        displayName = "Custom",
         owner = null,
         repo = null,
     )

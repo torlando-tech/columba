@@ -6,6 +6,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import network.columba.app.R
+import network.columba.app.viewmodel.UiMessage
 
 /**
  * Manages a local-only WiFi hotspot for APK sharing without requiring
@@ -101,19 +103,23 @@ class LocalHotspotManager(private val context: Context) {
                     override fun onFailed(reason: Int) {
                         Log.e(TAG, "Local hotspot failed with reason: $reason")
                         reservation = null
-                        val message = when (reason) {
+                        val uiMessage = when (reason) {
                             ERROR_TETHERING_DISALLOWED ->
-                                "Hotspot is not allowed by device policy"
+                                UiMessage.Text(R.string.hotspot_error_policy)
                             ERROR_INCOMPATIBLE_MODE ->
-                                "WiFi is in a mode that prevents hotspot creation"
+                                UiMessage.Text(R.string.hotspot_error_incompatible_mode)
                             ERROR_NO_CHANNEL ->
-                                "No WiFi channel available for hotspot"
+                                UiMessage.Text(R.string.hotspot_error_no_channel)
                             ERROR_GENERIC ->
-                                "Could not start hotspot"
+                                UiMessage.Text(R.string.hotspot_error_could_not_start)
                             else ->
-                                "Hotspot failed (error $reason)"
+                                UiMessage.Text(R.string.hotspot_error_generic, listOf(reason))
                         }
-                        callback(Result.failure(HotspotException(message, reason)))
+                        callback(
+                            Result.failure(
+                                HotspotException("hotspot_start_failed (reason=$reason)", reason, uiMessage),
+                            ),
+                        )
                     }
                 },
                 Handler(Looper.getMainLooper()),
@@ -177,5 +183,13 @@ class LocalHotspotManager(private val context: Context) {
         }
     }
 
-    class HotspotException(message: String, val reason: Int) : Exception(message)
+    /**
+     * Hotspot start failure. [uiMessage] carries the localized explanation
+     * for the UI; the inherited [message] is a log-only rendering of it.
+     */
+    class HotspotException(
+        message: String,
+        val reason: Int,
+        val uiMessage: UiMessage = UiMessage.Text(R.string.hotspot_error_generic),
+    ) : Exception(message)
 }

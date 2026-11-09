@@ -7,11 +7,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import network.columba.app.data.db.dao.MessageDao
 import network.columba.app.data.db.dao.PeerIconDao
@@ -25,6 +29,7 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.notifications.NotificationHelper
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.host.util.PeerNameResolver
 import network.columba.app.telemetry.MemoryDiagnosticCounter
 import network.columba.app.telemetry.MemoryDiagnostics
@@ -64,6 +69,8 @@ class MessageCollector
         companion object {
             private const val TAG = "MessageCollector"
             private const val NOTIFICATION_BATCH_SIZE = 32
+            private const val NOTIFICATION_RETRY_BASE_MS = 1_000L
+            private const val NOTIFICATION_RETRY_MAX_MS = 30_000L
         }
 
         // Application-scoped coroutine for background message collection
@@ -115,27 +122,7 @@ class MessageCollector
                             // for messages stored through paths without icon data.
                             val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
 
-                            receivedMessage.iconAppearance?.let { appearance ->
-                                if (appearance.iconName.isNotEmpty() &&
-                                    appearance.foregroundColor.isNotEmpty() &&
-                                    appearance.backgroundColor.isNotEmpty()
-                                ) {
-                                    try {
-                                        peerIconDao.upsertIcon(
-                                            PeerIconEntity(
-                                                destinationHash = sourceHash,
-                                                iconName = appearance.iconName,
-                                                foregroundColor = appearance.foregroundColor,
-                                                backgroundColor = appearance.backgroundColor,
-                                                updatedTimestamp = System.currentTimeMillis(),
-                                            ),
-                                        )
-                                        Log.d(TAG, "Saved icon appearance for $sourceHash: ${appearance.iconName} (from duplicate message)")
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Failed to save icon appearance for $sourceHash", e)
-                                    }
-                                }
-                            }
+                            persistIconAppearance(sourceHash, receivedMessage.iconAppearance)
 
                             return@collect
                         }
@@ -214,29 +201,7 @@ class MessageCollector
                                 Log.d(TAG, "Stored sender's public key for $sourceHash")
                             }
 
-                            // Store sender's icon appearance if present (Sideband/MeshChat interop)
-                            // Icons are stored in peer_icons table (LXMF concept), separate from announces (Reticulum concept)
-                            receivedMessage.iconAppearance?.let { appearance ->
-                                if (appearance.iconName.isNotEmpty() &&
-                                    appearance.foregroundColor.isNotEmpty() &&
-                                    appearance.backgroundColor.isNotEmpty()
-                                ) {
-                                    try {
-                                        peerIconDao.upsertIcon(
-                                            PeerIconEntity(
-                                                destinationHash = sourceHash,
-                                                iconName = appearance.iconName,
-                                                foregroundColor = appearance.foregroundColor,
-                                                backgroundColor = appearance.backgroundColor,
-                                                updatedTimestamp = System.currentTimeMillis(),
-                                            ),
-                                        )
-                                        Log.d(TAG, "Saved icon appearance for $sourceHash: ${appearance.iconName}")
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Failed to save icon appearance for $sourceHash", e)
-                                    }
-                                }
-                            }
+                            persistIconAppearance(sourceHash, receivedMessage.iconAppearance)
 
                             conversationRepository.saveMessage(sourceHash, peerName, dataMessage, publicKey)
                             Log.d(TAG, "Message saved to database for peer ${sourceHash.take(16)} (hasPublicKey=${publicKey != null})")
@@ -396,6 +361,34 @@ class MessageCollector
             notificationCollectionJob = scope.launch { observePendingNotifications() }
         }
 
+        private suspend fun persistIconAppearance(
+            sourceHash: String,
+            appearance: IconAppearance?,
+        ) {
+            if (appearance == null) return
+            if (appearance.iconName.isEmpty() ||
+                appearance.foregroundColor.isEmpty() ||
+                appearance.backgroundColor.isEmpty()
+            ) {
+                return
+            }
+            try {
+                peerIconDao.upsertIcon(
+                    PeerIconEntity(
+                        destinationHash = sourceHash,
+                        iconName = appearance.iconName,
+                        foregroundColor = appearance.foregroundColor,
+                        backgroundColor = appearance.backgroundColor,
+                        updatedTimestamp = System.currentTimeMillis(),
+                    ),
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to save icon appearance for $sourceHash", e)
+            }
+        }
+
         /**
          * Reconcile durable notification state owned by this app process. Every message-table
          * invalidation for the active identity is a signal, even when the pending count is
@@ -413,7 +406,18 @@ class MessageCollector
                             .map { identity.identityHash }
                     }
                 }
-                .collect { identityHash -> reconcilePendingNotifications(identityHash) }
+                .onEach { identityHash -> reconcilePendingNotifications(identityHash) }
+                .retryWhen { cause, attempt ->
+                    if (cause is CancellationException) throw cause
+                    Log.w(TAG, "Notification observation interrupted; retrying", cause)
+                    delay(
+                        minOf(
+                            NOTIFICATION_RETRY_MAX_MS,
+                            NOTIFICATION_RETRY_BASE_MS shl attempt.coerceAtMost(5).toInt(),
+                        ),
+                    )
+                    true
+                }.collect()
         }
 
         /**
@@ -423,8 +427,7 @@ class MessageCollector
          * on a later invalidation or collector restart.
          */
         private suspend fun reconcilePendingNotifications(identityHash: String) {
-            while (true) {
-                if (identityRepository.getActiveIdentitySync()?.identityHash != identityHash) return
+            while (identityRepository.getActiveIdentitySync()?.identityHash == identityHash) {
                 val batch = messageDao.getPendingNotificationMessages(identityHash, NOTIFICATION_BATCH_SIZE)
                 if (batch.isEmpty()) return
                 for (pending in batch) {

@@ -292,6 +292,19 @@ class ServicePersistenceManager(
                     peerPublicKey = message.publicKey,
                     localIdentityHash = identity.identityHash,
                 )
+                // Restore/export reads peer_identities, not conversation keys. Only
+                // retain key material deriving this sender's LXMF destination, and
+                // store its identity hash just as announce persistence does.
+                val publicKey = message.publicKey
+                if (publicKey != null && LxmfSignatureVerifier.senderHash(publicKey) == sender) {
+                    peerIdentityDao.insertPeerIdentity(
+                        PeerIdentityEntity(
+                            peerHash = HashUtils.computeIdentityHash(publicKey),
+                            publicKey = publicKey,
+                            lastSeenTimestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
                 // A live IPC callback is not guaranteed after an app restart, so icon
                 // appearance must survive from the service process itself. Invalid or
                 // missing appearance leaves any existing icon untouched.

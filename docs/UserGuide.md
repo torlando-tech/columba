@@ -115,6 +115,8 @@ For newly received unknown-key messages, Columba retains the original signed mes
 
 Learning a key alone never marks a message verified. Older messages without retained signed evidence cannot be rechecked automatically. Open message details to see the recorded verification result.
 
+Messages received while only the service is running retain sender keys and icons for restoration after restart. Message notifications catch up when the app starts, and temporary database read failures are retried automatically.
+
 ---
 
 ## Step 5 – Offline and Mesh Usage

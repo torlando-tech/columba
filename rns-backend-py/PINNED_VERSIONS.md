@@ -66,6 +66,11 @@ cancellation, child-process cleanup, host stop and runtime reuse:
   -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.rns.backend.py.PythonRnsUpstreamStamperInstrumentedTest
 ```
 
+Host Python tests run through `python3 rns-backend-py/run_python_tests.py`.
+The dedicated Python CI job installs the exact pins and runs each file in an
+isolated interpreter. Do not use dependency-free unittest discovery for this
+mixed stub/integration suite.
+
 ### `TorClientInterface.py` — not restored (Tor out of scope)
 
 `release/v0.10.x` shipped `python/TorClientInterface.py` (a `TCPClientInterface`

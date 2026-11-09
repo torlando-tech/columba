@@ -3663,5 +3663,38 @@ class SettingsViewModelTest {
             }
         }
 
+    @Test
+    fun `notificationPrivacyLevel survives a settings state rebuild`() =
+        runTest {
+            val privacyFlow =
+                MutableStateFlow(network.columba.app.data.model.NotificationPrivacyLevel.NONE)
+            every { settingsRepository.notificationPrivacyLevelFlow } returns privacyFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+                assertEquals(
+                    network.columba.app.data.model.NotificationPrivacyLevel.NONE,
+                    state.notificationPrivacyLevel,
+                )
+
+                // Any flow in the loadSettings() combine rebuilds the snapshot; a theme
+                // change must not reset the chooser to FULL.
+                themePreferenceFlow.value = PresetTheme.FOREST
+                state = expectMostRecentItem()
+                assertEquals(
+                    network.columba.app.data.model.NotificationPrivacyLevel.NONE,
+                    state.notificationPrivacyLevel,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
     // endregion
 }

@@ -611,6 +611,10 @@ class SettingsViewModel
                             blockUnknownSenders = _state.value.blockUnknownSenders,
                             allowCallsFromContactsOnly = _state.value.allowCallsFromContactsOnly,
                             allowVoiceCalls = _state.value.allowVoiceCalls,
+                            // Set by loadPrivacySettings() from DataStore; the combine above
+                            // rebuilds this snapshot on any flow change, so carry it over or
+                            // the chooser snaps back to FULL.
+                            notificationPrivacyLevel = _state.value.notificationPrivacyLevel,
                             // Preserve message size limit from loadLocationSharingSettings()
                             incomingMessageSizeLimitKb = _state.value.incomingMessageSizeLimitKb,
                             // Preserve message sorting from loadLocationSharingSettings()

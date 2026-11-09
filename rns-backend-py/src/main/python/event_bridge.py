@@ -1508,7 +1508,7 @@ def _lxmf_delivery_callback(message):
             )
         # Receiving-interface annotation + signal metrics. Two sources, in
         # priority order (mirrors release/v0.10.x's _on_lxmf_delivery):
-        #   1. torlando-tech LXMF fork (branch feature/receiving-interface-capture-1.1.0)
+        #   1. torlando-tech LXMF fork (based on upstream 1.3.0)
         #      sets `message.receiving_interface` (RNS.Interface) +
         #      `message.receiving_hops` on inbound opportunistic messages.
         #      Upstream LXMF leaves these off entirely, so getattr-guard.
@@ -1545,7 +1545,8 @@ def _lxmf_delivery_callback(message):
         if recv_iface is not None:
             recv_iface_name = _format_iface_for_emit(recv_iface)
 
-        rssi, snr = _signal_metrics(recv_iface)
+        rssi = getattr(message, "rssi", None)
+        snr = getattr(message, "snr", None)
 
         payload = {
             "hash": _hex(getattr(message, "hash", None)),
@@ -1611,7 +1612,7 @@ def register_callbacks(
 
 def deregister_callbacks():
     """Tear-down counterpart to register_callbacks(). Best-effort."""
-    global _announce_handler
+    global _announce_handler, _lxmf_router
     _reset_announce_dispatch()
     try:
         if _announce_handler is not None and _rns_transport is not None:
@@ -1619,6 +1620,7 @@ def deregister_callbacks():
     except Exception as e:  # noqa: BLE001
         RNS.log(f"event_bridge: deregister failed: {e}", RNS.LOG_ERROR)
     _announce_handler = None
+    _lxmf_router = None
 
 
 # --- LXST telephony callback bridges ---------------------------------------
@@ -1673,61 +1675,31 @@ def uninstall_destination_resolver():
     _destination_resolver = None
 
 
-# --- LXMF external stamp generator bridge ----------------------------------
+def stop_lxmf_router(router):
+    """Stop router scheduling and let upstream RNS reap its stamp workers."""
+    import time
+    import RNS.Stamps
 
-def install_external_stamp_generator(java_callback):
-    """Register a Java callback as upstream LXMF's external stamp generator.
-
-    Bypasses Python LXMF's `multiprocessing.Manager` based stamp pipeline
-    which hangs on Android (Chaquopy lacks `sem_open`, Android kills idle
-    helper processes, the Manager deadlocks waiting on the dead worker).
-    The torlando-tech LXMF fork exposes `LXStamper.set_external_generator`
-    for exactly this — when set, `LXStamper.generate_stamp` calls
-    `external_generator(workblock, stamp_cost, cancellation_token)` and gets
-    `(stamp_bytes, rounds)` back. The token lets the native search stop promptly
-    when LXMF cancels the deferred-stamp job.
-
-    Why this wrapper instead of registering the Kotlin callback directly:
-    Chaquopy's `JavaObject.__call__` dispatcher on `BiFunction.apply`
-    boxes the args as `Object[]` instead of typed `byte[] / int` —
-    LXStamper line 111 then throws
-    `ClassCastException: Object[] cannot be cast to byte[]` inside the
-    synthetic apply, and the deferred-stamp worker thread dies. By going
-    through a Python closure that calls `java_callback.generate(...)`
-    via Chaquopy's typed-method path (not the SAM-callable path),
-    Chaquopy applies the proper `bytes → byte[]` / `int → int`
-    conversion before dispatching.
-
-    Kotlin contract: `java_callback` exposes a method named `generate`
-    with signature `(workblock: byte[], stampCost: int, token: PyObject) -> List` where
-    the returned list is `[stamp_bytes, rounds]`. See
-    `PythonRnsRuntime.kt` `StampGeneratorCallback` for the implementation.
-    """
-    try:
-        from LXMF import LXStamper
-    except ImportError:
-        RNS.log(
-            "event_bridge: install_external_stamp_generator failed — "
-            "LXMF.LXStamper not importable",
-            RNS.LOG_ERROR,
-        )
+    if router is None:
         return
 
-    def _wrapper(workblock, stamp_cost, cancellation_token):
-        result = java_callback.generate(workblock, stamp_cost, cancellation_token)
-        # `result` is a Java List exposed as a Python sequence; index access
-        # returns Python bytes for index 0 and Python int for index 1
-        # (Chaquopy auto-converts via the typed method's return signature).
-        stamp = result[0]
-        rounds = result[1]
-        return stamp, rounds
+    try:
+        router.exit_handler()
+    finally:
+        for message_id in list(router.pending_deferred_stamps):
+            router.cancel_outbound(message_id)
 
-    LXStamper.set_external_generator(_wrapper, None, True)
-
-
-def uninstall_external_stamp_generator():
-    """Cancel active external stamp work and clear LXMF's global callback."""
-    LXMF.LXStamper.set_external_generator(None)
+        # Expansion precedes registration in active_jobs, and a message may
+        # generate a second propagation stamp. Keep signalling upstream until
+        # the deferred worker and every active RNS job finish.
+        while True:
+            for message_id in list(RNS.Stamps.active_jobs):
+                RNS.Stamps.cancel_work(message_id)
+            if router.stamp_gen_lock.acquire(timeout=0.05):
+                router.stamp_gen_lock.release()
+                if not RNS.Stamps.active_jobs:
+                    break
+            time.sleep(0.05)
 
 
 # --- Per-Link packet bridge ------------------------------------------------
@@ -1846,6 +1818,7 @@ def attach_lxmessage_callbacks(
                 return
             if not (
                 getattr(msg, "try_propagation_on_fail", False)
+                and msg.state != LXMF.LXMessage.CANCELLED
                 and captured_router is not None
                 and getattr(captured_router, "outbound_propagation_node", None) is not None
                 and getattr(msg, "desired_method", None) != LXMF.LXMessage.PROPAGATED

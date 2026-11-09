@@ -234,17 +234,11 @@ class PythonEventBridge {
                 // Python side stays thin. Matches NativeTelemetryHandler's
                 // extractIconAppearance on the kotlin backend.
                 iconAppearance = fieldsJson?.let { extractIconAppearance(it) },
-                // Receiving-interface, hops, and signal metrics. Upstream
-                // Python LXMF does not annotate any of these; `event_bridge.py`
-                // sources them at delivery time from (a) the torlando-tech
-                // LXMF fork's `message.receiving_interface` / `receiving_hops`
-                // (set on opportunistic deliveries), (b) `RNS.Transport.
-                // path_table` as a fallback for link-based deliveries, and
-                // (c) `interface.get_rssi()` / `get_snr()` on the receiving
-                // RNode interface for the signal metrics — mirrors
-                // `release/v0.10.x`'s `signal_quality.extract_signal_metrics`.
-                // Non-RNode paths (TCP/Auto/Backbone) leave rssi/snr null,
-                // matching kotlin's null-when-unavailable shape.
+                // The LXMF fork records interface/hops on opportunistic
+                // deliveries; event_bridge falls back to Transport paths for
+                // other deliveries. Signal metrics come from the message's
+                // packet/link snapshot, never the radio's latest unrelated
+                // packet. Missing metrics stay null; zero is a valid reading.
                 receivedHopCount = payload.dictInt("receiving_hops"),
                 receivedInterface = payload.dictStr("receiving_interface"),
                 receivedRssi = payload.dictInt("rssi"),

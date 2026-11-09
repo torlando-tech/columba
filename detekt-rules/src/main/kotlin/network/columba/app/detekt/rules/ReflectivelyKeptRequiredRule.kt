@@ -31,7 +31,7 @@ import org.jetbrains.kotlin.psi.KtClassOrObject
  * These two shapes cover every Chaquopy bridge in the tree with no false
  * positives (Android callbacks like `GattCallback`/`ProgressCallback` and the
  * kotlin-backend `AndroidRNodeHostBridge` don't match). Bridges that fit
- * neither shape (e.g. `PythonEventBridge`, `StampGeneratorCallback`) still carry
+ * neither shape (e.g. `PythonEventBridge`) still carry
  * the annotation but aren't auto-detectable here — keep new Chaquopy bridges to
  * one of the two shapes so this rule can guard them.
  */

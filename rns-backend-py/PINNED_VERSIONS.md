@@ -71,6 +71,9 @@ The dedicated Python CI job installs the exact pins and runs each file in an
 isolated interpreter. Do not use dependency-free unittest discovery for this
 mixed stub/integration suite.
 
+Cold Gradle bootstrap uses a 60-second network timeout for distribution
+downloads, including the official URL's GitHub redirect, before CI checks start.
+
 ### `TorClientInterface.py` — not restored (Tor out of scope)
 
 `release/v0.10.x` shipped `python/TorClientInterface.py` (a `TCPClientInterface`

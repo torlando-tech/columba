@@ -158,8 +158,8 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
@@ -198,6 +198,7 @@ import network.columba.app.rns.api.BackendCapabilities.Support
 import network.columba.app.rns.api.model.Direction
 import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.data.config.InterfaceConfigCodec
+import network.columba.app.domain.model.SignatureStatus
 import network.columba.app.ui.components.AttachmentPanel
 import network.columba.app.ui.components.ThreadPill
 import network.columba.app.ui.components.ThreadRenameDialog
@@ -233,7 +234,6 @@ import network.columba.app.ui.components.StarToggleButton
 import network.columba.app.ui.components.SwipeableMessageBubble
 import network.columba.app.ui.components.SyncStatusBottomSheet
 import network.columba.app.ui.components.ConversationTransferTray
-import network.columba.app.ui.components.UnverifiedSenderChip
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
@@ -255,7 +255,6 @@ import network.columba.app.util.FileUtils
 import network.columba.app.util.ImageUtils
 import network.columba.app.util.LocationPermissionManager
 import network.columba.app.util.MediaPermissionManager
-import network.columba.app.util.formatRelativeTime
 import network.columba.app.util.formatTimeSince
 import network.columba.app.util.launchSafely
 import network.columba.app.util.showNoFileManagerToast
@@ -270,6 +269,9 @@ import android.Manifest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import network.columba.app.ui.components.SignatureStatusChip
+import network.columba.app.ui.theme.OnWarningContainer
+import network.columba.app.ui.theme.WarningContainer
 
 private const val URL_ANNOTATION_TAG = "url"
 private const val VOICE_PREVIEW_KEY = "voice-recording-preview"
@@ -2445,16 +2447,12 @@ fun MessageBubble(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
     ) {
-        // Unverified-sender warning — mirrors Sideband's "this message is
-        // likely to be fake" banner. Rendered above every bubble type (text,
-        // media-only, attachment, pending-file notification) because a forged
-        // message could carry any payload shape. Trigger is exactly
-        // `signatureVerified == false` (an unverified sender); null (sent,
-        // legacy) and true both skip the chip. See
-        // MessageEntity.signatureVerified for the full state table.
-        if (message.signatureVerified == false) {
-            UnverifiedSenderChip(modifier = Modifier.padding(bottom = 4.dp))
-        }
+        // Keep signature status above every payload shape, including media,
+        // attachments, and pending-file notifications.
+        SignatureStatusChip(
+            status = message.signatureStatus,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
 
         // Handle pending file notifications (system messages for files arriving via relay)
         if (message.isPendingFileNotification) {
@@ -3756,11 +3754,11 @@ private fun TextSizeDialog(
  * the root message stays pinned above the replies, always as one line — root
  * text (or the off-screen placeholder) plus the reply count. The card form
  * cost ~90dp of viewport; one line keeps the root identifiable while the
- * message list gets the space. A failed signature check keeps its warning as
- * an inline icon (the full chip is on the message itself).
+ * message list gets the space. Signature warnings stay as a compact inline
+ * icon, with the same unknown/inconclusive versus invalid distinction as the bubble.
  */
 @Composable
-private fun ThreadPinnedHeader(
+internal fun ThreadPinnedHeader(
     header: ThreadHeaderUi,
     replyCount: Int,
 ) {
@@ -3787,16 +3785,34 @@ private fun ThreadPinnedHeader(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            if (header is ThreadHeaderUi.Root && header.signatureVerified == false) {
-                Icon(
-                    imageVector = Icons.Default.Warning,
-                    contentDescription = stringResource(R.string.messaging_unverified_sender_chip),
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier =
-                        Modifier
-                            .padding(start = 8.dp)
-                            .size(14.dp),
-                )
+            if (header is ThreadHeaderUi.Root && !header.isFromMe) {
+                val warningLabel =
+                    when (header.signatureStatus) {
+                        SignatureStatus.SOURCE_UNKNOWN -> stringResource(R.string.message_detail_signature_unknown)
+                        SignatureStatus.INVALID -> stringResource(R.string.message_detail_signature_invalid)
+                        SignatureStatus.UNVERIFIED -> stringResource(R.string.message_detail_signature_unverified)
+                        SignatureStatus.VERIFIED, null -> null
+                    }
+                if (warningLabel != null) {
+                    val invalid = header.signatureStatus == SignatureStatus.INVALID
+                    val verificationError = stringResource(R.string.signature_verification_failed)
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = warningLabel,
+                        tint = if (invalid) MaterialTheme.colorScheme.onErrorContainer else OnWarningContainer,
+                        modifier =
+                            Modifier
+                                .padding(start = 8.dp)
+                                .background(
+                                    if (invalid) MaterialTheme.colorScheme.errorContainer else WarningContainer,
+                                    RoundedCornerShape(4.dp),
+                                ).padding(2.dp)
+                                .size(14.dp)
+                                .semantics {
+                                    if (invalid) error(verificationError)
+                                },
+                    )
+                }
             }
             Text(
                 text = pluralStringResource(R.plurals.thread_replies_count, replyCount, replyCount),

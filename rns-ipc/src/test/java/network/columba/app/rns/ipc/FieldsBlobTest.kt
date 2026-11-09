@@ -12,10 +12,12 @@ import java.io.DataOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertNull
 
 /**
- * Out-of-band inbound `fieldsJson` transfer (the receive-side mirror of
- * [AttachmentBlob]). Pins the round-trip and the corrupt-length guard.
+ * Out-of-band inbound fields and original LXMF signature evidence. Pins the
+ * round-trip and corrupt-length guards.
  */
 @RunWith(RobolectricTestRunner::class)
 class FieldsBlobTest {
@@ -26,8 +28,26 @@ class FieldsBlobTest {
         // ~400 KB — comfortably over the inline threshold, the case that used to
         // overflow the Binder transaction inline.
         val json = """{"6":"${"ab".repeat(200_000)}"}"""
-        val pfd = FieldsBlob.writeToPfd(tmp.root, json)
-        assertEquals(json, FieldsBlob.readFromPfd(pfd))
+        val evidence = ByteArray(200_000) { it.toByte() }
+        val pfd = FieldsBlob.writeToPfd(tmp.root, json, evidence)
+        val payload = FieldsBlob.readFromPfd(pfd)
+        assertEquals(json, payload.fieldsJson)
+        assertArrayEquals(evidence, payload.signatureEvidence)
+    }
+
+    @Test
+    fun `retains original evidence without fields`() {
+        val evidence = byteArrayOf(0, 1, -1, 42)
+        val payload = FieldsBlob.readFromPfd(FieldsBlob.writeToPfd(tmp.root, null, evidence))
+        assertNull(payload.fieldsJson)
+        assertArrayEquals(evidence, payload.signatureEvidence)
+    }
+
+    @Test
+    fun `retains fields without evidence`() {
+        val payload = FieldsBlob.readFromPfd(FieldsBlob.writeToPfd(tmp.root, "{}", null))
+        assertEquals("{}", payload.fieldsJson)
+        assertNull(payload.signatureEvidence)
     }
 
     @Test
@@ -38,8 +58,21 @@ class FieldsBlobTest {
         val f = File(tmp.root, "corrupt.bin")
         DataOutputStream(FileOutputStream(f)).use { out ->
             out.writeInt(0x4C584D46) // MAGIC ("LXMF")
-            out.writeInt(1) // VERSION
+            out.writeInt(2) // VERSION
             out.writeInt(Int.MAX_VALUE) // implausible length
+        }
+        val pfd = ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY)
+        assertThrows(IOException::class.java) { FieldsBlob.readFromPfd(pfd) }
+    }
+
+    @Test
+    fun `rejects implausible evidence length before allocating`() {
+        val f = File(tmp.root, "corrupt-evidence.bin")
+        DataOutputStream(FileOutputStream(f)).use { out ->
+            out.writeInt(0x4C584D46)
+            out.writeInt(2)
+            out.writeInt(-1) // No fields.
+            out.writeInt(Int.MAX_VALUE)
         }
         val pfd = ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY)
         assertThrows(IOException::class.java) { FieldsBlob.readFromPfd(pfd) }
@@ -50,7 +83,7 @@ class FieldsBlobTest {
         val f = File(tmp.root, "wrongmagic.bin")
         DataOutputStream(FileOutputStream(f)).use { out ->
             out.writeInt(0xDEADBEEF.toInt())
-            out.writeInt(1)
+            out.writeInt(2)
             out.writeInt(0)
         }
         val pfd = ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY)

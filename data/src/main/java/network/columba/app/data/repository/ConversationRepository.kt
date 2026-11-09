@@ -35,6 +35,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
+import network.columba.app.domain.model.SignatureStatus
 
 data class Conversation(
     val peerHash: String,
@@ -71,13 +72,10 @@ data class Message(
     val receivedAt: Long? = null,
     // Interface name through which message was sent (null for received messages or pre-feature messages)
     val sentInterface: String? = null,
-    // For received messages: whether the LXMF signature was verified against
-    // the sender's known identity. false = potential forgery (sender identity
-    // unknown to us at receive time, or an invalid signature on the Python
-    // backend); null = sent by us or a pre-v10 legacy row. Both backends now
-    // forward a definite value for delivered messages. See
-    // MessageEntity.signatureVerified for full semantics.
-    val signatureVerified: Boolean? = null,
+    // Null means no recorded result; only INVALID proves a failed signature check.
+    val signatureStatus: SignatureStatus? = null,
+    // Original packed LXMF bytes for deferred verification, never part of MessageUi.
+    val signatureEvidence: ByteArray? = null,
     // DB-local per-target-message reactions aggregation. Flat shape:
     //   {"👍": ["sender_hex_1", ...], "❤️": [...]}
     // Never appears on the wire — the LXMF reaction wire format is
@@ -252,14 +250,19 @@ class ConversationRepository
 
         /**
          * Save a message and update the conversation
-         * Creates conversation if it doesn't exist
+         * Creates the conversation, deduplicates and persists evidence in one database transaction.
+         * Received callbacks may pin the original local identity instead of consulting mutable UI state.
+         * [attachmentsPrepared] is for the service's encompassing message/key/icon
+         * transaction: it must call [extractLargeAttachments] before taking that lock.
          */
-        @Suppress("LongMethod") // Pre-existing size (134 lines at TOR-24); P2 only threads threadId through it
+        @Suppress("LongMethod") // Conversation, message/evidence and thread state commit together
         suspend fun saveMessage(
             peerHash: String,
             peerName: String,
             message: Message,
             peerPublicKey: ByteArray? = null,
+            localIdentityHash: String? = null,
+            attachmentsPrepared: Boolean = false,
         ) {
             // VALIDATION: Sanitize message content before storage
             val sanitizedContent = TextSanitizer.sanitizeMessage(message.content)
@@ -267,19 +270,16 @@ class ConversationRepository
             // VALIDATION: Sanitize peer name
             val sanitizedPeerName = TextSanitizer.sanitizePeerName(peerName)
 
-            // Get active identity hash (required for all data)
-            val activeIdentity =
-                localIdentityDao.getActiveIdentitySync()
+            val identityHash =
+                localIdentityHash
+                    ?: localIdentityDao.getActiveIdentitySync()?.identityHash
                     ?: throw IllegalStateException("No active identity found")
-            val identityHash = activeIdentity.identityHash
 
-            // Check if message already exists to avoid duplicate processing
-            val messageExists = messageDao.messageExists(message.id, identityHash)
-
-            // Extract large attachments to disk before opening the transaction:
-            // those writes are not SQL and must not hold the database lock.
+            // Extract large attachments before opening the transaction: file I/O
+            // must not hold the database lock. Recheck deduplication under that
+            // lock before changing any message, unread, preview or thread state.
             val messageEntity =
-                if (messageExists) {
+                if (messageDao.messageExists(message.id, identityHash)) {
                     null
                 } else {
                     buildMessageEntity(
@@ -287,7 +287,7 @@ class ConversationRepository
                         conversationHash = peerHash,
                         identityHash = identityHash,
                         sanitizedContent = sanitizedContent,
-                        processedFieldsJson = extractLargeAttachments(message.id, message.fieldsJson),
+                        attachmentsPrepared = attachmentsPrepared,
                     )
                 }
 
@@ -297,6 +297,7 @@ class ConversationRepository
             // bookkeeping commit together or not at all, so a reader can never
             // observe a message whose thread bump or preview is still pending.
             database.withTransaction {
+                val messageExists = messageDao.messageExists(message.id, identityHash)
                 // CRITICAL: Create/update conversation FIRST (before message insert)
                 // This ensures foreign key constraint is satisfied
                 val existingConversation = conversationDao.getConversation(peerHash, identityHash)
@@ -313,8 +314,9 @@ class ConversationRepository
                         existingConversation.copy(
                             peerName = sanitizedPeerName, // Update name (SANITIZED) in case it changed from new announce
                             peerPublicKey = peerPublicKey ?: existingConversation.peerPublicKey, // Update public key if provided
-                            lastMessage = sanitizedContent, // Store SANITIZED content
-                            lastMessageTimestamp = conversationTimestamp,
+                            lastMessage = if (messageExists) existingConversation.lastMessage else sanitizedContent,
+                            lastMessageTimestamp =
+                                if (messageExists) existingConversation.lastMessageTimestamp else conversationTimestamp,
                             unreadCount =
                                 if (shouldIncrementUnread) {
                                     existingConversation.unreadCount + 1 // Increment only for NEW received messages
@@ -351,8 +353,8 @@ class ConversationRepository
                 // NOW insert the message (after conversation exists) with SANITIZED content
                 // Only insert if message doesn't already exist - prevents LXMF replay from
                 // overwriting imported messages with new timestamps (fixes ordering bug)
-                if (messageEntity != null) {
-                    messageDao.insertMessage(messageEntity)
+                if (!messageExists && messageEntity != null) {
+                    messageDao.insertMessageWithSignatureEvidence(messageEntity, message.signatureEvidence)
 
                     // Threads-spec §4.3: implicit thread creation / activity bump
                     // / first-sighting root hook, inside this transaction so the
@@ -587,17 +589,6 @@ class ConversationRepository
         }
 
         /**
-         * Get IDs of recent received messages for the active identity.
-         * Used to pre-seed the notification dedup cache at startup so that
-         * replayed/re-broadcast messages don't trigger duplicate notifications.
-         * Bounded to [since] to avoid unbounded memory growth.
-         */
-        suspend fun getReceivedMessageIds(since: Long): List<String> {
-            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyList()
-            return messageDao.getReceivedMessageIds(activeIdentity.identityHash, since)
-        }
-
-        /**
          * Observe a message by ID for real-time updates (e.g., status changes from pending → delivered).
          * Returns a Flow that emits whenever the message changes in the database.
          */
@@ -676,7 +667,7 @@ class ConversationRepository
                 receivedInterface = receivedInterface,
                 receivedAt = receivedAt,
                 sentInterface = sentInterface,
-                signatureVerified = signatureVerified,
+                signatureStatus = signatureStatus,
                 reactionsJson = reactionsJson,
                 threadId = threadId,
             )
@@ -684,17 +675,17 @@ class ConversationRepository
         /**
          * Build a [MessageEntity] for persistence. Extracted from [saveMessage]
          * (which is at the detekt LongMethod budget) — the caller supplies the
-         * resolved conversation/identity hashes plus the already-sanitized
-         * content and attachment-extracted fieldsJson. Received-side routing /
-         * signal metadata and `signatureVerified` are carried straight through
-         * so the message-details screen and unverified-sender warning render.
+         * resolved conversation/identity hashes plus already-sanitized content.
+         * Prepare attachments here before the caller takes the write lock. Received-side routing /
+         * signal metadata and signature status are carried through. Original signed evidence
+         * is stored separately, never reconstructed from display fields or loaded by UI queries.
          */
         private fun buildMessageEntity(
             message: Message,
             conversationHash: String,
             identityHash: String,
             sanitizedContent: String,
-            processedFieldsJson: String?,
+            attachmentsPrepared: Boolean,
         ) = MessageEntity(
             id = message.id,
             conversationHash = conversationHash,
@@ -704,7 +695,8 @@ class ConversationRepository
             isFromMe = message.isFromMe,
             status = message.status,
             isRead = message.isFromMe, // Our own messages are always "read"
-            fieldsJson = processedFieldsJson,
+            fieldsJson =
+                if (attachmentsPrepared) message.fieldsJson else extractLargeAttachments(message.id, message.fieldsJson),
             deliveryMethod = message.deliveryMethod,
             errorMessage = message.errorMessage,
             replyToMessageId = message.replyToMessageId,
@@ -714,7 +706,8 @@ class ConversationRepository
             receivedSnr = message.receivedSnr,
             receivedAt = message.receivedAt,
             sentInterface = message.sentInterface,
-            signatureVerified = message.signatureVerified,
+            signatureStatus = message.signatureStatus,
+            notificationHandled = message.isFromMe,
             threadId = message.threadId, // FIELD_THREAD bytes; null = Main
         )
 
@@ -1118,14 +1111,18 @@ class ConversationRepository
          * If the total fieldsJson size exceeds the threshold, large fields are saved to disk
          * and replaced with file references. This prevents SQLite CursorWindow overflow
          * when loading messages (~2MB row limit).
+         * Service persistence also calls this before its encompassing message/key/icon
+         * transaction; already-extracted file references are left intact.
          *
          * @param messageId Message identifier for storage path
          * @param fieldsJson Original fields JSON string
          * @return Modified fields JSON with file references for large attachments, or original if no extraction needed
          */
         @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
-        @androidx.annotation.VisibleForTesting
-        internal fun extractLargeAttachments(messageId: String, fieldsJson: String?): String? {
+        fun extractLargeAttachments(
+            messageId: String,
+            fieldsJson: String?,
+        ): String? {
             if (fieldsJson == null) return null
 
             val totalSize = fieldsJson.length
@@ -1810,7 +1807,7 @@ fun MessageEntity.toDomainMessage(): Message =
         receivedSnr = receivedSnr,
         receivedAt = receivedAt,
         sentInterface = sentInterface,
-        signatureVerified = signatureVerified,
+        signatureStatus = signatureStatus,
         reactionsJson = reactionsJson,
         threadId = threadId,
     )

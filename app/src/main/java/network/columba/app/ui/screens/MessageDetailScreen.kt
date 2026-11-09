@@ -49,6 +49,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import network.columba.app.R
+import network.columba.app.domain.model.SignatureStatus
+import network.columba.app.ui.theme.OnWarningContainer
+import network.columba.app.ui.theme.WarningContainer
 import network.columba.app.ui.util.getInterfaceInfo
 import network.columba.app.ui.util.getRssiInfo
 import network.columba.app.ui.util.getSnrInfo
@@ -200,29 +203,8 @@ fun MessageDetailScreen(
                 } else {
                     // Received message info: delivery method, hop count, receiving interface.
 
-                    // Signature verification card. Only emitted for received
-                    // messages where the flag is non-null. Null (sent messages,
-                    // legacy rows) renders no card — we don't claim a
-                    // verification state either way for those, matching the
-                    // bubble behavior in MessagingScreen.
-                    msg.signatureVerified?.let { verified ->
-                        if (verified) {
-                            MessageInfoCard(
-                                icon = Icons.Default.VerifiedUser,
-                                title = stringResource(R.string.message_detail_signature_title),
-                                content = stringResource(R.string.message_detail_signature_verified),
-                                subtitle = stringResource(R.string.message_detail_signature_verified_detail),
-                            )
-                        } else {
-                            MessageInfoCard(
-                                icon = Icons.Default.Warning,
-                                iconTint = MaterialTheme.colorScheme.error,
-                                title = stringResource(R.string.message_detail_signature_title),
-                                content = stringResource(R.string.message_detail_signature_unverified),
-                                subtitle = stringResource(R.string.message_detail_signature_unverified_detail),
-                                contentColor = MaterialTheme.colorScheme.error,
-                            )
-                        }
+                    msg.signatureStatus?.let { status ->
+                        MessageSignatureInfoCard(status)
                     }
 
                     // Delivery method card. Especially important for propagation-fetched
@@ -290,6 +272,48 @@ fun MessageDetailScreen(
     }
 }
 
+/** The detail view distinguishes an unavailable key from a failed signature check. */
+@Composable
+internal fun MessageSignatureInfoCard(status: SignatureStatus) {
+    when (status) {
+        SignatureStatus.VERIFIED ->
+            MessageInfoCard(
+                icon = Icons.Default.VerifiedUser,
+                title = stringResource(R.string.message_detail_signature_title),
+                content = stringResource(R.string.message_detail_signature_verified),
+                subtitle = stringResource(R.string.message_detail_signature_verified_detail),
+            )
+        SignatureStatus.SOURCE_UNKNOWN ->
+            MessageInfoCard(
+                icon = Icons.Default.Warning,
+                iconTint = OnWarningContainer,
+                iconContainerColor = WarningContainer,
+                title = stringResource(R.string.message_detail_signature_title),
+                content = stringResource(R.string.message_detail_signature_unknown),
+                subtitle = stringResource(R.string.message_detail_signature_unknown_detail),
+            )
+        SignatureStatus.INVALID ->
+            MessageInfoCard(
+                icon = Icons.Default.Error,
+                iconTint = MaterialTheme.colorScheme.onErrorContainer,
+                iconContainerColor = MaterialTheme.colorScheme.errorContainer,
+                title = stringResource(R.string.message_detail_signature_title),
+                content = stringResource(R.string.message_detail_signature_invalid),
+                subtitle = stringResource(R.string.message_detail_signature_invalid_detail),
+                contentColor = MaterialTheme.colorScheme.error,
+            )
+        SignatureStatus.UNVERIFIED ->
+            MessageInfoCard(
+                icon = Icons.Default.Warning,
+                iconTint = OnWarningContainer,
+                iconContainerColor = WarningContainer,
+                title = stringResource(R.string.message_detail_signature_title),
+                content = stringResource(R.string.message_detail_signature_unverified),
+                subtitle = stringResource(R.string.message_detail_signature_unverified_detail),
+            )
+    }
+}
+
 @Composable
 private fun MessageInfoCard(
     icon: ImageVector,
@@ -298,6 +322,7 @@ private fun MessageInfoCard(
     subtitle: String? = null,
     iconTint: Color = MaterialTheme.colorScheme.onPrimaryContainer,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    iconContainerColor: Color = MaterialTheme.colorScheme.primaryContainer,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -321,7 +346,7 @@ private fun MessageInfoCard(
                     Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
+                        .background(iconContainerColor),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(

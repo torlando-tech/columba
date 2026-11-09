@@ -1,8 +1,10 @@
 package network.columba.app.data.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
+import network.columba.app.domain.model.SignatureStatus
 
 @Entity(
     tableName = "messages",
@@ -28,6 +30,8 @@ import androidx.room.Index
         Index("conversationHash", "identityHash", "timestamp"), // For queries with ordering
         Index("conversationHash", "identityHash", "isFromMe", "isRead"), // For unread count queries
         Index("replyToMessageId"), // For efficient reply lookups
+        Index("signatureStatus", "conversationHash", "id", "identityHash"), // Bounded deferred verification scans
+        Index("identityHash", "isFromMe", "notificationHandled"), // Pending notification reconciliation
         Index("conversationHash", "identityHash", "threadId", "timestamp"), // Thread grouping (spec §5); threadId NULL rows serve Main queries
     ], // Indexes for faster queries
 )
@@ -72,19 +76,11 @@ data class MessageEntity(
     val receivedAt: Long? = null,
     // Interface name through which message was sent (null for received messages or pre-feature messages)
     val sentInterface: String? = null,
-    // For received messages: whether the LXMF signature was verified against
-    // the sender's known identity.
-    //   true  = signature checked against a known source identity, valid.
-    //   false = the sender's signature could not be verified — could be a
-    //           forgery; the UI must warn. Kotlin backend: always
-    //           SOURCE_UNKNOWN (we don't hold the sender's identity yet;
-    //           LXMF-kt drops SIGNATURE_INVALID at the router). Python backend:
-    //           may also be a failed signature check (python LXMF delivers
-    //           those to the app).
-    //   null  = sent by us (signed locally — implicitly authentic) or legacy
-    //           rows from before this column (migration backfills null). Treat
-    //           as "no warning" to preserve historical display.
-    val signatureVerified: Boolean? = null,
+    // Null means no recorded result. UNVERIFIED preserves ambiguous legacy failures.
+    val signatureStatus: SignatureStatus? = null,
+    // DB-local notification completion marker. Existing rows default to handled so the
+    // v12 → v13 migration cannot replay historical alerts; new inbound rows start pending.
+    @ColumnInfo(defaultValue = "1") val notificationHandled: Boolean = true,
     // LXMF FIELD_THREAD (0x08) raw wire bytes — the thread grouping key
     // (threads-spec §4.1). Null = Main conversation. Migrated v10→v11; all
     // pre-thread messages keep threadId = NULL. Reception is opaque: any

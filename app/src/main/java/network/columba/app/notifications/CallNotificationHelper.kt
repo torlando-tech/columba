@@ -162,10 +162,10 @@ class CallNotificationHelper
                 val incomingChannel =
                     NotificationChannel(
                         CHANNEL_ID_INCOMING_CALL,
-                        "Incoming Calls",
+                        context.getString(R.string.notif_channel_incoming_calls),
                         NotificationManager.IMPORTANCE_HIGH,
                     ).apply {
-                        description = "Notifications for incoming voice calls"
+                        description = context.getString(R.string.notif_channel_incoming_calls_desc)
                         enableVibration(true)
                         vibrationPattern = longArrayOf(0, 500, 200, 500)
                         setSound(null, null) // We'll handle ringtone separately
@@ -177,10 +177,10 @@ class CallNotificationHelper
                 val ongoingChannel =
                     NotificationChannel(
                         CHANNEL_ID_ONGOING_CALL,
-                        "Ongoing Calls",
+                        context.getString(R.string.notif_channel_ongoing_calls),
                         NotificationManager.IMPORTANCE_LOW,
                     ).apply {
-                        description = "Notifications for active voice calls"
+                        description = context.getString(R.string.notif_channel_ongoing_calls_desc)
                         enableVibration(false)
                         setSound(null, null)
                     }
@@ -188,6 +188,10 @@ class CallNotificationHelper
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 manager.createNotificationChannel(incomingChannel)
                 manager.createNotificationChannel(ongoingChannel)
+
+                // Re-creating an existing channel id replaces its name/description with
+                // the current-locale text on every app start (user-set importance is
+                // preserved by the platform); channel ids never change.
             }
         }
 
@@ -265,7 +269,7 @@ class CallNotificationHelper
                 NotificationCompat
                     .Builder(context, CHANNEL_ID_INCOMING_CALL)
                     .setSmallIcon(R.drawable.ic_notification_stat)
-                    .setContentTitle("Incoming Voice Call")
+                    .setContentTitle(context.getString(R.string.notif_call_incoming_title))
                     .setContentText(displayName)
                     .setPriority(NotificationCompat.PRIORITY_MAX)
                     .setCategory(NotificationCompat.CATEGORY_CALL)
@@ -276,11 +280,11 @@ class CallNotificationHelper
                     .setFullScreenIntent(fullScreenPendingIntent, true)
                     .addAction(
                         android.R.drawable.ic_menu_close_clear_cancel,
-                        "Decline",
+                        context.getString(R.string.notif_call_action_decline),
                         declinePendingIntent,
                     ).addAction(
                         android.R.drawable.ic_menu_call,
-                        "Answer",
+                        context.getString(R.string.notif_call_action_answer),
                         answerPendingIntent,
                     ).build()
 
@@ -341,8 +345,8 @@ class CallNotificationHelper
                 NotificationCompat
                     .Builder(context, CHANNEL_ID_ONGOING_CALL)
                     .setSmallIcon(R.drawable.ic_notification_stat)
-                    .setContentTitle("Voice Call")
-                    .setContentText("$displayName - $durationText")
+                    .setContentTitle(context.getString(R.string.notif_call_ongoing_title))
+                    .setContentText(context.getString(R.string.notif_call_ongoing_text, displayName, durationText))
                     .setPriority(NotificationCompat.PRIORITY_LOW)
                     .setCategory(NotificationCompat.CATEGORY_CALL)
                     .setOngoing(true)
@@ -350,7 +354,7 @@ class CallNotificationHelper
                     .setContentIntent(openPendingIntent)
                     .addAction(
                         android.R.drawable.ic_menu_close_clear_cancel,
-                        "End Call",
+                        context.getString(R.string.notif_call_action_end),
                         endPendingIntent,
                     ).build()
 

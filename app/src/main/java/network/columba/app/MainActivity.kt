@@ -55,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -84,11 +85,9 @@ import network.columba.app.navigation.callDetailsDestination
 import network.columba.app.navigation.callDetailsRoute
 import network.columba.app.navigation.AppDestination
 import network.columba.app.navigation.ConversationNavigation
-import network.columba.app.navigation.KEY_NOMADNET_SESSION_ENDED
 import network.columba.app.navigation.appComposable
 import network.columba.app.navigation.completeCurrentFlow
 import network.columba.app.navigation.navigateToAnsweredCall
-import network.columba.app.navigation.endNomadNetSessionAndPop
 import network.columba.app.navigation.navigateToEntity
 import network.columba.app.navigation.navigateToIncomingCall
 import network.columba.app.navigation.navigateToTab
@@ -125,6 +124,7 @@ import network.columba.app.ui.screens.NewCallHashEntryScreen
 import network.columba.app.ui.screens.NewCallScreen
 import network.columba.app.ui.screens.MyIdentityScreen
 import network.columba.app.ui.screens.NomadNetBrowserScreen
+import network.columba.app.ui.screens.NomadNetHomeScreen
 import network.columba.app.ui.screens.NotificationSettingsScreen
 import network.columba.app.ui.screens.PropagationNodesScreen
 import network.columba.app.ui.screens.QrScannerScreen
@@ -321,7 +321,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(settingsState.selectedTheme, settingsState.isLoading) {
                 if (!settingsState.isLoading) {
                     isThemeReady = true
-                    Log.d(TAG, "Theme loaded: ${settingsState.selectedTheme.displayName} - dismissing splash")
+                    Log.d(TAG, "Theme loaded: ${settingsState.selectedTheme.getIdentifier()} - dismissing splash")
                 }
             }
 
@@ -595,6 +595,8 @@ sealed class PendingNavigation {
         val peerName: String,
         val fromNotification: Boolean = false,
         val notificationEventId: Long = 0L,
+        /** Thread the notification's message belongs to; null = Main. */
+        val threadIdHex: String? = null,
     ) : PendingNavigation()
 
     data class AddContact(
@@ -656,6 +658,8 @@ sealed class PendingNavigation {
     data class NomadNetBrowser(
         val nodeHash: String,
         val path: String,
+        /** Request data (JSON) saved with a pinned shortcut's page; null for plain pages. */
+        val requestData: String? = null,
     ) : PendingNavigation()
 }
 
@@ -814,8 +818,30 @@ fun ColumbaNavigation(
         }
     }
 
-    // Handle pending navigation from intents
-    LaunchedEffect(pendingNavigation.value) {
+    // Cold start (launcher shortcut or nomadnetwork:// VIEW intent) can set
+    // pendingNavigation before the NavHost attaches its graph, where navigating
+    // throws (COLUMBA-8Y). Re-running the effect when the back stack appears lets
+    // the failed navigation be retried instead of silently dropped.
+    val pendingNavBackStackEntry by navController.currentBackStackEntryAsState()
+
+    // Handle pending navigation from intents.
+    //
+    // The request can arrive before the NavHost attaches its graph (a cold start
+    // from a launcher shortcut or a notification), where navigating enters the
+    // graph-less window behind COLUMBA-8Y. It must also not be consumed while an
+    // entry gate is showing: a shortcut would skip onboarding or cover the
+    // identity recovery screen with a page that cannot load until the key is
+    // restored. Both cases keep the request pending — the effect re-runs on every
+    // destination change, so it is retried once a real screen is showing.
+    LaunchedEffect(pendingNavigation.value, pendingNavBackStackEntry) {
+        if (pendingNavigation.value == null) return@LaunchedEffect
+        val pendingNavRoute = pendingNavBackStackEntry?.destination?.route
+        if (pendingNavRoute == null ||
+            pendingNavRoute == AppDestination.WELCOME.routePattern ||
+            pendingNavRoute == AppDestination.IDENTITY_UNLOCK.routePattern
+        ) {
+            return@LaunchedEffect
+        }
         pendingNavigation.value?.let { navigation ->
             try {
                 when (navigation) {
@@ -849,6 +875,7 @@ fun ColumbaNavigation(
                             encodedPeerName = encodedName,
                             fromNotification = navigation.fromNotification,
                             notificationEventId = navigation.notificationEventId,
+                            threadId = navigation.threadIdHex,
                         )
 
                         if (navigationAction == ConversationNavigation.Action.REUSE_CURRENT) {
@@ -1017,7 +1044,17 @@ fun ColumbaNavigation(
                         Log.d("ColumbaNavigation", "Navigated to flasher (direct): ${navigation.usbDeviceId}")
                     }
                     is PendingNavigation.NomadNetBrowser -> {
-                        navController.openNomadNetPage(navigation.nodeHash, navigation.path)
+                        // False when the graph is still attaching: keep the
+                        // request pending; the effect re-runs once the back
+                        // stack exists.
+                        if (!navController.openNomadNetPage(
+                                navigation.nodeHash,
+                                navigation.path,
+                                requestData = navigation.requestData,
+                            )
+                        ) {
+                            return@LaunchedEffect
+                        }
                         Log.d("ColumbaNavigation", "Navigated to NomadNet browser: ${navigation.nodeHash}")
                     }
                 }
@@ -1243,7 +1280,7 @@ fun ColumbaNavigation(
                 (context as? ComponentActivity)?.finish()
             } else {
                 backPressedOnce = true
-                Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.toast_press_back_to_exit), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -1259,6 +1296,17 @@ fun ColumbaNavigation(
                 val encodedHash = Uri.encode(destinationHash)
                 val encodedName = Uri.encode(peerName)
                 navController.navigate("messaging/$encodedHash/$encodedName")
+            },
+            onThreadClick = { destinationHash, peerName, threadIdHex ->
+                navController.navigate(
+                    network.columba.app.navigation.ConversationNavigation.routeFor(
+                        encodedDestinationHash = Uri.encode(destinationHash),
+                        encodedPeerName = Uri.encode(peerName),
+                        fromNotification = false,
+                        notificationEventId = 0L,
+                        threadId = threadIdHex,
+                    ),
+                )
             },
             onViewPeerDetails = { peerHash ->
                 val encodedHash = Uri.encode(peerHash)
@@ -1323,7 +1371,7 @@ fun ColumbaNavigation(
                             bottomNavTabs.forEach { tab ->
                                 NavigationBarItem(
                                     icon = { Icon(tab.icon, contentDescription = null) },
-                                    label = { Text(tab.label) },
+                                    label = { Text(stringResource(tab.labelRes)) },
                                     selected = selectedTab == tab,
                                     onClick = {
                                         navController.navigateToTab(tab)
@@ -2291,6 +2339,11 @@ fun ColumbaNavigation(
                                             type = NavType.LongType
                                             defaultValue = 0L
                                         },
+                                        navArgument("threadId") {
+                                            type = NavType.StringType
+                                            nullable = true
+                                            defaultValue = null
+                                        },
                                     ),
                             ) { backStackEntry ->
                                 val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
@@ -2298,12 +2351,15 @@ fun ColumbaNavigation(
                                 val fromNotification = backStackEntry.arguments?.getBoolean("fromNotification") == true
                                 val notificationEventId =
                                     backStackEntry.arguments?.getLong("notificationEventId") ?: 0L
+                                val initialThreadId =
+                                    backStackEntry.arguments?.getString("threadId")?.takeIf { it.isNotEmpty() }
 
                                 MessagingScreen(
                                     destinationHash = destinationHash,
                                     peerName = peerName,
                                     fromNotification = fromNotification,
                                     notificationEventId = notificationEventId,
+                                    initialThreadId = initialThreadId,
                                     onBackClick = { navController.popBackStack() },
                                     onPeerClick = {
                                         val encodedHash = Uri.encode(destinationHash)
@@ -2402,24 +2458,44 @@ fun ColumbaNavigation(
                                             type = NavType.StringType
                                             defaultValue = "/page/index.mu"
                                         },
+                                        navArgument("restoreSession") {
+                                            type = NavType.BoolType
+                                            defaultValue = false
+                                        },
+                                        navArgument("requestData") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                        },
                                     ),
                             ) { backStackEntry ->
                                 val destHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
                                 val path = backStackEntry.arguments?.getString("path") ?: "/page/index.mu"
-                                // System Back ends the site session exactly like the
-                                // toolbar Back: mark the home ended before popping so
-                                // it shows the address prompt instead of reloading the
-                                // site Back just left. The screen's own BackHandler
-                                // (URL editing, in-site page history) is composed
-                                // later and keeps priority while either is active.
-                                BackHandler { navController.endNomadNetSessionAndPop() }
+                                // Set only by the tab home's Continue row: serve the
+                                // in-memory session snapshot (page, in-page history,
+                                // form drafts) instead of re-fetching.
+                                val restoreSession =
+                                    backStackEntry.arguments?.getBoolean("restoreSession") ?: false
+                                // Set when a saved page or its pinned shortcut
+                                // remembers the request that fetched it.
+                                val requestData =
+                                    backStackEntry.arguments?.getString("requestData")?.takeIf { it.isNotEmpty() }
+                                // The browser is always pushed on top of the NomadNet
+                                // tab home, so Back (system or toolbar) is a plain pop
+                                // back onto that home. The screen's own BackHandler
+                                // (URL editing, in-site page history) is composed later
+                                // and keeps priority while either is active.
+                                BackHandler { navController.popBackStack() }
                                 NomadNetBrowserScreen(
                                     destinationHash = destHash,
                                     initialPath = path,
-                                    onBackClick = { navController.endNomadNetSessionAndPop() },
-                                    // Standalone browser: closing the site ends the
-                                    // session the same way Back does.
-                                    onCloseSite = { navController.endNomadNetSessionAndPop() },
+                                    restoreSession = restoreSession,
+                                    initialRequestData = requestData,
+                                    onBackClick = { navController.popBackStack() },
+                                    // Close Site drops the persisted last node (see the
+                                    // screen's closeSite() call) and then leaves the
+                                    // browser, so the home no longer offers to continue
+                                    // the site that was just closed.
+                                    onCloseSite = { navController.popBackStack() },
                                     onOpenConversation = { conversationHash ->
                                         val encodedHash = Uri.encode(conversationHash)
                                         val encodedName = Uri.encode(conversationHash.take(12))
@@ -2428,38 +2504,24 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            // NomadNet tab home: reopens the last-browsed node,
-                            // or shows the address-entry prompt on a fresh install
-                            // or after the session was ended with Back/Close Site
-                            // (endNomadNetSessionAndPop marks this entry), so Back
-                            // truly ends the session instead of reloading the site
-                            // it just left.
-                            appComposable(AppDestination.NOMADNET_HOME) { backStackEntry ->
+                            // NomadNet tab home: a hub with an address field,
+                            // a "Continue" row for the last-opened page and the
+                            // saved pages list. It never loads a page by itself,
+                            // so the tab is always a chooser and Back from the
+                            // browser lands here.
+                            appComposable(AppDestination.NOMADNET_HOME) {
                                 DoubleBackToExitHandler(AppDestination.NOMADNET_HOME.routePattern)
-                                val lastNodeHash = settingsState.nomadNetLastNodeHash
-                                val sessionEnded by
-                                    backStackEntry.savedStateHandle
-                                        .getStateFlow(KEY_NOMADNET_SESSION_ENDED, false)
-                                        .collectAsState()
-                                // Reopen the exact page the user left on: the deep
-                                // path (a forum thread, etc.) restored from the
-                                // @Singleton page cache, falling back to the node's
-                                // index when no deep path was recorded (deep-link
-                                // entry or a session saved before path persistence).
-                                val lastViewPath =
-                                    settingsState.nomadNetLastViewPath
-                                        ?: network.columba.app.repository.SettingsRepository.DEFAULT_NOMADNET_PATH
-                                NomadNetBrowserScreen(
-                                    destinationHash = lastNodeHash.orEmpty(),
-                                    initialPath = lastViewPath,
-                                    showHomeEntry = lastNodeHash.isNullOrEmpty() || sessionEnded,
-                                    fromSessionRestore = true,
-                                    onBackClick = { navController.popBackStack() },
-                                    // Close Site on the tab home: closeSite() drops the
-                                    // persisted last-node hash, the state flow flips
-                                    // showHomeEntry, and the screen swaps to the address
-                                    // prompt in place - no navigation needed.
-                                    onCloseSite = {},
+                                NomadNetHomeScreen(
+                                    lastPageNodeHash = settingsState.nomadNetLastNodeHash,
+                                    lastPagePath = settingsState.nomadNetLastViewPath,
+                                    onOpenPage = { nodeHash, path, requestData ->
+                                        navController.openNomadNetPage(nodeHash, path, requestData = requestData)
+                                    },
+                                    // Continue reopens the page the user left on with
+                                    // its drafts and in-page history intact.
+                                    onContinuePage = { nodeHash, path ->
+                                        navController.openNomadNetPage(nodeHash, path, restoreSession = true)
+                                    },
                                     onOpenConversation = { conversationHash ->
                                         val encodedHash = Uri.encode(conversationHash)
                                         val encodedName = Uri.encode(conversationHash.take(12))
@@ -2646,7 +2708,7 @@ fun ColumbaNavigation(
                             }
                         },
                         sheetState = sheetState,
-                        primaryActionLabel = if (useAppSettings) "Open Settings" else "Grant Permissions",
+                        primaryActionLabel = if (useAppSettings) stringResource(R.string.ble_ctrl_open_settings) else stringResource(R.string.ble_ctrl_grant_permissions),
                     )
                 }
 

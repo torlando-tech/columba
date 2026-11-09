@@ -30,9 +30,12 @@ import network.columba.app.notifications.NotificationHelper
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.model.IconAppearance
+import network.columba.app.rns.api.util.ThreadFieldCodec
+import network.columba.app.rns.api.util.toHex
 import network.columba.app.rns.host.util.PeerNameResolver
 import network.columba.app.telemetry.MemoryDiagnosticCounter
 import network.columba.app.telemetry.MemoryDiagnostics
+import network.columba.app.ui.model.parseReplyToFromFields
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -180,6 +183,9 @@ class MessageCollector
                                 receivedAt = now,
                                 signatureStatus = receivedMessage.signatureStatus,
                                 signatureEvidence = receivedMessage.signatureEvidence,
+                                threadId =
+                                    ThreadFieldCodec.threadIdFromFieldsJson(receivedMessage.fieldsJson),
+                                replyToMessageId = parseReplyToFromFields(receivedMessage.fieldsJson),
                             )
 
                         // Get peer name from cache, existing conversation, or use formatted hash
@@ -440,6 +446,7 @@ class MessageCollector
                                 peerName = peerName,
                                 messagePreview = pending.preview,
                                 isFavorite = isSavedPeer(pending.conversationHash),
+                                threadIdHex = pending.threadId?.toHex(),
                             )
                         }
                         messageDao.ackNotificationHandled(pending.id, identityHash)

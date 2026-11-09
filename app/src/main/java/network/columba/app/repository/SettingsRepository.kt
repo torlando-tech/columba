@@ -8,13 +8,14 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -29,7 +30,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.model.MapStylePreference
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.data.repository.CustomThemeRepository
+import network.columba.app.nomadnet.NomadNetSavedSite
+import network.columba.app.nomadnet.NomadNetSavedSites
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import network.columba.app.ui.theme.AppTheme
@@ -39,9 +43,19 @@ import network.columba.app.ui.theme.ThemeMode
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Set by [ReplaceFileCorruptionHandler], so a reader can tell "never chosen" apart from
+ * "lost when DataStore replaced a corrupt file". Privacy-sensitive settings fail closed
+ * on the latter instead of reverting to their revealing default.
+ */
+private val SETTINGS_CORRUPTION_RECOVERED = booleanPreferencesKey("settings_corruption_recovered")
+
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
     name = "settings",
-    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+    corruptionHandler =
+        ReplaceFileCorruptionHandler {
+            mutablePreferencesOf(SETTINGS_CORRUPTION_RECOVERED to true)
+        },
 )
 
 /**
@@ -76,6 +90,7 @@ class SettingsRepository
             val NOTIFICATION_ANNOUNCE_EXCLUDE_TCP = booleanPreferencesKey("notification_announce_exclude_tcp")
             val NOTIFICATION_BLE_CONNECTED = booleanPreferencesKey("notification_ble_connected")
             val NOTIFICATION_BLE_DISCONNECTED = booleanPreferencesKey("notification_ble_disconnected")
+            val NOTIFICATION_PRIVACY_LEVEL = stringPreferencesKey("notification_privacy_level")
             val HAS_REQUESTED_NOTIFICATION_PERMISSION = booleanPreferencesKey("has_requested_notification_permission")
 
             // Location permission preferences
@@ -165,6 +180,7 @@ class SettingsRepository
             val NOMADNET_LAST_NODE = stringPreferencesKey("nomadnet_last_node")
             val NOMADNET_LAST_PATH = stringPreferencesKey("nomadnet_last_path")
             val NOMADNET_AUTO_IDENTIFY_NODES = stringSetPreferencesKey("nomadnet_auto_identify_nodes")
+            val NOMADNET_SAVED_SITES = stringPreferencesKey("nomadnet_saved_sites")
             val BOTTOM_NAV_TABS = stringPreferencesKey("bottom_nav_tabs")
             val HTTP_ENABLED_FOR_DOWNLOAD = booleanPreferencesKey("http_enabled_for_download")
 
@@ -172,6 +188,17 @@ class SettingsRepository
             val BLOCK_UNKNOWN_SENDERS = booleanPreferencesKey("block_unknown_senders")
             val ALLOW_CALLS_FROM_CONTACTS_ONLY = booleanPreferencesKey("allow_calls_from_contacts_only")
             val ALLOW_VOICE_CALLS = booleanPreferencesKey("allow_voice_calls")
+
+            // Threads feature flag (threads-spec rollout): default OFF through
+            // one beta cycle. The v4→v5 DB migration is additive and ships
+            // ahead of this flag on purpose; the flag gates the P2 UI, not
+            // persistence.
+            val THREADS_ENABLED = booleanPreferencesKey("threads_enabled")
+
+            // Per-card expansion state in the chat list (threads-spec §6.1:
+            // "expansion state is per-card local preference"). Set of expanded
+            // peer hashes.
+            val EXPANDED_CHAT_CARDS = stringSetPreferencesKey("expanded_chat_cards")
 
             // Telemetry collector preferences
             val TELEMETRY_COLLECTOR_ADDRESS = stringPreferencesKey("telemetry_collector_address")
@@ -409,6 +436,33 @@ class SettingsRepository
         suspend fun saveNotificationBleDisconnected(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.NOTIFICATION_BLE_DISCONNECTED] = enabled
+            }
+        }
+
+        /**
+         * Flow of how much a received-message notification reveals.
+         * Defaults to [NotificationPrivacyLevel.DEFAULT] when no level was ever stored;
+         * a stored but unrecognised value fails closed to [NotificationPrivacyLevel.NONE].
+         */
+        val notificationPrivacyLevelFlow: Flow<NotificationPrivacyLevel> =
+            context.dataStore.data
+                .map { preferences ->
+                    NotificationPrivacyLevel.resolve(
+                        storedName = preferences[PreferencesKeys.NOTIFICATION_PRIVACY_LEVEL],
+                        corruptionRecovered = preferences[SETTINGS_CORRUPTION_RECOVERED] == true,
+                    )
+                }.distinctUntilChanged()
+
+        /**
+         * Save the message privacy level used when building message notifications.
+         *
+         * @param level How much the notification may reveal
+         */
+        suspend fun saveNotificationPrivacyLevel(level: NotificationPrivacyLevel) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.NOTIFICATION_PRIVACY_LEVEL] = level.name
+                // An explicit choice supersedes the corruption-recovery fallback.
+                preferences.remove(SETTINGS_CORRUPTION_RECOVERED)
             }
         }
 
@@ -1718,15 +1772,146 @@ class SettingsRepository
         }
 
         /**
-         * Forget the last-browsed NomadNet page (Close Site). The bottom-nav
-         * NomadNet tab then reopens at the address-entry prompt instead of the
-         * closed site. Both the node and path keys are cleared so a stale deep
-         * path can never resurrect the closed site.
+         * Forget the last-browsed NomadNet page (Close Site). The NomadNet tab
+         * home then offers only its address field and saved sites; the closed
+         * site loses its "Continue" row instead of reopening. Both the node and
+         * path keys are cleared so a stale deep path can never resurrect the
+         * closed site.
          */
         suspend fun clearNomadNetLastNodeHash() {
             context.dataStore.edit { preferences ->
                 preferences.remove(PreferencesKeys.NOMADNET_LAST_NODE)
                 preferences.remove(PreferencesKeys.NOMADNET_LAST_PATH)
+            }
+        }
+
+        /**
+         * Flow of the user's saved NomadNet pages, most recent first. Emits an
+         * empty list for unset or corrupt storage (see
+         * [NomadNetSavedSites.decode]) so the tab home always renders.
+         */
+        val nomadNetSavedSitesFlow: Flow<List<NomadNetSavedSite>> =
+            context.dataStore.data
+                .map { preferences -> NomadNetSavedSites.decode(preferences[PreferencesKeys.NOMADNET_SAVED_SITES]) }
+                .distinctUntilChanged()
+
+        /**
+         * Save a page, or refresh its stored label if it is already saved.
+         * Read-modify-write inside ONE [edit] transaction so a concurrent
+         * save/remove cannot drop an entry. Rejected when the node hash is not
+         * a browsable 32-char hex address or the path is blank.
+         */
+        suspend fun saveNomadNetSavedSite(
+            nodeHash: String,
+            persistPath: String,
+            label: String? = null,
+            requestData: String? = null,
+        ) {
+            val normalizedHash = NomadNetSavedSites.normalizeNodeHash(nodeHash) ?: return
+            val path = persistPath.trim()
+            if (path.isEmpty()) return
+            context.dataStore.edit { preferences ->
+                val current = NomadNetSavedSites.decode(preferences[PreferencesKeys.NOMADNET_SAVED_SITES])
+                putNomadNetSavedSites(
+                    preferences,
+                    NomadNetSavedSites.upsert(
+                        current,
+                        NomadNetSavedSite(normalizedHash, path, label, System.currentTimeMillis(), requestData),
+                    ),
+                )
+            }
+        }
+
+        /**
+         * Re-inserts an already-normalized [site] with its original
+         * [NomadNetSavedSite.savedAt], so the snackbar's Undo puts the page
+         * back in the order it was in instead of at the top.
+         */
+        suspend fun restoreNomadNetSavedSite(site: NomadNetSavedSite) {
+            val normalizedHash = NomadNetSavedSites.normalizeNodeHash(site.nodeHash) ?: return
+            val path = site.persistPath.trim()
+            if (path.isEmpty()) return
+            context.dataStore.edit { preferences ->
+                val current = NomadNetSavedSites.decode(preferences[PreferencesKeys.NOMADNET_SAVED_SITES])
+                putNomadNetSavedSites(
+                    preferences,
+                    NomadNetSavedSites.upsert(current, site.copy(nodeHash = normalizedHash, persistPath = path)),
+                )
+            }
+        }
+
+        /**
+         * Remove a saved page. No-op when it is not saved.
+         *
+         * [requestData] identifies which save of a form-result path to drop:
+         * the path only names the submitted fields, so two searches of one path
+         * are two saved pages.
+         */
+        suspend fun removeNomadNetSavedSite(
+            nodeHash: String,
+            persistPath: String,
+            requestData: String? = null,
+        ) {
+            val normalizedHash = NomadNetSavedSites.normalizeNodeHash(nodeHash) ?: return
+            context.dataStore.edit { preferences ->
+                val current = NomadNetSavedSites.decode(preferences[PreferencesKeys.NOMADNET_SAVED_SITES])
+                putNomadNetSavedSites(
+                    preferences,
+                    NomadNetSavedSites.remove(current, normalizedHash, persistPath.trim(), requestData),
+                )
+            }
+        }
+
+        /**
+         * Save the page when it is not saved and remove it when it is, in one
+         * [edit] transaction so a rapid double tap cannot leave a half-applied
+         * state.
+         *
+         * @return true when the page is saved afterwards.
+         */
+        suspend fun toggleNomadNetSavedSite(
+            nodeHash: String,
+            persistPath: String,
+            label: String? = null,
+            requestData: String? = null,
+        ): Boolean {
+            val normalizedHash = NomadNetSavedSites.normalizeNodeHash(nodeHash) ?: return false
+            val path = persistPath.trim()
+            if (path.isEmpty()) return false
+            var saved = false
+            context.dataStore.edit { preferences ->
+                val current = NomadNetSavedSites.decode(preferences[PreferencesKeys.NOMADNET_SAVED_SITES])
+                val request = NomadNetSavedSites.normalizeRequestData(requestData)
+                saved =
+                    if (NomadNetSavedSites.contains(current, normalizedHash, path, request)) {
+                        putNomadNetSavedSites(
+                            preferences,
+                            NomadNetSavedSites.remove(current, normalizedHash, path, request),
+                        )
+                        false
+                    } else {
+                        putNomadNetSavedSites(
+                            preferences,
+                            NomadNetSavedSites.upsert(
+                                current,
+                                NomadNetSavedSite(normalizedHash, path, label, System.currentTimeMillis(), request),
+                            ),
+                        )
+                        true
+                    }
+            }
+            return saved
+        }
+
+        /** Writes the encoded list, dropping the key entirely when it is empty. */
+        private fun putNomadNetSavedSites(
+            preferences: MutablePreferences,
+            sites: List<NomadNetSavedSite>,
+        ) {
+            if (sites.isEmpty()) {
+                preferences.remove(PreferencesKeys.NOMADNET_SAVED_SITES)
+            } else {
+                preferences[PreferencesKeys.NOMADNET_SAVED_SITES] = NomadNetSavedSites.encode(sites)
             }
         }
 
@@ -2400,6 +2585,55 @@ class SettingsRepository
                 .edit()
                 .putBoolean(KEY_BLOCK_UNKNOWN_SENDERS, enabled)
                 .apply()
+        }
+
+        // Threads feature flag
+
+        /**
+         * Flow of the `threads_enabled` feature flag. Default false: threads
+         * ship behind this flag through one beta cycle (threads-spec
+         * rollout). Wire parsing + persistence are flag-independent by design
+         * (additive migration lands ahead of the UI); this gates the P2 UI.
+         */
+        val threadsEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.THREADS_ENABLED] ?: false
+                }.distinctUntilChanged()
+
+        /** Get the `threads_enabled` feature flag (non-flow). */
+        suspend fun getThreadsEnabled(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.THREADS_ENABLED] ?: false
+                }.first()
+
+        /** Save the `threads_enabled` feature flag. */
+        suspend fun saveThreadsEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.THREADS_ENABLED] = enabled
+            }
+        }
+
+        // Chat-list expanding cards (threads-spec §6.1)
+
+        /** Peer hashes whose chat card is expanded. Per-card local preference. */
+        val expandedChatCardsFlow: Flow<Set<String>> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.EXPANDED_CHAT_CARDS] ?: emptySet()
+                }.distinctUntilChanged()
+
+        /** Expand/collapse one chat card (persisted local preference). */
+        suspend fun setChatCardExpanded(
+            peerHash: String,
+            expanded: Boolean,
+        ) {
+            context.dataStore.edit { preferences ->
+                val current = preferences[PreferencesKeys.EXPANDED_CHAT_CARDS] ?: emptySet()
+                preferences[PreferencesKeys.EXPANDED_CHAT_CARDS] =
+                    if (expanded) current + peerHash else current - peerHash
+            }
         }
 
         /**

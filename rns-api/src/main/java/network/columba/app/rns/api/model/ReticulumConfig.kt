@@ -2,7 +2,9 @@ package network.columba.app.rns.api.model
 
 import android.os.Parcel
 import android.os.Parcelable
+import androidx.annotation.StringRes
 import kotlinx.parcelize.Parcelize
+import network.columba.app.rns.api.R
 
 @Parcelize
 data class ReticulumConfig(
@@ -685,20 +687,20 @@ enum class LogLevel : Parcelable {
 
 @Parcelize
 enum class BatteryProfile(
-    val displayName: String,
-    val description: String,
+    @StringRes val displayName: Int,
+    @StringRes val description: Int,
 ) : Parcelable {
     MAXIMUM_BATTERY(
-        displayName = "Maximum Battery",
-        description = "Best battery life with slower background networking and discovery.",
+        displayName = R.string.battery_profile_maximum_name,
+        description = R.string.battery_profile_maximum_description,
     ),
     BALANCED(
-        displayName = "Balanced",
-        description = "Good battery life with normal responsiveness for most users.",
+        displayName = R.string.battery_profile_balanced_name,
+        description = R.string.battery_profile_balanced_description,
     ),
     PERFORMANCE(
-        displayName = "Performance",
-        description = "Fastest path recovery and networking responsiveness at higher battery cost.",
+        displayName = R.string.battery_profile_performance_name,
+        description = R.string.battery_profile_performance_description,
     ),
     ;
 

@@ -1,0 +1,97 @@
+# 10-cancel-leaves-no-thread.yaml
+#
+# Spec D11: a thread exists only after a message is sent in it. Tapping
+# "Thread from here" and canceling (back, no send) must leave Main without a
+# "0 replies" pill, and the sheet must list no message-less row for it. The
+# second half proves the contrast: the same entry point + a real send still
+# grows the "1 reply" hook.
+#
+# Params: APP_ID, PEER_NAME, MAIN_TOKEN, TAIL_TOKEN, REPLY_TOKEN.
+appId: ${APP_ID}
+---
+- runFlow:
+    file: lib/open-chat.yaml
+    env:
+      APP_ID: ${APP_ID}
+      PEER_NAME: ${PEER_NAME}
+
+# A root message in Main, plus a tail so the root is not at the composer edge
+# (Maestro's long press does not register on the bottom-most bubble).
+- tapOn: "Type a message..."
+- inputText: ${MAIN_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${MAIN_TOKEN}
+    timeout: 30000
+- tapOn: "Type a message..."
+- inputText: ${TAIL_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${TAIL_TOKEN}
+    timeout: 30000
+
+# Case 2 into a target, then cancel without sending.
+- longPressOn:
+    text: ${MAIN_TOKEN}
+- extendedWaitUntil:
+    visible: "Thread from here"
+    timeout: 3000
+- tapOn: "Thread from here"
+- assertVisible:
+    text: ".*> ${MAIN_TOKEN}.*"
+# Cancel through the sheet: the prefilled quote keeps the composer focused,
+# and while the IME is up it swallows the Back key event, so a key-press
+# cancel is not deterministic here.
+- hideKeyboard
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- tapOn: "Main"
+
+# No hook: nothing was sent into the target.
+- extendedWaitUntil:
+    visible:
+      text: "Switch thread: Main"
+    timeout: 15000
+- assertNotVisible: "0 replies"
+
+# No sheet row either: the abandoned target (and its auto quote draft) is gone.
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- assertNotVisible:
+    text: ".*> ${MAIN_TOKEN}.*"
+- tapOn: "Close threads"
+- takeScreenshot: threads-cancel-no-hook
+
+# Contrast: the same entry point with a real send still hooks.
+- longPressOn:
+    text: ${MAIN_TOKEN}
+- extendedWaitUntil:
+    visible: "Thread from here"
+    timeout: 3000
+- tapOn: "Thread from here"
+- inputText: ${REPLY_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ".*${REPLY_TOKEN}.*"
+    timeout: 30000
+# A second reply makes the hook "2 replies": 02's thread already shows
+# "1 reply" in this same conversation, so 1 would not identify this root.
+- tapOn: "Reply in thread…"
+- inputText: ${REPLY_TOKEN}-2
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ".*${REPLY_TOKEN}-2.*"
+    timeout: 30000
+- back
+- extendedWaitUntil:
+    visible: "2 replies"
+    timeout: 10000
+- takeScreenshot: threads-hook-after-send

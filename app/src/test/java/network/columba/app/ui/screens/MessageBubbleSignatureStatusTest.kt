@@ -14,6 +14,8 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.test.core.app.ApplicationProvider
+import network.columba.app.R
 import network.columba.app.domain.model.SignatureStatus
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.ui.model.AudioAttachmentMode
@@ -36,11 +38,22 @@ class MessageBubbleSignatureStatusTest {
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
-    private val unknownIdentity =
-        hasText("identity", substring = true, ignoreCase = true) and
-            hasText("unknown", substring = true, ignoreCase = true)
-    private val notVerified = hasText("not verified", substring = true, ignoreCase = true)
+    private val unknownIdentity
+        get() =
+            hasText(
+                ApplicationProvider.getApplicationContext<Application>().getString(R.string.message_detail_signature_unknown),
+            )
+    private val notVerified
+        get() =
+            hasText(
+                ApplicationProvider.getApplicationContext<Application>().getString(R.string.message_detail_signature_unverified),
+            )
     private val invalidSignature = SemanticsMatcher.keyIsDefined(SemanticsProperties.Error)
+    private val invalidLabel
+        get() =
+            hasText(
+                ApplicationProvider.getApplicationContext<Application>().getString(R.string.message_detail_signature_invalid),
+            )
 
     private fun message(status: SignatureStatus?) =
         MessageUi(
@@ -115,6 +128,7 @@ class MessageBubbleSignatureStatusTest {
         shapes.forEach { shape ->
             composeRule.runOnIdle { state.value = shape }
             composeRule.onNode(invalidSignature).assertIsDisplayed()
+            composeRule.onNode(invalidLabel).assertIsDisplayed()
             composeRule.onAllNodes(unknownIdentity).assertCountEquals(0)
         }
     }
@@ -160,5 +174,6 @@ class MessageBubbleSignatureStatusTest {
 
         composeRule.onAllNodes(unknownIdentity).assertCountEquals(0)
         composeRule.onNode(invalidSignature).assertIsDisplayed()
+        composeRule.onNode(invalidLabel).assertIsDisplayed()
     }
 }

@@ -29,10 +29,13 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -92,8 +95,14 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import network.columba.app.R
 import network.columba.app.nomadnet.ImageLoadingMode
+import network.columba.app.nomadnet.NomadNetSavedSites
+import network.columba.app.nomadnet.NomadNetShortcutPinner
+import network.columba.app.nomadnet.NomadNetShortcutSpec
+import network.columba.app.nomadnet.NomadNetShortcuts
 import network.columba.app.nomadnet.buildNomadNetPersistPath
 import network.columba.app.ui.components.MicronPageContent
 import network.columba.app.viewmodel.NomadNetAutoIdentifyViewModel
@@ -101,24 +110,25 @@ import network.columba.app.viewmodel.NomadNetBrowserViewModel
 import network.columba.app.viewmodel.NomadNetBrowserViewModel.BrowserState
 import network.columba.app.viewmodel.NomadNetBrowserViewModel.NavigationEvent
 import network.columba.app.viewmodel.NomadNetBrowserViewModel.RenderingMode
+import network.columba.app.viewmodel.NomadNetSitesViewModel
 import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NomadNetBrowserScreen(
     destinationHash: String,
     initialPath: String = "/page/index.mu",
-    showHomeEntry: Boolean = false,
-    fromSessionRestore: Boolean = false,
+    restoreSession: Boolean = false,
+    /** Request data (JSON) a saved page / pinned shortcut recorded for this page; null for plain pages. */
+    initialRequestData: String? = null,
     onBackClick: () -> Unit,
     onCloseSite: (() -> Unit)? = null,
     onOpenConversation: (String) -> Unit = {},
     viewModel: NomadNetBrowserViewModel = hiltViewModel(),
     autoIdentifyViewModel: NomadNetAutoIdentifyViewModel = hiltViewModel(),
+    sitesViewModel: NomadNetSitesViewModel = hiltViewModel(),
 ) {
     val browserState by viewModel.browserState.collectAsState()
     val formFields by viewModel.formFields.collectAsState()
@@ -131,6 +141,7 @@ fun NomadNetBrowserScreen(
     val imageStates by viewModel.imageStates.collectAsState()
     val imageLoadingMode by viewModel.imageLoadingMode.collectAsState()
     val isPullRefreshing by viewModel.isPullRefreshing.collectAsState()
+    val savedPageKeys by sitesViewModel.savedKeys.collectAsState()
     val canGoBack by viewModel.canGoBack.collectAsState()
     val downloadState by viewModel.downloadState.collectAsState()
     var showMenu by remember { mutableStateOf(false) }
@@ -151,13 +162,14 @@ fun NomadNetBrowserScreen(
     var urlFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     val urlFocusRequester = remember { FocusRequester() }
 
-    // Load initial page. A session restore (the NomadNet tab home reopening
-    // the persisted page) serves the in-memory session store first, so
-    // returning to the tab shows the page instantly - even `#!c=0` pages
-    // that no file cache holds - instead of re-fetching on every tab tap.
-    LaunchedEffect(destinationHash, initialPath) {
+    // Load the page this browser entry was opened for. [restoreSession] is set
+    // only by the tab home's Continue row, which reopens the page the user was
+    // on - drafts and in-page history included - from the in-memory session
+    // snapshot instead of re-fetching it. Every other entry point is ordinary
+    // navigation and honours the site's freshness directive.
+    LaunchedEffect(destinationHash, initialPath, restoreSession, initialRequestData) {
         if (browserState is BrowserState.Initial && destinationHash.isNotEmpty()) {
-            viewModel.loadPage(destinationHash, initialPath, fromSessionRestore)
+            viewModel.loadPage(destinationHash, initialPath, restoreSession, initialRequestData)
         }
     }
 
@@ -183,7 +195,7 @@ fun NomadNetBrowserScreen(
     // Show identify errors via snackbar
     LaunchedEffect(identifyError) {
         identifyError?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showSnackbar(it.resolve(context))
             viewModel.clearIdentifyError()
         }
     }
@@ -322,9 +334,10 @@ fun NomadNetBrowserScreen(
         // padding convention used elsewhere in the codebase.
         snackbarHost = {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 80.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 80.dp),
             ) {
                 SnackbarHost(snackbarHostState)
             }
@@ -399,7 +412,7 @@ fun NomadNetBrowserScreen(
                         )
                     } else {
                         Text(
-                            text = "NomadNet Browser",
+                            text = stringResource(R.string.nomadnet_browser_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                         )
@@ -414,10 +427,51 @@ fun NomadNetBrowserScreen(
                             onBackClick()
                         }
                     }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
+                    val loadedForBookmark = browserState as? BrowserState.PageLoaded
+                    if (loadedForBookmark != null) {
+                        // Saved pages are keyed by node + persist path (field
+                        // block included), so a saved forum thread is its own
+                        // entry rather than collapsing onto the node's index.
+                        val bookmarkPath =
+                            buildNomadNetPersistPath(loadedForBookmark.path, loadedForBookmark.fieldTokens)
+                        val saved =
+                            NomadNetSavedSites.key(
+                                loadedForBookmark.nodeHash,
+                                bookmarkPath,
+                                loadedForBookmark.requestData,
+                            ) in savedPageKeys
+                        IconButton(
+                            onClick = {
+                                sitesViewModel.toggleSaved(
+                                    nodeHash = loadedForBookmark.nodeHash,
+                                    persistPath = bookmarkPath,
+                                    label = NomadNetShortcuts.pageTitle(loadedForBookmark.document),
+                                    // Form-result pages record the request that
+                                    // produced them, so reopening replays it.
+                                    requestData = loadedForBookmark.requestData,
+                                )
+                            },
+                        ) {
+                            Icon(
+                                imageVector =
+                                    if (saved) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                                contentDescription =
+                                    stringResource(
+                                        if (saved) R.string.nomadnet_bookmark_remove_cd else R.string.nomadnet_bookmark_add_cd,
+                                    ),
+                                tint =
+                                    if (saved) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    },
+                            )
+                        }
+                    }
                     if (browserState is BrowserState.PageLoaded) {
                         // Tappable even when already identified: re-opening the
                         // dialog then shows manage mode (toggle state + Done).
@@ -442,41 +496,58 @@ fun NomadNetBrowserScreen(
                             )
                         }
                         IconButton(onClick = { viewModel.refresh() }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                            Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.nomadnet_refresh_cd))
                         }
                     }
                     Box {
                         IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "Menu")
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.nomadnet_menu_cd))
                         }
                         DropdownMenu(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false },
                         ) {
-                            // Copy URL — derive from compose state
+                            // Copy URL / Share / home-screen shortcut — derive from compose state
+                            val loadedPage = browserState as? BrowserState.PageLoaded
                             val shareableUrl =
-                                (browserState as? BrowserState.PageLoaded)?.let {
-                                    "nomadnetwork://${it.nodeHash}:${buildNomadNetPersistPath(it.path, it.fieldTokens)}"
+                                loadedPage?.let {
+                                    NomadNetShortcuts.deepLink(
+                                        it.nodeHash,
+                                        buildNomadNetPersistPath(it.path, it.fieldTokens),
+                                    )
                                 }
                             if (shareableUrl != null) {
+                                val shareChooserTitle = stringResource(R.string.nomadnet_share_chooser_title)
                                 DropdownMenuItem(
-                                    text = { Text("Copy URL") },
+                                    text = { Text(stringResource(R.string.nomadnet_copy_url)) },
                                     onClick = {
                                         clipboardManager.setText(AnnotatedString(shareableUrl))
                                         showMenu = false
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Share") },
+                                    text = { Text(stringResource(R.string.nomadnet_share)) },
                                     onClick = {
                                         val intent =
                                             Intent(Intent.ACTION_SEND).apply {
                                                 type = "text/plain"
                                                 putExtra(Intent.EXTRA_TEXT, shareableUrl)
                                             }
-                                        context.startActivity(Intent.createChooser(intent, "Share NomadNet URL"))
+                                        context.startActivity(Intent.createChooser(intent, shareChooserTitle))
                                         showMenu = false
                                     },
+                                )
+                                NomadNetAddToHomeScreenMenuItem(
+                                    page = loadedPage,
+                                    onAddToHomeScreen = { spec -> NomadNetShortcutPinner.requestPin(context, spec) },
+                                    onUnsupportedLauncher = {
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                context.getString(R.string.nomadnet_add_to_home_screen_unsupported),
+                                            )
+                                        }
+                                    },
+                                    onDismissMenu = { showMenu = false },
                                 )
                                 HorizontalDivider()
                             }
@@ -484,13 +555,13 @@ fun NomadNetBrowserScreen(
                             RenderingMode.entries.forEach { mode ->
                                 DropdownMenuItem(
                                     text = {
-                                        val label =
+                                        val labelRes =
                                             when (mode) {
-                                                RenderingMode.MONOSPACE_SCROLL -> "Monospace (scroll)"
-                                                RenderingMode.MONOSPACE_ZOOM -> "Monospace (zoom)"
-                                                RenderingMode.PROPORTIONAL_WRAP -> "Proportional (wrap)"
+                                                RenderingMode.MONOSPACE_SCROLL -> R.string.nomadnet_rendering_monospace_scroll
+                                                RenderingMode.MONOSPACE_ZOOM -> R.string.nomadnet_rendering_monospace_zoom
+                                                RenderingMode.PROPORTIONAL_WRAP -> R.string.nomadnet_rendering_proportional_wrap
                                             }
-                                        Text(label)
+                                        Text(stringResource(labelRes))
                                     },
                                     leadingIcon = {
                                         RadioButton(
@@ -512,14 +583,14 @@ fun NomadNetBrowserScreen(
                             ImageLoadingMode.entries.forEach { mode ->
                                 DropdownMenuItem(
                                     text = {
-                                        val label =
+                                        val labelRes =
                                             when (mode) {
-                                                ImageLoadingMode.NEVER -> "Images: never"
-                                                ImageLoadingMode.MANUAL -> "Images: manual"
-                                                ImageLoadingMode.AUTO -> "Images: auto"
-                                                ImageLoadingMode.ALWAYS -> "Images: always"
+                                                ImageLoadingMode.NEVER -> R.string.nomadnet_images_never
+                                                ImageLoadingMode.MANUAL -> R.string.nomadnet_images_manual
+                                                ImageLoadingMode.AUTO -> R.string.nomadnet_images_auto
+                                                ImageLoadingMode.ALWAYS -> R.string.nomadnet_images_always
                                             }
-                                        Text(label)
+                                        Text(stringResource(labelRes))
                                     },
                                     leadingIcon = {
                                         RadioButton(
@@ -543,7 +614,7 @@ fun NomadNetBrowserScreen(
                                 val hasPageImages = imageStates.isNotEmpty()
                                 if (hasPageImages) {
                                     DropdownMenuItem(
-                                        text = { Text("Load all images") },
+                                        text = { Text(stringResource(R.string.nomadnet_load_all_images)) },
                                         leadingIcon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null) },
                                         onClick = {
                                             viewModel.loadPageImages(forceReload = false)
@@ -551,7 +622,7 @@ fun NomadNetBrowserScreen(
                                         },
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Reload all images") },
+                                        text = { Text(stringResource(R.string.nomadnet_reload_all_images)) },
                                         leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
                                         onClick = {
                                             viewModel.loadPageImages(forceReload = true)
@@ -561,7 +632,7 @@ fun NomadNetBrowserScreen(
                                 }
                             }
                             DropdownMenuItem(
-                                text = { Text("Clear image cache") },
+                                text = { Text(stringResource(R.string.nomadnet_clear_image_cache)) },
                                 leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null) },
                                 onClick = {
                                     viewModel.clearImageCache()
@@ -596,104 +667,6 @@ fun NomadNetBrowserScreen(
     ) { paddingValues ->
         when (val state = browserState) {
             is BrowserState.Initial -> {
-                if (showHomeEntry) {
-                    // Bottom-nav entry with no node yet: a dedicated address
-                    // field owned by this page. Deliberately NOT the top-bar
-                    // isEditingUrl flow — toggling that state from here raced
-                    // with the field's focus handler and made the editor flash
-                    // for a frame. This field is always present and submits
-                    // directly, so there is no shared edit-state to clobber.
-                    // No auto-focus: opening the tab must not pop the keyboard;
-                    // the user taps the field when they actually want to type.
-                    var homeUrlValue by remember { mutableStateOf(TextFieldValue("")) }
-                    val submitHomeUrl: () -> Unit = {
-                        if (homeUrlValue.text.isNotBlank()) {
-                            viewModel.navigateToUrl(homeUrlValue.text)
-                        }
-                    }
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .padding(paddingValues)
-                                // Edge-to-edge makes adjustResize a no-op, so pad
-                                // for the IME explicitly; when the keyboard shows,
-                                // the box shrinks and the block rides up above it.
-                                .imePadding(),
-                        // Bias the block toward the upper third so the Go button
-                        // stays comfortably clear of the keyboard.
-                        contentAlignment = BiasAlignment(0f, -0.4f),
-                    ) {
-                        Column(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Language,
-                                contentDescription = null,
-                                modifier = Modifier.size(56.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "NomadNet Browser",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Enter a node address to start browsing.\nFormat: <hash>:/page/index.mu",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            BasicTextField(
-                                value = homeUrlValue,
-                                onValueChange = { homeUrlValue = it },
-                                singleLine = true,
-                                textStyle =
-                                    TextStyle(
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = MaterialTheme.typography.bodyMedium.fontSize,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                    ),
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                                keyboardActions = KeyboardActions(onGo = { submitHomeUrl() }),
-                                modifier = Modifier.fillMaxWidth(),
-                                decorationBox = { innerTextField ->
-                                    Box(
-                                        modifier =
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .background(
-                                                    MaterialTheme.colorScheme.surface,
-                                                    RoundedCornerShape(12.dp),
-                                                ).padding(horizontal = 16.dp, vertical = 12.dp),
-                                        contentAlignment = Alignment.CenterStart,
-                                    ) {
-                                        if (homeUrlValue.text.isEmpty()) {
-                                            Text(
-                                                text = "<hash>:/page/index.mu",
-                                                fontFamily = FontFamily.Monospace,
-                                                fontSize = MaterialTheme.typography.bodyMedium.fontSize,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                        innerTextField()
-                                    }
-                                },
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(onClick = submitHomeUrl) {
-                                Text("Go")
-                            }
-                        }
-                    }
-                }
                 // Nothing to show yet
             }
 
@@ -710,7 +683,7 @@ fun NomadNetBrowserScreen(
                     CircularProgressIndicator()
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = state.statusMessage,
+                        text = state.statusMessage.resolve(context),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -718,7 +691,7 @@ fun NomadNetBrowserScreen(
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(16.dp))
                     TextButton(onClick = { viewModel.cancelLoading() }) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.cancel))
                     }
                 }
             }
@@ -880,13 +853,13 @@ fun NomadNetBrowserScreen(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        text = "Failed to load page",
+                        text = stringResource(R.string.nomadnet_failed_to_load_page),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.error,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = state.message,
+                        text = state.message.resolve(context),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -894,7 +867,7 @@ fun NomadNetBrowserScreen(
                     Button(onClick = { viewModel.retry() }) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Retry")
+                        Text(stringResource(R.string.nomadnet_retry))
                     }
                 }
             }
@@ -910,16 +883,17 @@ private fun NomadNetDownloadDialog(
     onOpen: (String) -> Unit,
     onShare: (String) -> Unit,
 ) {
+    val context = LocalContext.current
     androidx.compose.material3.AlertDialog(
         onDismissRequest = { if (!downloadState.isActive) onDismiss() },
         title = {
             Text(
                 if (downloadState.isActive) {
-                    "Downloading..."
+                    stringResource(R.string.nomadnet_status_downloading)
                 } else if (downloadState.error != null) {
-                    "Download Failed"
+                    stringResource(R.string.nomadnet_download_failed_title)
                 } else {
-                    "Download Complete"
+                    stringResource(R.string.nomadnet_download_complete_title)
                 },
             )
         },
@@ -940,7 +914,7 @@ private fun NomadNetDownloadDialog(
                     )
                 } else if (downloadState.error != null) {
                     Text(
-                        downloadState.error,
+                        downloadState.error.resolve(context),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -957,18 +931,18 @@ private fun NomadNetDownloadDialog(
         },
         confirmButton = {
             if (downloadState.isActive) {
-                TextButton(onClick = onCancel) { Text("Cancel") }
+                TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
             } else if (downloadState.filePath != null) {
-                TextButton(onClick = { onOpen(downloadState.filePath) }) { Text("Open") }
+                TextButton(onClick = { onOpen(downloadState.filePath) }) { Text(stringResource(R.string.nomadnet_open)) }
             } else {
-                TextButton(onClick = onDismiss) { Text("OK") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.nomadnet_ok)) }
             }
         },
         dismissButton = {
             if (!downloadState.isActive && downloadState.filePath != null) {
-                TextButton(onClick = { onShare(downloadState.filePath) }) { Text("Share") }
+                TextButton(onClick = { onShare(downloadState.filePath) }) { Text(stringResource(R.string.nomadnet_share)) }
             } else if (!downloadState.isActive) {
-                TextButton(onClick = onDismiss) { Text("Close") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.nomadnet_close)) }
             }
         },
     )
@@ -987,7 +961,7 @@ private fun openDownloadedFile(
                 setDataAndType(uri, mimeType)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-        context.startActivity(Intent.createChooser(intent, "Open with"))
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.nomadnet_open_with)))
     } catch (_: Exception) {
         // No app available to handle this file type
     }
@@ -1007,7 +981,7 @@ private fun shareDownloadedFile(
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-        context.startActivity(Intent.createChooser(intent, "Share file"))
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.nomadnet_share_file)))
     } catch (_: Exception) {
         // No app available to share
     }
@@ -1028,7 +1002,7 @@ private fun formatFileSize(bytes: Long): String =
 @Composable
 internal fun BrowserCloseSiteMenuItem(onCloseSite: () -> Unit) {
     DropdownMenuItem(
-        text = { Text("Close site") },
+        text = { Text(stringResource(R.string.nomadnet_close_site)) },
         leadingIcon = {
             Icon(
                 Icons.Default.Close,
@@ -1036,5 +1010,42 @@ internal fun BrowserCloseSiteMenuItem(onCloseSite: () -> Unit) {
             )
         },
         onClick = onCloseSite,
+    )
+}
+
+/**
+ * "Add to home screen" action for the displayed NomadNet page.
+ *
+ * Extracted so the shortcut's label/deep-link derivation and the
+ * unsupported-launcher fallback are testable on their own — the full screen
+ * needs the browser ViewModels. [onAddToHomeScreen] returns whether the
+ * launcher accepted the pin request; a launcher without pin support returns
+ * false and reports through [onUnsupportedLauncher] rather than failing
+ * silently.
+ */
+@Composable
+internal fun NomadNetAddToHomeScreenMenuItem(
+    page: BrowserState.PageLoaded,
+    onAddToHomeScreen: (NomadNetShortcutSpec) -> Boolean,
+    onUnsupportedLauncher: () -> Unit,
+    onDismissMenu: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(stringResource(R.string.nomadnet_add_to_home_screen)) },
+        leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+        onClick = {
+            onDismissMenu()
+            val spec =
+                NomadNetShortcuts.spec(
+                    nodeHash = page.nodeHash,
+                    persistPath = buildNomadNetPersistPath(page.path, page.fieldTokens),
+                    pageTitle = NomadNetShortcuts.pageTitle(page.document),
+                    // A form-result page's request is replayed from the
+                    // shortcut's intent extra; without it the pin re-fetches
+                    // with empty form values.
+                    requestData = page.requestData,
+                )
+            if (!onAddToHomeScreen(spec)) onUnsupportedLauncher()
+        },
     )
 }

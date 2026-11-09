@@ -84,15 +84,11 @@ class AnnounceRepositoryTest {
                 timestamp = now + 2_000,
                 hops = 1,
             )
-            val filteredPage =
-                database
-                    .announceDao()
-                    .getEnrichedAnnouncesPaged(
-                        interfaceTypes = listOf(InterfaceType.RNODE.storageName),
-                        interfaceTypeCount = 1,
-                    ).load(PagingSource.LoadParams.Refresh(key = null, loadSize = 1, placeholdersEnabled = false))
             val filteredRows =
-                (filteredPage as PagingSource.LoadResult.Page<Int, EnrichedAnnounce>).data
+                loadAnnouncePage(
+                    interfaceTypes = listOf(InterfaceType.RNODE.storageName),
+                    loadSize = 1,
+                ).data
             assertEquals(listOf(destinationHash), filteredRows.map { it.destinationHash })
         }
 
@@ -135,13 +131,11 @@ class AnnounceRepositoryTest {
             dao.updateFavoriteStatus(destinationHash, isFavorite = true, timestamp = System.currentTimeMillis())
             dao.deleteStaleInterfaceSightings(System.currentTimeMillis() - AnnounceRepository.RECENT_INTERFACE_WINDOW_MS)
 
-            val filteredPage =
-                dao.getEnrichedAnnouncesPaged(
-                    interfaceTypes = listOf(InterfaceType.RNODE.storageName),
-                    interfaceTypeCount = 1,
-                ).load(PagingSource.LoadParams.Refresh(key = null, loadSize = 1, placeholdersEnabled = false))
             val filteredRows =
-                (filteredPage as PagingSource.LoadResult.Page<Int, EnrichedAnnounce>).data
+                loadAnnouncePage(
+                    interfaceTypes = listOf(InterfaceType.RNODE.storageName),
+                    loadSize = 1,
+                ).data
             assertEquals(listOf(destinationHash), filteredRows.map { it.destinationHash })
         }
 
@@ -173,13 +167,11 @@ class AnnounceRepositoryTest {
             assertEquals(InterfaceType.BLE.storageName, dao.getAnnounce(destinationHash)?.receivingInterfaceType)
             dao.deleteStaleInterfaceSightings(System.currentTimeMillis() - AnnounceRepository.RECENT_INTERFACE_WINDOW_MS)
 
-            val filteredPage =
-                dao.getEnrichedAnnouncesPaged(
-                    interfaceTypes = listOf(InterfaceType.BLE.storageName),
-                    interfaceTypeCount = 1,
-                ).load(PagingSource.LoadParams.Refresh(key = null, loadSize = 1, placeholdersEnabled = false))
             val filteredRows =
-                (filteredPage as PagingSource.LoadResult.Page<Int, EnrichedAnnounce>).data
+                loadAnnouncePage(
+                    interfaceTypes = listOf(InterfaceType.BLE.storageName),
+                    loadSize = 1,
+                ).data
             assertEquals(listOf(destinationHash), filteredRows.map { it.destinationHash })
         }
 
@@ -196,14 +188,11 @@ class AnnounceRepositoryTest {
             )
             saveTestAnnounce(destinationHash, "TCPClientInterface[Current path]", now, hops = 1)
 
-            val page =
-                database
-                    .announceDao()
-                    .getEnrichedAnnouncesPaged(
-                        interfaceTypes = listOf(InterfaceType.RNODE.storageName),
-                        interfaceTypeCount = 1,
-                    ).load(PagingSource.LoadParams.Refresh(key = null, loadSize = 1, placeholdersEnabled = false))
-            val rows = (page as PagingSource.LoadResult.Page<Int, EnrichedAnnounce>).data
+            val rows =
+                loadAnnouncePage(
+                    interfaceTypes = listOf(InterfaceType.RNODE.storageName),
+                    loadSize = 1,
+                ).data
             assertTrue(rows.isEmpty())
         }
 
@@ -269,11 +258,216 @@ class AnnounceRepositoryTest {
             assertEquals("Saved relay", saved[0].peerName)
         }
 
+    @Test
+    fun keysetPaging_keepsLoadedRowsStableWhenNewerRowArrives() =
+        runTest {
+            val now = System.currentTimeMillis()
+            repeat(4) { i ->
+                saveTestAnnounce("peer$i".hash32(), "TCPClientInterface[A]", now - i, hops = 1)
+            }
+
+            val firstPage = loadAnnouncePage(nodeTypes = listOf("PEER"), loadSize = 2)
+            assertEquals(
+                listOf("peer0".hash32(), "peer1".hash32()),
+                firstPage.data.map { it.destinationHash },
+            )
+
+            // A new announce lands at the top of the stream while the user is on page 1.
+            saveTestAnnounce("peer9".hash32(), "TCPClientInterface[A]", now + 10_000, hops = 1)
+
+            val nextPage =
+                loadAnnouncePage(
+                    nodeTypes = listOf("PEER"),
+                    loadSize = 2,
+                    cursor = firstPage.nextKey,
+                )
+            assertEquals(
+                listOf("peer2".hash32(), "peer3".hash32()),
+                nextPage.data.map { it.destinationHash },
+            )
+        }
+
+    @Test
+    fun keysetPaging_prependReturnsNewerRowsInListOrder() =
+        runTest {
+            val now = System.currentTimeMillis()
+            repeat(4) { i ->
+                saveTestAnnounce("peer$i".hash32(), "TCPClientInterface[A]", now - i, hops = 1)
+            }
+            val firstPage = loadAnnouncePage(nodeTypes = listOf("PEER"), loadSize = 2)
+            assertEquals("The refresh page is the top of the list", null, firstPage.prevKey)
+
+            // Three newer rows land while the user is reading an append page.
+            saveTestAnnounce("peer7".hash32(), "TCPClientInterface[A]", now + 10_000, hops = 1)
+            saveTestAnnounce("peer8".hash32(), "TCPClientInterface[A]", now + 20_000, hops = 1)
+            saveTestAnnounce("peer9".hash32(), "TCPClientInterface[A]", now + 30_000, hops = 1)
+
+            val topRow = firstPage.data.first()
+            val topCursor = AnnounceCursor(topRow.lastSeenTimestamp, topRow.destinationHash)
+            val prepended =
+                loadAnnouncePage(
+                    nodeTypes = listOf("PEER"),
+                    loadSize = 2,
+                    cursor = topCursor,
+                    isAppend = false,
+                )
+            // The LIMIT must keep the rows nearest the cursor, not the newest overall,
+            // and they come back in list order.
+            assertEquals(
+                listOf("peer8".hash32(), "peer7".hash32()),
+                prepended.data.map { it.destinationHash },
+            )
+
+            val olderPrepend =
+                loadAnnouncePage(
+                    nodeTypes = listOf("PEER"),
+                    loadSize = 2,
+                    cursor = requireNotNull(prepended.prevKey),
+                    isAppend = false,
+                )
+            assertEquals(listOf("peer9".hash32()), olderPrepend.data.map { it.destinationHash })
+            assertEquals(null, olderPrepend.prevKey)
+        }
+
+    @Test
+    fun newArrivalQueries_respectNodeTypeFilterAndTopOfStreamFloor() =
+        runTest {
+            val now = System.currentTimeMillis()
+            saveTestAnnounce("peera".hash32(), "TCPClientInterface[A]", now, hops = 1)
+            saveTestAnnounce("nodea".hash32(), "TCPClientInterface[A]", now + 1, hops = 1, nodeType = "NODE")
+
+            val floor =
+                requireNotNull(
+                    repository.getArrivalFloor(
+                        nodeTypes = listOf("PEER"),
+                        searchQuery = "",
+                        interfaceTypes = emptyList(),
+                    ),
+                )
+            assertEquals("PEER-only floor ignores the newer NODE row", now, floor.lastSeenTimestamp)
+            assertEquals("Floor is the top row's hash, the paging tie-break", "peera".hash32(), floor.destinationHash)
+
+            saveTestAnnounce("peerz".hash32(), "TCPClientInterface[A]", now + 2, hops = 1)
+            saveTestAnnounce("nodez".hash32(), "TCPClientInterface[A]", now + 3, hops = 1, nodeType = "NODE")
+
+            val count =
+                repository
+                    .observeAnnounceCountNewerThan(
+                        sinceTimestamp = floor.lastSeenTimestamp,
+                        sinceHash = floor.destinationHash,
+                        nodeTypes = listOf("PEER"),
+                        searchQuery = "",
+                        interfaceTypes = emptyList(),
+                    ).first()
+            assertEquals("Only the newer PEER row sorts above the floor", 1, count)
+        }
+
+    @Test
+    fun arrivalsBelowTheFloor_areNotCounted() =
+        runTest {
+            val now = System.currentTimeMillis()
+            saveTestAnnounce("peera".hash32(), "TCPClientInterface[A]", now, hops = 1)
+            val floor =
+                requireNotNull(
+                    repository.getArrivalFloor(
+                        nodeTypes = listOf("PEER"),
+                        searchQuery = "",
+                        interfaceTypes = emptyList(),
+                    ),
+                )
+
+            // Saved after the floor but with an older timestamp: it sorts below the top of the
+            // stream, so it never displaces a card above the anchor and owes no hint. The
+            // counter promises only rows a reload reveals at the top.
+            saveTestAnnounce("peerl".hash32(), "TCPClientInterface[A]", now - 30_000, hops = 1)
+
+            val count =
+                repository
+                    .observeAnnounceCountNewerThan(
+                        sinceTimestamp = floor.lastSeenTimestamp,
+                        sinceHash = floor.destinationHash,
+                        nodeTypes = listOf("PEER"),
+                        searchQuery = "",
+                        interfaceTypes = emptyList(),
+                    ).first()
+            assertEquals("Older-timestamp arrival sorts below the floor", 0, count)
+        }
+
+    @Test
+    fun sameTimestampSmallerHash_sortsAboveTheFloor() =
+        runTest {
+            val now = System.currentTimeMillis()
+            // CRC32 hashes: peerb c3a10228, peerd 2ac2a71d.
+            saveTestAnnounce("peerb".hash32(), "TCPClientInterface[A]", now, hops = 1)
+            val floor =
+                requireNotNull(
+                    repository.getArrivalFloor(
+                        nodeTypes = listOf("PEER"),
+                        searchQuery = "",
+                        interfaceTypes = emptyList(),
+                    ),
+                )
+
+            // Same millisecond, smaller hash: paging order puts it above the floor row, so the
+            // counter must see it and a reload must reveal it at the top.
+            saveTestAnnounce("peerd".hash32(), "TCPClientInterface[A]", now, hops = 1)
+
+            val count =
+                repository
+                    .observeAnnounceCountNewerThan(
+                        sinceTimestamp = floor.lastSeenTimestamp,
+                        sinceHash = floor.destinationHash,
+                        nodeTypes = listOf("PEER"),
+                        searchQuery = "",
+                        interfaceTypes = emptyList(),
+                    ).first()
+            assertEquals("Same-timestamp row with a smaller hash sorts above", 1, count)
+        }
+
+    private fun String.hash32(): String = "%032x".format(java.util.zip.CRC32().apply { update(toByteArray()) }.value)
+
+    private suspend fun loadAnnouncePage(
+        interfaceTypes: List<String> = emptyList(),
+        nodeTypes: List<String> = emptyList(),
+        searchQuery: String = "",
+        loadSize: Int = 30,
+        cursor: AnnounceCursor? = null,
+        isAppend: Boolean = true,
+    ): PagingSource.LoadResult.Page<AnnounceCursor, EnrichedAnnounce> =
+        AnnouncePagingSource(
+            announceDao = database.announceDao(),
+            nodeTypes = nodeTypes,
+            searchQuery = searchQuery,
+            interfaceTypes = interfaceTypes,
+        ).load(
+            when {
+                cursor == null ->
+                    PagingSource.LoadParams.Refresh(
+                        key = null,
+                        loadSize = loadSize,
+                        placeholdersEnabled = false,
+                    )
+                isAppend ->
+                    PagingSource.LoadParams.Append(
+                        key = cursor,
+                        loadSize = loadSize,
+                        placeholdersEnabled = false,
+                    )
+                else ->
+                    PagingSource.LoadParams.Prepend(
+                        key = cursor,
+                        loadSize = loadSize,
+                        placeholdersEnabled = false,
+                    )
+            },
+        ) as PagingSource.LoadResult.Page
+
     private suspend fun saveTestAnnounce(
         destinationHash: String,
         receivingInterface: String,
         timestamp: Long,
         hops: Int,
+        nodeType: String = "PEER",
     ) {
         repository.saveAnnounce(
             destinationHash = destinationHash,
@@ -282,7 +476,7 @@ class AnnounceRepositoryTest {
             appData = null,
             hops = hops,
             timestamp = timestamp,
-            nodeType = "PEER",
+            nodeType = nodeType,
             receivingInterface = receivingInterface,
             receivingInterfaceType = InterfaceType.fromName(receivingInterface).storageName,
             aspect = "lxmf.delivery",

@@ -1,17 +1,19 @@
 package network.columba.app.ui.theme
 
+import androidx.annotation.StringRes
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import network.columba.app.R
 
 /**
  * Sealed interface for app themes.
  * Supports both preset themes and user-created custom themes.
  */
 sealed interface AppTheme {
-    val displayName: String
-    val description: String
+    // Preset themes expose @StringRes label ids (PresetTheme.displayNameRes /
+    // descriptionRes); user-created themes carry user-entered text directly.
 
     /**
      * Get the color scheme for this theme.
@@ -37,40 +39,40 @@ sealed interface AppTheme {
  * These are the 6 pre-configured themes that ship with the app.
  */
 enum class PresetTheme(
-    override val displayName: String,
-    override val description: String,
+    @StringRes val displayNameRes: Int,
+    @StringRes val descriptionRes: Int,
 ) : AppTheme {
     VIBRANT(
-        displayName = "Vibrant",
-        description = "Purple-pink gradient matching the app icon",
+        displayNameRes = R.string.preset_theme_vibrant_label,
+        descriptionRes = R.string.preset_theme_vibrant_desc,
     ),
     DYNAMIC(
-        displayName = "Dynamic",
-        description = "Extracts colors from your device wallpaper",
+        displayNameRes = R.string.preset_theme_dynamic_label,
+        descriptionRes = R.string.preset_theme_dynamic_desc,
     ),
     OCEAN(
-        displayName = "Ocean",
-        description = "Cool blue tones for clarity and focus",
+        displayNameRes = R.string.preset_theme_ocean_label,
+        descriptionRes = R.string.preset_theme_ocean_desc,
     ),
     FOREST(
-        displayName = "Forest",
-        description = "Natural green tones, easy on the eyes",
+        displayNameRes = R.string.preset_theme_forest_label,
+        descriptionRes = R.string.preset_theme_forest_desc,
     ),
     SUNSET(
-        displayName = "Sunset",
-        description = "Warm orange-red tones for energy",
+        displayNameRes = R.string.preset_theme_sunset_label,
+        descriptionRes = R.string.preset_theme_sunset_desc,
     ),
     MONOCHROME(
-        displayName = "Monochrome",
-        description = "Grayscale minimalism for professionals",
+        displayNameRes = R.string.preset_theme_monochrome_label,
+        descriptionRes = R.string.preset_theme_monochrome_desc,
     ),
     OLED_BLACK(
-        displayName = "OLED Black",
-        description = "True black (#000000) for OLED screens - maximum battery savings",
+        displayNameRes = R.string.preset_theme_oled_black_label,
+        descriptionRes = R.string.preset_theme_oled_black_desc,
     ),
     EXPRESSIVE(
-        displayName = "Expressive",
-        description = "Purple/lavender palette with sage/mint green accents",
+        displayNameRes = R.string.preset_theme_expressive_label,
+        descriptionRes = R.string.preset_theme_expressive_desc,
     ),
     ;
 
@@ -152,8 +154,8 @@ enum class PresetTheme(
 @androidx.compose.runtime.Immutable
 data class CustomTheme(
     val id: Long,
-    override val displayName: String,
-    override val description: String,
+    val displayName: String,
+    val description: String,
     val lightColorScheme: ColorScheme,
     val darkColorScheme: ColorScheme,
     // If duplicated from a preset

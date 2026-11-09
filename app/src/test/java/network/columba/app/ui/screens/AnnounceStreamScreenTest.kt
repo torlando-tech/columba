@@ -1,16 +1,21 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import androidx.paging.PagingData
+import androidx.test.core.app.ApplicationProvider
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -18,10 +23,14 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import network.columba.app.R
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.repository.Announce
 import network.columba.app.rns.api.model.NodeType
 import network.columba.app.test.RegisterComponentActivityRule
+import network.columba.app.test.TestFactories
+import network.columba.app.viewmodel.AnnounceError
+import network.columba.app.viewmodel.AnnounceRowEdit
 import network.columba.app.viewmodel.AnnounceStreamViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -41,7 +50,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34], application = Application::class)
 class AnnounceStreamScreenTest {
     private val registerActivityRule = RegisterComponentActivityRule()
-    private val composeRule = createComposeRule()
+    private val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
@@ -216,6 +225,78 @@ class AnnounceStreamScreenTest {
 
         // Search bar appears
         composeTestRule.onNodeWithText("Search by name or hash...").assertIsDisplayed()
+    }
+
+    @Test
+    fun announceStreamScreen_dismissedSearch_withNonBlankQuery_keepsFilterVisible() {
+        val mockViewModel = createMockAnnounceStreamViewModel(searchQuery = "alice")
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        // Open search: the chip is redundant while the bar shows the query
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        composeTestRule.onNodeWithText("Filtering: \"alice\"").assertDoesNotExist()
+
+        // Dismiss: the live filter must stay visible outside the bar
+        composeTestRule.onNodeWithContentDescription("Close search").performClick()
+        composeTestRule.onNodeWithText("Filtering: \"alice\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun announceStreamScreen_backWhileSearchOpen_collapsesSearchInsteadOfPoppingTheTab() {
+        var hostBackInvoked = false
+        val mockViewModel = createMockAnnounceStreamViewModel(searchQuery = "alice")
+
+        composeTestRule.setContent {
+            BackHandler { hostBackInvoked = true }
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        // The screen's BackHandler only becomes enabled once the toggle recomposes
+        composeTestRule.waitForIdle()
+        composeTestRule.runOnUiThread { composeTestRule.activity.onBackPressedDispatcher.onBackPressed() }
+
+        assertEquals(false, hostBackInvoked)
+        assertEquals("alice", mockViewModel.searchQuery.value)
+        composeTestRule.onNodeWithText("Filtering: \"alice\"").assertIsDisplayed()
+    }
+
+    @Test
+    fun announceStreamContent_activeQuery_omitsTheLoadedOnlyCount() {
+        // The announce list is paged, so itemCount counts loaded rows, not matches:
+        // the chip must not advertise a number that grows while scrolling.
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                searchQuery = "alice",
+                announces =
+                    listOf(
+                        TestFactories.createAnnounce(peerName = "alice"),
+                        TestFactories.createAnnounce(destinationHash = "bobhash", peerName = "bob"),
+                    ),
+            )
+
+        composeTestRule.setContent {
+            AnnounceStreamContent(viewModel = mockViewModel, showSearchFilter = true)
+        }
+
+        composeTestRule.onNodeWithText("Filtering: \"alice\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("2 matches").assertDoesNotExist()
+        composeTestRule.onNodeWithText("0 matches").assertDoesNotExist()
+    }
+
+    @Test
+    fun announceStreamScreen_filteredEmpty_showsQueryAwareEmptyState() {
+        val mockViewModel = createMockAnnounceStreamViewModel(searchQuery = "alice")
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("No nodes match \"alice\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No nodes discovered yet").assertDoesNotExist()
     }
 
     // ========== Empty State Tests ==========
@@ -529,8 +610,137 @@ class AnnounceStreamScreenTest {
         )
     }
 
-    // ========== Test Helpers ==========
+    // ========== Frozen-stream new-announce behavior (GH #1166) ==========
 
+    @Test
+    fun newAnnounces_whileAtTop_reloadOnceWithoutWaitingBanner() {
+        val counts = MutableStateFlow(0)
+        val mockViewModel = createMockAnnounceStreamViewModel()
+        every { mockViewModel.newAnnounceCount } returns counts
+
+        composeTestRule.setContent {
+            AnnounceStreamContent(viewModel = mockViewModel)
+        }
+        composeTestRule.waitForIdle()
+
+        counts.value = 2
+        composeTestRule.waitForIdle()
+
+        // The reload happens on the count change; a static non-zero count must not spin it.
+        verify(exactly = 1) { mockViewModel.refreshAnnounces() }
+        composeTestRule.onNodeWithContentDescription(str(R.string.announce_scroll_to_top)).assertDoesNotExist()
+    }
+
+    @Test
+    fun newAnnounces_whileScrolled_showBannerAndReloadOnlyOnRequest() {
+        val counts = MutableStateFlow(0)
+        val announces = (0 until 20).map { index -> testAnnounce(index) }
+        val mockViewModel = createMockAnnounceStreamViewModel(announces = announces)
+        every { mockViewModel.newAnnounceCount } returns counts
+
+        composeTestRule.setContent {
+            AnnounceStreamContent(viewModel = mockViewModel)
+        }
+        composeTestRule
+            .onNode(hasScrollAction() and hasAnyDescendant(hasText("Peer 0")))
+            .performScrollToIndex(5)
+        composeTestRule.waitForIdle()
+
+        counts.value = 3
+        composeTestRule.waitForIdle()
+
+        // Scrolled viewport: new announces must not replace loaded pages.
+        verify(exactly = 0) { mockViewModel.refreshAnnounces() }
+        composeTestRule.onNodeWithContentDescription(str(R.string.announce_scroll_to_top)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("3").assertIsDisplayed()
+
+        composeTestRule.onNodeWithContentDescription(str(R.string.announce_scroll_to_top)).performClick()
+        composeTestRule.waitForIdle()
+        verify(atLeast = 1) { mockViewModel.refreshAnnounces() }
+    }
+
+    private fun str(id: Int): String = ApplicationProvider.getApplicationContext<Application>().getString(id)
+
+    @Test
+    fun deletingAllCardsWhileScrolled_keepsArrivalsReloading() {
+        val counts = MutableStateFlow(0)
+        val edits = MutableStateFlow<Map<String, AnnounceRowEdit>>(emptyMap())
+        val announces = (0 until 20).map { index -> testAnnounce(index) }
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                announces = announces,
+                rowEditsState = edits,
+            )
+        every { mockViewModel.newAnnounceCount } returns counts
+
+        composeTestRule.setContent {
+            AnnounceStreamContent(viewModel = mockViewModel)
+        }
+        composeTestRule
+            .onNode(hasScrollAction() and hasAnyDescendant(hasText("Peer 0")))
+            .performScrollToIndex(5)
+        composeTestRule.waitForIdle()
+
+        edits.value = announces.associate { it.destinationHash to AnnounceRowEdit(isDeleted = true) }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("No nodes discovered yet").assertIsDisplayed()
+
+        // The list stays mounted, so the scroll position clamps to the top and a later
+        // arrival still reloads it instead of leaving the tab stuck on the empty state.
+        counts.value = 1
+        composeTestRule.waitForIdle()
+        verify { mockViewModel.refreshAnnounces() }
+    }
+
+    private fun testAnnounce(index: Int) =
+        Announce(
+            destinationHash = "%032x".format(index.toLong()),
+            peerName = "Peer $index",
+            publicKey = ByteArray(32),
+            appData = null,
+            hops = 1,
+            lastSeenTimestamp = 1_000L + index,
+            nodeType = "PEER",
+        )
+
+    @Test
+    fun announceStreamScreen_hidesRowsMarkedDeleted() {
+        val announces = (0 until 3).map { index -> testAnnounce(index) }
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                announces = announces,
+                rowEdits = mapOf(announces[1].destinationHash to AnnounceRowEdit(isDeleted = true)),
+            )
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("Peer 0").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Peer 1").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Peer 2").assertIsDisplayed()
+    }
+
+    @Test
+    fun announceStreamScreen_allRowsDeleted_showsEmptyState() {
+        val announcements = (0 until 2).map { index -> testAnnounce(index) }
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                announces = announcements,
+                rowEdits =
+                    announcements.associate {
+                        it.destinationHash to AnnounceRowEdit(isDeleted = true)
+                    },
+            )
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("No nodes discovered yet").assertIsDisplayed()
+    }
+
+    // ========== Test Helpers ==========
     // This is a mock builder that mirrors the StateFlow surface of
     // AnnounceStreamViewModel — every parameter maps 1:1 to a public StateFlow
     // on the real ViewModel. Grouping these into a config object would obscure
@@ -540,7 +750,7 @@ class AnnounceStreamScreenTest {
         reachableCount: Int = 0,
         isAnnouncing: Boolean = false,
         announceSuccess: Boolean = false,
-        announceError: String? = null,
+        announceError: AnnounceError? = null,
         // Default = canonical All state under the new exclusive contract:
         // all 3 node types + audio active. Tests that need a single-chip or
         // partial state override these explicitly.
@@ -549,11 +759,15 @@ class AnnounceStreamScreenTest {
         showAudioAnnounces: Boolean = true,
         selectedInterfaceTypes: Set<InterfaceType> = emptySet(),
         searchQuery: String = "",
+        announces: List<Announce> = emptyList(),
+        rowEdits: Map<String, AnnounceRowEdit> = emptyMap(),
+        rowEditsState: MutableStateFlow<Map<String, AnnounceRowEdit>>? = null,
     ): AnnounceStreamViewModel {
         val mockViewModel = mockk<AnnounceStreamViewModel>()
 
         // Stub StateFlow properties
-        every { mockViewModel.announces } returns flowOf(PagingData.empty<Announce>())
+        every { mockViewModel.announces } returns
+            flowOf(if (announces.isEmpty()) PagingData.empty<Announce>() else PagingData.from(announces))
         every { mockViewModel.reachableAnnounceCount } returns MutableStateFlow(reachableCount)
         every { mockViewModel.searchQuery } returns MutableStateFlow(searchQuery)
         every { mockViewModel.selectedNodeTypes } returns MutableStateFlow(selectedNodeTypes)
@@ -562,12 +776,16 @@ class AnnounceStreamScreenTest {
         every { mockViewModel.isAnnouncing } returns MutableStateFlow(isAnnouncing)
         every { mockViewModel.announceSuccess } returns MutableStateFlow(announceSuccess)
         every { mockViewModel.announceError } returns MutableStateFlow(announceError)
+        every { mockViewModel.newAnnounceCount } returns MutableStateFlow(0)
+        every { mockViewModel.windowRefreshPending } returns MutableStateFlow(false)
+        every { mockViewModel.rowEdits } returns (rowEditsState ?: MutableStateFlow(rowEdits))
 
         // Stub action methods that may be called
         every { mockViewModel.triggerAnnounce() } just Runs
         every { mockViewModel.updateSelectedNodeTypes(any()) } just Runs
         every { mockViewModel.updateShowAudioAnnounces(any()) } just Runs
         every { mockViewModel.updateSelectedInterfaceTypes(any()) } just Runs
+        every { mockViewModel.refreshAnnounces() } just Runs
         every { mockViewModel.clearAnnounceStatus() } just Runs
 
         return mockViewModel

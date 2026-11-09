@@ -344,30 +344,31 @@ class RnsBackendIpcRoundTripTest {
     }
 
     @Test
-    fun `cycleCallProfile round-trips through the stub`() = runTest {
+    fun `switchCallProfile round-trips the requested profile id through the stub`() = runTest {
         val (client, _) = buildClientAndServer()
         advanceUntilIdle()
 
-        client.telephony.cycleCallProfile()
+        client.telephony.switchCallProfile(0x50)
         advanceUntilIdle()
 
-        assertEquals(1, fake.telephony.cycleCallProfileCount)
+        assertEquals(1, fake.telephony.switchCallProfileCount)
+        assertEquals(0x50, fake.telephony.lastSwitchedProfileCode)
     }
 
     @Test
-    fun `activeProfile observable round-trips a profile value through the stub`() = runTest {
+    fun `activeProfileCode observable round-trips ids and null through the stub`() = runTest {
         val (client, _) = buildClientAndServer()
         advanceUntilIdle()
 
-        client.telephony.activeProfile.test {
+        client.telephony.activeProfileCode.test {
             // Initial null snapshot (no call active).
             assertEquals(null, awaitItem())
 
-            fake.telephony.emitActiveProfile("HQ")
+            fake.telephony.emitActiveProfileCode(0x50)
             advanceUntilIdle()
-            assertEquals("HQ", awaitItem())
+            assertEquals(0x50, awaitItem())
 
-            fake.telephony.emitActiveProfile(null)
+            fake.telephony.emitActiveProfileCode(null)
             advanceUntilIdle()
             assertEquals(null, awaitItem())
 
@@ -582,7 +583,7 @@ private class FakeRnsTelephony : RnsTelephony {
     private val _isSpeakerOn = kotlinx.coroutines.flow.MutableStateFlow(false)
     private val _isPttMode = kotlinx.coroutines.flow.MutableStateFlow(false)
     private val _isPttActive = kotlinx.coroutines.flow.MutableStateFlow(false)
-    private val _activeProfile = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    private val _activeProfileCode = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
     private val _callMode = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
     override val callState: kotlinx.coroutines.flow.StateFlow<network.columba.app.rns.api.model.CallState>
@@ -592,15 +593,15 @@ private class FakeRnsTelephony : RnsTelephony {
     override val isSpeakerOn: kotlinx.coroutines.flow.StateFlow<Boolean> get() = _isSpeakerOn
     override val isPttMode: kotlinx.coroutines.flow.StateFlow<Boolean> get() = _isPttMode
     override val isPttActive: kotlinx.coroutines.flow.StateFlow<Boolean> get() = _isPttActive
-    override val activeProfile: kotlinx.coroutines.flow.StateFlow<String?> get() = _activeProfile
+    override val activeProfileCode: kotlinx.coroutines.flow.StateFlow<Int?> get() = _activeProfileCode
     override val callMode: kotlinx.coroutines.flow.StateFlow<String?> get() = _callMode
 
     fun emitCallState(state: network.columba.app.rns.api.model.CallState) {
         _callState.value = state
     }
 
-    fun emitActiveProfile(profile: String?) {
-        _activeProfile.value = profile
+    fun emitActiveProfileCode(profileCode: Int?) {
+        _activeProfileCode.value = profileCode
     }
 
     fun emitCallMode(mode: String?) {
@@ -613,8 +614,14 @@ private class FakeRnsTelephony : RnsTelephony {
     override suspend fun declineCall() { declineCount++ }
     override suspend fun setCallMuted(muted: Boolean) { _isMuted.value = muted }
     override suspend fun setCallSpeaker(speakerOn: Boolean) { _isSpeakerOn.value = speakerOn }
-    var cycleCallProfileCount = 0
-    override suspend fun cycleCallProfile() { cycleCallProfileCount++ }
+    var switchCallProfileCount = 0
+    var lastSwitchedProfileCode: Int? = null
+
+    override suspend fun switchCallProfile(profileCode: Int) {
+        switchCallProfileCount++
+        lastSwitchedProfileCode = profileCode
+        _activeProfileCode.value = profileCode
+    }
     var cycleCallModeCount = 0
     override suspend fun cycleCallMode() { cycleCallModeCount++ }
     var pttActiveValues: MutableList<Boolean> = mutableListOf()
@@ -691,6 +698,7 @@ private class FakeRnsLxmf : RnsLxmf {
         replyQuotedContent: String?,
         iconAppearance: IconAppearance?,
         extraFields: Map<Int, Any>?,
+        threadId: ByteArray?,
     ): Result<MessageReceipt> =
         recordAndAck(content, imageData, imageFormat, fileAttachments, destinationHash)
 

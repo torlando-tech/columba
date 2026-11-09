@@ -9,6 +9,7 @@ import network.columba.app.rns.ipc.BundleKeys
 import network.columba.app.rns.ipc.IRnsTelephony
 import network.columba.app.rns.ipc.callback.IRnsBoolEventCallback
 import network.columba.app.rns.ipc.callback.IRnsCallStateCallback
+import network.columba.app.rns.ipc.callback.IRnsNullableIntEventCallback
 import network.columba.app.rns.ipc.callback.IRnsNullableStringEventCallback
 import network.columba.app.rns.ipc.callback.IRnsResultCallback
 
@@ -63,11 +64,11 @@ internal class ServerRnsTelephony(
         callbackBinder = { it.asBinder() },
         emit = { cb, value -> cb.onBool(value) },
     )
-    private val activeProfileHub = ObserverHub<String?, IRnsNullableStringEventCallback>(
+    private val activeProfileCodeHub = ObserverHub<Int?, IRnsNullableIntEventCallback>(
         scope = scope,
-        upstream = { impl.activeProfile },
+        upstream = { impl.activeProfileCode },
         callbackBinder = { it.asBinder() },
-        emit = { cb, value -> cb.onString(value) },
+        emit = { cb, value -> cb.onInt(value ?: 0, value != null) },
     )
     private val callModeHub = ObserverHub<String?, IRnsNullableStringEventCallback>(
         scope = scope,
@@ -111,8 +112,8 @@ internal class ServerRnsTelephony(
         Bundle.EMPTY
     }
 
-    override fun cycleCallProfile(cb: IRnsResultCallback) = dispatch(cb, scope) {
-        impl.cycleCallProfile()
+    override fun switchCallProfile(profileCode: Int, cb: IRnsResultCallback) = dispatch(cb, scope) {
+        impl.switchCallProfile(profileCode)
         Bundle.EMPTY
     }
 
@@ -187,14 +188,15 @@ internal class ServerRnsTelephony(
     override fun unregisterIsPttActiveObserver(cb: IRnsBoolEventCallback) =
         isPttActiveHub.unregisterObserver(cb)
 
-    override fun getCurrentActiveProfile(cb: IRnsNullableStringEventCallback) {
-        try { cb.onString(impl.activeProfile.value) } catch (_: RemoteException) { /* client dead */ }
+    override fun getCurrentActiveProfileCode(cb: IRnsNullableIntEventCallback) {
+        val value = impl.activeProfileCode.value
+        try { cb.onInt(value ?: 0, value != null) } catch (_: RemoteException) { /* client dead */ }
     }
 
-    override fun registerActiveProfileObserver(cb: IRnsNullableStringEventCallback) =
-        activeProfileHub.registerObserver(cb)
-    override fun unregisterActiveProfileObserver(cb: IRnsNullableStringEventCallback) =
-        activeProfileHub.unregisterObserver(cb)
+    override fun registerActiveProfileCodeObserver(cb: IRnsNullableIntEventCallback) =
+        activeProfileCodeHub.registerObserver(cb)
+    override fun unregisterActiveProfileCodeObserver(cb: IRnsNullableIntEventCallback) =
+        activeProfileCodeHub.unregisterObserver(cb)
 
     override fun getCurrentCallMode(cb: IRnsNullableStringEventCallback) {
         try { cb.onString(impl.callMode.value) } catch (_: RemoteException) { /* client dead */ }

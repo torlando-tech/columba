@@ -1,11 +1,13 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
 import network.columba.app.rns.api.model.DiscoveredInterface
 import network.columba.app.test.RegisterComponentActivityRule
 import org.junit.Assert.assertEquals
@@ -38,6 +40,7 @@ class DiscoveredInterfacesScreenTest {
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
     val composeTestRule get() = composeRule
+    private val context: Context = ApplicationProvider.getApplicationContext()
 
     // ========== isYggdrasilAddress Tests ==========
 
@@ -100,42 +103,42 @@ class DiscoveredInterfacesScreenTest {
 
     @Test
     fun `formatInterfaceType TCPServerInterface returns TCP Server`() {
-        assertEquals("TCP Server", formatInterfaceType("TCPServerInterface"))
+        assertEquals("TCP Server", formatInterfaceType(context, "TCPServerInterface"))
     }
 
     @Test
     fun `formatInterfaceType TCPClientInterface returns TCP Client`() {
-        assertEquals("TCP Client", formatInterfaceType("TCPClientInterface"))
+        assertEquals("TCP Client", formatInterfaceType(context, "TCPClientInterface"))
     }
 
     @Test
     fun `formatInterfaceType BackboneInterface returns Backbone TCP`() {
-        assertEquals("Backbone (TCP)", formatInterfaceType("BackboneInterface"))
+        assertEquals("Backbone (TCP)", formatInterfaceType(context, "BackboneInterface"))
     }
 
     @Test
     fun `formatInterfaceType I2PInterface returns I2P`() {
-        assertEquals("I2P", formatInterfaceType("I2PInterface"))
+        assertEquals("I2P", formatInterfaceType(context, "I2PInterface"))
     }
 
     @Test
     fun `formatInterfaceType RNodeInterface returns RNode LoRa`() {
-        assertEquals("RNode (LoRa)", formatInterfaceType("RNodeInterface"))
+        assertEquals("RNode (LoRa)", formatInterfaceType(context, "RNodeInterface"))
     }
 
     @Test
     fun `formatInterfaceType WeaveInterface returns Weave LoRa`() {
-        assertEquals("Weave (LoRa)", formatInterfaceType("WeaveInterface"))
+        assertEquals("Weave (LoRa)", formatInterfaceType(context, "WeaveInterface"))
     }
 
     @Test
     fun `formatInterfaceType KISSInterface returns KISS`() {
-        assertEquals("KISS", formatInterfaceType("KISSInterface"))
+        assertEquals("KISS", formatInterfaceType(context, "KISSInterface"))
     }
 
     @Test
     fun `formatInterfaceType unknown type returns type unchanged`() {
-        assertEquals("UnknownType", formatInterfaceType("UnknownType"))
+        assertEquals("UnknownType", formatInterfaceType(context, "UnknownType"))
     }
 
     // ========== InterfaceTypeIcon Tests ==========
@@ -313,38 +316,38 @@ class DiscoveredInterfacesScreenTest {
 
     @Test
     fun `formatLastHeard with zero timestamp returns Never`() {
-        assertEquals("Never", formatLastHeard(0L))
+        assertEquals("Never", formatLastHeard(context, 0L))
     }
 
     @Test
     fun `formatLastHeard with recent timestamp returns just now`() {
         val now = System.currentTimeMillis() / 1000
-        assertEquals("just now", formatLastHeard(now - 30))
+        assertEquals("just now", formatLastHeard(context, now - 30))
     }
 
     @Test
     fun `formatLastHeard with 5 minutes ago returns min ago`() {
         val now = System.currentTimeMillis() / 1000
-        assertEquals("5 min ago", formatLastHeard(now - 300))
+        assertEquals("5 min ago", formatLastHeard(context, now - 300))
     }
 
     @Test
     fun `formatLastHeard with 2 hours ago returns hours ago`() {
         val now = System.currentTimeMillis() / 1000
-        assertEquals("2 hours ago", formatLastHeard(now - 7200))
+        assertEquals("2 hours ago", formatLastHeard(context, now - 7200))
     }
 
     @Test
     fun `formatLastHeard with 3 days ago returns days ago`() {
         val now = System.currentTimeMillis() / 1000
-        assertEquals("3 days ago", formatLastHeard(now - 259200))
+        assertEquals("3 days ago", formatLastHeard(context, now - 259200))
     }
 
     @Test
     fun `formatLastHeard with old timestamp returns formatted date`() {
         // Use a fixed timestamp from the past (Jan 15, 2024)
         val oldTimestamp = 1705344000L // Jan 15, 2024
-        val result = formatLastHeard(oldTimestamp)
+        val result = formatLastHeard(context, oldTimestamp)
         // Should return formatted date like "Jan 15"
         assertTrue(result.contains("Jan"))
     }
@@ -354,42 +357,42 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `formatLoraParamsForClipboard includes interface name`() {
         val iface = createTestDiscoveredInterface(name = "Test RNode")
-        val result = formatLoraParamsForClipboard(iface)
+        val result = formatLoraParamsForClipboard(context, iface)
         assertTrue(result.contains("Test RNode"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard formats frequency in MHz`() {
         val iface = createTestDiscoveredInterface(frequency = 915000000L)
-        val result = formatLoraParamsForClipboard(iface)
+        val result = formatLoraParamsForClipboard(context, iface)
         assertTrue(result.contains("915.0 MHz"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard formats bandwidth in kHz`() {
         val iface = createTestDiscoveredInterface(bandwidth = 125000)
-        val result = formatLoraParamsForClipboard(iface)
+        val result = formatLoraParamsForClipboard(context, iface)
         assertTrue(result.contains("125 kHz"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard formats spreading factor`() {
         val iface = createTestDiscoveredInterface(spreadingFactor = 10)
-        val result = formatLoraParamsForClipboard(iface)
+        val result = formatLoraParamsForClipboard(context, iface)
         assertTrue(result.contains("SF10"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard formats coding rate`() {
         val iface = createTestDiscoveredInterface(codingRate = 5)
-        val result = formatLoraParamsForClipboard(iface)
+        val result = formatLoraParamsForClipboard(context, iface)
         assertTrue(result.contains("4/5"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard includes modulation`() {
         val iface = createTestDiscoveredInterface(modulation = "LoRa")
-        val result = formatLoraParamsForClipboard(iface)
+        val result = formatLoraParamsForClipboard(context, iface)
         assertTrue(result.contains("Modulation: LoRa"))
     }
 
@@ -403,7 +406,7 @@ class DiscoveredInterfacesScreenTest {
                 codingRate = null,
                 modulation = null,
             )
-        val result = formatLoraParamsForClipboard(iface)
+        val result = formatLoraParamsForClipboard(context, iface)
         assertFalse(result.contains("Frequency"))
         assertFalse(result.contains("Bandwidth"))
         assertFalse(result.contains("Spreading Factor"))

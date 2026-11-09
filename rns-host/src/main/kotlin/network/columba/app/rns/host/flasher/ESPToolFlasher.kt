@@ -1,6 +1,8 @@
 package network.columba.app.rns.host.flasher
 
 import android.util.Log
+import androidx.annotation.StringRes
+import network.columba.app.rns.host.R
 import network.columba.app.rns.host.usb.KotlinUSBBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -85,8 +87,8 @@ class ESPToolFlasher(
      * automatic reset via DTR/RTS signals.
      */
     class ManualBootModeRequired(
-        message: String,
-    ) : Exception(message)
+        @StringRes val messageRes: Int,
+    ) : Exception()
 
     companion object {
         private const val TAG = "Columba:ESPTool"
@@ -196,15 +198,40 @@ class ESPToolFlasher(
     private var lastProtocolError: String? = null
 
     /**
+     * Flash stage marker accompanying each [ProgressCallback.onProgress].
+     * Consumers branch on the stage, never on the display text of the
+     * message (i18n ticket 02: control flow must not depend on text that
+     * will eventually be translated).
+     */
+    enum class FlashStage {
+        PARSING_PACKAGE,
+        CONNECTING,
+        SYNCING,
+        ENTERING_BOOTLOADER,
+        DETECTING_CHIP,
+        SETTING_BAUD,
+        ATTACHING_FLASH,
+        CONFIGURING_FLASH,
+        FLASHING_BOOTLOADER,
+        FLASHING_PARTITION_TABLE,
+        FLASHING_BOOT_APP0,
+        FLASHING_APPLICATION,
+        FLASHING_CONSOLE,
+        FINALIZING,
+        COMPLETE,
+    }
+
+    /**
      * Callback interface for flash progress updates.
      */
     interface ProgressCallback {
         fun onProgress(
             percent: Int,
-            message: String,
+            stage: FlashStage,
+            message: FlashText,
         )
 
-        fun onError(error: String)
+        fun onError(error: FlashText)
 
         fun onComplete()
     }
@@ -250,30 +277,30 @@ class ESPToolFlasher(
                     "bootloader offset=0x${bootloaderOffset.toString(16)}",
             )
             try {
-                progressCallback.onProgress(0, "Parsing firmware package...")
+                progressCallback.onProgress(0, FlashStage.PARSING_PACKAGE, flashText(R.string.flash_parsing_package))
 
                 // Parse the firmware ZIP
                 val firmwareData = parseFirmwareZip(firmwareZipStream)
                 if (firmwareData == null) {
-                    progressCallback.onError("Invalid firmware package")
+                    progressCallback.onError(flashText(R.string.esptool_invalid_package))
                     return@withContext false
                 }
 
                 // Read console image if provided
                 val consoleImage = consoleImageStream?.readBytes()
 
-                progressCallback.onProgress(5, "Connecting to device...")
+                progressCallback.onProgress(5, FlashStage.CONNECTING, flashText(R.string.flash_connecting_device))
 
                 // Connect at initial baud rate
                 if (!usbBridge.connect(deviceId, INITIAL_BAUD)) {
-                    progressCallback.onError("Failed to connect to device")
+                    progressCallback.onError(flashText(R.string.flash_connect_failed))
                     return@withContext false
                 }
 
                 // Enable raw mode for ESPTool - stops async reads so readBlocking() works
                 usbBridge.enableRawMode()
 
-                progressCallback.onProgress(8, "Syncing with bootloader...")
+                progressCallback.onProgress(8, FlashStage.SYNCING, flashText(R.string.esptool_syncing_bootloader))
 
                 // First try to sync WITHOUT entering bootloader.
                 // This handles the case where user has manually entered bootloader mode.
@@ -285,23 +312,35 @@ class ESPToolFlasher(
                     Log.d(TAG, "Device already in bootloader mode (manual entry detected)")
                 } else {
                     // Not in bootloader yet, try to enter via DTR/RTS sequence
-                    progressCallback.onProgress(9, "Entering bootloader...")
+                    progressCallback.onProgress(
+                        9,
+                        FlashStage.ENTERING_BOOTLOADER,
+                        flashText(R.string.esptool_entering_bootloader),
+                    )
                     if (!enterBootloader()) {
-                        progressCallback.onError("Failed to enter bootloader mode")
+                        progressCallback.onError(flashText(R.string.esptool_enter_bootloader_failed))
                         return@withContext false
                     }
 
-                    progressCallback.onProgress(10, "Syncing with bootloader...")
+                    progressCallback.onProgress(
+                        10,
+                        FlashStage.SYNCING,
+                        flashText(R.string.esptool_syncing_bootloader),
+                    )
                     synced = sync()
                 }
 
                 if (!synced) {
-                    progressCallback.onError("Failed to sync with bootloader")
+                    progressCallback.onError(flashText(R.string.esptool_sync_failed))
                     return@withContext false
                 }
 
                 // Read chip detect register - this "activates" the bootloader for subsequent commands
-                progressCallback.onProgress(11, "Detecting chip...")
+                progressCallback.onProgress(
+                    11,
+                    FlashStage.DETECTING_CHIP,
+                    flashText(R.string.esptool_detecting_chip),
+                )
                 val chipMagic = readChipDetectReg()
                 if (chipMagic != null) {
                     Log.d(TAG, "Chip magic: 0x${chipMagic.toString(16)}")
@@ -312,7 +351,7 @@ class ESPToolFlasher(
                 // Native USB doesn't use baud rate (it's not UART)
                 // Only attempt baud rate change for devices with USB-UART bridges
                 if (!isNativeUsb) {
-                    progressCallback.onProgress(12, "Switching to high-speed mode...")
+                    progressCallback.onProgress(12, FlashStage.SETTING_BAUD, flashText(R.string.esptool_setting_baud))
                     if (changeBaudRate(FLASH_BAUD)) {
                         delay(50)
                         usbBridge.setBaudRate(FLASH_BAUD)
@@ -325,12 +364,18 @@ class ESPToolFlasher(
                 }
 
                 // SPI attach configures flash pins (required before flash operations)
-                progressCallback.onProgress(13, "Attaching SPI flash...")
+                progressCallback.onProgress(
+                    13,
+                    FlashStage.ATTACHING_FLASH,
+                    flashText(R.string.esptool_attaching_flash),
+                )
                 if (!spiAttach()) {
                     if (verifyFlashWrites) {
                         progressCallback.onError(
-                            "Failed to attach SPI flash: " +
-                                (lastProtocolError ?: "no bootloader response"),
+                            flashText(
+                                R.string.esptool_attach_failed,
+                                lastProtocolError ?: "no bootloader response",
+                            ),
                         )
                         return@withContext false
                     }
@@ -338,17 +383,28 @@ class ESPToolFlasher(
                 }
 
                 flashSizeBytes?.let { size ->
-                    progressCallback.onProgress(14, "Configuring ${size / (1024 * 1024)} MiB flash...")
+                    progressCallback.onProgress(
+                        14,
+                        FlashStage.CONFIGURING_FLASH,
+                        flashText(R.string.esptool_configuring_flash, size / (1024 * 1024)),
+                    )
                     if (!spiSetParameters(size)) {
                         progressCallback.onError(
-                            "Failed to configure ${size / (1024 * 1024)} MiB SPI flash: " +
-                                (lastProtocolError ?: "no bootloader response"),
+                            flashText(
+                                R.string.esptool_configure_flash_failed,
+                                size / (1024 * 1024),
+                                lastProtocolError ?: "no bootloader response",
+                            ),
                         )
                         return@withContext false
                     }
                 }
 
-                progressCallback.onProgress(15, "Flashing bootloader...")
+                progressCallback.onProgress(
+                    15,
+                    FlashStage.FLASHING_BOOTLOADER,
+                    flashText(R.string.esptool_flashing_bootloader),
+                )
 
                 // Flash each region
                 var success = true
@@ -360,7 +416,7 @@ class ESPToolFlasher(
                         flashRegion(
                             bootloader,
                             bootloaderOffset,
-                            "bootloader",
+                            FlashStage.FLASHING_BOOTLOADER,
                             currentProgress,
                             20,
                             verifyFlashWrites,
@@ -370,7 +426,11 @@ class ESPToolFlasher(
                     currentProgress = 20
                 }
 
-                progressCallback.onProgress(currentProgress, "Flashing partition table...")
+                progressCallback.onProgress(
+                    currentProgress,
+                    FlashStage.FLASHING_PARTITION_TABLE,
+                    flashText(R.string.esptool_flashing_partition_table),
+                )
 
                 // Partition table (if present)
                 firmwareData.partitions?.let { partitions ->
@@ -378,7 +438,7 @@ class ESPToolFlasher(
                         flashRegion(
                             partitions,
                             OFFSET_PARTITIONS,
-                            "partition table",
+                            FlashStage.FLASHING_PARTITION_TABLE,
                             currentProgress,
                             25,
                             verifyFlashWrites,
@@ -394,7 +454,7 @@ class ESPToolFlasher(
                         flashRegion(
                             bootApp0,
                             OFFSET_BOOT_APP0,
-                            "boot_app0",
+                            FlashStage.FLASHING_BOOT_APP0,
                             currentProgress,
                             30,
                             verifyFlashWrites,
@@ -404,14 +464,18 @@ class ESPToolFlasher(
                     currentProgress = 30
                 }
 
-                progressCallback.onProgress(currentProgress, "Flashing application...")
+                progressCallback.onProgress(
+                    currentProgress,
+                    FlashStage.FLASHING_APPLICATION,
+                    flashText(R.string.esptool_flashing_application),
+                )
 
                 // Main application (required)
                 success =
                     flashRegion(
                         firmwareData.application,
                         OFFSET_APPLICATION,
-                        "application",
+                        FlashStage.FLASHING_APPLICATION,
                         currentProgress,
                         80,
                         verifyFlashWrites,
@@ -421,12 +485,16 @@ class ESPToolFlasher(
 
                 // Console image (SPIFFS)
                 consoleImage?.let { image ->
-                    progressCallback.onProgress(80, "Flashing console image...")
+                    progressCallback.onProgress(
+                        80,
+                        FlashStage.FLASHING_CONSOLE,
+                        flashText(R.string.esptool_flashing_console),
+                    )
                     success =
                         flashRegion(
                             image,
                             OFFSET_CONSOLE,
-                            "console image",
+                            FlashStage.FLASHING_CONSOLE,
                             80,
                             95,
                             verifyFlashWrites,
@@ -435,13 +503,15 @@ class ESPToolFlasher(
                     if (!success) return@withContext false
                 }
 
-                progressCallback.onProgress(95, "Finalizing...")
+                progressCallback.onProgress(95, FlashStage.FINALIZING, flashText(R.string.flash_finalizing))
 
                 // Send FLASH_END to tell bootloader to reboot and run application
                 if (!sendFlashEnd(reboot = true)) {
                     progressCallback.onError(
-                        "Failed to submit final reboot command: " +
-                            (lastProtocolError ?: "USB write failed"),
+                        flashText(
+                            R.string.esptool_reboot_command_failed,
+                            lastProtocolError ?: "USB write failed",
+                        ),
                     )
                     return@withContext false
                 }
@@ -451,7 +521,7 @@ class ESPToolFlasher(
                     hardReset()
                 }
 
-                progressCallback.onProgress(100, "Flash complete!")
+                progressCallback.onProgress(100, FlashStage.COMPLETE, flashText(R.string.esptool_flash_complete))
                 progressCallback.onComplete()
 
                 true
@@ -462,7 +532,7 @@ class ESPToolFlasher(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Flash failed", e)
-                progressCallback.onError("Flash failed: ${e.message}")
+                progressCallback.onError(flashText(R.string.flash_failed_error, e.message ?: "null"))
                 false
             } finally {
                 // Disable raw mode before disconnecting to restore normal async reads
@@ -657,16 +727,7 @@ class ESPToolFlasher(
 
         if (!result && isNativeUsb) {
             Log.w(TAG, "Sync failed on native USB device - manual boot mode required")
-            throw ManualBootModeRequired(
-                "Could not sync with bootloader. This device uses native USB (ESP32-S3) " +
-                    "which requires manual bootloader entry for initial flashing.\n\n" +
-                    "Please enter boot mode manually:\n" +
-                    "1. Hold the PRG (or BOOT) button\n" +
-                    "2. Press and release the RST button\n" +
-                    "3. Release the PRG (or BOOT) button\n" +
-                    "4. Try flashing again\n\n" +
-                    "Note: Once RNode firmware is installed, future updates will work automatically.",
-            )
+            throw ManualBootModeRequired(R.string.esptool_manual_boot_instructions)
         }
 
         return result
@@ -754,19 +815,69 @@ class ESPToolFlasher(
         return sendCommand(ESP_SPI_SET_PARAMS, buildSpiFlashParameters(sizeBytes), 0) != null
     }
 
+    /** Display resources for the region-transfer messages of one flashing stage. */
+    private data class RegionTexts(
+        @StringRes val progressRes: Int,
+        @StringRes val startFailedRes: Int,
+        @StringRes val blockFailedRes: Int,
+        @StringRes val verifyFailedRes: Int,
+    )
+
+    private fun FlashStage.regionTexts(): RegionTexts =
+        when (this) {
+            FlashStage.FLASHING_BOOTLOADER ->
+                RegionTexts(
+                    R.string.esptool_progress_bootloader,
+                    R.string.esptool_start_failed_bootloader,
+                    R.string.esptool_block_failed_bootloader,
+                    R.string.esptool_verify_failed_bootloader,
+                )
+            FlashStage.FLASHING_PARTITION_TABLE ->
+                RegionTexts(
+                    R.string.esptool_progress_partition_table,
+                    R.string.esptool_start_failed_partition_table,
+                    R.string.esptool_block_failed_partition_table,
+                    R.string.esptool_verify_failed_partition_table,
+                )
+            FlashStage.FLASHING_BOOT_APP0 ->
+                RegionTexts(
+                    R.string.esptool_progress_boot_app0,
+                    R.string.esptool_start_failed_boot_app0,
+                    R.string.esptool_block_failed_boot_app0,
+                    R.string.esptool_verify_failed_boot_app0,
+                )
+            FlashStage.FLASHING_APPLICATION ->
+                RegionTexts(
+                    R.string.esptool_progress_application,
+                    R.string.esptool_start_failed_application,
+                    R.string.esptool_block_failed_application,
+                    R.string.esptool_verify_failed_application,
+                )
+            FlashStage.FLASHING_CONSOLE ->
+                RegionTexts(
+                    R.string.esptool_progress_console,
+                    R.string.esptool_start_failed_console,
+                    R.string.esptool_block_failed_console,
+                    R.string.esptool_verify_failed_console,
+                )
+            else -> error("flashRegion invoked with non-region stage $this")
+        }
+
     /**
      * Flash a region of memory.
      */
-    @Suppress("ReturnCount")
+    @Suppress("LongMethod", "ReturnCount")
     private suspend fun flashRegion(
         data: ByteArray,
         offset: Int,
-        name: String,
+        stage: FlashStage,
         startProgress: Int,
         endProgress: Int,
         verifyWrite: Boolean,
         progressCallback: ProgressCallback,
     ): Boolean {
+        val name = stage.name.lowercase().removePrefix("flashing_").replace('_', ' ')
+        val texts = stage.regionTexts()
         Log.d(TAG, "Flashing $name: ${data.size} bytes at 0x${offset.toString(16)}")
 
         // ROM bootloader always uses 0x400 block size
@@ -801,9 +912,14 @@ class ESPToolFlasher(
         val beginResponse = sendCommand(ESP_FLASH_BEGIN, beginData, 0, eraseTimeout)
         if (beginResponse == null) {
             val detail = lastProtocolError ?: "no bootloader response"
-            val error = "Failed to start $name transfer at 0x${offset.toString(16)}: $detail"
-            Log.e(TAG, error)
-            progressCallback.onError(error)
+            Log.e(TAG, "Failed to start $name transfer at 0x${offset.toString(16)}: $detail")
+            progressCallback.onError(
+                flashText(
+                    texts.startFailedRes,
+                    offset.toString(16),
+                    detail,
+                ),
+            )
             return false
         }
 
@@ -834,11 +950,20 @@ class ESPToolFlasher(
             val dataResponse = sendCommand(ESP_FLASH_DATA, packet, checksum)
             if (dataResponse == null) {
                 val detail = lastProtocolError ?: "no bootloader response"
-                val error =
+                Log.e(
+                    TAG,
                     "Failed to transfer $name block ${blockNum + 1}/$numBlocks " +
-                        "at 0x${(offset + blockStart).toString(16)}: $detail"
-                Log.e(TAG, error)
-                progressCallback.onError(error)
+                        "at 0x${(offset + blockStart).toString(16)}: $detail",
+                )
+                progressCallback.onError(
+                    flashText(
+                        texts.blockFailedRes,
+                        blockNum + 1,
+                        numBlocks,
+                        (offset + blockStart).toString(16),
+                        detail,
+                    ),
+                )
                 return false
             }
 
@@ -848,14 +973,18 @@ class ESPToolFlasher(
                     ((blockNum + 1) * (endProgress - startProgress) / numBlocks)
             progressCallback.onProgress(
                 blockProgress,
-                "Flashing $name: ${blockNum + 1}/$numBlocks",
+                stage,
+                flashText(texts.progressRes, blockNum + 1, numBlocks),
             )
         }
 
         if (verifyWrite && !verifyFlashRegion(data, offset, name)) {
             progressCallback.onError(
-                "Flash verification failed for $name at 0x${offset.toString(16)}: " +
-                    (lastProtocolError ?: "device digest did not match the package"),
+                flashText(
+                    texts.verifyFailedRes,
+                    offset.toString(16),
+                    lastProtocolError ?: "device digest did not match the package",
+                ),
             )
             return false
         }

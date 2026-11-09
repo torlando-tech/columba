@@ -12,6 +12,8 @@ import org.maplibre.android.offline.OfflineRegionStatus
 import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
 import javax.inject.Inject
 import javax.inject.Singleton
+import network.columba.app.R
+import network.columba.app.viewmodel.UiMessage
 
 /**
  * Wrapper for MapLibre's native OfflineManager API.
@@ -77,7 +79,7 @@ class MapLibreOfflineManager
             onProgress: (Float, Long, Long) -> Unit,
             // regionId, sizeBytes
             onComplete: (Long, Long) -> Unit,
-            onError: (String) -> Unit,
+            onError: (UiMessage) -> Unit,
         ) {
             Log.d(TAG, "Starting download for region '$name': bounds=$bounds, zoom=$minZoom-$maxZoom")
 
@@ -134,13 +136,13 @@ class MapLibreOfflineManager
                                 override fun onError(error: OfflineRegionError) {
                                     Log.e(TAG, "Download error: ${error.reason} - ${error.message}")
                                     offlineRegion.setObserver(null)
-                                    onError("${error.reason}: ${error.message}")
+                                    onError(UiMessage.Raw("${error.reason}: ${error.message}"))
                                 }
 
                                 override fun mapboxTileCountLimitExceeded(limit: Long) {
                                     Log.e(TAG, "Tile count limit exceeded: $limit")
                                     offlineRegion.setObserver(null)
-                                    onError("Tile count limit exceeded ($limit tiles). Try a smaller region or fewer zoom levels.")
+                                    onError(UiMessage.Text(R.string.maplibre_tile_limit_exceeded, listOf(limit)))
                                 }
                             },
                         )
@@ -151,7 +153,7 @@ class MapLibreOfflineManager
 
                     override fun onError(error: String) {
                         Log.e(TAG, "Failed to create region: $error")
-                        onError(error)
+                        onError(UiMessage.Raw(error))
                     }
                 },
             )

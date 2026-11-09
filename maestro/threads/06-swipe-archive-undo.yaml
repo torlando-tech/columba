@@ -1,0 +1,64 @@
+# 06-swipe-archive-undo.yaml
+#
+# Spec §5.3: swiping a thread row toward the trailing edge reveals the
+# Archive panel; committing archives the row and shows the in-sheet snackbar
+# `"<title>" · moved to Archived` with `Undo`; Undo restores the thread to
+# Active. The pinned Main row has no swipe action at all.
+#
+# Params: APP_ID, PEER_NAME, THREAD_TOKEN.
+appId: ${APP_ID}
+---
+- runFlow:
+    file: lib/open-chat.yaml
+    env:
+      APP_ID: ${APP_ID}
+      PEER_NAME: ${PEER_NAME}
+
+# Seed a thread with one message.
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+- tapOn: "+ New"
+- tapOn: "Reply in thread…"
+- inputText: ${THREAD_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${THREAD_TOKEN}
+    timeout: 30000
+
+- runFlow:
+    file: lib/open-threads-sheet.yaml
+    env:
+      APP_ID: ${APP_ID}
+
+# Every row shares the same swipe target, so filter the list to this flow's
+# row before swiping.
+- tapOn: "Search threads"
+- inputText: ${THREAD_TOKEN}
+- hideKeyboard
+
+# Swipe the row toward the trailing edge -> Archive. SwipeToDismissBox only
+# commits past half the row width, and a selector-based swipe stops at the
+# element's width, so the travel is given in screen percentages around the
+# filtered row (the first row under the sheet's search field).
+- swipe:
+    start: "85%, 22%"
+    end: "5%, 22%"
+    duration: 400
+- extendedWaitUntil:
+    visible: ".*moved to Archived.*"
+    timeout: 10000
+- takeScreenshot: threads-swipe-archived
+
+# Undo restores the thread to Active and closes the snackbar window. The
+# footer itself stays for the threads earlier flows archived, so the snackbar
+# going away is the state proof.
+- tapOn: "Undo"
+- extendedWaitUntil:
+    notVisible: ".*moved to Archived.*"
+    timeout: 10000
+- assertVisible:
+    text: ".*${THREAD_TOKEN}.*"
+- takeScreenshot: threads-swipe-undo

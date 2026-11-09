@@ -6,6 +6,7 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import network.columba.app.data.db.ColumbaDatabase
+import network.columba.app.data.db.ThreadGrouping
 import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
 import network.columba.app.data.db.entity.ConversationEntity
@@ -17,12 +18,14 @@ import network.columba.app.data.util.HashUtils
 import network.columba.app.data.util.TextSanitizer
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.util.ThreadFieldCodec
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.rns.host.util.PeerNameResolver
 import kotlinx.coroutines.CancellationException
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.storage.AttachmentStorageManager
 import network.columba.app.rns.api.model.ReceivedMessage
+import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.api.util.toHex
 import network.columba.app.data.repository.Message as DataMessage
 
@@ -98,6 +101,7 @@ class ServicePersistenceManager(
             localIdentityDao,
             AttachmentStorageManager(context),
             database.draftDao(),
+            threadDao,
             database,
         )
     }
@@ -108,6 +112,7 @@ class ServicePersistenceManager(
             pendingSignatureVerification.startReconciliation(scope)
         }
     }
+    private val threadDao by lazy { database.threadDao() }
 
     /**
      * Check if a peer is explicitly blocked.
@@ -269,12 +274,24 @@ class ServicePersistenceManager(
      */
     suspend fun persistReceivedMessage(message: ReceivedMessage): Boolean =
         try {
+            val sender = message.sourceHash.toHex()
+            val recipient = localIdentityDao.getIdentityByDestinationHash(message.destinationHash.toHex())
+            val mayPersist =
+                recipient != null &&
+                    !isBlockedPeer(sender, recipient.identityHash) &&
+                    !shouldBlockUnknownSender(sender, recipient.identityHash)
+            // Prepare disk-backed fields before the outer transaction as well:
+            // repository.saveMessage's transaction nests inside this one.
+            val preparedFields =
+                if (recipient != null && mayPersist && !messageDao.messageExists(message.messageHash, recipient.identityHash)) {
+                    conversationRepository.extractLargeAttachments(message.messageHash, message.fieldsJson)
+                } else {
+                    message.fieldsJson
+                }
+            val preparedMessage = message.toStoredMessage(sender, preparedFields)
             database.withTransaction {
-                val identity =
-                    localIdentityDao.getIdentityByDestinationHash(message.destinationHash.toHex())
-                        ?: return@withTransaction false
-                val sender = message.sourceHash.toHex()
-                if (isBlockedPeer(sender, identity.identityHash) || shouldBlockUnknownSender(sender, identity.identityHash)) {
+                val identity = recipient ?: return@withTransaction false
+                if (!mayPersist || isBlockedPeer(sender, identity.identityHash) || shouldBlockUnknownSender(sender, identity.identityHash)) {
                     return@withTransaction false
                 }
                 val existing = conversationDao.getConversation(sender, identity.identityHash)
@@ -288,9 +305,10 @@ class ServicePersistenceManager(
                 conversationRepository.saveMessage(
                     peerHash = sender,
                     peerName = peerName,
-                    message = message.toStoredMessage(sender),
+                    message = preparedMessage,
                     peerPublicKey = message.publicKey,
                     localIdentityHash = identity.identityHash,
+                    attachmentsPrepared = true,
                 )
                 // Restore/export reads peer_identities, not conversation keys. Only
                 // retain key material deriving this sender's LXMF destination, and
@@ -308,22 +326,7 @@ class ServicePersistenceManager(
                 // A live IPC callback is not guaranteed after an app restart, so icon
                 // appearance must survive from the service process itself. Invalid or
                 // missing appearance leaves any existing icon untouched.
-                message.iconAppearance?.let { appearance ->
-                    if (appearance.iconName.isNotEmpty() &&
-                        appearance.foregroundColor.isNotEmpty() &&
-                        appearance.backgroundColor.isNotEmpty()
-                    ) {
-                        peerIconDao.upsertIcon(
-                            PeerIconEntity(
-                                destinationHash = sender,
-                                iconName = appearance.iconName,
-                                foregroundColor = appearance.foregroundColor,
-                                backgroundColor = appearance.backgroundColor,
-                                updatedTimestamp = System.currentTimeMillis(),
-                            ),
-                        )
-                    }
-                }
+                persistReceivedIcon(sender, message.iconAppearance)
                 true
             }
         } catch (e: CancellationException) {
@@ -332,6 +335,27 @@ class ServicePersistenceManager(
             Log.e(TAG, "Could not persist received message ${message.messageHash}", e)
             false
         }
+
+    private suspend fun persistReceivedIcon(
+        sender: String,
+        appearance: IconAppearance?,
+    ) {
+        if (appearance == null) return
+        if (appearance.iconName.isNotEmpty() &&
+            appearance.foregroundColor.isNotEmpty() &&
+            appearance.backgroundColor.isNotEmpty()
+        ) {
+            peerIconDao.upsertIcon(
+                PeerIconEntity(
+                    destinationHash = sender,
+                    iconName = appearance.iconName,
+                    foregroundColor = appearance.foregroundColor,
+                    backgroundColor = appearance.backgroundColor,
+                    updatedTimestamp = System.currentTimeMillis(),
+                ),
+            )
+        }
+    }
 
     /**
      * Persist a received message to the database.
@@ -388,7 +412,7 @@ class ServicePersistenceManager(
             val existingMessage = messageDao.getMessageById(messageHash, activeIdentity.identityHash)
             if (existingMessage != null) {
                 Log.d(TAG, "Message already exists - skipping duplicate: $messageHash")
-                // Return true for duplicates - message exists, app should still show notification
+                // Accept duplicate admission; the durable notification marker determines whether to alert.
                 return true
             }
 
@@ -417,59 +441,89 @@ class ServicePersistenceManager(
                 )
             val peerName = TextSanitizer.sanitizePeerName(resolvedName)
 
-            // Insert/update conversation
-            if (existingConversation != null) {
-                // Update peerName if we resolved a better name (nickname or announce)
-                val updatedPeerName =
-                    if (PeerNameResolver.isValidPeerName(resolvedName)) peerName else existingConversation.peerName
-                val updated =
-                    existingConversation.copy(
-                        peerName = updatedPeerName,
-                        lastMessage = sanitizedPreview,
-                        lastMessageTimestamp = receivedAt,
-                        unreadCount = existingConversation.unreadCount + 1,
-                        peerPublicKey = publicKey ?: existingConversation.peerPublicKey,
-                    )
-                conversationDao.updateConversation(updated)
-            } else {
-                val newConversation =
-                    ConversationEntity(
-                        peerHash = sourceHash,
-                        identityHash = activeIdentity.identityHash,
-                        peerName = peerName,
-                        peerPublicKey = publicKey,
-                        lastMessage = sanitizedPreview,
-                        lastMessageTimestamp = receivedAt,
-                        unreadCount = 1,
-                        lastSeenTimestamp = 0,
-                    )
-                conversationDao.insertConversation(newConversation)
-            }
+            // One real Room transaction: the conversation preview, the message
+            // row, the peer-activity stamp, and the thread bump commit together,
+            // so a reader can never see a message without its preview or its
+            // thread state.
+            database.withTransaction {
+                // The earlier lookup avoids needless work, but only this check
+                // under the write lock makes concurrent UI/service replay safe.
+                if (messageDao.messageExists(messageHash, activeIdentity.identityHash)) return@withTransaction
+                val currentConversation = conversationDao.getConversation(sourceHash, activeIdentity.identityHash)
+                // Insert/update conversation
+                if (currentConversation != null) {
+                    // Update peerName if we resolved a better name (nickname or announce)
+                    val updatedPeerName =
+                        if (PeerNameResolver.isValidPeerName(resolvedName)) peerName else currentConversation.peerName
+                    val updated =
+                        currentConversation.copy(
+                            peerName = updatedPeerName,
+                            lastMessage = sanitizedPreview,
+                            lastMessageTimestamp = receivedAt,
+                            unreadCount = currentConversation.unreadCount + 1,
+                            peerPublicKey = publicKey ?: currentConversation.peerPublicKey,
+                        )
+                    conversationDao.updateConversation(updated)
+                } else {
+                    val newConversation =
+                        ConversationEntity(
+                            peerHash = sourceHash,
+                            identityHash = activeIdentity.identityHash,
+                            peerName = peerName,
+                            peerPublicKey = publicKey,
+                            lastMessage = sanitizedPreview,
+                            lastMessageTimestamp = receivedAt,
+                            unreadCount = 1,
+                            lastSeenTimestamp = 0,
+                        )
+                    conversationDao.insertConversation(newConversation)
+                }
 
-            // Insert message
-            val messageEntity =
-                MessageEntity(
-                    id = messageHash,
-                    conversationHash = sourceHash,
-                    identityHash = activeIdentity.identityHash,
-                    content = sanitizedContent,
-                    timestamp = timestamp,
-                    isFromMe = false,
-                    status = "delivered",
-                    isRead = false,
-                    fieldsJson = fieldsJson,
-                    replyToMessageId = replyToMessageId,
-                    deliveryMethod = deliveryMethod,
-                    errorMessage = null,
-                    receivedHopCount = receivedHopCount,
-                    receivedInterface = receivedInterface,
-                    receivedRssi = receivedRssi,
-                    receivedSnr = receivedSnr,
-                    receivedAt = receivedAt,
-                    notificationHandled = false,
-                )
-            messageDao.insertMessage(messageEntity)
-            peerActivityDao.recordActivity(sourceHash, receivedAt, PeerActivityType.MESSAGE)
+                // Insert message
+                val messageEntity =
+                    MessageEntity(
+                        id = messageHash,
+                        conversationHash = sourceHash,
+                        identityHash = activeIdentity.identityHash,
+                        content = sanitizedContent,
+                        timestamp = timestamp,
+                        isFromMe = false,
+                        status = "delivered",
+                        isRead = false,
+                        fieldsJson = fieldsJson,
+                        replyToMessageId = replyToMessageId,
+                        deliveryMethod = deliveryMethod,
+                        errorMessage = null,
+                        receivedHopCount = receivedHopCount,
+                        receivedInterface = receivedInterface,
+                        receivedRssi = receivedRssi,
+                        receivedSnr = receivedSnr,
+                        receivedAt = receivedAt,
+                        threadId = ThreadFieldCodec.threadIdFromFieldsJson(fieldsJson),
+                        notificationHandled = false,
+                    )
+                messageDao.insertMessage(messageEntity)
+                peerActivityDao.recordActivity(sourceHash, receivedAt, PeerActivityType.MESSAGE)
+
+                // Threads-spec §4.3: implicit thread creation / activity bump /
+                // first-sighting root hook. T comes from fieldsJson key "8"; the
+                // root candidate is the explicit replyToMessageId parameter or
+                // the canonical 0x30 field. Unresolved targets degrade to no
+                // root — the message is already persisted and never dropped.
+                if (messageEntity.threadId != null) {
+                    ThreadGrouping.applyMessageActivity(
+                        threadDao = threadDao,
+                        messageDao = messageDao,
+                        identityHash = activeIdentity.identityHash,
+                        conversationHash = sourceHash,
+                        threadId = messageEntity.threadId,
+                        replyToMessageId = replyToMessageId
+                            ?: ThreadFieldCodec.replyHashFromFieldsJson(fieldsJson),
+                        content = sanitizedContent,
+                        activityAt = receivedAt,
+                    )
+                }
+            }
 
             // Check if this message has file attachments and should supersede a pending notification
             if (hasFileAttachments) {
@@ -713,7 +767,10 @@ class ServicePersistenceManager(
     }
 }
 
-private fun ReceivedMessage.toStoredMessage(sender: String) =
+private fun ReceivedMessage.toStoredMessage(
+    sender: String,
+    processedFieldsJson: String?,
+) =
     DataMessage(
         id = messageHash,
         destinationHash = sender,
@@ -721,8 +778,9 @@ private fun ReceivedMessage.toStoredMessage(sender: String) =
         timestamp = timestamp,
         isFromMe = false,
         status = "delivered",
-        fieldsJson = fieldsJson,
+        fieldsJson = processedFieldsJson,
         deliveryMethod = deliveryMethod,
+        replyToMessageId = ThreadFieldCodec.replyHashFromFieldsJson(fieldsJson),
         receivedHopCount = receivedHopCount,
         receivedInterface = receivedInterface,
         receivedRssi = receivedRssi,
@@ -730,4 +788,5 @@ private fun ReceivedMessage.toStoredMessage(sender: String) =
         receivedAt = System.currentTimeMillis(),
         signatureStatus = signatureStatus,
         signatureEvidence = signatureEvidence,
+        threadId = ThreadFieldCodec.threadIdFromFieldsJson(fieldsJson),
     )

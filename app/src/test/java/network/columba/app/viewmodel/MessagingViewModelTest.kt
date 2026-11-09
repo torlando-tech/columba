@@ -7,6 +7,7 @@ package network.columba.app.viewmodel
 
 import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import network.columba.app.R
 import network.columba.app.audio.VoiceMessageFormat
@@ -15,6 +16,7 @@ import network.columba.app.audio.VoiceMessageRecorder
 import network.columba.app.audio.VoiceMessageRecordingState
 import tech.torlando.lxst.recording.RecordedAudio
 import network.columba.app.data.db.entity.MessageEntity
+import network.columba.app.data.db.entity.ThreadEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ConversationRepository
@@ -22,6 +24,8 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.data.repository.ReplyPreview
 import network.columba.app.repository.SettingsRepository
+import network.columba.app.rns.api.util.hexToBytes
+import network.columba.app.rns.api.util.toHex
 import network.columba.app.rns.api.model.DeliveryMethod
 import network.columba.app.rns.api.model.DeliveryStatus
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
@@ -244,6 +248,7 @@ class MessagingViewModelTest {
         contactRepository = mockk()
         activeConversationManager = mockk()
         settingsRepository = mockk()
+        every { settingsRepository.threadsEnabledFlow } returns flowOf(false)
         propagationNodeManager = mockk()
         locationSharingManager = mockk()
         identityRepository = mockk()
@@ -262,7 +267,7 @@ class MessagingViewModelTest {
         every { receivedLocationRepository.observeHasLocation(any()) } returns flowOf(false)
 
         // Mock activeConversationManager methods
-        every { activeConversationManager.setActive(any()) } just Runs
+        every { activeConversationManager.setActive(any(), any()) } just Runs
 
         // Mock settingsRepository methods
         coEvery { settingsRepository.getDefaultDeliveryMethod() } returns "direct"
@@ -331,6 +336,11 @@ class MessagingViewModelTest {
 
         // Default: no reply preview
         coEvery { conversationRepository.getReplyPreview(any(), any()) } returns null
+
+        // Defaults for thread lookups made while switching targets
+        coEvery { conversationRepository.getThread(any(), any()) } returns null
+        coEvery { conversationRepository.firstMessageInThread(any(), any()) } returns null
+        coEvery { conversationRepository.discardDraftIfUnsent(any(), any()) } just Runs
     }
 
     @After
@@ -387,6 +397,7 @@ class MessagingViewModelTest {
      */
     private fun createTestViewModel(
         microphoneArbiter: MicrophoneAdmissionArbiter = MicrophoneAdmissionArbiter(),
+        savedState: SavedStateHandle = SavedStateHandle(),
     ): MessagingViewModel =
         MessagingViewModel(
             applicationContext,
@@ -408,6 +419,7 @@ class MessagingViewModelTest {
             notificationHelper,
             rnsTelephony,
             microphoneArbiter,
+            savedState,
         )
 
     private fun outgoingDeliveryMessage(
@@ -576,13 +588,152 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `undo of archiving the open thread returns to that thread`() =
+        runTest {
+            val openThread = "02000000000000000000000000000002"
+            val otherThread = "01000000000000000000000000000001"
+            val threads =
+                listOf(
+                    threadEntity(openThread, lastActivityAt = 2_000L),
+                    threadEntity(otherThread, lastActivityAt = 1_000L),
+                )
+            every { settingsRepository.threadsEnabledFlow } returns flowOf(true)
+            coEvery {
+                conversationRepository.threadsForConversation(testPeerHash, includeArchived = true)
+            } returns flowOf(threads)
+            coEvery { conversationRepository.observeUnreadCountsPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.observeLastMessagesPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.observeMessageCountsPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.observeFirstMessagesPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.saveDraft(any(), any(), any()) } returns Unit
+            coEvery { conversationRepository.getDraft(any(), any()) } returns null
+            coEvery { conversationRepository.markThreadAsRead(any(), any()) } returns Unit
+            coEvery { conversationRepository.markMainAsRead(any()) } returns Unit
+            coEvery { conversationRepository.setThreadsArchived(any(), any(), any()) } returns Unit
+            coEvery { conversationRepository.firstMessageInThread(any(), any()) } returns null
+            // Stubbed before construction: `threadsEnabled` captures the flow at init.
+            val viewModel = createTestViewModel()
+
+            // The flag is a WhileSubscribed StateFlow: start it like the UI does.
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            advanceUntilIdle()
+            assertTrue("threads flag must be on", viewModel.threadsEnabled.value)
+            viewModel.selectThread(openThread)
+            advanceUntilIdle()
+            assertEquals(openThread, viewModel.selectedThread.value)
+
+            // Archiving the open thread moves the list to the newest remaining one.
+            viewModel.archiveThreads(listOf(openThread))
+            advanceUntilIdle()
+            assertEquals(otherThread, viewModel.selectedThread.value)
+
+            // Undo puts the user back into the thread they were reading.
+            viewModel.unarchiveThreads(listOf(openThread))
+            advanceUntilIdle()
+            assertEquals(openThread, viewModel.selectedThread.value)
+            flagCollection.cancel()
+        }
+
+    @Test
+    fun `batch archive lands once and falls back to Main when nothing is left`() =
+        runTest {
+            val openThread = "02000000000000000000000000000002"
+            val otherThread = "01000000000000000000000000000001"
+            val threads =
+                listOf(
+                    threadEntity(openThread, lastActivityAt = 2_000L),
+                    threadEntity(otherThread, lastActivityAt = 1_000L),
+                )
+            every { settingsRepository.threadsEnabledFlow } returns flowOf(true)
+            coEvery {
+                conversationRepository.threadsForConversation(testPeerHash, includeArchived = true)
+            } returns flowOf(threads)
+            coEvery { conversationRepository.observeUnreadCountsPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.observeLastMessagesPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.observeMessageCountsPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.observeFirstMessagesPerThread(testPeerHash) } returns flowOf(emptyList())
+            coEvery { conversationRepository.saveDraft(any(), any(), any()) } returns Unit
+            coEvery { conversationRepository.getDraft(any(), any()) } returns null
+            coEvery { conversationRepository.markThreadAsRead(any(), any()) } returns Unit
+            coEvery { conversationRepository.markMainAsRead(any()) } returns Unit
+            coEvery { conversationRepository.setThreadsArchived(any(), any(), any()) } returns Unit
+            coEvery { conversationRepository.firstMessageInThread(any(), any()) } returns null
+            val viewModel = createTestViewModel()
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            viewModel.selectThread(openThread)
+            advanceUntilIdle()
+            assertEquals(openThread, viewModel.selectedThread.value)
+
+            // One batch: every selected thread goes in a single repository call.
+            viewModel.archiveThreads(listOf(openThread, otherThread))
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.selectedThread.value)
+            coVerify(exactly = 1) {
+                conversationRepository.setThreadsArchived(
+                    testPeerHash,
+                    // ByteArray identity is not equality: compare the ids as hex.
+                    match { ids -> ids.map { it.toHex() }.toSet() == setOf(openThread, otherThread) },
+                    archived = true,
+                )
+            }
+            flagCollection.cancel()
+        }
+
+    /** Threads-on stubs shared by the case-2 root tests. */
+    private fun stubThreadSurface() {
+        every { settingsRepository.threadsEnabledFlow } returns flowOf(true)
+        coEvery { conversationRepository.threadsForConversation(any(), includeArchived = true) } returns flowOf(emptyList())
+        coEvery { conversationRepository.observeUnreadCountsPerThread(any()) } returns flowOf(emptyList())
+        coEvery { conversationRepository.observeLastMessagesPerThread(any()) } returns flowOf(emptyList())
+        coEvery { conversationRepository.observeMessageCountsPerThread(any()) } returns flowOf(emptyList())
+        coEvery { conversationRepository.observeFirstMessagesPerThread(any()) } returns flowOf(emptyList())
+        coEvery { conversationRepository.saveDraft(any(), any(), any()) } returns Unit
+        coEvery { conversationRepository.getDraft(any(), any()) } returns null
+        coEvery { conversationRepository.markThreadAsRead(any(), any()) } returns Unit
+        coEvery { conversationRepository.markMainAsRead(any()) } returns Unit
+        coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+        coEvery {
+            rnsLxmf.sendLxmfMessageWithMethod(
+                any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(),
+            )
+        } returns Result.success(
+            MessageReceipt(
+                messageHash = ByteArray(32) { it.toByte() },
+                timestamp = 3_000L,
+                destinationHash = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+            ),
+        )
+    }
+
+    private fun threadEntity(
+        threadIdHex: String,
+        lastActivityAt: Long,
+    ) = ThreadEntity(
+        threadId = threadIdHex.hexToBytes(),
+        conversationHash = testPeerHash,
+        identityHash = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        createdAt = 0L,
+        lastActivityAt = lastActivityAt,
+    )
+
+    @Test
     fun `conversation visibility dismisses its notification and marks it read`() =
         runViewModelTest {
             val result = runCatching { viewModel.onConversationVisible(testPeerHash) }
             advanceUntilIdle()
 
             assertTrue("Visibility handling should complete without error", result.isSuccess)
-            verify { activeConversationManager.setActive(testPeerHash) }
+            verify { activeConversationManager.setActive(testPeerHash, any()) }
             verify { notificationHelper.cancelNotificationForConversation(testPeerHash) }
             coVerify { conversationRepository.markConversationAsRead(testPeerHash) }
         }
@@ -958,7 +1109,7 @@ class MessagingViewModelTest {
             every { failingContactRepository.getEnrichedContacts() } returns flowOf(emptyList())
 
             val failingActiveConversationManager: ActiveConversationManager = mockk()
-            every { failingActiveConversationManager.setActive(any()) } just Runs
+            every { failingActiveConversationManager.setActive(any(), any()) } just Runs
 
             val failingSettingsRepository: SettingsRepository = mockk()
             coEvery { failingSettingsRepository.getDefaultDeliveryMethod() } returns "direct"
@@ -966,6 +1117,7 @@ class MessagingViewModelTest {
             coEvery { failingSettingsRepository.getIncomingMessageSizeLimitKb() } returns 500
             every { failingSettingsRepository.messageFontScaleFlow } returns flowOf(1.0f)
             every { failingSettingsRepository.sortMessagesBySentTime } returns flowOf(false)
+            every { failingSettingsRepository.threadsEnabledFlow } returns flowOf(false)
 
             val failingPropagationNodeManager: PropagationNodeManager = mockk()
             every { failingPropagationNodeManager.isSyncing } returns MutableStateFlow(false)
@@ -3263,9 +3415,9 @@ class MessagingViewModelTest {
             viewModel.toggleContact()
             advanceUntilIdle()
 
-            // Assert: ContactToggleResult.Error was emitted with appropriate message
+            // Assert: ContactToggleResult.Error was emitted with the typed reason
             assert(emittedResult is ContactToggleResult.Error)
-            assert((emittedResult as ContactToggleResult.Error).message.contains("Identity not available"))
+            assert((emittedResult as ContactToggleResult.Error).reason == ContactToggleErrorReason.IDENTITY_NOT_AVAILABLE)
             collectJob.cancel()
         }
 
@@ -3290,9 +3442,11 @@ class MessagingViewModelTest {
             viewModel.toggleContact()
             advanceUntilIdle()
 
-            // Assert: ContactToggleResult.Error was emitted
+            // Assert: ContactToggleResult.Error was emitted with typed reason + detail
             assert(emittedResult is ContactToggleResult.Error)
-            assert((emittedResult as ContactToggleResult.Error).message.contains("Database error"))
+            val error = emittedResult as ContactToggleResult.Error
+            assert(error.reason == ContactToggleErrorReason.UPDATE_FAILED)
+            assert(error.detail == "Database error")
             collectJob.cancel()
         }
 
@@ -4625,7 +4779,7 @@ class MessagingViewModelTest {
             val cachedPreview = cache["current-msg"]
             assertNotNull(cachedPreview)
             assertEquals("deleted-msg", cachedPreview!!.messageId)
-            assertEquals("Message deleted", cachedPreview.contentPreview)
+            assertTrue(cachedPreview!!.isDeletedPlaceholder)
         }
 
     @Test
@@ -4633,6 +4787,248 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Assert: Initial state is empty map
             assertTrue(viewModel.replyPreviewCache.value.isEmpty())
+        }
+
+    @Test
+    fun `canceling a thread from here leaves no thread and no quote draft`() =
+        runTest {
+            stubThreadSurface()
+            val viewModel =
+                createTestViewModel().also {
+                    it.attachmentIoDispatcher = StandardTestDispatcher(testScheduler)
+                }
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            viewModel.startThreadFromMessage("root-message-id", "quoted Main message")
+            advanceUntilIdle()
+            val abandonedThread = requireNotNull(viewModel.selectedThread.value)
+
+            viewModel.selectThread(null)
+            advanceUntilIdle()
+
+            // A thread exists only after a message is sent in it: canceling
+            // stores no row, so Main grows no "0 replies" hook, and the
+            // abandoned target's draft (the auto quote included) goes with it.
+            coVerify {
+                conversationRepository.discardDraftIfUnsent(
+                    peerHash = testPeerHash,
+                    threadId = match { it.contentEquals(abandonedThread.hexToBytes()) },
+                )
+            }
+            assertEquals(null, viewModel.selectedThread.value)
+            assertEquals(null, viewModel.draftText.value)
+
+            flagCollection.cancel()
+        }
+
+    @Test
+    fun `recreating mid-compose restores the target and its draft`() =
+        runTest {
+            stubThreadSurface()
+            val threadHex = "0a0b0c0d0e0f1112131415161718191a"
+            val saved =
+                SavedStateHandle(
+                    mapOf(
+                        "messaging.target.conversation" to testPeerHash,
+                        "messaging.target.thread" to threadHex,
+                        "messaging.target.root" to "root-message-id",
+                    ),
+                )
+            coEvery { conversationRepository.getDraft(any(), any()) } returns "> quoted root"
+            val viewModel = createTestViewModel(savedState = saved)
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // A recreation is not a cancel: the target the user was composing
+            // in (and its draft) comes back instead of opening on Main.
+            assertEquals(threadHex, viewModel.selectedThread.value)
+            assertEquals("> quoted root", viewModel.draftText.value)
+
+            // Leaving the chat ends its composing target: a later open of the
+            // same chat starts on Main.
+            viewModel.loadMessages("other-peer-hash", "Other Peer")
+            advanceUntilIdle()
+            val reopened = createTestViewModel(savedState = saved)
+            val reopenedFlags = launch(UnconfinedTestDispatcher(testScheduler)) {
+                reopened.threadsEnabled.collect { }
+            }
+            reopened.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            assertEquals(null, reopened.selectedThread.value)
+
+            reopenedFlags.cancel()
+            flagCollection.cancel()
+        }
+
+    @Test
+    fun `canceling clears the recreation snapshot`() =
+        runTest {
+            stubThreadSurface()
+            val saved = SavedStateHandle()
+            val viewModel = createTestViewModel(savedState = saved)
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            viewModel.startThreadFromMessage("root-message-id", "quoted Main message")
+            advanceUntilIdle()
+            val abandonedThread = requireNotNull(viewModel.selectedThread.value)
+            viewModel.selectThread(null)
+            advanceUntilIdle()
+
+            // Recreate on the same saved state: the canceled target must not
+            // come back.
+            val recreated = createTestViewModel(savedState = saved)
+            val recreatedFlags = launch(UnconfinedTestDispatcher(testScheduler)) {
+                recreated.threadsEnabled.collect { }
+            }
+            recreated.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            assertEquals(null, recreated.selectedThread.value)
+            assertTrue(abandonedThread.isNotBlank())
+
+            recreatedFlags.cancel()
+            flagCollection.cancel()
+        }
+
+    @Test
+    fun `the first send in a thread from here carries its root`() =
+        runTest {
+            val rootMessageId = "root-message-id"
+            stubThreadSurface()
+            val viewModel =
+                createTestViewModel().also {
+                    it.attachmentIoDispatcher = StandardTestDispatcher(testScheduler)
+                }
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            viewModel.startThreadFromMessage(rootMessageId, "quoted Main message")
+            advanceUntilIdle()
+            val threadHex = requireNotNull(viewModel.selectedThread.value)
+
+            // The root never needed a row before the send: the first message
+            // carries it and ThreadGrouping creates the thread from it.
+            viewModel.sendMessage(testPeerHash, "first message")
+            advanceUntilIdle()
+
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = "first message",
+                    sourceIdentity = any(),
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                    fileAttachments = null,
+                    replyToMessageId = rootMessageId,
+                    replyQuotedContent = any(),
+                    iconAppearance = null,
+                    extraFields = null,
+                    threadId = match { it?.contentEquals(threadHex.hexToBytes()) == true },
+                )
+            }
+            coVerify {
+                conversationRepository.saveMessage(
+                    peerHash = testPeerHash,
+                    peerName = testPeerName,
+                    message = match { it.replyToMessageId == rootMessageId && it.threadId != null },
+                    peerPublicKey = null,
+                )
+            }
+            assertEquals("the send stays in the thread target", threadHex, viewModel.selectedThread.value)
+            flagCollection.cancel()
+        }
+
+    @Test
+    fun `send targets Main when the thread flag is off even with a stored selection`() =
+        runTest {
+            stubThreadSurface()
+            // Flag off: one flat list. A selection may still exist (process
+            // restore, or the user turning the flag off mid-conversation) but
+            // the composer, the draft, and the send must all target Main.
+            every { settingsRepository.threadsEnabledFlow } returns flowOf(false)
+            val viewModel =
+                createTestViewModel().also {
+                    it.attachmentIoDispatcher = StandardTestDispatcher(testScheduler)
+                }
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            viewModel.selectThread("0a0b0c0d0e0f1112131415161718191a")
+            advanceUntilIdle()
+            assertTrue("threads flag must be off", !viewModel.threadsEnabled.value)
+
+            viewModel.sendMessage(testPeerHash, "flat list message")
+            advanceUntilIdle()
+
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = "flat list message",
+                    sourceIdentity = any(),
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                    fileAttachments = null,
+                    replyToMessageId = null,
+                    replyQuotedContent = any(),
+                    iconAppearance = null,
+                    extraFields = null,
+                    threadId = null,
+                )
+            }
+            flagCollection.cancel()
+        }
+
+    @Test
+    fun `turning the flag off collapses the selection back to Main`() =
+        runTest {
+            val flag = MutableStateFlow(true)
+            stubThreadSurface()
+            every { settingsRepository.threadsEnabledFlow } returns flag
+            coEvery { conversationRepository.getDraft(any(), null) } returns "main drafts"
+            val viewModel =
+                createTestViewModel().also {
+                    it.attachmentIoDispatcher = StandardTestDispatcher(testScheduler)
+                }
+            val flagCollection = launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.threadsEnabled.collect { }
+            }
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            viewModel.selectThread("0a0b0c0d0e0f1112131415161718191a")
+            advanceUntilIdle()
+            assertEquals(
+                "the thread is selected while the flag is on",
+                "0a0b0c0d0e0f1112131415161718191a",
+                viewModel.selectedThread.value,
+            )
+
+            flag.value = false
+            advanceUntilIdle()
+
+            assertNull("flag off drops the selection", viewModel.selectedThread.value)
+            assertEquals("Main's draft comes back", "main drafts", viewModel.draftText.value)
+            flagCollection.cancel()
         }
 
     @Test
@@ -6638,7 +7034,8 @@ class MessagingViewModelTest {
             // Assert: cached reply preview is replaced with "Message deleted" placeholder
             val cachedAfter = viewModel.replyPreviewCache.value["reply-msg"]
             assertNotNull(cachedAfter)
-            assertEquals("Message deleted", cachedAfter!!.contentPreview)
+            assertEquals("", cachedAfter!!.contentPreview)
+            assertTrue(cachedAfter.isDeletedPlaceholder)
             assertEquals("", cachedAfter.senderName)
         }
 

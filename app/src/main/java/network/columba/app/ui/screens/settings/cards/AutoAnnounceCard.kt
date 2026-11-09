@@ -37,9 +37,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.ui.components.CollapsibleSettingsCard
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -64,7 +67,7 @@ fun AutoAnnounceCard(
     val presetIntervals = listOf(1, 3, 6, 12)
 
     CollapsibleSettingsCard(
-        title = "Auto Announce",
+        title = stringResource(R.string.settings_announce_title),
         icon = Icons.Default.Sensors,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
@@ -77,9 +80,7 @@ fun AutoAnnounceCard(
     ) {
         // Description
         Text(
-            text =
-                "Automatically announce your presence on the network at regular intervals. " +
-                    "This helps other peers discover you.",
+            text = stringResource(R.string.settings_announce_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -134,7 +135,7 @@ private fun IntervalSelector(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            text = "Announce Interval: $intervalHours hour${if (intervalHours != 1) "s" else ""}",
+            text = pluralStringResource(R.plurals.settings_announce_interval, intervalHours, intervalHours),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.primary,
@@ -163,9 +164,9 @@ private fun IntervalSelector(
                 label = {
                     Text(
                         if (presetIntervals.contains(intervalHours)) {
-                            "Custom"
+                            stringResource(R.string.settings_announce_custom)
                         } else {
-                            "Custom (${intervalHours}h)"
+                            stringResource(R.string.settings_announce_custom_value, intervalHours)
                         },
                     )
                 },
@@ -194,18 +195,18 @@ private fun AnnounceStatus(
             Text(
                 text =
                     if (hoursAgo > 0) {
-                        "Last announce: ${hoursAgo}h ${minutesAgo}m ago"
+                        stringResource(R.string.settings_announce_last_hm, hoursAgo, minutesAgo)
                     } else if (minutesAgo > 0) {
-                        "Last announce: ${minutesAgo}m ago"
+                        stringResource(R.string.settings_announce_last_m, minutesAgo)
                     } else {
-                        "Last announce: just now"
+                        stringResource(R.string.settings_announce_last_now)
                     },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             Text(
-                text = "No announces sent yet",
+                text = stringResource(R.string.settings_announce_none),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -217,15 +218,15 @@ private fun AnnounceStatus(
 
             val displayText =
                 if (timeUntilNext <= 0) {
-                    "Next announce: soon"
+                    stringResource(R.string.settings_announce_next_soon)
                 } else {
                     val hoursRemaining = (timeUntilNext / 3600000).toInt()
                     val minutesRemaining = ((timeUntilNext % 3600000) / 60000).toInt()
 
                     if (hoursRemaining > 0) {
-                        "Next announce in: ${hoursRemaining}h ${minutesRemaining}m"
+                        stringResource(R.string.settings_announce_next_hm, hoursRemaining, minutesRemaining)
                     } else {
-                        "Next announce in: ${minutesRemaining}m"
+                        stringResource(R.string.settings_announce_next_m, minutesRemaining)
                     }
                 }
 
@@ -272,12 +273,12 @@ private fun ManualAnnounceSection(
                 } else {
                     Icon(
                         imageVector = Icons.Default.Send,
-                        contentDescription = "Announce Now",
+                        contentDescription = stringResource(R.string.settings_announce_now),
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
-                Text(text = if (isManualAnnouncing) "Announcing..." else "Announce Now")
+                Text(text = if (isManualAnnouncing) stringResource(R.string.settings_announce_announcing) else stringResource(R.string.settings_announce_now))
             }
         }
 
@@ -292,13 +293,13 @@ private fun ManualAnnounceSection(
             ) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Success",
+                    contentDescription = stringResource(R.string.settings_announce_success_cd),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp),
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "Announce sent!",
+                    text = stringResource(R.string.settings_announce_sent),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -316,13 +317,13 @@ private fun ManualAnnounceSection(
             ) {
                 Icon(
                     imageVector = Icons.Default.Info,
-                    contentDescription = "Error",
+                    contentDescription = stringResource(R.string.settings_announce_error_cd),
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(16.dp),
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "Error: $manualAnnounceError",
+                    text = stringResource(R.string.error_prefix, manualAnnounceError),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -340,11 +341,11 @@ private fun CustomIntervalDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Custom Interval") },
+        title = { Text(stringResource(R.string.settings_announce_custom_dialog_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Enter announce interval (1-12 hours):",
+                    stringResource(R.string.settings_announce_custom_prompt),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 OutlinedTextField(
@@ -354,13 +355,13 @@ private fun CustomIntervalDialog(
                             onInputChange(it)
                         }
                     },
-                    label = { Text("Hours") },
+                    label = { Text(stringResource(R.string.settings_announce_hours)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     isError = customIntervalInput.toIntOrNull()?.let { it < 1 || it > 12 } ?: false,
                     supportingText = {
                         if (customIntervalInput.toIntOrNull()?.let { it < 1 || it > 12 } == true) {
-                            Text("Value must be between 1 and 12")
+                            Text(stringResource(R.string.settings_announce_invalid_range))
                         }
                     },
                 )
@@ -376,12 +377,12 @@ private fun CustomIntervalDialog(
                 },
                 enabled = customIntervalInput.toIntOrNull()?.let { it in 1..12 } ?: false,
             ) {
-                Text("Confirm")
+                Text(stringResource(R.string.settings_announce_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.settings_announce_cancel))
             }
         },
     )

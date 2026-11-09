@@ -18,8 +18,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.ui.components.CollapsibleSettingsCard
+import network.columba.app.ui.components.NotificationPrivacyChooser
 
 @Composable
 fun PrivacyCard(
@@ -31,9 +36,11 @@ fun PrivacyCard(
     onAllowCallsFromContactsOnlyChange: (Boolean) -> Unit,
     blockedPeerCount: Int = 0,
     onNavigateToBlockedUsers: () -> Unit = {},
+    notificationPrivacyLevel: NotificationPrivacyLevel = NotificationPrivacyLevel.DEFAULT,
+    onNotificationPrivacyLevelChange: (NotificationPrivacyLevel) -> Unit = {},
 ) {
     CollapsibleSettingsCard(
-        title = "Privacy",
+        title = stringResource(R.string.settings_privacy_title),
         icon = Icons.Default.Security,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
@@ -48,7 +55,7 @@ fun PrivacyCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Messages from contacts only",
+                text = stringResource(R.string.settings_privacy_messages_contacts_only),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier =
                     Modifier
@@ -63,9 +70,9 @@ fun PrivacyCard(
         Text(
             text =
                 if (blockUnknownSenders) {
-                    "Only contacts can message you. Messages from unknown senders are silently discarded."
+                    stringResource(R.string.settings_privacy_messages_blocked_hint)
                 } else {
-                    "Anyone can send you messages, including unknown senders."
+                    stringResource(R.string.settings_privacy_messages_open_hint)
                 },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -82,7 +89,7 @@ fun PrivacyCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Calls from contacts only",
+                text = stringResource(R.string.settings_privacy_calls_contacts_only),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier =
                     Modifier
@@ -97,12 +104,34 @@ fun PrivacyCard(
         Text(
             text =
                 if (allowCallsFromContactsOnly) {
-                    "Only contacts can call you. Other callers' link attempts are silently dropped."
+                    stringResource(R.string.settings_privacy_calls_blocked_hint)
                 } else {
-                    "Anyone can call you, including unknown callers."
+                    stringResource(R.string.settings_privacy_calls_open_hint)
                 },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Message privacy levels. Same control as Notification Settings, surfaced here so
+        // the exposure of message text is discoverable from the privacy card too.
+        Text(
+            text = stringResource(R.string.message_privacy_title),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Text(
+            text = stringResource(R.string.message_privacy_body),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        NotificationPrivacyChooser(
+            selected = notificationPrivacyLevel,
+            onSelect = onNotificationPrivacyLevelChange,
+            modifier = Modifier.padding(top = 4.dp),
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -122,7 +151,7 @@ fun PrivacyCard(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "Blocked Users",
+                text = stringResource(R.string.settings_privacy_blocked_users),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier =
                     Modifier

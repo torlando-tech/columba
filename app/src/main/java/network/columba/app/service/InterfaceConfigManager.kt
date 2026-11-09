@@ -13,6 +13,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
+import network.columba.app.R
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
@@ -27,6 +28,8 @@ import network.columba.app.rns.host.ReticulumService
 import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.rns.host.manager.filterByTransport
 import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
+import network.columba.app.viewmodel.UiMessage
+import network.columba.app.viewmodel.UiMessageException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -94,7 +97,7 @@ class InterfaceConfigManager
          *   setter can save a newer value between that earlier read and this one.
          * @return Result indicating success or failure with error details
          */
-        @Suppress("CyclomaticComplexMethod", "LongMethod") // Complex but necessary service restart orchestration
+        @Suppress("CyclomaticComplexMethod", "LongMethod", "ThrowsCount") // Complex but necessary service restart orchestration; each throw carries its own localized UiMessage
         suspend fun applyInterfaceChanges(
             onServiceReady: (() -> Unit)? = null,
             onAppliedConfig: ((count: Int, mode: String?) -> Unit)? = null,
@@ -308,7 +311,7 @@ class InterfaceConfigManager
                             "Active identity ${activeIdentity.identityHash.take(8)}... is password-protected " +
                                 "(or password status unreadable) - skipping apply until unlock",
                         )
-                        error("Active identity requires unlock before interface config can apply")
+                        throw UiMessageException(UiMessage.Text(R.string.iface_apply_requires_unlock))
                     }
                     val deliveryKey =
                         if (activeIdentity != null) {
@@ -325,7 +328,7 @@ class InterfaceConfigManager
                             "Active identity ${activeIdentity.identityHash.take(8)}... present but key decryption " +
                                 "returned null - refusing to restart with an ephemeral identity",
                         )
-                        error("Active identity key unavailable; aborting apply")
+                        throw UiMessageException(UiMessage.Text(R.string.iface_apply_key_unavailable))
                     }
                     val displayName = activeIdentity?.displayName
                     Log.d(TAG, "Active identity: ${if (activeIdentity != null) "set (in-memory key)" else "none"}")
@@ -405,7 +408,7 @@ class InterfaceConfigManager
                         // as an apply-time redelivery and ignored in
                         // ReticulumService.onStartCommand.
                         Log.e(TAG, "Failed to initialize Reticulum", error)
-                        throw Exception("Failed to initialize Reticulum: ${error.message}", error)
+                        throw UiMessageException(UiMessage.Text(R.string.iface_apply_init_failed, listOf(error.message ?: "null")), error)
                     }
                     Log.d(TAG, "✓ Reticulum initialized successfully")
 

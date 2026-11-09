@@ -46,6 +46,7 @@ internal class NativeMessageSender(
         val replyQuotedContent: String? = null,
         val iconAppearance: IconAppearance? = null,
         val extraFields: Map<Int, Any>? = null,
+        val threadId: ByteArray? = null,
     )
 
     suspend fun sendLxmfMessageWithMethod(
@@ -138,8 +139,16 @@ internal class NativeMessageSender(
         return recipientIdentity
     }
 
-    private fun buildFields(options: MessageOptions): MutableMap<Int, Any> {
+    internal fun buildFields(options: MessageOptions): MutableMap<Int, Any> {
         val fields = mutableMapOf<Int, Any>()
+
+        // Thread grouping key (threads-spec §4.2): fields[0x08] = raw bytes,
+        // 16 fresh random (CSPRNG) bytes chosen by the creator and reused for
+        // the thread's lifetime. Receivers group by exact bytes; absent = Main.
+        // Mirrors the raw-bytes treatment of the 0x30 reply hash below.
+        options.threadId?.takeIf { it.isNotEmpty() }?.let {
+            fields[LxmfFields.FIELD_THREAD] = it
+        }
 
         if (options.imageData != null && options.imageFormat != null) {
             fields[LxmfFields.FIELD_IMAGE] = listOf(options.imageFormat, options.imageData)

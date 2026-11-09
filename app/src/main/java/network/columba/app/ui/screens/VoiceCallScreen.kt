@@ -49,13 +49,17 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import network.columba.app.R
 import network.columba.app.call.PttMediaSessionManager
+import network.columba.app.ui.components.CallProfileSheet
+import network.columba.app.ui.model.CodecProfile
 import network.columba.app.viewmodel.CallViewModel
 import network.columba.app.rns.api.model.CallState
 
@@ -84,8 +88,18 @@ fun VoiceCallScreen(
     val isPttActive by viewModel.isPttActive.collectAsStateWithLifecycle()
     val callDuration by viewModel.callDuration.collectAsStateWithLifecycle()
     val peerName by viewModel.peerName.collectAsStateWithLifecycle()
-    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
+    val activeProfileCode by viewModel.activeProfileCode.collectAsStateWithLifecycle()
     val callMode by viewModel.callMode.collectAsStateWithLifecycle()
+
+    // Current profile resolved from the backend id; the compact control shows
+    // its LXST abbreviation, the sheet shows the full label. Null until the
+    // backend reports a profile for this call.
+    val activeProfile = activeProfileCode?.let { code -> CodecProfile.fromCode(code) }
+
+    // Audio profile picker: a deliberate second tap to open, one tap on a row
+    // to switch. Nothing else on the call screen is blocked by it beyond the
+    // M3 modal scrim, and it closes as soon as the call leaves Active.
+    var showProfileSheet by remember { mutableStateOf(false) }
 
     // Half duplex (the PTT transport mode). The PTT hold button and the
     // Bluetooth-headset PTT capture are active only in HDX; in FDX the call is
@@ -181,6 +195,13 @@ fun VoiceCallScreen(
         }
     }
 
+    // The picker only exists for an established call; drop it if the call
+    // stops being active (peer hung up, declined, ...) so the sheet does not
+    // linger over the post-call state while the screen navigates away.
+    LaunchedEffect(callState) {
+        if (callState !is CallState.Active) showProfileSheet = false
+    }
+
     // Full-screen call UI
     Box(
         modifier =
@@ -236,18 +257,22 @@ fun VoiceCallScreen(
                 Text(
                     text =
                         when (callState) {
-                            is CallState.Connecting -> "Connecting..."
-                            is CallState.Ringing -> "Ringing..."
+                            is CallState.Connecting -> stringResource(R.string.call_status_connecting_long)
+                            is CallState.Ringing -> stringResource(R.string.call_status_ringing_long)
                             is CallState.Active ->
                                 if (isHalfDuplex) {
-                                    if (isPttActive) "Transmitting" else "Listening"
+                                    if (isPttActive) {
+                                        stringResource(R.string.call_status_transmitting)
+                                    } else {
+                                        stringResource(R.string.call_status_listening)
+                                    }
                                 } else {
                                     viewModel.formatDuration(callDuration)
                                 }
-                            is CallState.Busy -> "Line Busy"
-                            is CallState.Rejected -> "Call Rejected"
-                            is CallState.Ended -> "Call Ended"
-                            else -> "Calling..."
+                            is CallState.Busy -> stringResource(R.string.call_status_line_busy)
+                            is CallState.Rejected -> stringResource(R.string.call_status_call_rejected)
+                            is CallState.Ended -> stringResource(R.string.call_status_call_ended)
+                            else -> stringResource(R.string.call_status_calling_long)
                         },
                     style = MaterialTheme.typography.bodyLarge,
                     color =
@@ -304,7 +329,7 @@ fun VoiceCallScreen(
                     // Mute button (disabled in half duplex since PTT controls transmit)
                     CallControlButton(
                         icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                        label = if (isMuted) "Unmute" else "Mute",
+                        label = if (isMuted) stringResource(R.string.call_unmute) else stringResource(R.string.call_mute),
                         isActive = isMuted,
                         onClick = { viewModel.toggleMute() },
                         enabled = callState is CallState.Active && !isHalfDuplex,
@@ -329,26 +354,29 @@ fun VoiceCallScreen(
                     // Speaker button
                     CallControlButton(
                         icon = if (isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeDown,
-                        label = if (isSpeakerOn) "Earpiece" else "Speaker",
+                        label = if (isSpeakerOn) stringResource(R.string.call_earpiece) else stringResource(R.string.call_speaker),
                         isActive = isSpeakerOn,
                         onClick = { viewModel.toggleSpeaker() },
                         enabled = callState is CallState.Active,
                         testTag = "speakerButton",
                     )
 
-                    // LXST profile cycle button (Profile Negotiation).
-                    // Shows the active codec profile abbreviation; tapping
-                    // cycles to the next profile and signals it to the peer.
-                    // Disabled until a call is established (switchProfile is a
-                    // no-op otherwise); the label falls back to "Audio" when
-                    // the backend hasn't reported a profile yet.
+                    // LXST audio profile control (Profile Negotiation).
+                    // Opens the profile picker instead of cycling: one
+                    // deliberate tap to open, one tap on a row to switch, and
+                    // the exact codec is chosen directly. Disabled until a
+                    // call is established (switchProfile is a no-op
+                    // otherwise); the label carries the active profile's
+                    // LXST abbreviation, falling back to "Audio" until the
+                    // backend reports one.
                     CallControlButton(
                         icon = Icons.Default.AudioFile,
-                        label = (activeProfile ?: "Audio").uppercase(),
+                        label = activeProfile?.abbreviation ?: stringResource(R.string.call_profile_control),
+                        contentDescription = stringResource(R.string.call_profile_control_content_description),
                         isActive = false,
-                        onClick = { viewModel.cycleProfile() },
+                        onClick = { showProfileSheet = true },
                         enabled = callState is CallState.Active,
-                        testTag = "profileCycleButton",
+                        testTag = "profileButton",
                     )
                 }
 
@@ -367,7 +395,7 @@ fun VoiceCallScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.CallEnd,
-                        contentDescription = "End call",
+                        contentDescription = stringResource(R.string.call_end_call_content_description),
                         modifier = Modifier.size(32.dp),
                         tint = MaterialTheme.colorScheme.onError,
                     )
@@ -376,11 +404,22 @@ fun VoiceCallScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "End Call",
+                    text = stringResource(R.string.call_end_call),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+
+        if (showProfileSheet) {
+            CallProfileSheet(
+                activeProfileCode = activeProfileCode,
+                onProfileSelected = { profile ->
+                    showProfileSheet = false
+                    viewModel.switchProfile(profile)
+                },
+                onDismiss = { showProfileSheet = false },
+            )
         }
     }
 }
@@ -448,13 +487,13 @@ private fun PttButton(
         ) {
             Icon(
                 imageVector = Icons.Default.Mic,
-                contentDescription = if (isActive) "Transmitting" else "Hold to talk",
+                contentDescription = if (isActive) stringResource(R.string.call_status_transmitting) else stringResource(R.string.call_hold_to_talk),
                 modifier = Modifier.size(48.dp),
                 tint = contentColor,
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = if (isActive) "TALKING" else "HOLD\nTO TALK",
+                text = if (isActive) stringResource(R.string.call_talking) else stringResource(R.string.call_hold_talk_multiline),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = contentColor,
@@ -472,6 +511,7 @@ private fun CallControlButton(
     onClick: () -> Unit,
     enabled: Boolean = true,
     testTag: String = "",
+    contentDescription: String = label,
 ) {
     val backgroundColor by animateColorAsState(
         targetValue =
@@ -503,7 +543,7 @@ private fun CallControlButton(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = label,
+                contentDescription = contentDescription,
                 modifier = Modifier.size(24.dp),
             )
         }

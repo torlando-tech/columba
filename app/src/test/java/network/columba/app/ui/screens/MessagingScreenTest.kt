@@ -11,7 +11,9 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -34,6 +36,7 @@ import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.service.SyncProgress
 import network.columba.app.test.MessagingTestFixtures
 import network.columba.app.test.RegisterComponentActivityRule
+import network.columba.app.test.waitForCondition
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
 import network.columba.app.ui.model.ReplyPreviewUi
@@ -630,7 +633,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - verify messages are displayed
         composeTestRule.onNodeWithText("Received message 1", substring = true).assertIsDisplayed()
@@ -1166,7 +1169,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then
         composeTestRule.onNodeWithText("Hello from me").assertIsDisplayed()
@@ -1187,7 +1190,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then
         composeTestRule.onNodeWithText("Hello from peer").assertIsDisplayed()
@@ -1208,7 +1211,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - pending shows "○"
         composeTestRule.onNodeWithText("○").assertIsDisplayed()
@@ -1229,7 +1232,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - sent shows "✓"
         composeTestRule.onNodeWithText("✓").assertIsDisplayed()
@@ -1250,7 +1253,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - delivered shows "✓✓"
         composeTestRule.onNodeWithText("✓✓").assertIsDisplayed()
@@ -1271,7 +1274,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - failed shows "!"
         composeTestRule.onNodeWithText("!").assertIsDisplayed()
@@ -1292,7 +1295,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - no delivery status indicators should be shown
         composeTestRule.onNodeWithText("○").assertDoesNotExist()
@@ -1338,7 +1341,7 @@ class MessagingScreenTest {
                         viewModel = mockViewModel,
                     )
                 }
-                composeTestRule.waitForIdle()
+                composeTestRule.awaitMessageRows()
             }
 
         // Then - should trigger async image loading
@@ -1367,7 +1370,7 @@ class MessagingScreenTest {
                         viewModel = mockViewModel,
                     )
                 }
-                composeTestRule.waitForIdle()
+                composeTestRule.awaitMessageRows()
             }
 
         // Then - should NOT trigger async image loading (already in loadedImageIds)
@@ -1392,7 +1395,7 @@ class MessagingScreenTest {
                         viewModel = mockViewModel,
                     )
                 }
-                composeTestRule.waitForIdle()
+                composeTestRule.awaitMessageRows()
             }
 
         // Then - should NOT trigger async image loading
@@ -1421,7 +1424,7 @@ class MessagingScreenTest {
                         viewModel = mockViewModel,
                     )
                 }
-                composeTestRule.waitForIdle()
+                composeTestRule.awaitMessageRows()
 
                 // Initial load should be triggered
                 verify { mockViewModel.loadImageAsync(messageId, any()) }
@@ -1454,7 +1457,7 @@ class MessagingScreenTest {
                         viewModel = mockViewModel,
                     )
                 }
-                composeTestRule.waitForIdle()
+                composeTestRule.awaitMessageRows()
             }
 
         // Then - both should trigger async loads
@@ -1481,7 +1484,7 @@ class MessagingScreenTest {
                         viewModel = mockViewModel,
                     )
                 }
-                composeTestRule.waitForIdle()
+                composeTestRule.awaitMessageRows()
             }
 
         // Then - should NOT trigger async load (fieldsJson is null)
@@ -1740,7 +1743,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - reply preview should be displayed
         composeTestRule.onNodeWithText("Frank").assertIsDisplayed()
@@ -1770,7 +1773,7 @@ class MessagingScreenTest {
                         viewModel = mockViewModel,
                     )
                 }
-                composeTestRule.waitForIdle()
+                composeTestRule.awaitMessageRows()
             }
 
         // Then - should trigger async loading of reply preview
@@ -1806,7 +1809,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - should NOT trigger async loading (already cached)
         verify(exactly = 0) { mockViewModel.loadReplyPreviewAsync(any(), any()) }
@@ -1833,7 +1836,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - media-only GIF shows sent status (overlay timestamp row)
         // The "Animated GIF" AsyncImage may not render in Robolectric tests,
@@ -1856,7 +1859,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - should display text content (in bubble)
         composeTestRule.onNodeWithText("Check out this GIF!").assertIsDisplayed()
@@ -1884,7 +1887,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - should display reply preview (in bubble)
         composeTestRule.onNodeWithText("Alice").assertIsDisplayed()
@@ -1906,7 +1909,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - should show sent status indicator
         composeTestRule.onNodeWithText("✓").assertIsDisplayed()
@@ -1979,7 +1982,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Initial load should be triggered
         verify { mockViewModel.loadReplyPreviewAsync(messageId, replyToId) }
@@ -2015,7 +2018,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - received messages don't show delivery status indicators
         composeTestRule.onNodeWithText("✓").assertDoesNotExist()
@@ -2037,7 +2040,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - delivered shows double checkmark
         composeTestRule.onNodeWithText("✓✓").assertIsDisplayed()
@@ -2058,7 +2061,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - pending shows empty circle
         composeTestRule.onNodeWithText("○").assertIsDisplayed()
@@ -2079,7 +2082,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - failed shows exclamation
         composeTestRule.onNodeWithText("!").assertIsDisplayed()
@@ -2151,7 +2154,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - text from second GIF should be visible
         composeTestRule.onNodeWithText("Look at this!").assertIsDisplayed()
@@ -2231,7 +2234,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - text message should be displayed
         composeTestRule.onNodeWithText("Hello!").assertIsDisplayed()
@@ -2252,7 +2255,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - propagated shows the accepted-by-relay indicator
         composeTestRule.onNodeWithContentDescription("Stored on relay network").assertIsDisplayed()
@@ -2273,7 +2276,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - retrying_propagated shows the relay-upload indicator
         composeTestRule.onNodeWithContentDescription("Sending to relay network").assertIsDisplayed()
@@ -2374,7 +2377,7 @@ class MessagingScreenTest {
                 viewModel = mockViewModel,
             )
         }
-        composeTestRule.waitForIdle()
+        composeTestRule.awaitMessageRows()
 
         // Then - root text, reply count and the invalid signature warning share one row
         val invalidSignatureLabel =
@@ -2398,5 +2401,21 @@ class MessagingScreenTest {
         composeTestRule
             .onNodeWithContentDescription(invalidSignatureLabel)
             .assertIsDisplayed()
+    }
+
+    /**
+     * The message list is paged, so its first row is composed only after PagingData is
+     * diffed on a background executor. `waitForIdle` drains Compose and the main looper
+     * but never waits for that executor, so on a contended CI runner every row
+     * assertion races the differ while the list is still in its empty state. Block
+     * until the first page has replaced the empty state, then let Compose settle.
+     */
+    private fun ComposeTestRule.awaitMessageRows() {
+        val emptyStateText =
+            RuntimeEnvironment.getApplication().getString(R.string.messaging_no_messages_yet)
+        waitForCondition(timeoutMillis = 10_000) {
+            onAllNodesWithText(emptyStateText).fetchSemanticsNodes().isEmpty()
+        }
+        waitForIdle()
     }
 }

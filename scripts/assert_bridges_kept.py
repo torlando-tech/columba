@@ -25,7 +25,6 @@ BRIDGE_CLASSES = [
     "network.columba.app.rns.backend.py.PythonEventBridge",
     "network.columba.app.rns.backend.py.PyEventCallback",
     "network.columba.app.rns.backend.py.PyTwoArgCallback",
-    "network.columba.app.rns.backend.py.StampGeneratorCallback",
 ]
 
 # Method names Python calls on each host bridge (from the call sites in
@@ -47,10 +46,6 @@ BRIDGE_METHODS = {
     },
     "network.columba.app.rns.host.usb.KotlinUSBBridge": {
         "connect", "disconnect", "findDeviceByVidPid", "isConnected", "notifyBluetoothPin", "read",
-    },
-    "network.columba.app.rns.backend.py.StampGeneratorCallback": {
-        # event_bridge.install_external_stamp_generator calls generate(workblock, cost, token) by name.
-        "generate",
     },
 }
 

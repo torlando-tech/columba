@@ -1,8 +1,10 @@
 package network.columba.app.data.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
+import network.columba.app.domain.model.SignatureStatus
 
 @Entity(
     tableName = "messages",
@@ -28,6 +30,8 @@ import androidx.room.Index
         Index("conversationHash", "identityHash", "timestamp"), // For queries with ordering
         Index("conversationHash", "identityHash", "isFromMe", "isRead"), // For unread count queries
         Index("replyToMessageId"), // For efficient reply lookups
+        Index("signatureStatus", "conversationHash", "id", "identityHash"), // Bounded deferred verification scans
+        Index("identityHash", "isFromMe", "notificationHandled"), // Pending notification reconciliation
     ], // Indexes for faster queries
 )
 data class MessageEntity(
@@ -71,17 +75,9 @@ data class MessageEntity(
     val receivedAt: Long? = null,
     // Interface name through which message was sent (null for received messages or pre-feature messages)
     val sentInterface: String? = null,
-    // For received messages: whether the LXMF signature was verified against
-    // the sender's known identity.
-    //   true  = signature checked against a known source identity, valid.
-    //   false = the sender's signature could not be verified — could be a
-    //           forgery; the UI must warn. Kotlin backend: always
-    //           SOURCE_UNKNOWN (we don't hold the sender's identity yet;
-    //           LXMF-kt drops SIGNATURE_INVALID at the router). Python backend:
-    //           may also be a failed signature check (python LXMF delivers
-    //           those to the app).
-    //   null  = sent by us (signed locally — implicitly authentic) or legacy
-    //           rows from before this column (migration backfills null). Treat
-    //           as "no warning" to preserve historical display.
-    val signatureVerified: Boolean? = null,
+    // Null means no recorded result. UNVERIFIED preserves ambiguous legacy failures.
+    val signatureStatus: SignatureStatus? = null,
+    // DB-local notification completion marker. Existing rows default to handled so the
+    // v11 → v12 migration cannot replay historical alerts; new inbound rows start pending.
+    @ColumnInfo(defaultValue = "1") val notificationHandled: Boolean = true,
 )

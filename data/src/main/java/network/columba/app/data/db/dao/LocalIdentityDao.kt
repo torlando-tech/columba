@@ -45,6 +45,10 @@ interface LocalIdentityDao {
     @Query("SELECT * FROM local_identities WHERE identityHash = :identityHash")
     suspend fun getIdentity(identityHash: String): LocalIdentityEntity?
 
+    /** Resolve a delivered message's immutable original recipient, not the current UI identity. */
+    @Query("SELECT * FROM local_identities WHERE destinationHash = :destinationHash LIMIT 1")
+    suspend fun getIdentityByDestinationHash(destinationHash: String): LocalIdentityEntity?
+
     /**
      * Insert or replace an identity.
      */

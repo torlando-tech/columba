@@ -30,11 +30,6 @@ class AnnounceProvenanceBridgeTests(unittest.TestCase):
         setattr(rns, "LOG_DEBUG", 1)
         setattr(rns, "LOG_ERROR", 3)
         setattr(rns, "log", lambda *args, **kwargs: None)
-        setattr(rns, "Destination", types.SimpleNamespace(
-            hash_from_name_and_identity=lambda aspect, identity: b"destination"
-            if aspect == "lxmf.delivery"
-            else b"other"
-        ))
         setattr(rns, "Transport", types.SimpleNamespace(
             PATHFINDER_M=128,
             hops_to=lambda destination_hash: 1,
@@ -56,7 +51,7 @@ class AnnounceProvenanceBridgeTests(unittest.TestCase):
         callback = FakeCallback()
         setattr(self.module, "_on_announce", callback)
 
-        self.module._AnnounceHandler().received_announce(
+        self.module._AnnounceHandler("lxmf.delivery").received_announce(
             b"destination",
             FakeIdentity(),
             b"app-data",

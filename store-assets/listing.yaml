@@ -26,8 +26,8 @@ phone:
 
 # "No X" ladder: each caption names something the app does not need; the
 # ladder reads as one set on the store shelf. Supersedes the 2026-09-07
-# approved copy - pending re-approval. Measured so every line fits 120px
-# (01's first line lands at 118px).
+# approved copy - pending re-approval. Measured: every line fits 120px
+# except 01's first line (118px) and 04's second line (1059px -> 106px).
 screens:
   - id: 01_contacts
     capture: captures/01_contacts.png
@@ -43,7 +43,7 @@ screens:
 
   - id: 04_conversation
     capture: captures/04_conversation.png
-    caption_text: "No server.\nJust you two."
+    caption_text: "No middlemen.\nJust the two of you."
 
   - id: 05_call
     capture: captures/05_call.png

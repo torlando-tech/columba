@@ -3,6 +3,7 @@ package network.columba.app.rns.backend.py
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.ReticulumConfig
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -253,5 +254,135 @@ class RnsConfigFileTest {
         assertTrue(out.contains("share_instance = No"))
         assertFalse(out.contains("shared_instance_type"))
         assertFalse(out.contains("rpc_key"))
+    }
+
+    // ---- announce ingress filter ([filter], RNS 1.6.0) ----------------------
+
+    @Test
+    fun `filter default on emits required_only and all five built-in types`() {
+        val out = RnsConfigFile.build(cfg())
+        assertTrue(out.contains("[filter]"))
+        assertTrue(out.contains("required_only = Yes"))
+        val allowedLine = out.lines().first { it.trim().startsWith("allowed_types") }
+        for (aspect in listOf(
+            "lxmf.delivery",
+            "lxmf.propagation",
+            "nomadnetwork.node",
+            "lxst.telephony",
+            "rnstransport.discovery.interface",
+        )) {
+            assertTrue("missing $aspect", allowedLine.contains(aspect))
+        }
+        // hop_limiter 0 = unlimited: the line must be absent so RNS keeps
+        // its own default.
+        assertFalse(out.contains("hop_limiter"))
+    }
+
+    @Test
+    fun `filter disabled omits the whole filter section`() {
+        val out = RnsConfigFile.build(cfg().copy(announceFilterEnabled = false))
+        assertFalse(out.contains("[filter]"))
+        assertFalse(out.contains("required_only"))
+        assertFalse(out.contains("allowed_types"))
+    }
+
+    @Test
+    fun `hosting without filter-while-sharing keeps the filter off`() {
+        // Joined apps register their own announce needs on the master; a
+        // node-wide gate would starve them, so hosting defaults to no filter.
+        val out = RnsConfigFile.build(cfg(), hostShareInstance = true)
+        assertFalse(out.contains("[filter]"))
+    }
+
+    @Test
+    fun `hosting with filter-while-sharing opt-in emits the filter`() {
+        val out = RnsConfigFile.build(
+            cfg().copy(announceFilterWhileHosting = true),
+            hostShareInstance = true,
+        )
+        assertTrue(out.contains("required_only = Yes"))
+    }
+
+    @Test
+    fun `joining a master never emits the filter — master's config governs`() {
+        // Announce handling runs in the master's process; our [filter]
+        // section would be inert at best.
+        val out = RnsConfigFile.build(cfg(), joinShareInstance = true)
+        assertFalse(out.contains("[filter]"))
+    }
+
+    @Test
+    fun `optional aspect toggles drop exactly their entries`() {
+        val out = RnsConfigFile.build(
+            cfg().copy(
+                announceFilterAllowNodes = false,
+                announceFilterAllowCalls = false,
+            ),
+        )
+        val allowedLine = out.lines().first { it.trim().startsWith("allowed_types") }
+        assertFalse(allowedLine.contains("nomadnetwork.node"))
+        assertFalse(allowedLine.contains("lxst.telephony"))
+        assertTrue(allowedLine.contains("lxmf.delivery"))
+        assertTrue(allowedLine.contains("lxmf.propagation"))
+        assertTrue(allowedLine.contains("rnstransport.discovery.interface"))
+    }
+
+    @Test
+    fun `custom aspects emit only while hosting`() {
+        val withCustom = cfg().copy(
+            announceFilterWhileHosting = true,
+            announceFilterCustomAspects = listOf("sideband.status"),
+        )
+        val hosted = RnsConfigFile.build(withCustom, hostShareInstance = true)
+        assertTrue(hosted.contains("sideband.status"))
+        // Not master → dormant: persisted but never emitted.
+        val own = RnsConfigFile.build(withCustom)
+        assertFalse(own.contains("sideband.status"))
+    }
+
+    @Test
+    fun `invalid and duplicate custom aspects are dropped at render`() {
+        // A restored backup or hand-edited value must not corrupt the
+        // grammar or duplicate built-ins.
+        val out = RnsConfigFile.build(
+            cfg().copy(
+                announceFilterWhileHosting = true,
+                announceFilterCustomAspects = listOf(
+                    "UPPER.CASE",
+                    "no_dot",
+                    "with space.x",
+                    "lxmf.delivery",
+                    "good.app",
+                    "good.app",
+                ),
+            ),
+            hostShareInstance = true,
+        )
+        val allowedLine = out.lines().first { it.trim().startsWith("allowed_types") }
+        assertFalse(allowedLine.contains("UPPER"))
+        assertFalse(allowedLine.contains("no_dot"))
+        assertFalse(allowedLine.contains("space"))
+        assertFalse(allowedLine.contains("good.app, good.app"))
+        assertTrue(allowedLine.contains("good.app"))
+        // Built-in dedup: lxmf.delivery appears exactly once.
+        assertEquals(1, Regex("lxmf\\.delivery").findAll(allowedLine).count())
+    }
+
+    @Test
+    fun `hop limiter emitted only when positive`() {
+        val out = RnsConfigFile.build(cfg().copy(announceFilterMaxHops = 3))
+        assertTrue(out.contains("hop_limiter = 3"))
+        val zero = RnsConfigFile.build(cfg().copy(announceFilterMaxHops = 0))
+        assertFalse(zero.contains("hop_limiter"))
+    }
+
+    @Test
+    fun `filter section sits between logging and interfaces`() {
+        val out = RnsConfigFile.build(cfg())
+        val loggingIdx = out.indexOf("[logging]")
+        val filterIdx = out.indexOf("[filter]")
+        val interfacesIdx = out.indexOf("[interfaces]")
+        assertTrue(loggingIdx in 0 until filterIdx)
+        assertTrue(filterIdx < interfacesIdx)
     }
 }

@@ -89,6 +89,43 @@ sealed interface SharedInstanceAccessEvent {
     data object Unavailable : SharedInstanceAccessEvent
 }
 
+/**
+ * The seven persisted values that render into the RNS 1.6.0 `[filter]`
+ * section. Mirrors `ReticulumConfig`'s announce-filter fields; used both
+ * as the live UI snapshot and as the "applied" anchor the pending-restart
+ * affordance compares against.
+ */
+data class AnnounceFilterConfig(
+    val enabled: Boolean = true,
+    val whileHosting: Boolean = false,
+    val allowNodes: Boolean = true,
+    val allowCalls: Boolean = true,
+    val allowDiscovery: Boolean = true,
+    val customAspects: List<String> = emptyList(),
+    val maxHops: Int = 0,
+) {
+    /**
+     * The filter as `RnsConfigFile.renderFilter` would actually render it
+     * under the given hosting mode: nothing at all while the gate is off
+     * (or while hosting without the while-hosting opt-in), and no custom
+     * aspects unless we are the master. Pending-restart comparisons MUST
+     * run both sides through this so dormant preference edits — values the
+     * running daemon cannot see — never demand a connection-dropping
+     * restart.
+     */
+    fun effective(hostShareInstance: Boolean): AnnounceFilterConfig =
+        if (!enabled || (hostShareInstance && !whileHosting)) {
+            INACTIVE
+        } else {
+            copy(customAspects = if (hostShareInstance) customAspects else emptyList())
+        }
+
+    companion object {
+        /** Normalized form of "no `[filter]` section is rendered". */
+        val INACTIVE = AnnounceFilterConfig(enabled = false)
+    }
+}
+
 @androidx.compose.runtime.Immutable
 data class SettingsState(
     val displayName: String = "",
@@ -159,6 +196,23 @@ data class SettingsState(
     val appliedShareInstanceHosting: Boolean = false,
     val isHostingSharedInstance: Boolean = false,
     val isHostingShareInstanceConflict: Boolean = false,
+    // RNS 1.6.0 announce ingress filter (python backend only; capability-
+    // gated in UI). Same persisted-vs-applied pattern as shareInstance-
+    // Hosting: the values mirror DataStore, `appliedAnnounceFilter` is the
+    // snapshot the running daemon was constructed with, and any divergence
+    // drives the "Restart required to apply" affordance.
+    val announceFilterEnabled: Boolean = true,
+    val announceFilterWhileHosting: Boolean = false,
+    val announceFilterAllowNodes: Boolean = true,
+    val announceFilterAllowCalls: Boolean = true,
+    val announceFilterAllowDiscovery: Boolean = true,
+    val announceFilterCustomAspects: List<String> = emptyList(),
+    val announceFilterMaxHops: Int = 0,
+    val appliedAnnounceFilter: AnnounceFilterConfig = AnnounceFilterConfig(),
+    // Auto Discovery setting. While true the discovery-aspect toggle is
+    // forced on: dropping rnstransport.discovery.interface breaks
+    // AutoInterface peering (probe-confirmed on the pinned RNS).
+    val discoverInterfacesEnabled: Boolean = false,
     // Location sharing state
     val locationSharingEnabled: Boolean = true,
     val activeSharingSessions: List<network.columba.app.service.SharingSession> = emptyList(),
@@ -221,7 +275,30 @@ data class SettingsState(
     val nomadNetLastNodeHash: String? = null,
     // Path of the last-browsed NomadNet page (deep page), or null when none.
     val nomadNetLastViewPath: String? = null,
-)
+) {
+    /**
+     * True when the EFFECTIVELY rendered filter diverges from the config
+     * the running daemon was constructed with — drives the "Restart
+     * required to apply" affordance on the Advanced card and the filter
+     * screen. Both sides go through [AnnounceFilterConfig.effective] so
+     * dormant edits (custom aspects while not hosting, optional aspects
+     * while the gate is off) never demand a connection-dropping restart,
+     * and the discovery aspect compares forced-through, matching what the
+     * config builders render.
+     */
+    val announceFilterPending: Boolean
+        get() =
+            AnnounceFilterConfig(
+                enabled = announceFilterEnabled,
+                whileHosting = announceFilterWhileHosting,
+                allowNodes = announceFilterAllowNodes,
+                allowCalls = announceFilterAllowCalls,
+                allowDiscovery = announceFilterAllowDiscovery || discoverInterfacesEnabled,
+                customAspects = announceFilterCustomAspects,
+                maxHops = announceFilterMaxHops,
+            ).effective(shareInstanceHostingEnabled) !=
+                appliedAnnounceFilter.effective(shareInstanceHostingEnabled)
+}
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
 @HiltViewModel
@@ -289,6 +366,39 @@ class SettingsViewModel
             )
         val state: StateFlow<SettingsState> = _state.asStateFlow()
 
+        // The filter the RUNNING daemon was actually built with, read from
+        // the config snapshot the :reticulum process writes at both config-
+        // build sites (cold start in ColumbaApplication, Apply & Restart in
+        // InterfaceConfigManager). Deriving "applied" from the snapshot —
+        // not from current preferences — keeps the pending-restart hint
+        // truthful across activity re-creation (a saved-but-unrestarted
+        // change must stay pending) and edits racing a restart (values
+        // saved after the config builder read DataStore are NOT what the
+        // daemon got). Missing/unreadable snapshot falls back to shipped
+        // defaults, which is exactly what a fresh-install daemon runs.
+        private val _appliedAnnounceFilter = MutableStateFlow(AnnounceFilterConfig())
+
+        /** Re-reads the daemon's build-time filter from the config snapshot. */
+        private fun refreshAppliedAnnounceFilter() {
+            viewModelScope.launch(Dispatchers.IO) {
+                val applied =
+                    runCatching {
+                        ReticulumConfigSnapshot.read(context)?.configWithoutKey
+                    }.getOrNull()?.let {
+                        AnnounceFilterConfig(
+                            enabled = it.announceFilterEnabled,
+                            whileHosting = it.announceFilterWhileHosting,
+                            allowNodes = it.announceFilterAllowNodes,
+                            allowCalls = it.announceFilterAllowCalls,
+                            allowDiscovery = it.announceFilterAllowDiscovery,
+                            customAspects = it.announceFilterCustomAspects,
+                            maxHops = it.announceFilterMaxHops,
+                        )
+                    } ?: AnnounceFilterConfig()
+                _appliedAnnounceFilter.value = applied
+            }
+        }
+
         private val _sharedInstanceAccessEvents = MutableSharedFlow<SharedInstanceAccessEvent>(extraBufferCapacity = 1)
         val sharedInstanceAccessEvents: SharedFlow<SharedInstanceAccessEvent> =
             _sharedInstanceAccessEvents.asSharedFlow()
@@ -307,6 +417,10 @@ class SettingsViewModel
         private var sharedInstanceAvailabilityJob: Job? = null
 
         init {
+            // Anchor the pending-restart hint to the filter the running
+            // daemon was actually built with (config snapshot), not to
+            // current preferences.
+            refreshAppliedAnnounceFilter()
             loadSettings()
             // Always load location sharing settings (not dependent on monitors)
             loadLocationSharingSettings()
@@ -446,6 +560,15 @@ class SettingsViewModel
                         settingsRepository.shareInstanceHostingEnabledFlow,
                         settingsRepository.crashReportingConsentFlow,
                         settingsRepository.themeModeFlow,
+                        settingsRepository.announceFilterEnabledFlow,
+                        settingsRepository.announceFilterWhileHostingFlow,
+                        settingsRepository.announceFilterAllowNodesFlow,
+                        settingsRepository.announceFilterAllowCallsFlow,
+                        settingsRepository.announceFilterAllowDiscoveryFlow,
+                        settingsRepository.announceFilterCustomAspectsFlow,
+                        settingsRepository.announceFilterMaxHopsFlow,
+                        settingsRepository.discoverInterfacesEnabledFlow,
+                        _appliedAnnounceFilter,
                     ) { flows ->
                         @Suppress("UNCHECKED_CAST")
                         val activeIdentity = flows[0] as network.columba.app.data.db.entity.LocalIdentityEntity?
@@ -505,6 +628,32 @@ class SettingsViewModel
 
                         @Suppress("UNCHECKED_CAST")
                         val themeMode = flows[18] as ThemeMode
+
+                        @Suppress("UNCHECKED_CAST")
+                        val announceFilterEnabled = flows[19] as Boolean
+
+                        @Suppress("UNCHECKED_CAST")
+                        val announceFilterWhileHosting = flows[20] as Boolean
+
+                        @Suppress("UNCHECKED_CAST")
+                        val announceFilterAllowNodes = flows[21] as Boolean
+
+                        @Suppress("UNCHECKED_CAST")
+                        val announceFilterAllowCalls = flows[22] as Boolean
+
+                        @Suppress("UNCHECKED_CAST")
+                        val announceFilterAllowDiscovery = flows[23] as Boolean
+
+                        @Suppress("UNCHECKED_CAST")
+                        val announceFilterCustomAspects = flows[24] as List<String>
+
+                        @Suppress("UNCHECKED_CAST")
+                        val announceFilterMaxHops = flows[25] as Int
+
+                        @Suppress("UNCHECKED_CAST")
+                        val discoverInterfacesEnabled = flows[26] as Boolean
+
+                        val appliedFilter = flows[27] as AnnounceFilterConfig
 
                         val displayName = activeIdentity?.displayName ?: defaultName
                         val resolvedIdentityHash = identityInfo.first ?: activeIdentity?.identityHash ?: _state.value.identityHash
@@ -569,6 +718,22 @@ class SettingsViewModel
                                 },
                             isHostingSharedInstance = _state.value.isHostingSharedInstance,
                             isHostingShareInstanceConflict = _state.value.isHostingShareInstanceConflict,
+                            // Announce filter: persisted values reflected
+                            // immediately; `applied` is the snapshot the
+                            // running daemon was built with (written by the
+                            // :reticulum process at both config-build sites),
+                            // re-read on init and after every restart — so a
+                            // saved-but-unrestarted change keeps the hint
+                            // even across activity re-creation.
+                            announceFilterEnabled = announceFilterEnabled,
+                            announceFilterWhileHosting = announceFilterWhileHosting,
+                            announceFilterAllowNodes = announceFilterAllowNodes,
+                            announceFilterAllowCalls = announceFilterAllowCalls,
+                            announceFilterAllowDiscovery = announceFilterAllowDiscovery,
+                            announceFilterCustomAspects = announceFilterCustomAspects,
+                            announceFilterMaxHops = announceFilterMaxHops,
+                            appliedAnnounceFilter = appliedFilter,
+                            discoverInterfacesEnabled = discoverInterfacesEnabled,
                             // Message delivery state
                             defaultDeliveryMethod = defaultDeliveryMethod,
                             tryPropagationOnFail = _state.value.tryPropagationOnFail,
@@ -1143,6 +1308,13 @@ class SettingsViewModel
                                         appliedShareInstanceHosting = applied,
                                     )
                                 }
+                                // The daemon rebuilt from the snapshot
+                                // InterfaceConfigManager just wrote — read
+                                // "applied" from that snapshot, NOT from
+                                // current prefs (an edit saved after the
+                                // config builder read DataStore is not what
+                                // the daemon got).
+                                refreshAppliedAnnounceFilter()
                             },
                         ).onSuccess {
                             Log.i(TAG, "Service restart completed successfully")
@@ -2054,6 +2226,89 @@ class SettingsViewModel
             viewModelScope.launch {
                 settingsRepository.saveShareInstanceHostingEnabled(enabled)
                 Log.d(TAG, "Share-instance hosting preference set to $enabled (pending restart to apply)")
+            }
+        }
+
+        // ---- RNS 1.6.0 announce ingress filter ------------------------------
+        //
+        // Persist-only, like setShareInstanceHostingEnabled: [filter] is read
+        // at Reticulum() construction, so every change surfaces through the
+        // "Restart required to apply" affordance (state.announceFilterPending)
+        // instead of a silent live flip.
+
+        /** Toggle the master `required_only` gate. */
+        fun setAnnounceFilterEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveAnnounceFilterEnabled(enabled)
+                Log.d(TAG, "Announce filter enabled set to $enabled (pending restart to apply)")
+            }
+        }
+
+        /** Toggle filtering while hosting a shared instance. */
+        fun setAnnounceFilterWhileHosting(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveAnnounceFilterWhileHosting(enabled)
+                Log.d(TAG, "Announce filter while-hosting set to $enabled (pending restart to apply)")
+            }
+        }
+
+        /** Toggle `nomadnetwork.node` through the filter. */
+        fun setAnnounceFilterAllowNodes(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveAnnounceFilterAllowNodes(enabled)
+            }
+        }
+
+        /** Toggle `lxst.telephony` through the filter. */
+        fun setAnnounceFilterAllowCalls(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveAnnounceFilterAllowCalls(enabled)
+            }
+        }
+
+        /**
+         * Toggle `rnstransport.discovery.interface` through the filter.
+         * The UI disables this while Auto Discovery is on; the config
+         * builders force it true there regardless of the stored value.
+         */
+        fun setAnnounceFilterAllowDiscovery(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveAnnounceFilterAllowDiscovery(enabled)
+            }
+        }
+
+        /** `hop_limiter`: 0 = unlimited. */
+        fun setAnnounceFilterMaxHops(hops: Int) {
+            viewModelScope.launch {
+                // Mirrors Reticulum's clamp: 0 = unlimited (line omitted),
+                // otherwise the emitted hop_limiter tops out at 128.
+                settingsRepository.saveAnnounceFilterMaxHops(hops.coerceIn(0, 128))
+            }
+        }
+
+        /**
+         * Add a custom aspect to the hosting-scoped allow list.
+         *
+         * @param onResult receives true when stored, false when the string
+         *   fails the RNS aspect charset or already exists — the dialog
+         *   shows a validation error rather than storing a typo that would
+         *   silently block that app's traffic.
+         */
+        fun addAnnounceFilterAspect(
+            aspect: String,
+            onResult: (Boolean) -> Unit = {},
+        ) {
+            viewModelScope.launch {
+                val added = settingsRepository.addAnnounceFilterCustomAspect(aspect)
+                Log.d(TAG, "Announce filter custom aspect '$aspect' added=$added (pending restart to apply)")
+                onResult(added)
+            }
+        }
+
+        /** Drop a custom aspect from the hosting-scoped allow list. */
+        fun removeAnnounceFilterAspect(aspect: String) {
+            viewModelScope.launch {
+                settingsRepository.removeAnnounceFilterCustomAspect(aspect)
             }
         }
 

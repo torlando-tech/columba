@@ -57,5 +57,9 @@ val NATIVE_CAPABILITIES: BackendCapabilities = BackendCapabilities(
         // SharedInstanceServer (RPC over TCP 37428). reticulum-kt has no
         // equivalent server; UI hides the toggle on this backend.
         shareInstanceHosting = false,
+        // The RNS 1.6.0 [filter] ingress gate is an upstream-RNS config-file
+        // feature; reticulum-kt has no port yet. UI hides the Announce
+        // filtering surface on this backend until the port lands.
+        announceIngressFilter = false,
     ),
 )

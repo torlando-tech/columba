@@ -120,17 +120,20 @@ def make_bg(w, h, top, bottom, angle="vertical"):
 
 
 def layout_caption(text, font_path, max_px, min_px, width_budget):
-    """(lines, font): one line at max size, else two balanced lines, else shrink."""
+    """(lines, font): one line at max size, else two balanced lines, else shrink.
+    An explicit newline in the copy pins the break there instead."""
     def fits(f, s):
         return f.getlength(s) <= width_budget
 
     fmax = ImageFont.truetype(font_path, max_px)
-    if fits(fmax, text):
+    if "\n" not in text and fits(fmax, text):
         return [text], fmax
 
     words = text.split()
     lines = [text]
-    if len(words) > 1:  # balanced two-line split (widths scale linearly with size)
+    if "\n" in text:
+        lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+    elif len(words) > 1:  # balanced two-line split (widths scale linearly with size)
         ref = ImageFont.truetype(font_path, 100)
         best = min((abs(ref.getlength(" ".join(words[:i])) -
                          ref.getlength(" ".join(words[i:]))), i)
@@ -141,7 +144,7 @@ def layout_caption(text, font_path, max_px, min_px, width_budget):
         f = ImageFont.truetype(font_path, size)
         if all(fits(f, ln) for ln in lines):
             return lines, f
-    return [text], ImageFont.truetype(font_path, min_px)
+    return lines, ImageFont.truetype(font_path, min_px)
 
 
 def clean_status_bar(shot, bar_h, clock, font_path):

@@ -133,12 +133,20 @@ data class BackendCapabilities(
      * equivalent. UI hides the "Share Instance" toggle in Advanced
      * settings on backends that report `false` so the option doesn't
      * appear where it has no effect.
+     *
+     * `announceIngressFilter` reports whether this backend honours the
+     * RNS 1.6.0 `[filter]` ingress gate (`required_only` + `allowed_types`
+     * + `hop_limiter`). Upstream Python RNS parses it at construction;
+     * reticulum-kt has no port yet, so the UI hides the whole Announce
+     * filtering surface (Advanced row + options screen) on backends that
+     * report `false`.
      */
     @Parcelize
     data class PerformanceCaps(
         val batteryProfileTuning: Support,
         val sharedInstanceAvailabilityChecks: Boolean,
         val shareInstanceHosting: Boolean = false,
+        val announceIngressFilter: Boolean = false,
     ) : Parcelable
 
     /**
@@ -195,6 +203,7 @@ data class BackendCapabilities(
                 batteryProfileTuning = Support.UNSUPPORTED,
                 sharedInstanceAvailabilityChecks = false,
                 shareInstanceHosting = false,
+                announceIngressFilter = false,
             ),
         )
     }

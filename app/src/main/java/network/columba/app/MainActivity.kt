@@ -105,6 +105,7 @@ import network.columba.app.ui.components.LocalCapabilities
 import network.columba.app.ui.components.LocalWindowSize
 import network.columba.app.ui.components.OfflineModeBanner
 import network.columba.app.ui.screens.AnnounceDetailScreen
+import network.columba.app.ui.screens.AnnounceFilterScreen
 import network.columba.app.ui.screens.AnnounceStreamScreen
 import network.columba.app.ui.screens.ApkSharingScreen
 import network.columba.app.ui.screens.BleConnectionStatusScreen
@@ -1756,6 +1757,9 @@ fun ColumbaNavigation(
                                     onNavigateToBlockedUsers = {
                                         navController.navigate("blocked_users")
                                     },
+                                    onNavigateToAnnounceFilter = {
+                                        navController.navigate("announce_filter")
+                                    },
                                 )
                             }
 
@@ -2179,6 +2183,13 @@ fun ColumbaNavigation(
 
                             appComposable(AppDestination.NOTIFICATION_SETTINGS) {
                                 NotificationSettingsScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                )
+                            }
+
+                            appComposable(AppDestination.ANNOUNCE_FILTER) {
+                                AnnounceFilterScreen(
+                                    viewModel = settingsViewModel,
                                     onNavigateBack = { navController.popBackStack() },
                                 )
                             }

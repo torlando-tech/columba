@@ -159,12 +159,12 @@ def clean_status_bar(shot, bar_h, clock, font_path):
     fs = int(bar_h * 0.42)
     font = ImageFont.truetype(font_path, fs)
     tb = d.textbbox((0, 0), clock, font=font)
-    d.text((int(w * 0.035), (bar_h - (tb[3] - tb[1])) // 2 - tb[1]), clock,
+    d.text((int(w * 0.062), (bar_h - (tb[3] - tb[1])) // 2 - tb[1]), clock,
            font=font, fill=fg)
 
     # battery: outlined pill, filled, nub
     bw2, bh2 = int(bar_h * 0.62), int(bar_h * 0.40)
-    bx1 = int(w * 0.965)
+    bx1 = w - int(bar_h * 0.72)          # ~24dp right margin, Pixel-style
     y0, y1 = (bar_h - bh2) // 2, (bar_h + bh2) // 2
     d.rounded_rectangle([bx1 - bw2, y0, bx1, y1], radius=bh2 // 4,
                         outline=fg, width=max(2, bar_h // 26))
@@ -174,7 +174,7 @@ def clean_status_bar(shot, bar_h, clock, font_path):
                  bar_h // 2 + bh2 // 6], fill=fg)
 
     # wifi: three arcs + dot, fully inside the bar
-    cx, cy = int(w * 0.885), int(bar_h * 0.62)
+    cx, cy = bx1 - bw2 - int(bar_h * 0.55), int(bar_h * 0.62)
     for rr in (bar_h * 0.34, bar_h * 0.22, bar_h * 0.11):
         d.arc([cx - rr, cy - rr, cx + rr, cy + rr], 220, 320, fill=fg,
               width=max(2, bar_h // 22))
@@ -219,8 +219,10 @@ def compose_one(entry, cfg, out_dir):
     fy = zone_top + (zone_h - fh) // 2
 
     # cover-fit the capture into the screen rect, clipped by the rounded mask
+    # (the frame's screen hole is inset by the left button margin too)
     bz = g["bezel"]
-    sx, sy = fx + int(bz * scale), fy + int(bz * scale)
+    mg = g["button_w"] + 2
+    sx, sy = fx + int((mg + bz) * scale), fy + int(bz * scale)
     sw, sh = int(g["screen"][0] * scale), int(g["screen"][1] * scale)
 
     shot = Image.open(os.path.join(HERE, entry["capture"])).convert("RGBA")

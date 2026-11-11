@@ -48,3 +48,7 @@ screens:
   - id: 05_call
     capture: captures/05_call.png
     caption_text: "No carrier.\nJust voice."
+
+  - id: 06_interfaces
+    capture: captures/06_interfaces.png
+    caption_text: "Internet optional."

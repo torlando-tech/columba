@@ -187,12 +187,22 @@ class PythonCallManager(
             },
         )
         transport.setPacketCallback { data -> packetRouter.onInboundPacket(data) }
+        // Hidden developer flag: `adb shell settings put global
+        // columba_lxst_native_audio 0` selects LXST-kt's Phase-2 pipeline
+        // (AudioTrack playback + Kotlin codec) instead of the Oboe/native
+        // codec path. The native libs ship arm64/armeabi only, so on x86_64
+        // emulators the first RX audio frame would otherwise kill this
+        // process with UnsatisfiedLinkError. Default 1 = native (unchanged).
+        val nativeAudio =
+            android.provider.Settings.Global.getInt(context.contentResolver, "columba_lxst_native_audio", 1) != 0
         telephone = Telephone(
             context = context,
             networkTransport = transport,
             audioBridge = audioBridge,
             networkPacketBridge = packetRouter,
             callBridge = callCoordinator,
+            useNativePlayback = nativeAudio,
+            useNativeCodec = nativeAudio,
         )
         callCoordinator.setCallManager(this)
 

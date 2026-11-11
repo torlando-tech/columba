@@ -403,13 +403,11 @@ jobs:
         # hand-managed in Play Console; the API refuses new builds otherwise.
         # Drop it only if release notes/whatsnew ever get pushed through
         # this pipeline.
-        # Stable tags only: getVersionFromTag() strips prerelease suffixes,
-        # so v2.3.4-beta1 and v2.3.4 share versionCode 20304000, and Play
-        # rejects a reused versionCode on any track — uploading a beta would
-        # poison the matching stable upload. Betas stay GitHub-Release-only
-        # until the versionCode scheme encodes prereleases.
+        # Prereleases upload too: getVersionFromTag() gives a patch's beta the
+        # base versionCode and its stable release +10, so Play's monotonic,
+        # never-reused rule holds for both (one prerelease per patch).
         # Also skips cleanly on forks / before the secret is configured.
-        if: ${{ steps.play.outputs.enabled == 'true' && !contains(steps.version.outputs.version, '-') }}
+        if: ${{ steps.play.outputs.enabled == 'true' }}
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}

@@ -80,6 +80,13 @@ class StartupConfigLoaderTest {
         coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
         coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns null
         coEvery { settingsRepository.getShareInstanceHostingEnabled() } returns false
+        coEvery { settingsRepository.getAnnounceFilterEnabled() } returns false
+        coEvery { settingsRepository.getAnnounceFilterWhileHosting() } returns false
+        coEvery { settingsRepository.getAnnounceFilterAllowNodes() } returns true
+        coEvery { settingsRepository.getAnnounceFilterAllowCalls() } returns true
+        coEvery { settingsRepository.getAnnounceFilterAllowDiscovery() } returns true
+        coEvery { settingsRepository.getAnnounceFilterCustomAspects() } returns emptyList()
+        coEvery { settingsRepository.getAnnounceFilterMaxHops() } returns 0
 
         loader =
             StartupConfigLoader(

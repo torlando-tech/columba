@@ -1,0 +1,54 @@
+# Google Play listing screenshots - single source of truth.
+# Rebuild everything:  python3 compose.py
+# Captions are the 2026-11 "No X" set - replaces the 2026-09-07 copy
+# (pending re-approval); see notes in README.
+
+canvas: [1080, 1920]
+frame: pixel-9-pro
+out_dir: out
+status_bar: true          # fallback overlay; drop per-screen once re-captured in demo mode
+clock: "9:41"
+
+background:
+  top: "#B844C8"          # app-icon gradient (Purple40 -> Pink40)
+  bottom: "#E85577"
+
+caption:
+  max_px: 120
+  min_px: 80
+  color: "#FFFFFF"
+  top_margin: 72
+  gap: 30
+
+phone:
+  scale: 1.0
+  bottom_margin: 28
+
+# "No X" ladder: each caption names something the app does not need; the
+# ladder reads as one set on the store shelf. Supersedes the 2026-09-07
+# approved copy - pending re-approval. Measured: every line fits 120px
+# except 01's first line (118px) and 04's second line (1059px -> 106px).
+screens:
+  - id: 01_contacts
+    capture: captures/01_contacts.png
+    caption_text: "No phone number.\nJust people."
+
+  - id: 02_chats
+    capture: captures/02_chats.png
+    caption_text: "No account.\nJust messages."
+
+  - id: 03_map
+    capture: captures/03_map.png
+    caption_text: "No towers.\nStill see them."
+
+  - id: 04_conversation
+    capture: captures/04_conversation.png
+    caption_text: "No middlemen.\nJust the two of you."
+
+  - id: 05_call
+    capture: captures/05_call.png
+    caption_text: "No carrier.\nJust voice."
+
+  - id: 06_interfaces
+    capture: captures/06_interfaces.png
+    caption_text: "Internet optional."

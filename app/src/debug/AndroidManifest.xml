@@ -36,6 +36,7 @@
                 <action android:name="network.columba.test.LIVE_STATE" />
                 <action android:name="network.columba.test.RESTART_SERVICE" />
                 <action android:name="network.columba.test.ONBOARD" />
+                <action android:name="network.columba.test.SEED_STORE_ART" />
                 <action android:name="network.columba.test.LIST_INTERFACES" />
                 <action android:name="network.columba.test.DISABLE_ALL_INTERFACES" />
                 <action android:name="network.columba.test.DISABLE_INTERFACE" />

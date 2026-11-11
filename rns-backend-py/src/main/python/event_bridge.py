@@ -518,7 +518,7 @@ _on_lxmf_failure = None
 
 _rns_transport = None
 _lxmf_router = None
-_announce_handler = None
+_announce_handlers = []
 
 _fallback_queue = queue.Queue(maxsize=64)
 
@@ -554,10 +554,11 @@ def _enqueue_fallback(task):
 #
 # RNS's `Transport.receive()` allocates a fresh OS thread for *every* announce
 # it hands to a registered announce handler — one `threading.Thread(...)` per
-# matching handler. LXMF registers two handlers (delivery + propagation) and
-# this module one, so a mesh announce burst of N destinations allocates ~3N
-# threads. What those threads do inline is what keeps them alive: aspect
-# resolution, the JNI crossings into Kotlin, and the Kotlin-side announcement
+# *matching* handler. LXMF registers two handlers (delivery + propagation) and
+# this module registers one per tracked aspect, each scoped by `aspect_filter`
+# (see `_AnnounceHandler`), so a mesh announce burst of N destinations
+# allocates ~3N threads. What those threads do inline is what keeps them
+# alive: the JNI crossings into Kotlin and the Kotlin-side announcement
 # translation. On low-end devices a burst is enough to exhaust the process's
 # thread slots, and the next `pthread_create` fails with
 # `OutOfMemoryError: pthread_create (1040KB max stack) failed: Try again` —
@@ -623,6 +624,7 @@ threading.Thread(
 
 
 def _enqueue_announce(
+    aspect,
     destination_hash,
     announced_identity,
     app_data,
@@ -636,6 +638,7 @@ def _enqueue_announce(
         _announce_queue.put_nowait(
             (
                 _announce_generation,
+                aspect,
                 destination_hash,
                 announced_identity,
                 app_data,
@@ -792,24 +795,14 @@ def _emit(callback, payload):
         RNS.log(f"event_bridge: onEvent dispatch failed: {e}", RNS.LOG_ERROR)
 
 
-# Aspects Columba tracks. RNS's announce handler with `aspect_filter = None`
-# receives every announce but is not told which aspect matched, so we resolve
-# it by recomputing the destination hash for each known aspect — pure RNS
-# protocol code, no Columba app-logic.
+# Aspects Columba tracks. RNS 1.6.0 keys announce handlers by the name hash of
+# the handler's `aspect_filter` and only invokes a handler for announces whose
+# embedded name hash matches, so we register one handler per aspect (see
+# `_AnnounceHandler`). Announces for unrelated aspects never reach this module
+# at all — no thread hand-off, no queue slot, no JNI crossing, no Room write —
+# and the aspect of a delivered announce is known from the handler that
+# received it, so no per-announce hash recomputation is needed.
 _KNOWN_ASPECTS = ("lxmf.delivery", "lxmf.propagation", "nomadnetwork.node", "lxst.telephony")
-
-
-def _resolve_aspect(destination_hash, identity):
-    """Which known aspect produced this announce, or None if not one we track."""
-    if identity is None:
-        return None
-    for aspect in _KNOWN_ASPECTS:
-        try:
-            if RNS.Destination.hash_from_name_and_identity(aspect, identity) == destination_hash:
-                return aspect
-        except Exception:  # noqa: BLE001
-            continue
-    return None
 
 
 def _format_iface_for_emit(iface):
@@ -842,50 +835,28 @@ def _format_iface_for_emit(iface):
     return f"{cls_name}[{raw_str}]"
 
 
-def _announce_enrichment(destination_hash, identity, app_data):
-    """Python-only enrichment for an announce: matched aspect + current hops.
-
-    The kotlin event-bridge side derives display name + stamp costs from the
-    raw `app_data` bytes via the shared `network.columba.app.rns.api.util.
-    AppDataParser` (same parser the native kotlin backend uses), so neither
-    field is computed here — keeping the parsing in one place means the two
-    backends cannot drift on its rules.
-
-    What stays Python-side: `aspect` requires `RNS.Destination.
-    hash_from_name_and_identity` (which needs the Python identity object),
-    and `hops` requires `RNS.Transport.hops_to` (Python-only Transport state).
-    `app_data` is unused here but kept on the parameter list so callers don't
-    need to special-case unrelated aspects.
-    """
-    enrichment = {
-        "aspect": None,
-        "hops": 0,
-    }
-    try:
-        enrichment["aspect"] = _resolve_aspect(destination_hash, identity)
-
-        hops = RNS.Transport.hops_to(destination_hash)
-        # PATHFINDER_M is RNS's "hop count unknown" sentinel — surface 0 instead.
-        enrichment["hops"] = 0 if hops == RNS.Transport.PATHFINDER_M else hops
-    except Exception as e:  # noqa: BLE001 — enrichment is best-effort, never fatal
-        RNS.log(f"event_bridge: announce enrichment failed: {e}", RNS.LOG_DEBUG)
-    return enrichment
-
-
 class _AnnounceHandler:
-    """RNS announce handler — `aspect_filter = None` catches every aspect.
+    """RNS announce handler scoped to a single aspect.
 
-    RNS allocates one OS thread per announce per registered handler to invoke
+    RNS 1.6.0 keys announce handlers by `Destination.name_hash(aspect_filter)`
+    and only invokes a handler for announces whose embedded name hash matches,
+    so one handler per tracked aspect replaces the old `aspect_filter = None`
+    catch-all that forced every announce on the network through the dispatch
+    queue only for the aspect filter to drop it afterwards. The handler knows
+    its own aspect, so it travels with the announce instead of being
+    re-derived by hashing.
+
+    RNS allocates one OS thread per announce per *matching* handler to invoke
     this method (`Transport.receive()`), so it MUST return immediately: the
     raw announce is handed to the module-level dispatch worker (see the
-    announce-dispatch comment above), which resolves the aspect and — for the
-    four aspects Columba tracks — flattens and hands the announce off to
-    Kotlin. Announces for any other aspect are dropped by the worker (see
-    `_dispatch_announce`).
+    announce-dispatch comment above), which flattens the announce and hands it
+    off to Kotlin.
     """
 
-    aspect_filter = None
     receive_path_responses = True
+
+    def __init__(self, aspect):
+        self.aspect_filter = aspect
 
     def received_announce(
         self,
@@ -896,6 +867,7 @@ class _AnnounceHandler:
         is_path_response=False,
     ):
         _enqueue_announce(
+            self.aspect_filter,
             destination_hash,
             announced_identity,
             app_data,
@@ -906,6 +878,7 @@ class _AnnounceHandler:
 
 def _dispatch_announce(
     generation,
+    aspect,
     destination_hash,
     announced_identity,
     app_data,
@@ -916,21 +889,24 @@ def _dispatch_announce(
 
     `generation` is the one captured when the announce was enqueued; a mismatch
     means the stack that received it is gone, so it is dropped rather than
-    delivered to whichever Kotlin sink is registered now.
+    delivered to whichever Kotlin sink is registered now. `aspect` is the
+    `aspect_filter` of the handler that received the announce — RNS 1.6.0 only
+    delivers an announce to handlers whose aspect name hash matches, so the
+    aspect needs no resolution and untracked aspects never reach this worker.
     """
     if generation != _announce_generation:
         return
-
-    enrichment = _announce_enrichment(destination_hash, announced_identity, app_data)
-    # Only surface announces for aspects Columba tracks. This matches the
-    # kotlin backend's RichAnnounceHandler, which returns False (drops the
-    # announce) when no known aspect matches. `aspect_filter = None` above
-    # means RNS hands us *every* announce, including ones from unrelated
-    # RNS apps — without this drop those leak into the announce stream with
-    # a junk display name (whatever their app_data decodes to) and an
-    # "unknown" aspect, and collide into the "Site" filter.
-    if enrichment.get("aspect") is None:
+    if announced_identity is None:
         return
+
+    hops = 0
+    try:
+        heard_hops = RNS.Transport.hops_to(destination_hash)
+        # PATHFINDER_M is RNS's "hop count unknown" sentinel — surface 0 instead.
+        hops = 0 if heard_hops == RNS.Transport.PATHFINDER_M else heard_hops
+    except Exception as e:  # noqa: BLE001 — enrichment is best-effort, never fatal
+        RNS.log(f"event_bridge: announce hops lookup failed: {e}", RNS.LOG_DEBUG)
+
     # Receiving interface annotation. RNS doesn't surface a per-announce
     # `received_on` interface on `received_announce(...)` — we have to
     # look it up from `Transport.path_table[destination_hash][5]` (the
@@ -954,14 +930,15 @@ def _dispatch_announce(
 
     payload = {
         "destination_hash": _hex(destination_hash),
-        "identity_hash": _hex(announced_identity.hash) if announced_identity is not None else None,
-        "public_key": _hex(announced_identity.get_public_key()) if announced_identity is not None else None,
+        "identity_hash": _hex(announced_identity.hash),
+        "public_key": _hex(announced_identity.get_public_key()),
         "app_data": _hex(app_data),
         "announce_packet_hash": _hex(announce_packet_hash),
         "is_path_response": bool(is_path_response),
         "receiving_interface": recv_iface_name,
+        "aspect": aspect,
+        "hops": hops,
     }
-    payload.update(enrichment)
     _emit(_on_announce, payload)
 
 
@@ -1593,7 +1570,7 @@ def register_callbacks(
     class, used statically by RNS) and `lxmf_router` is the live LXMRouter.
     """
     global _on_announce, _on_packet, _on_link_event, _on_lxmf_delivery, _on_lxmf_failure
-    global _rns_transport, _lxmf_router, _announce_handler
+    global _rns_transport, _lxmf_router, _announce_handlers
 
     _on_announce = on_announce
     _on_packet = on_packet
@@ -1603,9 +1580,13 @@ def register_callbacks(
     _rns_transport = rns_transport
     _lxmf_router = lxmf_router
 
-    # Global registrations: announce handler + LXMF delivery callback.
-    _announce_handler = _AnnounceHandler()
-    RNS.Transport.register_announce_handler(_announce_handler)
+    # Global registrations: announce handlers + LXMF delivery callback.
+    # One handler per tracked aspect — RNS only delivers announces whose
+    # embedded name hash matches the handler's aspect_filter, so unrelated
+    # traffic never enters the dispatch queue at all.
+    _announce_handlers = [_AnnounceHandler(aspect) for aspect in _KNOWN_ASPECTS]
+    for handler in _announce_handlers:
+        RNS.Transport.register_announce_handler(handler)
 
     if lxmf_router is not None:
         lxmf_router.register_delivery_callback(_lxmf_delivery_callback)
@@ -1621,14 +1602,15 @@ def register_callbacks(
 
 def deregister_callbacks():
     """Tear-down counterpart to register_callbacks(). Best-effort."""
-    global _announce_handler, _lxmf_router
+    global _announce_handlers, _lxmf_router
     _reset_announce_dispatch()
-    try:
-        if _announce_handler is not None and _rns_transport is not None:
-            RNS.Transport.deregister_announce_handler(_announce_handler)
-    except Exception as e:  # noqa: BLE001
-        RNS.log(f"event_bridge: deregister failed: {e}", RNS.LOG_ERROR)
-    _announce_handler = None
+    if _rns_transport is not None:
+        for handler in _announce_handlers:
+            try:
+                RNS.Transport.deregister_announce_handler(handler)
+            except Exception as e:  # noqa: BLE001
+                RNS.log(f"event_bridge: deregister failed: {e}", RNS.LOG_ERROR)
+    _announce_handlers = []
     _lxmf_router = None
 
 

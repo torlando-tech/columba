@@ -9,9 +9,10 @@ from pathlib import Path
 
 EVENT_BRIDGE_PATH = Path(__file__).resolve().parents[2] / "main/python/event_bridge.py"
 
-# RNS/Transport.py dispatches every announce to every registered announce
+# RNS/Transport.py dispatches every announce to every *matching* announce
 # handler on a *fresh OS thread*. LXMF registers two handlers (delivery +
-# propagation) and `event_bridge` one, so a burst of N announces allocates
+# propagation) and `event_bridge` one per tracked aspect, each scoped by
+# `aspect_filter`, so an lxmf.delivery burst of N announces still allocates
 # ~3N threads, and whatever the handlers do inline is what keeps those
 # threads alive. On low-end devices a burst is enough to exhaust the
 # process's thread slots and the next `pthread_create` fails with
@@ -85,15 +86,6 @@ class AnnounceDispatchThreadBoundTests(unittest.TestCase):
         setattr(rns, "log", lambda *args, **kwargs: None)
         setattr(
             rns,
-            "Destination",
-            types.SimpleNamespace(
-                hash_from_name_and_identity=lambda aspect, identity: (
-                    b"destination" if aspect == "lxmf.delivery" else b"other"
-                )
-            ),
-        )
-        setattr(
-            rns,
             "Transport",
             types.SimpleNamespace(
                 PATHFINDER_M=128,
@@ -141,7 +133,7 @@ class AnnounceDispatchThreadBoundTests(unittest.TestCase):
     def test_announce_burst_does_not_scale_os_threads(self):
         consumer = RecordingConsumer(hold_s=CONSUMER_HOLD_S)
         setattr(self.module, "_on_announce", consumer)
-        handler = self.module._AnnounceHandler()
+        handler = self.module._AnnounceHandler("lxmf.delivery")
 
         peak_threads = 0
         deadline = time.time() + 20.0
@@ -172,7 +164,7 @@ class AnnounceDispatchThreadBoundTests(unittest.TestCase):
     def test_received_announce_does_not_absorb_consumer_latency(self):
         consumer = RecordingConsumer(hold_s=SLOW_CONSUMER_HOLD_S)
         setattr(self.module, "_on_announce", consumer)
-        handler = self.module._AnnounceHandler()
+        handler = self.module._AnnounceHandler("lxmf.delivery")
 
         worst_seconds = 0.0
         for index in range(5):
@@ -191,7 +183,7 @@ class AnnounceDispatchThreadBoundTests(unittest.TestCase):
         release = threading.Event()
         consumer = BlockingConsumer(release)
         setattr(self.module, "_on_announce", consumer)
-        handler = self.module._AnnounceHandler()
+        handler = self.module._AnnounceHandler("lxmf.delivery")
 
         try:
             # Park the dispatch worker inside the consumer, so everything
@@ -228,7 +220,7 @@ class AnnounceDispatchThreadBoundTests(unittest.TestCase):
         release = threading.Event()
         consumer = BlockingConsumer(release)
         setattr(self.module, "_on_announce", consumer)
-        handler = self.module._AnnounceHandler()
+        handler = self.module._AnnounceHandler("lxmf.delivery")
 
         try:
             # The first announce parks the worker; the rest stay queued.

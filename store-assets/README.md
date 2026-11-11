@@ -26,9 +26,11 @@ listing copy in `listing.yaml` is the source of truth.
 - `tools/x86_64/liblxst_opus_jni.so` - NDK build of lxst-kt
   `cpp/lxst_opus_jni.c` for x86_64; see the call section below.
 - `compose.py` - compositor. Device geometry lives in `FRAMES` (device
-  units, screen width 1280). Frame PNG and screen mask are generated from
-  that one dict, so the punch hole position and the status-bar overlay
-  height can never disagree with the frame.
+  units, screen width 1280). The frame and the capture's clip mask are
+  generated from that one dict with the same screen rect and radius, so
+  the capture is always cut by the hole's own shape (never reaching the
+  body's rounded corners) and the status-bar overlay height can never
+  disagree with the punch hole position.
 - `listing.yaml` - canvas, gradient, caption copy, capture per final.
 - `captures/` - raw device captures, one file per screen, named
   `<id>.png` to match the manifest entry.

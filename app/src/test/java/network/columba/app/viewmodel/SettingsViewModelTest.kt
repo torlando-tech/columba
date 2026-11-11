@@ -11,6 +11,8 @@ import network.columba.app.repository.NomadNetLastPage
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.ReticulumConfig
+import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsCore
@@ -32,6 +34,8 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -186,6 +190,30 @@ class SettingsViewModelTest {
         every { settingsRepository.shareInstanceHostingEnabledFlow } returns shareInstanceHostingEnabledFlow
         coEvery { settingsRepository.getShareInstanceHostingEnabled() } returns false
         coEvery { settingsRepository.saveShareInstanceHostingEnabled(any()) } returns Unit
+        every { settingsRepository.announceFilterEnabledFlow } returns MutableStateFlow(true)
+        every { settingsRepository.announceFilterWhileHostingFlow } returns MutableStateFlow(false)
+        every { settingsRepository.announceFilterAllowNodesFlow } returns MutableStateFlow(true)
+        every { settingsRepository.announceFilterAllowCallsFlow } returns MutableStateFlow(true)
+        every { settingsRepository.announceFilterAllowDiscoveryFlow } returns MutableStateFlow(true)
+        every { settingsRepository.announceFilterCustomAspectsFlow } returns MutableStateFlow(emptyList())
+        every { settingsRepository.announceFilterMaxHopsFlow } returns MutableStateFlow(0)
+        every { settingsRepository.discoverInterfacesEnabledFlow } returns MutableStateFlow(false)
+        coEvery { settingsRepository.getAnnounceFilterEnabled() } returns true
+        coEvery { settingsRepository.getAnnounceFilterWhileHosting() } returns false
+        coEvery { settingsRepository.getAnnounceFilterAllowNodes() } returns true
+        coEvery { settingsRepository.getAnnounceFilterAllowCalls() } returns true
+        coEvery { settingsRepository.getAnnounceFilterAllowDiscovery() } returns true
+        coEvery { settingsRepository.getAnnounceFilterCustomAspects() } returns emptyList()
+        coEvery { settingsRepository.getAnnounceFilterMaxHops() } returns 0
+        coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+        coEvery { settingsRepository.saveAnnounceFilterEnabled(any()) } returns Unit
+        coEvery { settingsRepository.saveAnnounceFilterWhileHosting(any()) } returns Unit
+        coEvery { settingsRepository.saveAnnounceFilterAllowNodes(any()) } returns Unit
+        coEvery { settingsRepository.saveAnnounceFilterAllowCalls(any()) } returns Unit
+        coEvery { settingsRepository.saveAnnounceFilterAllowDiscovery(any()) } returns Unit
+        coEvery { settingsRepository.saveAnnounceFilterMaxHops(any()) } returns Unit
+        coEvery { settingsRepository.addAnnounceFilterCustomAspect(any()) } returns true
+        coEvery { settingsRepository.removeAnnounceFilterCustomAspect(any()) } returns Unit
         every { settingsRepository.rpcKeyFlow } returns rpcKeyFlow
         every { settingsRepository.autoAnnounceEnabledFlow } returns autoAnnounceEnabledFlow
         every { settingsRepository.autoAnnounceIntervalHoursFlow } returns autoAnnounceIntervalHoursFlow
@@ -3695,6 +3723,192 @@ class SettingsViewModelTest {
                 cancelAndConsumeRemainingEvents()
             }
         }
+
+
+    // ---- announce ingress filter -------------------------------------------
+
+    @Test
+    fun `announce filter defaults load with no pending restart`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+                assertTrue(state.announceFilterEnabled)
+                assertTrue(state.announceFilterAllowNodes)
+                assertTrue(state.announceFilterAllowCalls)
+                assertTrue(state.announceFilterAllowDiscovery)
+                assertEquals(0, state.announceFilterMaxHops)
+                // Applied falls back to shipped defaults (no snapshot in
+                // unit tests), which is what a fresh daemon runs.
+                assertFalse(state.announceFilterPending)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `toggling announce filter persists and marks the restart pending`() =
+        runTest {
+            val filterFlow = MutableStateFlow(true)
+            every { settingsRepository.announceFilterEnabledFlow } returns filterFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                viewModel.setAnnounceFilterEnabled(false)
+                coVerify(exactly = 1) { settingsRepository.saveAnnounceFilterEnabled(false) }
+
+                filterFlow.value = false
+                state = expectMostRecentItem()
+                assertFalse(state.announceFilterEnabled)
+                // The daemon still runs the old config: pending until restart.
+                assertTrue(state.announceFilterPending)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `discovery aspect stays effective while Auto Discovery is on`() =
+        runTest {
+            // Stored allowDiscovery=false must NOT read as pending while
+            // Auto Discovery forces the aspect through — the config builders
+            // would emit it anyway, so the daemon already matches.
+            val allowDiscoveryFlow = MutableStateFlow(false)
+            val discoverFlow = MutableStateFlow(true)
+            every { settingsRepository.announceFilterAllowDiscoveryFlow } returns allowDiscoveryFlow
+            every { settingsRepository.discoverInterfacesEnabledFlow } returns discoverFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+                assertFalse(state.announceFilterPending)
+
+                // Turning Auto Discovery OFF makes the stored false real.
+                discoverFlow.value = false
+                state = expectMostRecentItem()
+                assertTrue(state.announceFilterPending)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `addAnnounceFilterAspect forwards the repository validation result`() =
+        runTest {
+            coEvery { settingsRepository.addAnnounceFilterCustomAspect("bad aspect") } returns false
+            coEvery { settingsRepository.addAnnounceFilterCustomAspect("good.app") } returns true
+
+            viewModel = createViewModel()
+
+            var rejected: Boolean? = null
+            var accepted: Boolean? = null
+            viewModel.addAnnounceFilterAspect("bad aspect") { rejected = it }
+            viewModel.addAnnounceFilterAspect("good.app") { accepted = it }
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(false, rejected)
+            assertEquals(true, accepted)
+        }
+
+    @Test
+    fun `applied filter comes from the daemon snapshot not from preferences`() =
+        runTest {
+            // Prefs say the gate is ON (repository stubs default true); the
+            // running daemon was actually built with it OFF (snapshot).
+            // Applied must follow the snapshot, so the divergence stays
+            // pending — even though preferences would say "no change".
+            mockkObject(ReticulumConfigSnapshot)
+            try {
+                every { ReticulumConfigSnapshot.read(any()) } returns
+                    ReticulumConfigSnapshot.Snapshot(
+                        configWithoutKey =
+                            ReticulumConfig(
+                                storagePath = "/tmp/reticulum",
+                                enabledInterfaces = emptyList(),
+                                announceFilterEnabled = false,
+                            ),
+                        identityHashHex = null,
+                    )
+                viewModel = createViewModel()
+
+                viewModel.state.test {
+                    var state = awaitItem()
+                    var attempts = 0
+                    while ((state.appliedAnnounceFilter.enabled || state.isLoading) && attempts++ < 50) {
+                        state = awaitItem()
+                    }
+                    assertFalse(state.appliedAnnounceFilter.enabled)
+                    assertTrue(state.announceFilterPending)
+                    cancelAndConsumeRemainingEvents()
+                }
+            } finally {
+                unmockkObject(ReticulumConfigSnapshot)
+            }
+        }
+
+    @Test
+    fun `custom aspect while not hosting does not request a restart`() {
+        // renderFilter omits custom aspects unless we are the master, so a
+        // dormant entry must not ask for a connection-dropping restart.
+        val state =
+            SettingsState(
+                shareInstanceHostingEnabled = false,
+                announceFilterCustomAspects = listOf("app.aspect.weather"),
+                appliedAnnounceFilter = AnnounceFilterConfig(),
+            )
+        assertFalse(state.announceFilterPending)
+    }
+
+    @Test
+    fun `custom aspect while hosting requests a restart`() {
+        val state =
+            SettingsState(
+                shareInstanceHostingEnabled = true,
+                announceFilterEnabled = true,
+                announceFilterWhileHosting = true,
+                announceFilterCustomAspects = listOf("app.aspect.weather"),
+                appliedAnnounceFilter = AnnounceFilterConfig(whileHosting = true),
+            )
+        assertTrue(state.announceFilterPending)
+    }
+
+    @Test
+    fun `optional aspect edits while the gate is off do not request a restart`() {
+        // Nothing renders while the gate is off, so edits to the optional
+        // aspects and the hop limit are dormant on both sides.
+        val state =
+            SettingsState(
+                announceFilterEnabled = false,
+                announceFilterAllowNodes = false,
+                announceFilterAllowCalls = false,
+                announceFilterMaxHops = 3,
+                appliedAnnounceFilter =
+                    AnnounceFilterConfig(
+                        enabled = false,
+                        allowNodes = true,
+                        allowCalls = true,
+                        maxHops = 0,
+                    ),
+            )
+        assertFalse(state.announceFilterPending)
+    }
 
     // endregion
 }

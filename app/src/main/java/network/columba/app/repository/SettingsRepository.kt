@@ -59,6 +59,13 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
 )
 
 /**
+ * RNS aspect charset: dot-separated lowercase tokens (`lxmf.delivery`, a
+ * joined app's `myapp.data`). Enforced on add so a typo can't silently
+ * block that app's traffic; RnsConfigFile re-validates at render time.
+ */
+private val ANNOUNCE_ASPECT_REGEX = Regex("^[a-z0-9][a-z0-9_-]*(\\.[a-z0-9_-]+)+$")
+
+/**
  * The (node, path) pair of the last NomadNet page the user loaded, published as
  * ONE consistent value so a reader can never see a node without its matching
  * path. Both null on a fresh install (no page browsed yet).
@@ -145,6 +152,19 @@ class SettingsRepository
             // and the daemon publishes itself on TCP 37428 so other RNS apps
             // on the device can join it.
             val SHARE_INSTANCE_HOSTING_ENABLED = booleanPreferencesKey("share_instance_hosting_enabled")
+
+            // RNS 1.6.0 announce ingress filter (python backend only —
+            // reticulum-kt has no [filter] port). required_only drops
+            // untracked announce types before any crypto; the allow-list
+            // entries below mirror the UI's locked/optional toggles. All
+            // read at Reticulum() construction — changes need a restart.
+            val ANNOUNCE_FILTER_ENABLED = booleanPreferencesKey("announce_filter_enabled")
+            val ANNOUNCE_FILTER_WHILE_HOSTING = booleanPreferencesKey("announce_filter_while_hosting")
+            val ANNOUNCE_FILTER_ALLOW_NODES = booleanPreferencesKey("announce_filter_allow_nodes")
+            val ANNOUNCE_FILTER_ALLOW_CALLS = booleanPreferencesKey("announce_filter_allow_calls")
+            val ANNOUNCE_FILTER_ALLOW_DISCOVERY = booleanPreferencesKey("announce_filter_allow_discovery")
+            val ANNOUNCE_FILTER_CUSTOM_ASPECTS = stringSetPreferencesKey("announce_filter_custom_aspects")
+            val ANNOUNCE_FILTER_MAX_HOPS = intPreferencesKey("announce_filter_max_hops")
 
             // RNS 1.1.x Interface Discovery preferences
             val DISCOVER_INTERFACES_ENABLED = booleanPreferencesKey("discover_interfaces_enabled")
@@ -1274,6 +1294,176 @@ class SettingsRepository
         suspend fun saveShareInstanceHostingEnabled(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.SHARE_INSTANCE_HOSTING_ENABLED] = enabled
+            }
+        }
+
+        // ---- RNS 1.6.0 announce ingress filter ------------------------------
+        //
+        // All seven values are read at Reticulum() construction (upstream
+        // parses [filter] in __apply_config); every setter persists only —
+        // the UI drives the restart through the same pending-restart
+        // affordance as shareInstanceHosting.
+
+        /** Master `required_only` gate. Defaults ON (drops only traffic the app discards anyway). */
+        val announceFilterEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ANNOUNCE_FILTER_ENABLED] ?: true
+                }.distinctUntilChanged()
+
+        /** Keep filtering while hosting a shared instance. Defaults OFF (joined apps first). */
+        val announceFilterWhileHostingFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ANNOUNCE_FILTER_WHILE_HOSTING] ?: false
+                }.distinctUntilChanged()
+
+        /** Pass `nomadnetwork.node` announces through the filter. Defaults ON. */
+        val announceFilterAllowNodesFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ANNOUNCE_FILTER_ALLOW_NODES] ?: true
+                }.distinctUntilChanged()
+
+        /** Pass `lxst.telephony` announces through the filter. Defaults ON. */
+        val announceFilterAllowCallsFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ANNOUNCE_FILTER_ALLOW_CALLS] ?: true
+                }.distinctUntilChanged()
+
+        /** Pass `rnstransport.discovery.interface` announces through the filter. Defaults ON. */
+        val announceFilterAllowDiscoveryFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ANNOUNCE_FILTER_ALLOW_DISCOVERY] ?: true
+                }.distinctUntilChanged()
+
+        /**
+         * User-added aspect strings, emitted into `allowed_types` ONLY while
+         * hosting a shared instance (dormant otherwise). Sorted for a stable
+         * flow value; validation happens on add and again at config render.
+         */
+        val announceFilterCustomAspectsFlow: Flow<List<String>> =
+            context.dataStore.data
+                .map { preferences ->
+                    (preferences[PreferencesKeys.ANNOUNCE_FILTER_CUSTOM_ASPECTS] ?: emptySet())
+                        .sorted()
+                }.distinctUntilChanged()
+
+        /** `hop_limiter`: drop announces beyond N hops. 0 = unlimited (default). */
+        val announceFilterMaxHopsFlow: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ANNOUNCE_FILTER_MAX_HOPS] ?: 0
+                }.distinctUntilChanged()
+
+        /** Non-flow reads for the config-build paths (cold start + Apply & Restart). */
+        suspend fun getAnnounceFilterEnabled(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ANNOUNCE_FILTER_ENABLED] ?: true
+                }.first()
+
+        suspend fun getAnnounceFilterWhileHosting(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ANNOUNCE_FILTER_WHILE_HOSTING] ?: false
+                }.first()
+
+        suspend fun getAnnounceFilterAllowNodes(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ANNOUNCE_FILTER_ALLOW_NODES] ?: true
+                }.first()
+
+        suspend fun getAnnounceFilterAllowCalls(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ANNOUNCE_FILTER_ALLOW_CALLS] ?: true
+                }.first()
+
+        suspend fun getAnnounceFilterAllowDiscovery(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ANNOUNCE_FILTER_ALLOW_DISCOVERY] ?: true
+                }.first()
+
+        suspend fun getAnnounceFilterCustomAspects(): List<String> =
+            context.dataStore.data
+                .map { preferences ->
+                    (preferences[PreferencesKeys.ANNOUNCE_FILTER_CUSTOM_ASPECTS] ?: emptySet())
+                        .sorted()
+                }.first()
+
+        suspend fun getAnnounceFilterMaxHops(): Int =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ANNOUNCE_FILTER_MAX_HOPS] ?: 0
+                }.first()
+
+        suspend fun saveAnnounceFilterEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.ANNOUNCE_FILTER_ENABLED] = enabled
+            }
+        }
+
+        suspend fun saveAnnounceFilterWhileHosting(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.ANNOUNCE_FILTER_WHILE_HOSTING] = enabled
+            }
+        }
+
+        suspend fun saveAnnounceFilterAllowNodes(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.ANNOUNCE_FILTER_ALLOW_NODES] = enabled
+            }
+        }
+
+        suspend fun saveAnnounceFilterAllowCalls(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.ANNOUNCE_FILTER_ALLOW_CALLS] = enabled
+            }
+        }
+
+        suspend fun saveAnnounceFilterAllowDiscovery(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.ANNOUNCE_FILTER_ALLOW_DISCOVERY] = enabled
+            }
+        }
+
+        suspend fun saveAnnounceFilterMaxHops(hops: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.ANNOUNCE_FILTER_MAX_HOPS] = hops.coerceAtLeast(0)
+            }
+        }
+
+        /**
+         * Add a custom aspect to the hosting-scoped allow list.
+         *
+         * @return true when stored; false when [aspect] fails the RNS aspect
+         *   charset or already exists (the UI surfaces false as a validation
+         *   error — a mistyped aspect would silently block that app, so the
+         *   add is rejected rather than stored).
+         */
+        suspend fun addAnnounceFilterCustomAspect(aspect: String): Boolean {
+            val normalized = aspect.trim().lowercase(java.util.Locale.ROOT)
+            if (!ANNOUNCE_ASPECT_REGEX.matches(normalized)) return false
+            var added = false
+            context.dataStore.edit { preferences ->
+                val current = preferences[PreferencesKeys.ANNOUNCE_FILTER_CUSTOM_ASPECTS] ?: emptySet()
+                if (normalized !in current) {
+                    preferences[PreferencesKeys.ANNOUNCE_FILTER_CUSTOM_ASPECTS] = current + normalized
+                    added = true
+                }
+            }
+            return added
+        }
+
+        suspend fun removeAnnounceFilterCustomAspect(aspect: String) {
+            context.dataStore.edit { preferences ->
+                val current = preferences[PreferencesKeys.ANNOUNCE_FILTER_CUSTOM_ASPECTS] ?: return@edit
+                preferences[PreferencesKeys.ANNOUNCE_FILTER_CUSTOM_ASPECTS] = current - aspect
             }
         }
 

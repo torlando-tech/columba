@@ -132,6 +132,13 @@ class InterfaceConfigManagerTest {
         coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns null
         coEvery { settingsRepository.getShareInstanceHostingEnabled() } returns false
         coEvery { settingsRepository.getIncomingMessageSizeLimitKb() } returns 1024
+        coEvery { settingsRepository.getAnnounceFilterEnabled() } returns false
+        coEvery { settingsRepository.getAnnounceFilterWhileHosting() } returns false
+        coEvery { settingsRepository.getAnnounceFilterAllowNodes() } returns true
+        coEvery { settingsRepository.getAnnounceFilterAllowCalls() } returns true
+        coEvery { settingsRepository.getAnnounceFilterAllowDiscovery() } returns true
+        coEvery { settingsRepository.getAnnounceFilterCustomAspects() } returns emptyList()
+        coEvery { settingsRepository.getAnnounceFilterMaxHops() } returns 0
         every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
 
         // Setup identity repository mock

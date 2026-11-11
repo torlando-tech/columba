@@ -56,11 +56,12 @@ def hex2rgb(h):
 
 
 def build_frame(name, ss=4):
-    """Render the device frame + screen mask at 1x, drawn at `ss`x for AA.
+    """Render the device frame at 1x, drawn at `ss`x for AA.
 
-    Returns (frame RGBA, screen mask L, geom). The frame layer has a
+    Returns (frame RGBA, screen-hole mask L, geom). The frame layer has a
     transparent screen area and an opaque punch hole; the capture is
-    clipped by the mask, then the frame is pasted over it.
+    clipped by the mask (the same rect/radius as the hole, so it can never
+    reach the body's rounded corners), then the frame is pasted over it.
     """
     g = FRAMES[name]
     sw, sh = g["screen"]
@@ -218,12 +219,15 @@ def compose_one(entry, cfg, out_dir):
     fx = (cw - fw) // 2
     fy = zone_top + (zone_h - fh) // 2
 
-    # cover-fit the capture into the screen rect, clipped by the rounded mask
-    # (the frame's screen hole is inset by the left button margin too)
+    # cover-fit the capture into the screen rect (inset from the frame's
+    # left edge by the side-button margin too). The clip mask is the hole's
+    # own rounded rect; round() keeps the crop window within half a pixel
+    # of the resized hole so the frame's 2px ring covers the seam, and the
+    # frame pasted last always wins over the capture.
     bz = g["bezel"]
     mg = g["button_w"] + 2
-    sx, sy = fx + int((mg + bz) * scale), fy + int(bz * scale)
-    sw, sh = int(g["screen"][0] * scale), int(g["screen"][1] * scale)
+    sx, sy = round(fx + (mg + bz) * scale), round(fy + bz * scale)
+    sw, sh = math.ceil(g["screen"][0] * scale), math.ceil(g["screen"][1] * scale)
 
     shot = Image.open(os.path.join(HERE, entry["capture"])).convert("RGBA")
     cover = max(sw / shot.width, sh / shot.height)

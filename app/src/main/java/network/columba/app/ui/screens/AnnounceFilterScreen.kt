@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -96,8 +97,20 @@ fun AnnounceFilterScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .consumeWindowInsets(paddingValues)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                // Padding AFTER verticalScroll rides the content, so the
+                // last row scrolls fully clear of the app NavigationBar;
+                // the clearance is the live bar inset, not a hardcoded 88.
+                // (Padding before the scroll node would shrink the viewport
+                // and expose a window-background band — banned since
+                // 302e446e7.)
+                .padding(
+                    start = 16.dp,
+                    top = 16.dp,
+                    end = 16.dp,
+                    bottom = 16.dp + bottomBarClearance(),
+                ),
         ) {
             // ---- master switch ------------------------------------------------
             SettingToggleRow(

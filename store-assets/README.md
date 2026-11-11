@@ -7,7 +7,7 @@ with the headline caption.
 
     ./gradlew :app:assembleNoSentryPythonBackendDebug
     store-assets/capture.sh             # boot AVD, install, seed, capture, compose
-    python3 compose.py                  # re-compose only (SKIP_INSTALL=1 skips install)
+    .venv-call/bin/python compose.py    # re-compose only (SKIP_INSTALL=1 skips install)
 
 If the main checkout is mid-WIP, build in a clean worktree and point the
 script at its output: `APK_DIR=~/worktrees/<wt>/app/build/outputs/...`.
@@ -19,10 +19,12 @@ listing copy in `listing.yaml` is the source of truth.
 - `capture.sh` - full pipeline: boot AVD -> install -> `pm clear` ->
   seed -> demo mode -> screencap per screen -> live voice call ->
   screencap -> compose.
-- `call_peer.py` - host-side Python RNS/LXMF peer (TCPInterface server on
-  :4242 + LXST signal responder) the emulator places the call to. Runs
-  from `.venv-call/` (gitignored; `python3 -m venv .venv-call &&
-  .venv-call/bin/pip install rns lxmf`).
+- `call_peer.py` / `compose.py` - host-side Python: the peer (TCPInterface
+  server on :4242 + LXST signal responder) the emulator places the call to,
+  and the compositor. Both share one interpreter: `.venv-call/` (gitignored;
+  `python3 -m venv .venv-call && .venv-call/bin/pip install -r requirements.txt`).
+  `call_peer.py` needs RNS/LXMF/LXST, `compose.py` numpy/PyYAML/Pillow -
+  one interpreter covers both.
 - `tools/x86_64/liblxst_opus_jni.so` - NDK build of lxst-kt
   `cpp/lxst_opus_jni.c` for x86_64; see the call section below.
 - `compose.py` - compositor. Device geometry lives in `FRAMES` (device

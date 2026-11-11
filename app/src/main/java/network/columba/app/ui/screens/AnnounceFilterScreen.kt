@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -33,7 +34,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,7 +42,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +50,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import network.columba.app.R
 import network.columba.app.viewmodel.SettingsViewModel
@@ -435,7 +435,10 @@ private fun RestartBar(
     }
 }
 
-private const val HOP_LIMIT_MAX = 7
+// Reticulum clamps hop_limiter into [1, PATHFINDER_M]; 0 means "don't
+// emit the line" (RNS keeps its default of 128), so the UI ceiling is
+// 128 and the value is a precise number, not a coarse gesture target.
+private const val HOP_LIMIT_MAX = 128
 
 @Composable
 private fun HopLimitDialog(
@@ -443,28 +446,42 @@ private fun HopLimitDialog(
     onDismiss: () -> Unit,
     onConfirm: (Int) -> Unit,
 ) {
-    var hops by remember { mutableStateOf(currentHops.toFloat()) }
+    // M3: sliders suit small discrete ranges where precision doesn't
+    // matter. A 0..128 ingress limit is a precise value, so the dialog
+    // takes direct numeric input with validation instead.
+    var text by rememberSaveable { mutableStateOf(currentHops.toString()) }
+    val hops = text.toIntOrNull()
+    val valid = hops != null && hops in 0..HOP_LIMIT_MAX
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_announce_filter_hops_dialog_title)) },
         text = {
             Column {
-                Text(
-                    text = if (hops.toInt() == 0) {
-                        stringResource(R.string.settings_announce_filter_hops_unlimited_value)
-                    } else {
-                        stringResource(R.string.settings_announce_filter_hops_value, hops.toInt())
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text(stringResource(R.string.settings_announce_filter_hops)) },
+                    singleLine = true,
+                    isError = !valid,
+                    supportingText = {
+                        Text(
+                            text = when {
+                                !valid -> stringResource(
+                                    R.string.settings_announce_filter_hops_error_range,
+                                )
+                                hops == 0 -> stringResource(
+                                    R.string.settings_announce_filter_hops_unlimited_value,
+                                )
+                                else -> stringResource(
+                                    R.string.settings_announce_filter_hops_value, hops,
+                                )
+                            },
+                        )
                     },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.testTag("announce_filter_hops_input"),
                 )
-                Slider(
-                    value = hops,
-                    onValueChange = { hops = it },
-                    valueRange = 0f..HOP_LIMIT_MAX.toFloat(),
-                    steps = HOP_LIMIT_MAX - 1,
-                    modifier = Modifier.testTag("announce_filter_hops_slider"),
-                )
+                Spacer(Modifier.height(8.dp))
                 Text(
                     text = stringResource(R.string.settings_announce_filter_hops_helper),
                     style = MaterialTheme.typography.bodySmall,
@@ -474,7 +491,8 @@ private fun HopLimitDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(hops.toInt()) },
+                onClick = { hops?.let(onConfirm) },
+                enabled = valid,
                 modifier = Modifier.testTag("announce_filter_hops_confirm"),
             ) {
                 Text(stringResource(R.string.settings_announce_filter_action_apply))

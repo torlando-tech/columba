@@ -2280,7 +2280,9 @@ class SettingsViewModel
         /** `hop_limiter`: 0 = unlimited. */
         fun setAnnounceFilterMaxHops(hops: Int) {
             viewModelScope.launch {
-                settingsRepository.saveAnnounceFilterMaxHops(hops)
+                // Mirrors Reticulum's clamp: 0 = unlimited (line omitted),
+                // otherwise the emitted hop_limiter tops out at 128.
+                settingsRepository.saveAnnounceFilterMaxHops(hops.coerceIn(0, 128))
             }
         }
 

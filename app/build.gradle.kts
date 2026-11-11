@@ -12,7 +12,14 @@ plugins {
 }
 
 // Parse version from git tag (e.g., v1.2.3 -> versionName "1.2.3", versionCode calculated)
-// New scheme: major * 10M + minor * 100K + patch * 1K (+ commits for dev builds)
+// New scheme: major * 10M + minor * 100K + patch * 1K, plus a fixed offset
+// separating a patch's prerelease from its stable release:
+//   v2.3.4-beta -> 20,304,000   (Play internal track)
+//   v2.3.4      -> 20,304,010   (+10: keeps the ones digit free for the per-ABI
+//                                APK offsets below, stays inside the patch's
+//                                1000-wide block, and always outranks its beta)
+// Play rejects a reused versionCode on any track, so a patch supports exactly
+// one prerelease; a second one must bump the patch. Dev builds add commitCount.
 fun getVersionFromTag(): Pair<Int, String> {
     return try {
         // Try exact tag match first (release build)
@@ -26,9 +33,12 @@ fun getVersionFromTag(): Pair<Int, String> {
         val major = parts.getOrNull(0)?.toIntOrNull() ?: 0
         val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
         val patch = parts.getOrNull(2)?.split("-")?.get(0)?.toIntOrNull() ?: 0
+        // Prerelease tags (v2.3.4-beta, v2.3.4-rc1) keep the base code; stable
+        // tags take +10 so a patch's stable always outranks its beta in Play.
+        val isPrerelease = parts.getOrNull(2)?.contains('-') == true
 
-        // New scheme: major * 10M + minor * 100K + patch * 1K
-        val versionCode = major * 10_000_000 + minor * 100_000 + patch * 1_000
+        // New scheme: major * 10M + minor * 100K + patch * 1K (+10 for stable)
+        val versionCode = major * 10_000_000 + minor * 100_000 + patch * 1_000 + if (isPrerelease) 0 else 10
         Pair(versionCode, versionString)
     } catch (e: Exception) {
         // Not on exact tag - get nearest tag + commit count

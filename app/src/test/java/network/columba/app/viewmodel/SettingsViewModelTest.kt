@@ -11,6 +11,8 @@ import network.columba.app.repository.NomadNetLastPage
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.ReticulumConfig
+import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsCore
@@ -32,6 +34,8 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -3739,7 +3743,8 @@ class SettingsViewModelTest {
                 assertTrue(state.announceFilterAllowCalls)
                 assertTrue(state.announceFilterAllowDiscovery)
                 assertEquals(0, state.announceFilterMaxHops)
-                // Applied anchors to persisted at t=0: nothing pending.
+                // Applied falls back to shipped defaults (no snapshot in
+                // unit tests), which is what a fresh daemon runs.
                 assertFalse(state.announceFilterPending)
 
                 cancelAndConsumeRemainingEvents()
@@ -3821,6 +3826,89 @@ class SettingsViewModelTest {
             assertEquals(false, rejected)
             assertEquals(true, accepted)
         }
+
+    @Test
+    fun `applied filter comes from the daemon snapshot not from preferences`() =
+        runTest {
+            // Prefs say the gate is ON (repository stubs default true); the
+            // running daemon was actually built with it OFF (snapshot).
+            // Applied must follow the snapshot, so the divergence stays
+            // pending — even though preferences would say "no change".
+            mockkObject(ReticulumConfigSnapshot)
+            try {
+                every { ReticulumConfigSnapshot.read(any()) } returns
+                    ReticulumConfigSnapshot.Snapshot(
+                        configWithoutKey =
+                            ReticulumConfig(
+                                storagePath = "/tmp/reticulum",
+                                enabledInterfaces = emptyList(),
+                                announceFilterEnabled = false,
+                            ),
+                        identityHashHex = null,
+                    )
+                viewModel = createViewModel()
+
+                viewModel.state.test {
+                    var state = awaitItem()
+                    var attempts = 0
+                    while ((state.appliedAnnounceFilter.enabled || state.isLoading) && attempts++ < 50) {
+                        state = awaitItem()
+                    }
+                    assertFalse(state.appliedAnnounceFilter.enabled)
+                    assertTrue(state.announceFilterPending)
+                    cancelAndConsumeRemainingEvents()
+                }
+            } finally {
+                unmockkObject(ReticulumConfigSnapshot)
+            }
+        }
+
+    @Test
+    fun `custom aspect while not hosting does not request a restart`() {
+        // renderFilter omits custom aspects unless we are the master, so a
+        // dormant entry must not ask for a connection-dropping restart.
+        val state =
+            SettingsState(
+                shareInstanceHostingEnabled = false,
+                announceFilterCustomAspects = listOf("app.aspect.weather"),
+                appliedAnnounceFilter = AnnounceFilterConfig(),
+            )
+        assertFalse(state.announceFilterPending)
+    }
+
+    @Test
+    fun `custom aspect while hosting requests a restart`() {
+        val state =
+            SettingsState(
+                shareInstanceHostingEnabled = true,
+                announceFilterEnabled = true,
+                announceFilterWhileHosting = true,
+                announceFilterCustomAspects = listOf("app.aspect.weather"),
+                appliedAnnounceFilter = AnnounceFilterConfig(whileHosting = true),
+            )
+        assertTrue(state.announceFilterPending)
+    }
+
+    @Test
+    fun `optional aspect edits while the gate is off do not request a restart`() {
+        // Nothing renders while the gate is off, so edits to the optional
+        // aspects and the hop limit are dormant on both sides.
+        val state =
+            SettingsState(
+                announceFilterEnabled = false,
+                announceFilterAllowNodes = false,
+                announceFilterAllowCalls = false,
+                announceFilterMaxHops = 3,
+                appliedAnnounceFilter =
+                    AnnounceFilterConfig(
+                        enabled = false,
+                        allowNodes = true,
+                        allowCalls = true,
+                        maxHops = 0,
+                    ),
+            )
+        assertFalse(state.announceFilterPending)
+    }
 
     // endregion
 }

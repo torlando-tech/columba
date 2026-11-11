@@ -195,4 +195,25 @@ kill "$PEER_PID" 2>/dev/null || true
 trap - EXIT
 "$ADB" -s "$SERIAL" shell settings put global columba_lxst_native_audio 1
 
+# 06: the interface-type modal - Auto / TCP / Bluetooth LE / RNode LoRa in one
+# list, i.e. "internet optional" made literal. The + FAB carries no text, so
+# its center is a coordinate tap; the dialog always opens at the same height.
+# End Call leaves the voice screen mid-animation, so back out until the tab
+# bar is actually on screen instead of assuming a fixed number of BACKs.
+for _ in 1 2 3 4; do
+    "$ADB" -s "$SERIAL" shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+    "$ADB" -s "$SERIAL" shell cat /sdcard/ui.xml | grep -q 'text="Settings"' && break
+    "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_BACK
+    sleep 2
+done
+tap_text "Settings"
+sleep 2
+tap_text "Network"                                      # expand the section
+sleep 2
+tap_text "Manage Interfaces"
+sleep 3
+"$ADB" -s "$SERIAL" shell input tap 964 2221            # + -> type dialog
+sleep 2
+cap 06_interfaces
+
 python3 compose.py

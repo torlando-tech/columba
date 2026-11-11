@@ -83,9 +83,15 @@ through the call dialog. On this x86_64 AVD two workarounds apply:
 
 ## Captions
 The 2026-11 "No X" ladder (no phone number / no account / no
-towers / no server / no carrier). It replaces the 2026-09-07 approved copy
+towers / no middlemen / no carrier). It replaces the 2026-09-07 approved copy
 and is pending re-approval. `caption_text` may contain an explicit newline
 to pin the two-line break; without one the compositor splits balanced.
+
+`06_interfaces` closes the set with a single line (`Internet optional.`,
+917px at 120px): capture.sh opens Settings -> Network -> Manage Interfaces
+and taps +, so the modal lists Auto Discovery / TCP Client / Bluetooth LE /
+RNode LoRa - the caption is the claim, the modal is the proof. The + FAB
+has no text, so that tap is a coordinate (964,2221 on the 1080x2400 device).
 
 ## Delivery
 - Play Console accepts the PNGs directly (1080x1920 is inside limits).

@@ -103,7 +103,28 @@ data class AnnounceFilterConfig(
     val allowDiscovery: Boolean = true,
     val customAspects: List<String> = emptyList(),
     val maxHops: Int = 0,
-)
+) {
+    /**
+     * The filter as `RnsConfigFile.renderFilter` would actually render it
+     * under the given hosting mode: nothing at all while the gate is off
+     * (or while hosting without the while-hosting opt-in), and no custom
+     * aspects unless we are the master. Pending-restart comparisons MUST
+     * run both sides through this so dormant preference edits — values the
+     * running daemon cannot see — never demand a connection-dropping
+     * restart.
+     */
+    fun effective(hostShareInstance: Boolean): AnnounceFilterConfig =
+        if (!enabled || (hostShareInstance && !whileHosting)) {
+            INACTIVE
+        } else {
+            copy(customAspects = if (hostShareInstance) customAspects else emptyList())
+        }
+
+    companion object {
+        /** Normalized form of "no `[filter]` section is rendered". */
+        val INACTIVE = AnnounceFilterConfig(enabled = false)
+    }
+}
 
 @androidx.compose.runtime.Immutable
 data class SettingsState(
@@ -256,12 +277,14 @@ data class SettingsState(
     val nomadNetLastViewPath: String? = null,
 ) {
     /**
-     * True when any announce-filter value diverges from the config the
-     * running daemon was constructed with — drives the "Restart required
-     * to apply" affordance on the Advanced card and the filter screen.
-     * Compares the EFFECTIVE discovery value: the config builders force
-     * the discovery aspect through while Auto Discovery is on, so a
-     * stored false + discovery-on must not read as pending.
+     * True when the EFFECTIVELY rendered filter diverges from the config
+     * the running daemon was constructed with — drives the "Restart
+     * required to apply" affordance on the Advanced card and the filter
+     * screen. Both sides go through [AnnounceFilterConfig.effective] so
+     * dormant edits (custom aspects while not hosting, optional aspects
+     * while the gate is off) never demand a connection-dropping restart,
+     * and the discovery aspect compares forced-through, matching what the
+     * config builders render.
      */
     val announceFilterPending: Boolean
         get() =
@@ -273,7 +296,8 @@ data class SettingsState(
                 allowDiscovery = announceFilterAllowDiscovery || discoverInterfacesEnabled,
                 customAspects = announceFilterCustomAspects,
                 maxHops = announceFilterMaxHops,
-            ) != appliedAnnounceFilter
+            ).effective(shareInstanceHostingEnabled) !=
+                appliedAnnounceFilter.effective(shareInstanceHostingEnabled)
 }
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -342,6 +366,39 @@ class SettingsViewModel
             )
         val state: StateFlow<SettingsState> = _state.asStateFlow()
 
+        // The filter the RUNNING daemon was actually built with, read from
+        // the config snapshot the :reticulum process writes at both config-
+        // build sites (cold start in ColumbaApplication, Apply & Restart in
+        // InterfaceConfigManager). Deriving "applied" from the snapshot —
+        // not from current preferences — keeps the pending-restart hint
+        // truthful across activity re-creation (a saved-but-unrestarted
+        // change must stay pending) and edits racing a restart (values
+        // saved after the config builder read DataStore are NOT what the
+        // daemon got). Missing/unreadable snapshot falls back to shipped
+        // defaults, which is exactly what a fresh-install daemon runs.
+        private val _appliedAnnounceFilter = MutableStateFlow(AnnounceFilterConfig())
+
+        /** Re-reads the daemon's build-time filter from the config snapshot. */
+        private fun refreshAppliedAnnounceFilter() {
+            viewModelScope.launch(Dispatchers.IO) {
+                val applied =
+                    runCatching {
+                        ReticulumConfigSnapshot.read(context)?.configWithoutKey
+                    }.getOrNull()?.let {
+                        AnnounceFilterConfig(
+                            enabled = it.announceFilterEnabled,
+                            whileHosting = it.announceFilterWhileHosting,
+                            allowNodes = it.announceFilterAllowNodes,
+                            allowCalls = it.announceFilterAllowCalls,
+                            allowDiscovery = it.announceFilterAllowDiscovery,
+                            customAspects = it.announceFilterCustomAspects,
+                            maxHops = it.announceFilterMaxHops,
+                        )
+                    } ?: AnnounceFilterConfig()
+                _appliedAnnounceFilter.value = applied
+            }
+        }
+
         private val _sharedInstanceAccessEvents = MutableSharedFlow<SharedInstanceAccessEvent>(extraBufferCapacity = 1)
         val sharedInstanceAccessEvents: SharedFlow<SharedInstanceAccessEvent> =
             _sharedInstanceAccessEvents.asSharedFlow()
@@ -360,6 +417,10 @@ class SettingsViewModel
         private var sharedInstanceAvailabilityJob: Job? = null
 
         init {
+            // Anchor the pending-restart hint to the filter the running
+            // daemon was actually built with (config snapshot), not to
+            // current preferences.
+            refreshAppliedAnnounceFilter()
             loadSettings()
             // Always load location sharing settings (not dependent on monitors)
             loadLocationSharingSettings()
@@ -507,6 +568,7 @@ class SettingsViewModel
                         settingsRepository.announceFilterCustomAspectsFlow,
                         settingsRepository.announceFilterMaxHopsFlow,
                         settingsRepository.discoverInterfacesEnabledFlow,
+                        _appliedAnnounceFilter,
                     ) { flows ->
                         @Suppress("UNCHECKED_CAST")
                         val activeIdentity = flows[0] as network.columba.app.data.db.entity.LocalIdentityEntity?
@@ -591,6 +653,8 @@ class SettingsViewModel
                         @Suppress("UNCHECKED_CAST")
                         val discoverInterfacesEnabled = flows[26] as Boolean
 
+                        val appliedFilter = flows[27] as AnnounceFilterConfig
+
                         val displayName = activeIdentity?.displayName ?: defaultName
                         val resolvedIdentityHash = identityInfo.first ?: activeIdentity?.identityHash ?: _state.value.identityHash
                         val resolvedDestinationHash = identityInfo.second ?: activeIdentity?.destinationHash ?: _state.value.destinationHash
@@ -655,11 +719,12 @@ class SettingsViewModel
                             isHostingSharedInstance = _state.value.isHostingSharedInstance,
                             isHostingShareInstanceConflict = _state.value.isHostingShareInstanceConflict,
                             // Announce filter: persisted values reflected
-                            // immediately; `applied` anchors to persisted on
-                            // the first emission and is re-synced from
-                            // DataStore when a restart completes — same
-                            // divergence-drives-the-hint pattern as
-                            // appliedShareInstanceHosting above.
+                            // immediately; `applied` is the snapshot the
+                            // running daemon was built with (written by the
+                            // :reticulum process at both config-build sites),
+                            // re-read on init and after every restart — so a
+                            // saved-but-unrestarted change keeps the hint
+                            // even across activity re-creation.
                             announceFilterEnabled = announceFilterEnabled,
                             announceFilterWhileHosting = announceFilterWhileHosting,
                             announceFilterAllowNodes = announceFilterAllowNodes,
@@ -667,20 +732,7 @@ class SettingsViewModel
                             announceFilterAllowDiscovery = announceFilterAllowDiscovery,
                             announceFilterCustomAspects = announceFilterCustomAspects,
                             announceFilterMaxHops = announceFilterMaxHops,
-                            appliedAnnounceFilter =
-                                if (_state.value.isLoading) {
-                                    AnnounceFilterConfig(
-                                        enabled = announceFilterEnabled,
-                                        whileHosting = announceFilterWhileHosting,
-                                        allowNodes = announceFilterAllowNodes,
-                                        allowCalls = announceFilterAllowCalls,
-                                        allowDiscovery = announceFilterAllowDiscovery || discoverInterfacesEnabled,
-                                        customAspects = announceFilterCustomAspects,
-                                        maxHops = announceFilterMaxHops,
-                                    )
-                                } else {
-                                    _state.value.appliedAnnounceFilter
-                                },
+                            appliedAnnounceFilter = appliedFilter,
                             discoverInterfacesEnabled = discoverInterfacesEnabled,
                             // Message delivery state
                             defaultDeliveryMethod = defaultDeliveryMethod,
@@ -1251,29 +1303,18 @@ class SettingsViewModel
                                 // because onServiceReady runs on the IPC thread.
                                 viewModelScope.launch {
                                     val applied = settingsRepository.getShareInstanceHostingEnabled()
-                                    // The filter snapshot the daemon was just
-                                    // rebuilt from — with the same discovery
-                                    // forcing InterfaceConfigManager applied
-                                    // to the rendered config, so "applied"
-                                    // matches what actually runs.
-                                    val discover = settingsRepository.getDiscoverInterfacesEnabled()
-                                    val appliedFilter =
-                                        AnnounceFilterConfig(
-                                            enabled = settingsRepository.getAnnounceFilterEnabled(),
-                                            whileHosting = settingsRepository.getAnnounceFilterWhileHosting(),
-                                            allowNodes = settingsRepository.getAnnounceFilterAllowNodes(),
-                                            allowCalls = settingsRepository.getAnnounceFilterAllowCalls(),
-                                            allowDiscovery =
-                                                settingsRepository.getAnnounceFilterAllowDiscovery() || discover,
-                                            customAspects = settingsRepository.getAnnounceFilterCustomAspects(),
-                                            maxHops = settingsRepository.getAnnounceFilterMaxHops(),
-                                        )
                                     _state.value = _state.value.copy(
                                         isRestarting = false,
                                         appliedShareInstanceHosting = applied,
-                                        appliedAnnounceFilter = appliedFilter,
                                     )
                                 }
+                                // The daemon rebuilt from the snapshot
+                                // InterfaceConfigManager just wrote — read
+                                // "applied" from that snapshot, NOT from
+                                // current prefs (an edit saved after the
+                                // config builder read DataStore is not what
+                                // the daemon got).
+                                refreshAppliedAnnounceFilter()
                             },
                         ).onSuccess {
                             Log.i(TAG, "Service restart completed successfully")

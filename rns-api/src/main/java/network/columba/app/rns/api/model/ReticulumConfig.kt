@@ -119,6 +119,67 @@ data class ReticulumConfig(
      * 0 = unlimited (explicit user choice).
      */
     val incomingMessageSizeLimitKb: Long? = null,
+    // ==================== RNS 1.6.0 Announce Ingress Filter ====================
+    /**
+     * Master switch for the `[filter] required_only` announce ingress filter
+     * (RNS 1.6.0+). When true, RNS drops announces for destination types the
+     * app never registers handlers for *before* ed25519 verification, path
+     * table insertion, and handler dispatch — the per-announce thread, queue
+     * slot, JNI crossing, and Room write are all eliminated for untracked
+     * aspects (the columba#1228 thread-exhaustion crash class shrinks to the
+     * tracked aspects only).
+     *
+     * Python-backend only (reticulum-kt has no `[filter]` port yet); the UI
+     * hides the control on backends reporting
+     * [network.columba.app.rns.api.BackendCapabilities.PerformanceCaps.announceIngressFilter]
+     * = false. Requires a Reticulum restart to apply (read at construction).
+     */
+    val announceFilterEnabled: Boolean = true,
+    /**
+     * Keep filtering while hosting a shared instance. Default false: joined
+     * apps (Sideband, rnsd, …) register their own announce needs on the
+     * master, and a node-wide `required_only` gate would starve them of
+     * every aspect Columba doesn't track. Users who understand the risk can
+     * opt in and whitelist the joined apps' aspects via
+     * [announceFilterCustomAspects].
+     */
+    val announceFilterWhileHosting: Boolean = false,
+    /**
+     * Pass `nomadnetwork.node` announces through the filter. Needed for
+     * node browsing and peer cards; safe to drop when the user never opens
+     * the NomadNet browser.
+     */
+    val announceFilterAllowNodes: Boolean = true,
+    /**
+     * Pass `lxst.telephony` announces through the filter. Dropping it stops
+     * incoming voice calls from ringing until the caller re-learns this
+     * device's announce.
+     */
+    val announceFilterAllowCalls: Boolean = true,
+    /**
+     * Pass `rnstransport.discovery.interface` announces through the filter.
+     * Load-bearing while interface discovery is on: RNS's own discovery
+     * handler registers that aspect, and dropping the announces breaks
+     * AutoInterface peering (empirically confirmed on the pinned RNS).
+     * Callers force this true whenever [discoverInterfaces] is true.
+     */
+    val announceFilterAllowDiscovery: Boolean = true,
+    /**
+     * User-added aspect strings (e.g. a Sideband app's `myapp.data`) merged
+     * into the filter allow list — but ONLY while hosting a shared instance,
+     * where joined apps need their aspects passed through. Dormant (kept in
+     * preferences, not emitted) whenever hosting is off. Invalid strings are
+     * dropped at config-render time, mirroring the
+     * [autoconnectInterfaceMode] validation.
+     */
+    val announceFilterCustomAspects: List<String> = emptyList(),
+    /**
+     * `[filter] hop_limiter`: drop announces heard beyond this many hops
+     * before any crypto. 0 = unlimited (omit the line, RNS default). Real
+     * reachability tradeoff — contacts farther than the limit become
+     * unreachable — so the UI exposes it as an advanced control.
+     */
+    val announceFilterMaxHops: Int = 0,
 ) : Parcelable {
     // Data-class-generated equals/hashCode use reference equality for ByteArray, so
     // two configs with identical key bytes would otherwise never compare equal. Override
@@ -146,7 +207,14 @@ data class ReticulumConfig(
             autoconnectInterfaceMode == other.autoconnectInterfaceMode &&
             interfaceDiscoverySources == other.interfaceDiscoverySources &&
             requiredDiscoveryValue == other.requiredDiscoveryValue &&
-            incomingMessageSizeLimitKb == other.incomingMessageSizeLimitKb
+            incomingMessageSizeLimitKb == other.incomingMessageSizeLimitKb &&
+            announceFilterEnabled == other.announceFilterEnabled &&
+            announceFilterWhileHosting == other.announceFilterWhileHosting &&
+            announceFilterAllowNodes == other.announceFilterAllowNodes &&
+            announceFilterAllowCalls == other.announceFilterAllowCalls &&
+            announceFilterAllowDiscovery == other.announceFilterAllowDiscovery &&
+            announceFilterCustomAspects == other.announceFilterCustomAspects &&
+            announceFilterMaxHops == other.announceFilterMaxHops
     }
 
     override fun hashCode(): Int {
@@ -169,6 +237,13 @@ data class ReticulumConfig(
         result = 31 * result + (interfaceDiscoverySources?.hashCode() ?: 0)
         result = 31 * result + requiredDiscoveryValue
         result = 31 * result + (incomingMessageSizeLimitKb?.hashCode() ?: 0)
+        result = 31 * result + announceFilterEnabled.hashCode()
+        result = 31 * result + announceFilterWhileHosting.hashCode()
+        result = 31 * result + announceFilterAllowNodes.hashCode()
+        result = 31 * result + announceFilterAllowCalls.hashCode()
+        result = 31 * result + announceFilterAllowDiscovery.hashCode()
+        result = 31 * result + announceFilterCustomAspects.hashCode()
+        result = 31 * result + announceFilterMaxHops
         return result
     }
 
@@ -202,7 +277,14 @@ data class ReticulumConfig(
             "autoconnectInterfaceMode=$autoconnectInterfaceMode, " +
             "interfaceDiscoverySources=$interfaceDiscoverySources, " +
             "requiredDiscoveryValue=$requiredDiscoveryValue, " +
-            "incomingMessageSizeLimitKb=$incomingMessageSizeLimitKb" +
+            "incomingMessageSizeLimitKb=$incomingMessageSizeLimitKb, " +
+            "announceFilterEnabled=$announceFilterEnabled, " +
+            "announceFilterWhileHosting=$announceFilterWhileHosting, " +
+            "announceFilterAllowNodes=$announceFilterAllowNodes, " +
+            "announceFilterAllowCalls=$announceFilterAllowCalls, " +
+            "announceFilterAllowDiscovery=$announceFilterAllowDiscovery, " +
+            "announceFilterCustomAspects=$announceFilterCustomAspects, " +
+            "announceFilterMaxHops=$announceFilterMaxHops" +
             ")"
 }
 

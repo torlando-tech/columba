@@ -100,7 +100,7 @@ class ReticulumConfigSnapshotTest {
         try {
             // Valid header (current version + identity hash) followed by a Parcelable
             // class name that can't be resolved, so readParcelable throws.
-            parcel.writeInt(4)
+            parcel.writeInt(ReticulumConfigSnapshot.VERSION)
             parcel.writeString("deadbeefcafe")
             parcel.writeString("network.columba.app.DoesNotExist")
             file.writeBytes(parcel.marshall())

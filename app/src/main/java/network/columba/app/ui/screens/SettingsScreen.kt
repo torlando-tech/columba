@@ -119,6 +119,7 @@ fun SettingsScreen(
     onNavigateToPyxisUpdater: () -> Unit = {},
     onNavigateToApkSharing: () -> Unit = {},
     onNavigateToBlockedUsers: () -> Unit = {},
+    onNavigateToAnnounceFilter: () -> Unit = {},
 ) {
     val blockedUsersViewModel: BlockedUsersViewModel = hiltViewModel()
     val state by viewModel.state.collectAsState()
@@ -646,6 +647,10 @@ fun SettingsScreen(
                     onCrashReportingToggle = { viewModel.setCrashReportingEnabled(it) },
                     threadsEnabled = threadsEnabled,
                     onThreadsToggle = { viewModel.setThreadsEnabled(it) },
+                    announceFilterEnabled = state.announceFilterEnabled,
+                    announceFilterPending = state.announceFilterPending,
+                    onAnnounceFilterToggle = { viewModel.setAnnounceFilterEnabled(it) },
+                    onOpenAnnounceFilter = onNavigateToAnnounceFilter,
                 )
 
                 // About section

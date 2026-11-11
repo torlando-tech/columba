@@ -111,6 +111,7 @@ internal object RnsConfigFile {
         sb.appendLine()
         sb.appendLine("[logging]")
         sb.appendLine("  loglevel = ${logLevel(config.logLevel)}")
+        renderFilter(sb, config, joinShareInstance, hostShareInstance)
         // Skip the `[interfaces]` block only when joining a master — the
         // host branch owns the transport and still needs its interface list.
         if (!joinShareInstance) {
@@ -121,6 +122,62 @@ internal object RnsConfigFile {
             }
         }
         return sb.toString()
+    }
+
+    /**
+     * Emit the RNS 1.6.0 `[filter]` section (see `Reticulum.py
+     * __apply_config`). `required_only` drops announces for destination
+     * types outside the allow list BEFORE ed25519 verification, path-table
+     * insertion, and handler dispatch — so untracked aspects cost nothing
+     * per announce (the columba#1228 handler-thread class shrinks to the
+     * tracked aspects). Read at Reticulum() construction, hence the
+     * restart-gated settings plumbing.
+     *
+     * Skipped when joining a co-located master: announce handling runs in
+     * the master's process and its own config governs — emitting it here
+     * would only mislead. While hosting, the gate stays off unless the user
+     * opts in (announceFilterWhileHosting): joined apps register their own
+     * announce needs on the master, and a node-wide gate would starve them
+     * of every aspect Columba doesn't track.
+     */
+    private fun renderFilter(
+        sb: StringBuilder,
+        config: ReticulumConfig,
+        joinShareInstance: Boolean,
+        hostShareInstance: Boolean,
+    ) {
+        val filterActive =
+            !joinShareInstance &&
+                config.announceFilterEnabled &&
+                (!hostShareInstance || config.announceFilterWhileHosting)
+        if (!filterActive) return
+        sb.appendLine()
+        sb.appendLine("[filter]")
+        sb.appendLine("  required_only = Yes")
+        val allowed =
+            buildList {
+                // Load-bearing for the app itself: messaging, offline sync
+                // via propagation, and (by default) node browsing, calls,
+                // and AutoInterface peering.
+                add("lxmf.delivery")
+                add("lxmf.propagation")
+                if (config.announceFilterAllowNodes) add("nomadnetwork.node")
+                if (config.announceFilterAllowCalls) add("lxst.telephony")
+                if (config.announceFilterAllowDiscovery) add("rnstransport.discovery.interface")
+                // Custom aspects are hosting-scoped: they exist to let
+                // joined apps' traffic through, and stay dormant (persisted
+                // but unemitted) whenever we're not master.
+                if (hostShareInstance) {
+                    config.announceFilterCustomAspects
+                        .filter { isValidAspect(it) }
+                        .forEach { add(it) }
+                }
+            }.distinct()
+        sb.appendLine("  allowed_types = ${allowed.joinToString(", ")}")
+        // 0 = unlimited: omit the line so RNS keeps its own default.
+        if (config.announceFilterMaxHops > 0) {
+            sb.appendLine("  hop_limiter = ${config.announceFilterMaxHops}")
+        }
     }
 
     private fun renderInterface(
@@ -272,6 +329,17 @@ internal object RnsConfigFile {
     }
 
     private fun yesNo(b: Boolean): String = if (b) "Yes" else "No"
+
+    /**
+     * RNS aspect charset: dot-separated lowercase tokens (`lxmf.delivery`,
+     * a joined app's `myapp.data`). Validated at render time so a restored
+     * preferences backup can't emit a token that breaks the `key = value`
+     * grammar or silently starves the allow list — same defensive posture
+     * as the `autoconnect_interface_mode` validation above.
+     */
+    private val ASPECT_REGEX = Regex("^[a-z0-9][a-z0-9_-]*(\\.[a-z0-9_-]+)+$")
+
+    private fun isValidAspect(value: String): Boolean = ASPECT_REGEX.matches(value)
 
     /** RNS loglevels are 0 (critical) .. 7 (extreme). */
     private fun logLevel(level: LogLevel): Int =

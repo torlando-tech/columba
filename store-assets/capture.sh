@@ -8,6 +8,7 @@
 # Android SDK at ~/Android/Sdk. See README.md for the demo-mode caveats.
 set -euo pipefail
 cd "$(dirname "$0")"
+mkdir -p captures
 SDK="$HOME/Android/Sdk"
 SERIAL=emulator-5554
 PKG=network.columba.app.debug
@@ -114,7 +115,17 @@ tap_text() {   # tap center of first uiautomator node with text/desc $1
 PEER_LOG=/tmp/columba-call-peer.log
 .venv-call/bin/python call_peer.py --statedir .call-peer --port 4242 >"$PEER_LOG" 2>&1 &
 PEER_PID=$!
-trap 'kill "$PEER_PID" 2>/dev/null || true' EXIT
+cleanup() {
+    kill "$PEER_PID" 2>/dev/null || true
+    # A failed tap or a call that never establishes must not leave the
+    # audio flag flipped: later calls would silently take the Phase-2
+    # path. Restore whatever was there before we touched it.
+    if [ "${AUDIO_FLAG_SET:-0}" = 1 ]; then
+        "$ADB" -s "$SERIAL" shell settings put global columba_lxst_native_audio "$PREV_NATIVE_AUDIO" \
+            >/dev/null 2>&1 || true
+    fi
+}
+trap cleanup EXIT
 for _ in $(seq 1 30); do grep -q PEER_READY "$PEER_LOG" && break; sleep 1; done
 if ! grep -q PEER_READY "$PEER_LOG"; then
     echo "peer did not start (alive=$(kill -0 "$PEER_PID" 2>/dev/null && echo yes || echo no)):" >&2
@@ -133,7 +144,10 @@ echo "peer: dest=$PEER_DEST"
 # The columba_lxst_native_audio flag (PythonCallManager) selects LXST-kt's
 # Phase-2 pipeline instead: AudioTrack playback + the Kotlin codec path.
 # Wire protocol identical; reset to native after the capture.
+PREV_NATIVE_AUDIO=$("$ADB" -s "$SERIAL" shell settings get global columba_lxst_native_audio 2>/dev/null | tr -d '\r')
+case "$PREV_NATIVE_AUDIO" in ""|null) PREV_NATIVE_AUDIO=1 ;; esac
 "$ADB" -s "$SERIAL" shell settings put global columba_lxst_native_audio 0
+AUDIO_FLAG_SET=1
 
 # Phase-2's Opus codec still loads native code (NativeOpus: libopus +
 # liblxst_opus_jni), arm-only in the AAR. Supply x86_64 builds: libopus (and
@@ -192,8 +206,8 @@ cap 05_call
 tap_text "End Call"
 sleep 2
 kill "$PEER_PID" 2>/dev/null || true
-trap - EXIT
-"$ADB" -s "$SERIAL" shell settings put global columba_lxst_native_audio 1
+AUDIO_FLAG_SET=0
+"$ADB" -s "$SERIAL" shell settings put global columba_lxst_native_audio "$PREV_NATIVE_AUDIO"
 
 # 06: the interface-type modal - Auto / TCP / Bluetooth LE / RNode LoRa in one
 # list, i.e. "internet optional" made literal. The + FAB carries no text, so

@@ -38,15 +38,17 @@ object ReticulumConfigSnapshot {
     private const val TAG = "ReticulumConfigSnapshot"
     private const val FILE_NAME = "rns_config_snapshot.bin"
     private const val LOCK_FILE_NAME = "$FILE_NAME.lock"
-    // Bumped to 4 when ReticulumConfig.autoconnectInterfaceMode was added.
-    // The field sits mid-layout (before interfaceDiscoverySources /
-    // requiredDiscoveryValue / incomingMessageSizeLimitKb), so V3 snapshots
-    // predate it and would unmarshal with a torn parcel layout from this
-    // version onward. We explicitly discard them; the UI re-initialises on
-    // next launch and writes V4. (V3 bumped for incomingMessageSizeLimitKb;
+    // Bumped to 5 when the RNS 1.6.0 announce-filter fields were appended to
+    // ReticulumConfig: @Parcelize marshals constructor order, so V4 snapshots
+    // would unmarshal with a torn parcel layout from here on. Explicitly
+    // discarded; the UI re-initialises on next launch and writes V5.
+    // (V4 bumped for autoconnectInterfaceMode; V3 for incomingMessageSizeLimitKb;
     // V2 -> V1 discard for shareInstanceHosting: see git history of this
     // constant.)
-    private const val VERSION = 4
+    // internal (not private) so the unmarshal-failure test can write a
+    // header with the CURRENT version — pinning a literal there silently
+    // turned that test into a version-mismatch test on the next bump.
+    internal const val VERSION = 5
 
     /**
      * The deserialized snapshot: a config without an identity key plus the

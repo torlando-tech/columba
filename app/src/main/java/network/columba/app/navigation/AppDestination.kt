@@ -32,6 +32,7 @@ enum class AppDestination(
     MAP("map", backContract = BackContract.TOP_LEVEL),
     IDENTITY("identity"),
     SETTINGS("settings", backContract = BackContract.TOP_LEVEL),
+    ANNOUNCE_FILTER("announce_filter"),
     MAP_FOCUS(
         routePattern = "map_focus?lat={lat}&lon={lon}&label={label}&type={type}&height={height}" +
             "&reachableOn={reachableOn}&port={port}&frequency={frequency}&bandwidth={bandwidth}" +

@@ -41,6 +41,11 @@ import network.columba.app.rns.api.BackendCapabilities.Versions
  *   yes` in the rendered config promotes the daemon to master (or quietly
  *   yields to a co-located master per upstream's first-to-bind policy). UI
  *   exposes the toggle in Settings → Advanced on this backend only.
+ * - **`announceIngressFilter = true`** — the pinned RNS 1.6.0 parses the
+ *   `[filter]` section (`required_only`, `allowed_types`, `hop_limiter`) at
+ *   construction, so the Announce filtering surface renders on this backend.
+ *   Like the discovery knobs it is config-file-gated: changes apply on the
+ *   next Reticulum restart, not live.
  * - **`autoconnectIfacOnlyFilter = false`** — upstream Python RNS has no
  *   knob that filters auto-connect by IFAC presence; reticulum-kt does. UI
  *   hides the IFAC-only Switch on this backend so the toggle doesn't
@@ -91,5 +96,6 @@ val PYTHON_CAPABILITIES: BackendCapabilities = BackendCapabilities(
         batteryProfileTuning = Support.UNSUPPORTED,
         sharedInstanceAvailabilityChecks = true,
         shareInstanceHosting = true,
+        announceIngressFilter = true,
     ),
 )

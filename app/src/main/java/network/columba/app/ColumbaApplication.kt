@@ -530,6 +530,18 @@ class ColumbaApplication : Application() {
                         rpcKey = rpcKey,
                         enableTransport = transportNodeEnabled,
                         shareInstanceHosting = startupConfig.shareInstanceHosting,
+                        // RNS 1.6.0 announce ingress filter. Discovery aspect
+                        // is forced through while interface discovery is on:
+                        // RNS's own discovery handler registers that aspect
+                        // and dropping it breaks AutoInterface peering.
+                        announceFilterEnabled = startupConfig.announceFilterEnabled,
+                        announceFilterWhileHosting = startupConfig.announceFilterWhileHosting,
+                        announceFilterAllowNodes = startupConfig.announceFilterAllowNodes,
+                        announceFilterAllowCalls = startupConfig.announceFilterAllowCalls,
+                        announceFilterAllowDiscovery =
+                            startupConfig.announceFilterAllowDiscovery || discoverInterfaces,
+                        announceFilterCustomAspects = startupConfig.announceFilterCustomAspects,
+                        announceFilterMaxHops = startupConfig.announceFilterMaxHops,
                         discoverInterfaces = discoverInterfaces,
                         autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                         autoconnectIfacOnly = startupConfig.autoconnectIfacOnly,

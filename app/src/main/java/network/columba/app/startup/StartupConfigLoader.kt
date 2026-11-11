@@ -47,6 +47,17 @@ class StartupConfigLoader
             val autoconnectIfacOnly: Boolean,
             val autoconnectInterfaceMode: String? = null,
             val shareInstanceHosting: Boolean,
+            // RNS 1.6.0 announce ingress filter (see ReticulumConfig KDoc).
+            // allowDiscovery is stored as-chosen; callers force it true when
+            // discoverInterfaces is on (dropping the discovery aspect breaks
+            // AutoInterface peering).
+            val announceFilterEnabled: Boolean = true,
+            val announceFilterWhileHosting: Boolean = false,
+            val announceFilterAllowNodes: Boolean = true,
+            val announceFilterAllowCalls: Boolean = true,
+            val announceFilterAllowDiscovery: Boolean = true,
+            val announceFilterCustomAspects: List<String> = emptyList(),
+            val announceFilterMaxHops: Int = 0,
         )
 
         /**
@@ -69,6 +80,13 @@ class StartupConfigLoader
                 val autoconnectInterfaceModeDeferred = async { settingsRepository.getAutoconnectInterfaceMode() }
                 val shareInstanceHostingDeferred =
                     async { settingsRepository.getShareInstanceHostingEnabled() }
+                val announceFilterEnabledDeferred = async { settingsRepository.getAnnounceFilterEnabled() }
+                val announceFilterWhileHostingDeferred = async { settingsRepository.getAnnounceFilterWhileHosting() }
+                val announceFilterAllowNodesDeferred = async { settingsRepository.getAnnounceFilterAllowNodes() }
+                val announceFilterAllowCallsDeferred = async { settingsRepository.getAnnounceFilterAllowCalls() }
+                val announceFilterAllowDiscoveryDeferred = async { settingsRepository.getAnnounceFilterAllowDiscovery() }
+                val announceFilterCustomAspectsDeferred = async { settingsRepository.getAnnounceFilterCustomAspects() }
+                val announceFilterMaxHopsDeferred = async { settingsRepository.getAnnounceFilterMaxHops() }
 
                 val savedAutoconnect = autoconnectCountDeferred.await()
                 // Filter the enabled set against the device's current transport so the
@@ -92,6 +110,13 @@ class StartupConfigLoader
                     autoconnectIfacOnly = autoconnectIfacOnlyDeferred.await(),
                     autoconnectInterfaceMode = autoconnectInterfaceModeDeferred.await(),
                     shareInstanceHosting = shareInstanceHostingDeferred.await(),
+                    announceFilterEnabled = announceFilterEnabledDeferred.await(),
+                    announceFilterWhileHosting = announceFilterWhileHostingDeferred.await(),
+                    announceFilterAllowNodes = announceFilterAllowNodesDeferred.await(),
+                    announceFilterAllowCalls = announceFilterAllowCallsDeferred.await(),
+                    announceFilterAllowDiscovery = announceFilterAllowDiscoveryDeferred.await(),
+                    announceFilterCustomAspects = announceFilterCustomAspectsDeferred.await(),
+                    announceFilterMaxHops = announceFilterMaxHopsDeferred.await(),
                 )
             }
     }

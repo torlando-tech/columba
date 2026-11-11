@@ -55,6 +55,10 @@ jobs:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          # The triggering tag is authoritative: a beta and its stable release
+          # are often tagged on the same commit, where git's own tag resolution
+          # picks the stable tag for both (see getVersionFromTag()).
+          ORG_GRADLE_PROJECT_columbaVersionTag: ${{ steps.version.outputs.tag }}
         run: |
           # Python backend first, then Kotlin backend; each in sentry / noSentry
           # telemetry variants. Four flavor combos × ABI splits + universal.
@@ -81,6 +85,8 @@ jobs:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          # Same as the APK step: the triggering tag decides beta vs stable.
+          ORG_GRADLE_PROJECT_columbaVersionTag: ${{ steps.version.outputs.tag }}
         run: |
           ./gradlew :app:bundleSentryPythonBackendRelease --no-daemon --stacktrace
           echo "✓ Release AAB built successfully"

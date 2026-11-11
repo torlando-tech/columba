@@ -2632,7 +2632,8 @@
     <string name="settings_announce_filter_hops_dialog_title">Max Announce Hops</string>
     <string name="settings_announce_filter_hops_unlimited_value">0 — Unlimited</string>
     <string name="settings_announce_filter_hops_value">%1$d hops</string>
-    <string name="settings_announce_filter_hops_helper">Announces heard beyond this many hops are dropped before any crypto. Contacts farther than the limit become unreachable. Leave at 0 unless your mesh is very busy.</string>
+    <string name="settings_announce_filter_hops_helper">Announces heard beyond this many hops are dropped before any crypto. Contacts farther than the limit become unreachable. Leave at 0 unless your mesh is very busy. 0–128.</string>
+    <string name="settings_announce_filter_hops_error_range">Enter a number between 0 and 128 (0 = unlimited)</string>
     <string name="settings_announce_filter_hosting_header">Shared Instance</string>
     <string name="settings_announce_filter_hosting_paused">Sharing your instance — filtering is paused while other apps are connected.</string>
     <string name="settings_announce_filter_while_hosting_title">Filter While Sharing</string>

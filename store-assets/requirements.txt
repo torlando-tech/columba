@@ -1,0 +1,8 @@
+# Host-side Python for the store-art pipeline (call_peer.py + compose.py).
+# One interpreter for both scripts: .venv-call/bin/python.
+rns
+lxmf
+lxst
+numpy
+PyYAML
+Pillow

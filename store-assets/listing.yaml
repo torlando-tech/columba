@@ -1,0 +1,45 @@
+# Google Play listing screenshots - single source of truth.
+# Rebuild everything:  python3 compose.py
+# Captions below are the copy approved 2026-09-07 (see notes in README).
+
+canvas: [1080, 1920]
+frame: pixel-9-pro
+out_dir: out
+status_bar: true          # fallback overlay; drop per-screen once re-captured in demo mode
+clock: "9:41"
+
+background:
+  top: "#B844C8"          # app-icon gradient (Purple40 -> Pink40)
+  bottom: "#E85577"
+
+caption:
+  max_px: 120
+  min_px: 80
+  color: "#FFFFFF"
+  top_margin: 72
+  gap: 30
+
+phone:
+  scale: 1.0
+  bottom_margin: 28
+
+screens:
+  - id: 01_contacts
+    capture: captures/01_contacts.png
+    caption_text: "Your people, anywhere"
+
+  - id: 02_chats
+    capture: captures/02_chats.png
+    caption_text: "Messages without carriers"   # DRAFT copy - not yet approved
+
+  - id: 03_map
+    capture: captures/03_map.png
+    caption_text: "Know where your people are"
+
+  - id: 04_conversation
+    capture: captures/04_conversation.png
+    caption_text: "Talk like the miles aren't there"   # DRAFT copy - not yet approved
+
+  - id: 05_call
+    capture: captures/05_call.png
+    caption_text: "Voice calls, no carrier"   # DRAFT copy - not yet approved

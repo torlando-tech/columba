@@ -61,6 +61,14 @@ object TestController {
         fun draftDao(): network.columba.app.data.db.dao.DraftDao
         fun conversationRepository(): network.columba.app.data.repository.ConversationRepository
         fun settingsRepository(): network.columba.app.repository.SettingsRepository
+        fun localIdentityDao(): network.columba.app.data.db.dao.LocalIdentityDao
+        fun contactDao(): network.columba.app.data.db.dao.ContactDao
+        fun announceDao(): network.columba.app.data.db.dao.AnnounceDao
+        fun conversationDao(): network.columba.app.data.db.dao.ConversationDao
+        fun messageDao(): network.columba.app.data.db.dao.MessageDao
+        fun receivedLocationDao(): network.columba.app.data.db.dao.ReceivedLocationDao
+        fun peerIconDao(): network.columba.app.data.db.dao.PeerIconDao
+        fun offlineMapRegionDao(): network.columba.app.data.db.dao.OfflineMapRegionDao
     }
 
     // Surface uncaught throws inside any scope.launch as a parseable
@@ -91,6 +99,14 @@ object TestController {
     private var draftDao: network.columba.app.data.db.dao.DraftDao? = null
     private var conversationRepo: network.columba.app.data.repository.ConversationRepository? = null
     private var settingsRepo: network.columba.app.repository.SettingsRepository? = null
+    private var localIdentityDao: network.columba.app.data.db.dao.LocalIdentityDao? = null
+    private var contactDao: network.columba.app.data.db.dao.ContactDao? = null
+    private var announceDao: network.columba.app.data.db.dao.AnnounceDao? = null
+    private var conversationDao: network.columba.app.data.db.dao.ConversationDao? = null
+    private var messageDao: network.columba.app.data.db.dao.MessageDao? = null
+    private var receivedLocationDao: network.columba.app.data.db.dao.ReceivedLocationDao? = null
+    private var peerIconDao: network.columba.app.data.db.dao.PeerIconDao? = null
+    private var offlineMapRegionDao: network.columba.app.data.db.dao.OfflineMapRegionDao? = null
     private val rxQueue = mutableListOf<ReceivedMessage>()
     private val rxLock = Any()
     private val deliveryStates = mutableMapOf<String, String>() // msgHashHex -> stateName
@@ -117,6 +133,14 @@ object TestController {
         draftDao = ep.draftDao()
         conversationRepo = ep.conversationRepository()
         settingsRepo = ep.settingsRepository()
+        localIdentityDao = ep.localIdentityDao()
+        contactDao = ep.contactDao()
+        announceDao = ep.announceDao()
+        conversationDao = ep.conversationDao()
+        messageDao = ep.messageDao()
+        receivedLocationDao = ep.receivedLocationDao()
+        peerIconDao = ep.peerIconDao()
+        offlineMapRegionDao = ep.offlineMapRegionDao()
         receiveJob = scope.launch {
             rnsLxmf!!.observeMessages().collect { msg ->
                 synchronized(rxLock) { rxQueue.add(msg) }
@@ -1026,6 +1050,52 @@ object TestController {
                 )
             } catch (e: Exception) {
                 Log.e(LOGCAT_TAG, "onboard_err reason=${escape(e.javaClass.simpleName + ":" + (e.message ?: ""))}")
+            }
+        }
+    }
+
+    /**
+     * Seeds the deterministic store-art demo dataset ([StoreArtSeeder]) for
+     * the Google Play screenshot pipeline in `store-assets/`. Does not touch
+     * interfaces - live discovery would pollute the deterministic Network tab.
+     *
+     * Line: `store_art_seeded contacts=N announces=N conversations=N messages=N locations=N`
+     * Line on failure: `store_art_err reason=…`
+     */
+    fun handleSeedStoreArt(
+        context: Context,
+        mayaHash: String? = null,
+        mayaPub: String? = null,
+    ) {
+        ensureInit(context)
+        scope.launch {
+            try {
+                val counts = StoreArtSeeder.seed(
+                    localIdentityDao = localIdentityDao!!,
+                    contactDao = contactDao!!,
+                    announceDao = announceDao!!,
+                    conversationDao = conversationDao!!,
+                    messageDao = messageDao!!,
+                    receivedLocationDao = receivedLocationDao!!,
+                    peerIconDao = peerIconDao!!,
+                    offlineMapRegionDao = offlineMapRegionDao!!,
+                    settingsRepository = settingsRepo!!,
+                    identityRepository = identityRepo!!,
+                    rnsCore = rnsCore!!,
+                    mayaDestHash = mayaHash?.takeIf { it.isNotEmpty() },
+                    mayaPublicKey = mayaPub?.takeIf { it.isNotEmpty() }?.fromHex(),
+                )
+                Log.i(
+                    LOGCAT_TAG,
+                    "store_art_seeded contacts=${counts.contacts} announces=${counts.announces} " +
+                        "conversations=${counts.conversations} messages=${counts.messages} " +
+                        "locations=${counts.locations}",
+                )
+            } catch (e: Exception) {
+                Log.e(
+                    LOGCAT_TAG,
+                    "store_art_err reason=${escape(e.javaClass.simpleName + ":" + (e.message ?: ""))}",
+                )
             }
         }
     }

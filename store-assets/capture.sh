@@ -15,7 +15,7 @@ PKG=network.columba.app.debug
 ADB="$SDK/platform-tools/adb"
 
 # 1. Boot the AVD headless if it isn't running
-if ! "$ADB" devices | grep -q "^$SERIAL device"; then
+if ! "$ADB" devices | grep -q "^$SERIAL[[:space:]]device$"; then
     "$SDK/emulator/emulator" -avd columba-e2e -no-window -no-audio \
         -no-boot-anim -gpu swiftshader_indirect >/tmp/columba-avd.log 2>&1 &
 fi
@@ -173,8 +173,18 @@ done
 sleep 20
 "$ADB" -s "$SERIAL" shell am broadcast -p "$PKG" -a network.columba.test.ONBOARD >/dev/null
 sleep 2
+"$ADB" -s "$SERIAL" logcat -c
 "$ADB" -s "$SERIAL" shell am broadcast -p "$PKG" -a network.columba.test.ADD_TCP_CLIENT \
     --es name hostlink --es host 10.0.2.2 --es port 4242 >/dev/null
+# The handler saves the interface asynchronously; killing the process before
+# the ack can drop the uplink entirely on next launch.
+SAVED=0
+for _ in $(seq 1 15); do
+    "$ADB" -s "$SERIAL" logcat -d -s COLUMBA_TEST |
+        grep -q 'interface_added name=hostlink' && { SAVED=1; break; }
+    sleep 2
+done
+[ "$SAVED" = 1 ] || { echo "ADD_TCP_CLIENT save never acked" >&2; exit 1; }
 "$ADB" -s "$SERIAL" shell am force-stop "$PKG"
 "$ADB" -s "$SERIAL" shell am start -n "$PKG/network.columba.app.MainActivity" >/dev/null
 sleep 20   # :reticulum up, TCP interface connects, peer announce lands
@@ -230,4 +240,4 @@ sleep 3
 sleep 2
 cap 06_interfaces
 
-python3 compose.py
+.venv-call/bin/python compose.py

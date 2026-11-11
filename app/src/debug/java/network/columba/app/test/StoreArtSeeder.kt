@@ -59,6 +59,15 @@ object StoreArtSeeder {
     private fun hex(label: String, chars: Int): String =
         sha(label).joinToString("") { "%02x".format(it) }.take(chars)
 
+    /** Deterministic positive row id for tables whose PK is autoGenerate;
+     * Room inserts an explicit non-zero PK verbatim, so repeated seeds
+     * address the same row. */
+    private fun stableId(label: String): Long {
+        var v = 0L
+        for (b in sha(label).take(8)) v = (v shl 8) or (b.toLong() and 0xff)
+        return (v and Long.MAX_VALUE).coerceAtLeast(1L)
+    }
+
     private fun pub(label: String): ByteArray = sha("pub:$label")
     /** Call-capture override: when the host runs a real Python RNS peer,
      * `SEED_STORE_ART` passes its announced destination hash + public key
@@ -296,26 +305,32 @@ object StoreArtSeeder {
         // capture deterministic without faking a location. maxZoom doubles
         // as the initial camera zoom (clamped 2..14 in MapViewModel). No
         // tile file is attached, so the style stays online.
-        val regionId = offlineMapRegionDao.insert(
-            OfflineMapRegionEntity(
-                name = "Store Art Region",
-                centerLatitude = 45.7175,
-                centerLongitude = -121.5168,
-                radiusKm = 25,
-                minZoom = 8,
-                // doubles as initial camera zoom; 11 keeps all markers in frame
-                maxZoom = 11,
-                status = OfflineMapRegionEntity.STATUS_COMPLETE,
-                mbtilesPath = null,
-                tileCount = 0,
-                sizeBytes = 0,
-                downloadProgress = 1f,
-                errorMessage = null,
-                createdAt = now - DAY,
-                completedAt = now - DAY,
-            ),
+        val region = OfflineMapRegionEntity(
+            id = stableId("region:store-art"),
+            name = "Store Art Region",
+            centerLatitude = 45.7175,
+            centerLongitude = -121.5168,
+            radiusKm = 25,
+            minZoom = 8,
+            // doubles as initial camera zoom; 11 keeps all markers in frame
+            maxZoom = 11,
+            status = OfflineMapRegionEntity.STATUS_COMPLETE,
+            mbtilesPath = null,
+            tileCount = 0,
+            sizeBytes = 0,
+            downloadProgress = 1f,
+            errorMessage = null,
+            createdAt = now - DAY,
+            completedAt = now - DAY,
         )
-        offlineMapRegionDao.setDefaultRegion(regionId)
+        // The PK is autoGenerate, so a fresh insert would append another
+        // region on every rerun; address the row by its stable id instead.
+        if (offlineMapRegionDao.getRegionById(region.id) == null) {
+            offlineMapRegionDao.insert(region)
+        } else {
+            offlineMapRegionDao.update(region)
+        }
+        offlineMapRegionDao.setDefaultRegion(region.id)
 
         settingsRepository.markOnboardingCompleted()
 

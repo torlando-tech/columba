@@ -364,11 +364,19 @@ class InterfaceConfigManager
                     val autoconnectIfacOnly = settingsRepository.getAutoconnectIfacOnly()
                     val autoconnectInterfaceMode = settingsRepository.getAutoconnectInterfaceMode()
                     val shareInstanceHosting = settingsRepository.getShareInstanceHostingEnabled()
+                    val announceFilterEnabled = settingsRepository.getAnnounceFilterEnabled()
+                    val announceFilterWhileHosting = settingsRepository.getAnnounceFilterWhileHosting()
+                    val announceFilterAllowNodes = settingsRepository.getAnnounceFilterAllowNodes()
+                    val announceFilterAllowCalls = settingsRepository.getAnnounceFilterAllowCalls()
+                    val announceFilterAllowDiscovery = settingsRepository.getAnnounceFilterAllowDiscovery()
+                    val announceFilterCustomAspects = settingsRepository.getAnnounceFilterCustomAspects()
+                    val announceFilterMaxHops = settingsRepository.getAnnounceFilterMaxHops()
                     Log.d(
                         TAG,
                         "Discovery settings: discover=$discoverInterfaces, autoconnect=$autoconnectDiscoveredCount " +
                             "(saved=$savedAutoconnect), ifacOnly=$autoconnectIfacOnly, " +
-                            "shareInstanceHosting=$shareInstanceHosting",
+                            "shareInstanceHosting=$shareInstanceHosting, " +
+                            "announceFilter=$announceFilterEnabled (hops=$announceFilterMaxHops)",
                     )
 
                     // Report the exact discovery values this restart read from
@@ -393,6 +401,15 @@ class InterfaceConfigManager
                             rpcKey = rpcKey,
                             enableTransport = transportNodeEnabled,
                             shareInstanceHosting = shareInstanceHosting,
+                            // Discovery aspect forced through while discovery is on
+                            // (same rule as ColumbaApplication's cold-start config).
+                            announceFilterEnabled = announceFilterEnabled,
+                            announceFilterWhileHosting = announceFilterWhileHosting,
+                            announceFilterAllowNodes = announceFilterAllowNodes,
+                            announceFilterAllowCalls = announceFilterAllowCalls,
+                            announceFilterAllowDiscovery = announceFilterAllowDiscovery || discoverInterfaces,
+                            announceFilterCustomAspects = announceFilterCustomAspects,
+                            announceFilterMaxHops = announceFilterMaxHops,
                             discoverInterfaces = discoverInterfaces,
                             autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                             autoconnectIfacOnly = autoconnectIfacOnly,

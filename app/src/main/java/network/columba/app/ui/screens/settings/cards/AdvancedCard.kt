@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
@@ -52,6 +53,15 @@ import network.columba.app.ui.components.LocalCapabilities
  * @param shareInstanceHostingPending True when the persisted preference differs from
  *   the value the running daemon was constructed with. Drives the "(pending restart)"
  *   hint and inline Restart button under the toggle.
+ * @param announceFilterEnabled Persisted "Filter Announces" master toggle
+ *   (RNS 1.6.0 `[filter]`; python backend only, capability-gated).
+ * @param announceFilterPending True when any announce-filter preference
+ *   diverges from the config the running daemon was built with. Drives the
+ *   pending-restart hint + inline Restart button under the filter toggle.
+ * @param onAnnounceFilterToggle Callback when the Filter Announces toggle changes.
+ *   Persist-only — applying needs a restart, like Share Instance.
+ * @param onOpenAnnounceFilter Callback when the Filter Options button is tapped;
+ *   navigates to the Announce Filtering screen.
  * @param onRestartReticulum Invoked when the user taps the inline Restart button next
  *   to the pending-changes hint. Plumbs through to `SettingsViewModel.restartService()`.
  * @param isRestarting True while a service restart is in flight; disables the
@@ -67,6 +77,10 @@ fun AdvancedCard(
     onShareInstanceHostingToggle: (Boolean) -> Unit = {},
     shareInstanceHostingPending: Boolean = false,
     onRestartReticulum: () -> Unit = {},
+    announceFilterEnabled: Boolean = true,
+    announceFilterPending: Boolean = false,
+    onAnnounceFilterToggle: (Boolean) -> Unit = {},
+    onOpenAnnounceFilter: () -> Unit = {},
     isRestarting: Boolean = false,
     crashReportingEnabled: Boolean = false,
     onCrashReportingToggle: (Boolean) -> Unit = {},
@@ -74,6 +88,7 @@ fun AdvancedCard(
     onThreadsToggle: (Boolean) -> Unit = {},
 ) {
     val canHostShareInstance = LocalCapabilities.current.performance.shareInstanceHosting
+    val canFilterAnnounces = LocalCapabilities.current.performance.announceIngressFilter
     CollapsibleSettingsCard(
         title = stringResource(R.string.settings_advanced_title),
         icon = Icons.Default.Tune,
@@ -186,6 +201,102 @@ fun AdvancedCard(
                             Text(stringResource(R.string.settings_advanced_restart))
                         }
                     }
+                }
+            }
+        }
+
+        // Announce ingress filter (RNS 1.6.0 [filter]; python backend only;
+        // capability-gated). Persist-only like Share Instance — [filter] is
+        // read at Reticulum() construction, so changes surface through the
+        // same pending-restart affordance and the options screen.
+        if (canFilterAnnounces) {
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FilterAlt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_advanced_filter_title),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                Switch(
+                    checked = announceFilterEnabled,
+                    onCheckedChange = onAnnounceFilterToggle,
+                    modifier = Modifier.testTag("announce_filter_toggle"),
+                )
+            }
+            Text(
+                text = stringResource(R.string.settings_advanced_filter_description),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (announceFilterPending) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_advanced_restart_pending),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    FilledTonalButton(
+                        onClick = onRestartReticulum,
+                        enabled = !isRestarting,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        ),
+                        contentPadding = ButtonDefaults.ContentPadding,
+                    ) {
+                        if (isRestarting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Text(stringResource(R.string.settings_advanced_restarting))
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.RestartAlt,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Text(stringResource(R.string.settings_advanced_restart))
+                        }
+                    }
+                }
+            }
+            if (announceFilterEnabled) {
+                Spacer(Modifier.height(8.dp))
+                FilledTonalButton(
+                    onClick = onOpenAnnounceFilter,
+                    modifier = Modifier.testTag("announce_filter_options"),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.settings_advanced_filter_options))
                 }
             }
         }

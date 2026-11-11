@@ -81,8 +81,11 @@ through the call dialog. On this x86_64 AVD two workarounds apply:
   dir: `libopus.so` + `libc++.so` from the emulator's media APEX, and the
   committed JNI glue from `tools/x86_64/`.
 
-Captions: 01/03/05 use the approved 2026-09-07 copy. `02_chats` caption
-is DRAFT - not approved.
+## Captions
+The 2026-11 "No X" ladder (no phone number / no account / no
+towers / no server / no carrier). It replaces the 2026-09-07 approved copy
+and is pending re-approval. `caption_text` may contain an explicit newline
+to pin the two-line break; without one the compositor splits balanced.
 
 ## Delivery
 - Play Console accepts the PNGs directly (1080x1920 is inside limits).

@@ -1,6 +1,7 @@
 # Google Play listing screenshots - single source of truth.
 # Rebuild everything:  python3 compose.py
-# Captions below are the copy approved 2026-09-07 (see notes in README).
+# Captions are the 2026-11 "No X" set - replaces the 2026-09-07 copy
+# (pending re-approval); see notes in README.
 
 canvas: [1080, 1920]
 frame: pixel-9-pro
@@ -23,23 +24,27 @@ phone:
   scale: 1.0
   bottom_margin: 28
 
+# "No X" ladder: each caption names something the app does not need; the
+# ladder reads as one set on the store shelf. Supersedes the 2026-09-07
+# approved copy - pending re-approval. Measured so every line fits 120px
+# (01's first line lands at 118px).
 screens:
   - id: 01_contacts
     capture: captures/01_contacts.png
-    caption_text: "Your people, anywhere"
+    caption_text: "No phone number.\nJust people."
 
   - id: 02_chats
     capture: captures/02_chats.png
-    caption_text: "Messages without carriers"   # DRAFT copy - not yet approved
+    caption_text: "No account.\nJust messages."
 
   - id: 03_map
     capture: captures/03_map.png
-    caption_text: "Know where your people are"
+    caption_text: "No towers.\nStill see them."
 
   - id: 04_conversation
     capture: captures/04_conversation.png
-    caption_text: "Talk like the miles aren't there"   # DRAFT copy - not yet approved
+    caption_text: "No server.\nJust you two."
 
   - id: 05_call
     capture: captures/05_call.png
-    caption_text: "Voice calls, no carrier"   # DRAFT copy - not yet approved
+    caption_text: "No carrier.\nJust voice."

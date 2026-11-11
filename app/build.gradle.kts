@@ -19,16 +19,30 @@ plugins {
 //                                APK offsets below, stays inside the patch's
 //                                1000-wide block, and always outranks its beta)
 // Play rejects a reused versionCode on any track, so a patch supports exactly
-// one prerelease; a second one must bump the patch. Dev builds add commitCount.
+// one prerelease; a second one must bump the patch. Dev builds carry the stable
+// offset too (+ commitCount), so an untagged build is never older than the tag
+// it descends from.
+//
+// Release builds require exactly one vX.Y.Z[-suffix] tag at HEAD. Co-located
+// tags (v2.2.5 next to v2.2.5-beta) are ambiguous: `git describe --exact-match`
+// silently answers the stable tag for both, so the beta would consume the
+// stable's versionCode. CI therefore passes the triggering tag via
+// -PcolumbaVersionTag (or ORG_GRADLE_PROJECT_columbaVersionTag), and a local
+// build that cannot tell them apart fails loudly instead of guessing.
+val versionTagOverride: String? =
+    providers.gradleProperty("columbaVersionTag").orNull?.trim()?.takeIf { it.isNotEmpty() }
+
+val versionTagPattern = Regex("""v\d+\.\d+\.\d+(-.+)?$""")
+val stableVersionCodeOffset = 10
+
 fun getVersionFromTag(): Pair<Int, String> {
     return try {
-        // Try exact tag match first (release build)
-        val tagName =
-            providers.exec {
-                commandLine("git", "describe", "--tags", "--exact-match")
-            }.standardOutput.asText.get().trim()
+        val versionString =
+            (versionTagOverride ?: versionTagAtHead()).removePrefix("v")
+        check(versionTagPattern.matches("v$versionString")) {
+            "Unrecognized version tag: '$versionString'"
+        }
 
-        val versionString = tagName.removePrefix("v")
         val parts = versionString.split(".")
         val major = parts.getOrNull(0)?.toIntOrNull() ?: 0
         val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
@@ -38,8 +52,13 @@ fun getVersionFromTag(): Pair<Int, String> {
         val isPrerelease = parts.getOrNull(2)?.contains('-') == true
 
         // New scheme: major * 10M + minor * 100K + patch * 1K (+10 for stable)
-        val versionCode = major * 10_000_000 + minor * 100_000 + patch * 1_000 + if (isPrerelease) 0 else 10
+        val versionCode = major * 10_000_000 + minor * 100_000 + patch * 1_000 +
+            if (isPrerelease) 0 else stableVersionCodeOffset
         Pair(versionCode, versionString)
+    } catch (e: IllegalStateException) {
+        // Ambiguous or unusable release tag: never fall through to the dev
+        // branch, which would rebuild a release with a dev versionCode.
+        throw e
     } catch (e: Exception) {
         // Not on exact tag - get nearest tag + commit count
         try {
@@ -60,7 +79,8 @@ fun getVersionFromTag(): Pair<Int, String> {
             val minor = versionParts.getOrNull(1)?.toIntOrNull() ?: 0
             val patch = versionParts.getOrNull(2)?.toIntOrNull() ?: 0
 
-            val versionCode = major * 10_000_000 + minor * 100_000 + patch * 1_000 + commitCount
+            val versionCode = major * 10_000_000 + minor * 100_000 + patch * 1_000 +
+                stableVersionCodeOffset + commitCount
             val versionName = "$major.$minor.$patch.${commitCount.toString().padStart(4, '0')}-dev"
 
             println("Dev build: $versionName (versionCode=$versionCode)")
@@ -71,6 +91,21 @@ fun getVersionFromTag(): Pair<Int, String> {
             Pair(1_000_000, "0.0.0-dev")
         }
     }
+}
+
+/** The single version tag pointing at HEAD, or throw when several do. */
+fun versionTagAtHead(): String {
+    val versionTags =
+        providers.exec {
+            commandLine("git", "tag", "--points-at", "HEAD")
+        }.standardOutput.asText.get().lines()
+            .map { it.trim() }
+            .filter { versionTagPattern.matches(it) }
+    check(versionTags.size <= 1) {
+        "Ambiguous release tag at HEAD: ${versionTags.joinToString(", ")}. " +
+            "Pass -PcolumbaVersionTag=<tag> (CI passes the triggering tag)."
+    }
+    return versionTags.singleOrNull() ?: throw NoSuchElementException("HEAD is not tagged")
 }
 
 fun getGitCommitHash(): String {

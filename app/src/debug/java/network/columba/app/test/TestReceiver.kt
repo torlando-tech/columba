@@ -45,6 +45,7 @@ import network.columba.app.rns.api.model.DeliveryMethod
  *   network.columba.test.ADD_TCP_CLIENT     --es name,host,port -> interface_added name=<…> id=<n> type=TCPClient … applied=true
  *   network.columba.test.REMOVE_INTERFACE   --es name -> interface_removed name=<…> id=<n> applied=true
  *   network.columba.test.SET_PROP_NODE      --es hex  -> prop_node_set hex=<…> | prop_node_err …
+ *   network.columba.test.SEED_STORE_ART            -> store_art_seeded contacts=N announces=N conversations=N messages=N locations=N | store_art_err reason=…
  *   network.columba.test.SYNC_PROP                    -> prop_sync_started state=<n> messages_received=<n>
  *   network.columba.test.SEND_IMAGE  --es to,text,path,fmt          -> img_sent id=<hex> | img_send_err …
  *   network.columba.test.SEND_FILE   --es to,text,path,name         -> file_sent id=<hex> | file_send_err …
@@ -244,6 +245,13 @@ class TestReceiver : BroadcastReceiver() {
 
             "network.columba.test.ONBOARD" ->
                 TestController.handleOnboard(app)
+
+            "network.columba.test.SEED_STORE_ART" ->
+                TestController.handleSeedStoreArt(
+                    app,
+                    intent.getStringExtra("maya_hash"),
+                    intent.getStringExtra("maya_pub"),
+                )
 
             "network.columba.test.LIST_INTERFACES" ->
                 TestController.handleListInterfaces(app)

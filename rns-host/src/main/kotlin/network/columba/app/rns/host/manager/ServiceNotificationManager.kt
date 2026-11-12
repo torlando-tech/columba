@@ -46,9 +46,11 @@ class ServiceNotificationManager(
         // Ongoing-call notification (CallStyle) channel: silent, low importance.
         const val CHANNEL_ID_CALL = "call_service"
 
-        // PendingIntent request code for the hang-up action. Process-wide constant
-        // so every repost updates the same PendingIntent.
+        // PendingIntent request codes for the call notification's hang-up action and
+        // content intent. Process-wide constants so every repost updates the same
+        // PendingIntents instead of creating a new one per call event.
         private const val CALL_HANG_UP_REQUEST_CODE = 6001
+        private const val CALL_OPEN_REQUEST_CODE = 6002
     }
 
     private val notificationManager: NotificationManager by lazy {
@@ -170,14 +172,15 @@ class ServiceNotificationManager(
      * @return Notification to display
      */
     fun createNotification(networkStatus: String): Notification {
-        val pendingIntent = createContentIntent()
         val (statusText, detailText) = getStatusTexts(networkStatus)
 
         activeCall?.let { call ->
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                return buildOngoingCallNotification(call, pendingIntent)
+                return buildOngoingCallNotification(call)
             }
         }
+
+        val pendingIntent = createContentIntent()
 
         return NotificationCompat
             .Builder(context, CHANNEL_ID)
@@ -211,10 +214,7 @@ class ServiceNotificationManager(
      * component name (the receiver is not exported; an explicit same-uid broadcast
      * from this process still reaches it).
      */
-    private fun buildOngoingCallNotification(
-        call: ActiveCall,
-        contentIntent: PendingIntent,
-    ): Notification {
+    private fun buildOngoingCallNotification(call: ActiveCall): Notification {
         val hangUpIntent =
             Intent(CallNotificationActions.ACTION_END_CALL)
                 .setComponent(
@@ -226,6 +226,19 @@ class ServiceNotificationManager(
                 context,
                 CALL_HANG_UP_REQUEST_CODE,
                 hangUpIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        // SystemUI's chip fires this notification's content intent, so it must land on
+        // the call screen: ACTION_OPEN_CALL on MainActivity navigates to
+        // `incoming_call/{identityHash}`, which renders whatever state the call is in.
+        val contentIntent =
+            PendingIntent.getActivity(
+                context,
+                CALL_OPEN_REQUEST_CODE,
+                Intent(CallNotificationActions.ACTION_OPEN_CALL)
+                    .setClassName(context.packageName, CallNotificationActions.MAIN_ACTIVITY_CLASS)
+                    .putExtra(CallNotificationActions.EXTRA_IDENTITY_HASH, call.identityHash)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         val callerName = call.peerName

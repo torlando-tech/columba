@@ -323,6 +323,16 @@ class CallActionReceiverTest {
     }
 
     @Test
+    fun `main activity class name matches the cross-process open-call contract`() {
+        // The :reticulum service's CallStyle notification targets ACTION_OPEN_CALL at
+        // MainActivity by class name, so the chip opens the call screen. Pin it.
+        assertEquals(
+            CallNotificationActions.MAIN_ACTIVITY_CLASS,
+            MainActivity::class.java.name,
+        )
+    }
+
+    @Test
     fun `receiver class name matches the cross-process call action contract`() {
         // The :reticulum service posts the ongoing-call notification and targets its
         // hang-up action at this receiver by component name (it cannot depend on the

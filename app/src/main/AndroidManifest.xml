@@ -59,19 +59,15 @@
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <!--
-        Foreground service permissions. Only the two types the app actually
-        starts are declared: rns.host.ReticulumService runs as
+        Foreground service permissions. rns.host.ReticulumService runs as
         connectedDevice|microphone (RNode BLE/USB + voice calls).
-        FOREGROUND_SERVICE_DATA_SYNC was declared but never used - no service
-        declares the dataSync type - and Play's foreground-service declaration
-        must be justified per type, so it stays out.
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
 
     <!--
         reticulum-kt's rns-android AAR (pulled in by LXST-kt for voice calls)
-        declares its own mesh foreground service - network.reticulum.android.
+        declares its own reticulum foreground service - network.reticulum.android.
         ReticulumService, specialUse, subtype "Runs the Reticulum network stack
         for mesh networking communication" - plus FOREGROUND_SERVICE_SPECIAL_USE.
         Columba never starts it: the node runs in our own

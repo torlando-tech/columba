@@ -7,6 +7,11 @@ package network.columba.app.notifications
  * which caller name it carries) lives on the app side of the backend seam
  * ([network.columba.app.service.IncomingCallPresenter]); this port keeps that
  * policy testable without Android notification machinery.
+ *
+ * The ongoing-call notification is deliberately *not* part of this port: it is
+ * posted by the `:reticulum` service as its foreground notification, because a
+ * CallStyle call notification must be enqueued through `startForeground` to be
+ * accepted by the platform.
  */
 interface IncomingCallNotifier {
     /**

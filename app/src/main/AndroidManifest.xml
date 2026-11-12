@@ -58,10 +58,31 @@
     <!-- USB Host feature for RNode USB serial connections (optional) -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
-    <!-- Foreground service permissions (Android 9+) -->
+    <!--
+        Foreground service permissions. Only the two types the app actually
+        starts are declared: rns.host.ReticulumService runs as
+        connectedDevice|microphone (RNode BLE/USB + voice calls).
+        FOREGROUND_SERVICE_DATA_SYNC was declared but never used - no service
+        declares the dataSync type - and Play's foreground-service declaration
+        must be justified per type, so it stays out.
+    -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+
+    <!--
+        reticulum-kt's rns-android AAR (pulled in by LXST-kt for voice calls)
+        declares its own mesh foreground service - network.reticulum.android.
+        ReticulumService, specialUse, subtype "Runs the Reticulum network stack
+        for mesh networking communication" - plus FOREGROUND_SERVICE_SPECIAL_USE.
+        Columba never starts it: the node runs in our own
+        rns.host.ReticulumService. Nothing in our code or in LXST-kt references
+        it (only the library's own BootReceiver, disabled by default, and its
+        notification-action receiver do), yet manifest merging puts it in every
+        flavor. Removed so the shipped manifest matches what actually runs and
+        Play's FGS declaration only has to justify two types. Revisit if
+        LXST-kt/reticulum-kt ever starts that service itself.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" tools:node="remove" />
 
     <!-- Notification permission (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -105,6 +126,22 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Columba.Splash">
+
+        <!--
+            reticulum-kt's rns-android AAR (pulled in by LXST-kt) declares a
+            mesh foreground service plus two receivers that belong to it.
+            Columba never starts them - the node runs in our own
+            rns.host.ReticulumService - and nothing in our code or in LXST-kt
+            references them. Markers must sit inside <application> to match the
+            library's nodes (merge matching is structural); removing the service
+            also drops its foregroundServiceType="specialUse", so Play's FGS
+            declaration only has to justify connectedDevice + microphone.
+            Revisit if LXST-kt/reticulum-kt ever starts that service itself.
+        -->
+        <service android:name="network.reticulum.android.ReticulumService" tools:node="remove" />
+        <receiver android:name="network.reticulum.android.BootReceiver" tools:node="remove" />
+        <receiver android:name="network.reticulum.android.NotificationActionReceiver" tools:node="remove" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

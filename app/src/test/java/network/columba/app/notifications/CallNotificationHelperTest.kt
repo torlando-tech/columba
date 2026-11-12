@@ -1,8 +1,8 @@
 package network.columba.app.notifications
 
 import android.Manifest
-import android.app.Application
 import android.app.AppOpsManager
+import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
 import org.junit.Assert.assertEquals
@@ -19,12 +19,13 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
- * Unit tests for CallNotificationHelper.
+ * Unit tests for CallNotificationHelper: the app-process side of voice-call
+ * notifications, i.e. the ringing (incoming) notification with its full-screen
+ * intent and answer/decline actions.
  *
- * Tests notification channel creation, incoming call notifications,
- * ongoing call notifications, and notification cancellation.
- *
- * Uses Robolectric's shadow system for Android component testing.
+ * The ongoing-call notification is not covered here anymore: it is posted by the
+ * `:reticulum` service as its foreground notification (a CallStyle notification
+ * must be enqueued through startForeground), so its tests live with the service.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -48,40 +49,17 @@ class CallNotificationHelperTest {
     // ========== Notification Channel Tests ==========
 
     @Test
-    fun `creates incoming call notification channel`() {
-        // Re-instantiate to trigger channel creation
+    fun `creates only the incoming call channel`() {
         helper = CallNotificationHelper(context)
 
-        // Verify incoming call channel was created
         val channels = notificationManager.notificationChannels
         assertTrue(
             "Should create incoming call channel",
             channels.any { it.id == "incoming_calls" },
         )
-    }
-
-    @Test
-    fun `creates ongoing call notification channel`() {
-        helper = CallNotificationHelper(context)
-
-        // Verify ongoing call channel was created
-        val channels = notificationManager.notificationChannels
-        assertTrue(
-            "Should create ongoing call channel",
+        assertFalse(
+            "Ongoing-call channel belongs to the service notification",
             channels.any { it.id == "ongoing_calls" },
-        )
-    }
-
-    @Test
-    fun `creates both notification channels`() {
-        helper = CallNotificationHelper(context)
-
-        // Should create exactly 2 channels
-        val channels = notificationManager.notificationChannels
-        assertEquals(
-            "Should have created 2 channels",
-            2,
-            channels.size,
         )
     }
 
@@ -94,131 +72,58 @@ class CallNotificationHelperTest {
             callerName = "Test Caller",
         )
 
-        val shadowNotificationManager = shadowOf(notificationManager)
         val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-            )
+            shadowOf(notificationManager).getNotification(CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL)
         assertNotNull("Should post notification with incoming call ID", notification)
     }
 
     @Test
-    fun `showIncomingCallNotification with null name uses formatted hash`() {
-        val testHash = "abc123def456789012345678901234567890"
-
+    fun `showIncomingCallNotification with null name falls back to formatted hash`() {
         helper.showIncomingCallNotification(
-            identityHash = testHash,
+            identityHash = "abc123def456789012345678901234567890",
             callerName = null,
         )
 
-        // Verify notification is posted
-        val shadowNotificationManager = shadowOf(notificationManager)
         val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-            )
-        assertNotNull("Should post notification", notification)
+            shadowOf(notificationManager).getNotification(CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL)
+        assertNotNull(notification)
+        assertEquals("abc123...567890", notification.extras.getCharSequence("android.text"))
     }
 
     @Test
     fun `showIncomingCallNotification respects permission`() {
-        // Revoke the permission
         val app = shadowOf(context as Application)
         app.denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
-
-        // Create a new helper after permission change
         helper = CallNotificationHelper(context)
 
-        helper.showIncomingCallNotification(
-            identityHash = "abc123",
-            callerName = "Test",
-        )
+        helper.showIncomingCallNotification(identityHash = "abc123", callerName = "Test")
 
-        // Should not post notification without permission
-        val shadowNotificationManager = shadowOf(notificationManager)
         val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-            )
+            shadowOf(notificationManager).getNotification(CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL)
         assertNull("Should not post notification without permission", notification)
     }
 
-    // ========== Ongoing Call Notification Tests ==========
-
     @Test
-    fun `showOngoingCallNotification posts notification with correct ID`() {
-        helper.showOngoingCallNotification(
-            identityHash = "abc123def456789012345678901234567890",
-            peerName = "Test Peer",
-            duration = 120,
-        )
+    fun `incoming call notification is ongoing`() {
+        helper.showIncomingCallNotification(identityHash = "abc123", callerName = "Test")
 
-        val shadowNotificationManager = shadowOf(notificationManager)
         val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-            )
-        assertNotNull("Should post notification with ongoing call ID", notification)
-    }
-
-    @Test
-    fun `showOngoingCallNotification with null name uses formatted hash`() {
-        val testHash = "abc123def456789012345678901234567890"
-
-        helper.showOngoingCallNotification(
-            identityHash = testHash,
-            peerName = null,
-            duration = 60,
+            shadowOf(notificationManager).getNotification(CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL)
+        assertNotNull(notification)
+        assertTrue(
+            "Incoming call notification should be ongoing",
+            notification.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0,
         )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-        val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-            )
-        assertNotNull("Should post notification", notification)
     }
-
-    @Test
-    fun `showOngoingCallNotification respects permission`() {
-        // Revoke the permission
-        val app = shadowOf(context as Application)
-        app.denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
-
-        // Create a new helper after permission change
-        helper = CallNotificationHelper(context)
-
-        helper.showOngoingCallNotification(
-            identityHash = "abc123",
-            peerName = "Test",
-            duration = 0,
-        )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-        val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-            )
-        assertNull("Should not post notification without permission", notification)
-    }
-
-    // ========== Cancel Notification Tests ==========
 
     @Test
     fun `cancelIncomingCallNotification cancels correct notification`() {
-        // First, post a notification
-        helper.showIncomingCallNotification(
-            identityHash = "abc123",
-            callerName = "Test",
-        )
-
+        helper.showIncomingCallNotification(identityHash = "abc123", callerName = "Test")
         val shadowNotificationManager = shadowOf(notificationManager)
         assertNotNull(
-            "Notification should exist before cancel",
             shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL),
         )
 
-        // Cancel it
         helper.cancelIncomingCallNotification()
 
         assertNull(
@@ -227,75 +132,11 @@ class CallNotificationHelperTest {
         )
     }
 
-    @Test
-    fun `cancelOngoingCallNotification cancels correct notification`() {
-        // First, post a notification
-        helper.showOngoingCallNotification(
-            identityHash = "abc123",
-            peerName = "Test",
-            duration = 0,
-        )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-        assertNotNull(
-            "Notification should exist before cancel",
-            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL),
-        )
-
-        // Cancel it
-        helper.cancelOngoingCallNotification()
-
-        assertNull(
-            "Notification should be cancelled",
-            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL),
-        )
-    }
-
-    @Test
-    fun `cancelAllCallNotifications cancels both notifications`() {
-        // Post both notifications
-        helper.showIncomingCallNotification(
-            identityHash = "abc123",
-            callerName = "Test",
-        )
-        helper.showOngoingCallNotification(
-            identityHash = "abc123",
-            peerName = "Test",
-            duration = 0,
-        )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-
-        // Verify both exist
-        assertNotNull(
-            "Incoming notification should exist",
-            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL),
-        )
-        assertNotNull(
-            "Ongoing notification should exist",
-            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL),
-        )
-
-        // Cancel all
-        helper.cancelAllCallNotifications()
-
-        // Verify both are cancelled
-        assertNull(
-            "Incoming notification should be cancelled",
-            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL),
-        )
-        assertNull(
-            "Ongoing notification should be cancelled",
-            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL),
-        )
-    }
-
     // ========== Full-Screen Intent Permission Tests ==========
 
     @Test
     fun `full screen intents usable when preflight and appop both allow`() {
         assertTrue(
-            "explicitly allowed appop plus passing preflight must be usable",
             helper.isFullScreenIntentUsable(
                 preflightAllowed = true,
                 appOpMode = AppOpsManager.MODE_ALLOWED,
@@ -306,7 +147,6 @@ class CallNotificationHelperTest {
     @Test
     fun `full screen intents not usable when appop at default mode`() {
         assertFalse(
-            "default-mode appop is denied by the data-delivery check, must be unusable",
             helper.isFullScreenIntentUsable(
                 preflightAllowed = true,
                 appOpMode = AppOpsManager.MODE_DEFAULT,
@@ -317,7 +157,6 @@ class CallNotificationHelperTest {
     @Test
     fun `full screen intents not usable when appop ignored`() {
         assertFalse(
-            "ignored-mode appop must be unusable",
             helper.isFullScreenIntentUsable(
                 preflightAllowed = true,
                 appOpMode = AppOpsManager.MODE_IGNORED,
@@ -328,264 +167,10 @@ class CallNotificationHelperTest {
     @Test
     fun `full screen intents not usable when preflight check fails`() {
         assertFalse(
-            "failing preflight must be unusable even with allowed appop",
             helper.isFullScreenIntentUsable(
                 preflightAllowed = false,
                 appOpMode = AppOpsManager.MODE_ALLOWED,
             ),
-        )
-    }
-
-    // ========== Notification ID Constants Tests ==========
-
-    @Test
-    fun `NOTIFICATION_ID_INCOMING_CALL is correct`() {
-        assertEquals(5000, CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL)
-    }
-
-    @Test
-    fun `NOTIFICATION_ID_ONGOING_CALL is correct`() {
-        assertEquals(5001, CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL)
-    }
-
-    // ========== Intent Action Constants Tests ==========
-
-    @Test
-    fun `ACTION_ANSWER_CALL is correct`() {
-        assertEquals("network.columba.app.ACTION_ANSWER_CALL", CallNotificationHelper.ACTION_ANSWER_CALL)
-    }
-
-    @Test
-    fun `ACTION_DECLINE_CALL is correct`() {
-        assertEquals("network.columba.app.ACTION_DECLINE_CALL", CallNotificationHelper.ACTION_DECLINE_CALL)
-    }
-
-    @Test
-    fun `ACTION_END_CALL is correct`() {
-        assertEquals("network.columba.app.ACTION_END_CALL", CallNotificationHelper.ACTION_END_CALL)
-    }
-
-    @Test
-    fun `ACTION_OPEN_CALL is correct`() {
-        assertEquals("network.columba.app.ACTION_OPEN_CALL", CallNotificationHelper.ACTION_OPEN_CALL)
-    }
-
-    // ========== Intent Extra Constants Tests ==========
-
-    @Test
-    fun `EXTRA_IDENTITY_HASH is correct`() {
-        assertEquals("identity_hash", CallNotificationHelper.EXTRA_IDENTITY_HASH)
-    }
-
-    @Test
-    fun `EXTRA_CALLER_NAME is correct`() {
-        assertEquals("caller_name", CallNotificationHelper.EXTRA_CALLER_NAME)
-    }
-
-    // ========== Duration Formatting Tests ==========
-
-    @Test
-    fun `ongoing notification formats zero duration correctly`() {
-        helper.showOngoingCallNotification(
-            identityHash = "abc123",
-            peerName = "Test",
-            duration = 0,
-        )
-
-        // Verify notification is posted (duration formatting is internal)
-        val shadowNotificationManager = shadowOf(notificationManager)
-        val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-            )
-        assertNotNull("Should post notification", notification)
-    }
-
-    @Test
-    fun `ongoing notification formats minute duration correctly`() {
-        helper.showOngoingCallNotification(
-            identityHash = "abc123",
-            peerName = "Test",
-            duration = 60,
-        )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-        val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-            )
-        assertNotNull("Should post notification", notification)
-    }
-
-    @Test
-    fun `ongoing notification formats hour plus duration correctly`() {
-        // 1 hour, 1 minute, 1 second
-        helper.showOngoingCallNotification(
-            identityHash = "abc123",
-            peerName = "Test",
-            duration = 3661,
-        )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-        val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-            )
-        assertNotNull("Should post notification", notification)
-    }
-
-    // ========== Identity Hash Formatting Tests ==========
-
-    @Test
-    fun `short identity hash is displayed as-is`() {
-        val shortHash = "abc123"
-
-        helper.showIncomingCallNotification(
-            identityHash = shortHash,
-            callerName = null,
-        )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-        val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-            )
-        assertNotNull("Should post notification", notification)
-    }
-
-    @Test
-    fun `long identity hash is truncated`() {
-        val longHash = "abc123def456789012345678901234567890"
-
-        helper.showIncomingCallNotification(
-            identityHash = longHash,
-            callerName = null,
-        )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-        val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-            )
-        assertNotNull("Should post notification", notification)
-    }
-
-    // ========== Notification Content Tests ==========
-
-    @Test
-    fun `incoming call notification has correct title`() {
-        helper.showIncomingCallNotification(
-            identityHash = "abc123",
-            callerName = "Test Caller",
-        )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-        val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-            )
-        assertNotNull("Notification should exist", notification)
-
-        // Verify notification title
-        val shadowNotification = shadowOf(notification)
-        assertEquals("Incoming Voice Call", shadowNotification.contentTitle)
-    }
-
-    @Test
-    fun `incoming call notification has caller name as content`() {
-        helper.showIncomingCallNotification(
-            identityHash = "abc123",
-            callerName = "John Doe",
-        )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-        val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-            )
-        assertNotNull("Notification should exist", notification)
-
-        val shadowNotification = shadowOf(notification)
-        assertEquals("John Doe", shadowNotification.contentText)
-    }
-
-    @Test
-    fun `ongoing call notification has correct title`() {
-        helper.showOngoingCallNotification(
-            identityHash = "abc123",
-            peerName = "Test Peer",
-            duration = 60,
-        )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-        val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-            )
-        assertNotNull("Notification should exist", notification)
-
-        val shadowNotification = shadowOf(notification)
-        assertEquals("Voice Call", shadowNotification.contentTitle)
-    }
-
-    @Test
-    fun `ongoing call notification shows peer name and duration`() {
-        // 90 seconds = 1:30
-        helper.showOngoingCallNotification(
-            identityHash = "abc123",
-            peerName = "Jane Doe",
-            duration = 90,
-        )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-        val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-            )
-        assertNotNull("Notification should exist", notification)
-
-        val shadowNotification = shadowOf(notification)
-        assertEquals("Jane Doe - 01:30", shadowNotification.contentText)
-    }
-
-    @Test
-    fun `incoming call notification is ongoing`() {
-        helper.showIncomingCallNotification(
-            identityHash = "abc123",
-            callerName = "Test",
-        )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-        val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-            )
-        assertNotNull("Notification should exist", notification)
-
-        assertTrue(
-            "Incoming call notification should be ongoing",
-            notification.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0,
-        )
-    }
-
-    @Test
-    fun `ongoing call notification is ongoing`() {
-        helper.showOngoingCallNotification(
-            identityHash = "abc123",
-            peerName = "Test",
-            duration = 0,
-        )
-
-        val shadowNotificationManager = shadowOf(notificationManager)
-        val notification =
-            shadowNotificationManager.getNotification(
-                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-            )
-        assertNotNull("Notification should exist", notification)
-
-        assertTrue(
-            "Ongoing call notification should be ongoing",
-            notification.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0,
         )
     }
 }

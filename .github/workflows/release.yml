@@ -405,10 +405,17 @@ jobs:
         # pythonBackend AAB goes up — its appId (network.columba.app) is the
         # registered Play listing; kotlinBackend builds carry the `.kt`
         # suffix appId and aren't published there.
-        # changesNotSentForReview: required while store-listing metadata is
-        # hand-managed in Play Console; the API refuses new builds otherwise.
-        # Drop it only if release notes/whatsnew ever get pushed through
-        # this pipeline.
+        # changesNotSentForReview must NOT be passed: this Play account
+        # auto-sends edits for review, and the API rejects edits.commit with
+        # "The query parameter changesNotSentForReview must not be set."
+        # It is only valid for listings that hold changes until a human
+        # clicks "Start rollout" (see run 43134428086, 2026-11-12).
+        # status: draft keeps the upload a draft release in the track — it
+        # does not roll out to testers (and cannot be submitted for review)
+        # until a human clicks "Start rollout" in Play Console. This account
+        # auto-sends edits for review, so anything committed as `completed`
+        # would leave this pipeline without a human gate.
+        #
         # Prereleases upload too: getVersionFromTag() gives a patch's beta the
         # base versionCode and its stable release +10, so Play's monotonic,
         # never-reused rule holds for both (one prerelease per patch).
@@ -419,5 +426,5 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: network.columba.app
           releaseFiles: columba-*-official-rns-py.aab
-          track: internal
-          changesNotSentForReview: true
+          tracks: internal
+          status: draft

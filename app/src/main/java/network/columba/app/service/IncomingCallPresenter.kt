@@ -14,7 +14,6 @@ import network.columba.app.data.repository.ContactRepository
 import network.columba.app.notifications.IncomingCallNotifier
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
-import network.columba.app.rns.host.util.PeerNameResolver
 
 /**
  * Process-lifetime presenter for background incoming-call presentation in the main
@@ -188,23 +187,9 @@ class IncomingCallPresenter internal constructor(
 
     /**
      * Resolve the caller's display name from the identity hash carried by
-     * [CallState.Incoming]:
-     * 1. Contact custom nickname (via the announce's destination hash)
-     * 2. Announce peer name
-     * 3. null - the notification helper falls back to a formatted hash
+     * [CallState.Incoming]. The lookup chain (contact nickname, announce peer
+     * name, null → formatted hash) lives in [CallPeerNameResolver].
      */
     internal suspend fun resolveCallerName(identityHash: String): String? =
-        runCatching {
-            val announce =
-                announceRepository.findByIdentityHash(identityHash) ?: return@runCatching null
-            val nickname =
-                contactRepository.getContact(announce.destinationHash)?.customNickname
-            when {
-                PeerNameResolver.isValidPeerName(nickname) -> nickname
-                PeerNameResolver.isValidPeerName(announce.peerName) -> announce.peerName
-                else -> null
-            }
-        }
-            .onFailure { Log.w(TAG, "Caller name lookup failed: ${it.message}") }
-            .getOrNull()
+        CallPeerNameResolver.resolve(identityHash, announceRepository, contactRepository)
 }

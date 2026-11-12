@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import network.columba.app.rns.api.call.CallNotificationActions
@@ -214,6 +215,7 @@ class ServiceNotificationManager(
      * component name (the receiver is not exported; an explicit same-uid broadcast
      * from this process still reaches it).
      */
+    @RequiresApi(Build.VERSION_CODES.S)
     private fun buildOngoingCallNotification(call: ActiveCall): Notification {
         val hangUpIntent =
             Intent(CallNotificationActions.ACTION_END_CALL)

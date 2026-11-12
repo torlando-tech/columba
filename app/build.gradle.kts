@@ -159,7 +159,7 @@ android {
     defaultConfig {
         applicationId = "network.columba.app"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = versionCodeOverride ?: versionCodeValue
         versionName = versionNameOverride ?: versionNameValue
 

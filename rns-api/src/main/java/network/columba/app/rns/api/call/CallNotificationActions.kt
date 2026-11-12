@@ -34,4 +34,13 @@ object CallNotificationActions {
      * loudly instead of silently losing the hang-up action.
      */
     const val RECEIVER_CLASS = "network.columba.app.notifications.CallActionReceiver"
+
+    /**
+     * Fully-qualified name of the app-process activity that handles [ACTION_OPEN_CALL].
+     * The service's ongoing-call notification is the one SystemUI's status-bar chip
+     * opens, so its content intent must land on the call screen rather than the app's
+     * default start page. Same cross-process reasoning as [RECEIVER_CLASS]; the app's
+     * `CallActionReceiverTest` pins the name to `MainActivity`.
+     */
+    const val MAIN_ACTIVITY_CLASS = "network.columba.app.MainActivity"
 }

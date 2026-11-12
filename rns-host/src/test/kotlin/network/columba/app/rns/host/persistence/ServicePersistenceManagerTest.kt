@@ -14,6 +14,7 @@ import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.dao.PeerIdentityDao
 import network.columba.app.data.db.dao.PendingDeliveryStatusDao
 import network.columba.app.data.db.entity.AnnounceEntity
+import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.db.entity.MessageEntity
@@ -1379,5 +1380,54 @@ class ServicePersistenceManagerTest {
                 )
 
             assertTrue("persistMessage should return true for known contacts", result)
+        }
+
+    @Test
+    fun `lookupDisplayName prefers the nickname of the announce behind an identity hash`() =
+        runTest {
+            // LXST calls carry identity hashes; contacts are keyed by destination hash.
+            // The announce is the only bridge, so the identity-hash branch must run the
+            // nickname -> announce-name chain against the announce's destination too -
+            // otherwise a caller shown under a saved nickname while ringing flips to the
+            // advertised name once answered.
+            val callerIdentityHash = "6f39d645c9936fe08159cd76bc646751"
+            val callerDestinationHash = "aaaa1111bbbb2222cccc3333dddd4444"
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "local_destination",
+                    filePath = "/test/path",
+                    createdTimestamp = 1L,
+                    lastUsedTimestamp = 1L,
+                    isActive = true,
+                )
+            val announce =
+                AnnounceEntity(
+                    destinationHash = callerDestinationHash,
+                    peerName = "Maya Okafor",
+                    publicKey = testPublicKey,
+                    appData = null,
+                    hops = 1,
+                    lastSeenTimestamp = 0L,
+                    nodeType = "LXMF_PEER",
+                    receivingInterface = "BLE",
+                )
+            val contact =
+                ContactEntity(
+                    destinationHash = callerDestinationHash,
+                    identityHash = testIdentityHash,
+                    publicKey = null,
+                    customNickname = "Saved Nickname",
+                    addedTimestamp = 1L,
+                    addedVia = "MANUAL",
+                )
+
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { announceDao.getAnnounce(callerIdentityHash) } returns null
+            coEvery { announceDao.getAnnounceByIdentityHash(callerIdentityHash.lowercase()) } returns announce
+            coEvery { contactDao.getContact(callerDestinationHash, testIdentityHash) } returns contact
+
+            assertEquals("Saved Nickname", persistenceManager.lookupDisplayName(callerIdentityHash))
         }
 }

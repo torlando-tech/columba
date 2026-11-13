@@ -68,6 +68,15 @@ subprojects {
         baseline = file("$projectDir/detekt-baseline.xml")
     }
 
+    // detekt 1.23.x defaults its `jvmTarget` to the JVM running Gradle, and its
+    // bundled Kotlin compiler refuses anything above 22, so every detekt task on
+    // CI's JDK 25 died with "--jvm-target must be one of [... 22]". Pin it to the
+    // bytecode the modules actually target (17) — analysis no longer depends on
+    // which JDK runs the build.
+    tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+        jvmTarget = "17"
+    }
+
     // Add custom Columba detekt rules
     dependencies {
         "detektPlugins"(project(":detekt-rules"))

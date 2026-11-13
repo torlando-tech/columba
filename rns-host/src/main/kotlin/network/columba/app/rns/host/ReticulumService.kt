@@ -17,8 +17,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.host.binder.ReticulumServiceBinder
 import network.columba.app.rns.host.di.ServiceModule
+import network.columba.app.rns.host.manager.ServiceNotificationManager
 import network.columba.app.rns.host.persistence.BackendInitializer
 import network.columba.app.rns.host.persistence.PeerActivityCollector
 import network.columba.app.rns.host.rnode.KotlinRNodeBridge
@@ -171,6 +173,8 @@ class ReticulumService : Service() {
         // Create notification channel
         managers.notificationManager.createNotificationChannel()
 
+        observeCallStateForForegroundNotification()
+
         // Wire RNode disconnect notifications. ServiceNotificationManager.
         // updateRNodeStatus already owns the heads-up alert (CHANNEL_ID_RNODE,
         // IMPORTANCE_HIGH) and the foreground-notification text suffix; we
@@ -299,6 +303,49 @@ class ReticulumService : Service() {
         } else {
             serviceScope.launch {
                 backendInitializer.initializeFromSnapshot(rnsBackend)
+            }
+        }
+    }
+
+    /**
+     * Keep the foreground notification and its types in step with call state.
+     *
+     * The call engine (LXST) captures audio inside `:reticulum`, so the while-in-use
+     * microphone exemption requires this service to run with
+     * `FOREGROUND_SERVICE_TYPE_MICROPHONE` while a call is Active — otherwise a
+     * backgrounded call is muted. The same transition swaps the notification to the
+     * ongoing-call (CallStyle) one, which is what draws SystemUI's status-bar call
+     * chip; the platform only accepts a CallStyle call notification from a
+     * foreground service. `when` carries the call start so the chip's chronometer
+     * counts call duration, not notification age.
+     */
+    private fun observeCallStateForForegroundNotification() {
+        serviceScope.launch {
+            var callStartedAtWallClockMs = 0L
+            var callIdentityHash: String? = null
+            rnsBackend.telephony.callState.collect { callState ->
+                if (callState is CallState.Active) {
+                    if (callIdentityHash != callState.identityHash) {
+                        callIdentityHash = callState.identityHash
+                        callStartedAtWallClockMs = System.currentTimeMillis()
+                    }
+                    val peerName =
+                        runCatching { managers.persistenceManager.lookupDisplayName(callState.identityHash) }
+                            .getOrNull()
+                            ?: callState.identityHash.take(8)
+                    managers.notificationManager.setCallState(
+                        this@ReticulumService,
+                        ServiceNotificationManager.ActiveCall(
+                            identityHash = callState.identityHash,
+                            peerName = peerName,
+                            startedAtWallClockMs = callStartedAtWallClockMs,
+                        ),
+                    )
+                } else {
+                    callIdentityHash = null
+                    callStartedAtWallClockMs = 0L
+                    managers.notificationManager.setCallState(this@ReticulumService, null)
+                }
             }
         }
     }

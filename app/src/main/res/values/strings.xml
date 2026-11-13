@@ -394,14 +394,9 @@
     <string name="notif_ble_disconnected_from">Disconnected from %1$s</string>
     <string name="notif_channel_incoming_calls">Incoming Calls</string>
     <string name="notif_channel_incoming_calls_desc">Notifications for incoming voice calls</string>
-    <string name="notif_channel_ongoing_calls">Ongoing Calls</string>
-    <string name="notif_channel_ongoing_calls_desc">Notifications for active voice calls</string>
     <string name="notif_call_incoming_title">Incoming Voice Call</string>
     <string name="notif_call_action_decline">Decline</string>
     <string name="notif_call_action_answer">Answer</string>
-    <string name="notif_call_ongoing_title">Voice Call</string>
-    <string name="notif_call_ongoing_text">%1$s - %2$s</string>
-    <string name="notif_call_action_end">End Call</string>
     <string name="notif_perm_blocked_title">Notifications are blocked</string>
     <string name="notif_perm_blocked_body">Notifications are enabled, but Android is blocking them. Grant the notification permission to receive them.</string>
     <string name="notif_perm_denied_forever_body">Android is no longer showing the permission dialog. Grant the notification permission in system settings to receive notifications.</string>

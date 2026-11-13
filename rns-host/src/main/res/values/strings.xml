@@ -5,6 +5,8 @@
     <string name="notif_channel_reticulum_description">Keeps Reticulum network running in background</string>
     <string name="notif_channel_rnode_name">RNode Connection Alerts</string>
     <string name="notif_channel_rnode_description">Alerts when an RNode radio loses connection</string>
+    <string name="notif_channel_calls_name">Ongoing Calls</string>
+    <string name="notif_channel_calls_description">Ongoing voice call notification; shows call duration and ends the call</string>
     <string name="notif_foreground_title">Columba Mesh Network</string>
     <string name="notif_rnode_alert_title">RNode Disconnected</string>
     <string name="notif_rnode_alert_text">%1$s lost connection. Attempting to reconnect...</string>

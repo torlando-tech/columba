@@ -841,6 +841,11 @@ class MessagingViewModel
         private var pendingSharedImageUris: List<Uri> = emptyList()
         private var pendingSharedImageDestHash: String? = null
 
+        // Thread the picker was opened from. Multi-image picks send outside the
+        // composer, so this is the only thing that keeps them in the thread the
+        // user was reading instead of dropping them into Main (threads-spec §6.2).
+        private var pendingSharedImageThreadHex: String? = null
+
         // Expose current conversation's link state for UI
         val currentLinkState: StateFlow<ConversationLinkManager.LinkState?> =
             combine(
@@ -3126,17 +3131,24 @@ class MessagingViewModel
             _qualitySelectionState.value = null
             pendingSharedImageUris = emptyList()
             pendingSharedImageDestHash = null
+            pendingSharedImageThreadHex = null
         }
 
         /**
-         * Show quality selection dialog for externally shared images.
+         * Show quality selection dialog for externally shared images or a
+         * multi-photo picker result.
          * When the user picks a preset, all images are compressed and sent
          * as individual messages via [selectImageQualityForSharedImages].
+         *
+         * @param threadIdHex thread the user was composing in (null = Main).
+         *   These sends bypass the composer, so the thread has to travel with
+         *   the pending batch or every image lands in Main.
          */
         fun processSharedImages(
             context: Context,
             uris: List<Uri>,
             destinationHash: String,
+            threadIdHex: String? = null,
         ) {
             if (uris.isEmpty()) return
 
@@ -3147,6 +3159,7 @@ class MessagingViewModel
 
             pendingSharedImageUris = uris
             pendingSharedImageDestHash = destinationHash
+            pendingSharedImageThreadHex = threadIdHex
 
             // Show quality dialog using the explicit destinationHash for link probing.
             // We await the probe result (up to 5s) so transfer-time estimates are accurate.
@@ -3195,10 +3208,12 @@ class MessagingViewModel
             val state = _qualitySelectionState.value ?: return
             val uris = pendingSharedImageUris.toList()
             val destHash = pendingSharedImageDestHash ?: return
+            val threadHex = pendingSharedImageThreadHex
 
             _qualitySelectionState.value = null
             pendingSharedImageUris = emptyList()
             pendingSharedImageDestHash = null
+            pendingSharedImageThreadHex = null
 
             viewModelScope.launch {
                 _isProcessingImage.value = true
@@ -3216,7 +3231,7 @@ class MessagingViewModel
                             continue
                         }
                         Log.d(TAG, "Shared image compressed to ${result.compressedImage.data.size} bytes")
-                        sendImageMessageDirect(destHash, result.compressedImage.data, result.compressedImage.format)
+                        sendImageMessageDirect(destHash, threadHex, result.compressedImage.data, result.compressedImage.format)
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error processing shared images", e)
@@ -3247,15 +3262,20 @@ class MessagingViewModel
         /**
          * Send a message with an image directly, bypassing the single-image StateFlows.
          * Used by multi-image share to send each image as a separate message.
+         *
+         * @param threadIdHex thread the batch was started from (null = Main); these
+         *   sends skip the composer, so it must be carried explicitly.
          */
         private suspend fun sendImageMessageDirect(
             destinationHash: String,
+            threadIdHex: String?,
             imageData: ByteArray,
             imageFormat: String,
         ) {
             try {
                 val sanitized = validateAndSanitizeContent("", imageData, emptyList()) ?: return
                 val destHashBytes = validateDestinationHash(destinationHash) ?: return
+                val threadIdBytes = threadIdHex?.hexToBytesOrNull()
                 val identity =
                     loadIdentityIfNeeded() ?: run {
                         Log.e(TAG, "Failed to load source identity")
@@ -3289,7 +3309,11 @@ class MessagingViewModel
                         }
                     }
 
-                Log.d(TAG, "Sending shared image to $destinationHash (${imageData.size} bytes, format=$imageFormat)")
+                Log.d(
+                    TAG,
+                    "Sending shared image to $destinationHash (${imageData.size} bytes, format=$imageFormat, " +
+                        "thread=${threadIdHex ?: "main"})",
+                )
 
                 val result =
                     rnsLxmf.sendLxmfMessageWithMethod(
@@ -3303,11 +3327,21 @@ class MessagingViewModel
                         fileAttachments = null,
                         replyToMessageId = null,
                         iconAppearance = iconAppearance,
+                        threadId = threadIdBytes,
                     )
 
                 result
                     .onSuccess { receipt ->
-                        handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, emptyList(), deliveryMethodString)
+                        handleSendSuccess(
+                            receipt,
+                            sanitized,
+                            destinationHash,
+                            imageData,
+                            imageFormat,
+                            emptyList(),
+                            deliveryMethodString,
+                            threadId = threadIdBytes,
+                        )
                     }.onFailure { error ->
                         handleSendFailure(
                             error = error,
@@ -3319,6 +3353,7 @@ class MessagingViewModel
                             fileAttachments = emptyList(),
                             replyToMessageId = null,
                             voiceBytes = null,
+                            threadId = threadIdBytes,
                         )
                     }
             } catch (e: Exception) {

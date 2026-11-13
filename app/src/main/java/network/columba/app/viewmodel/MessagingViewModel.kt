@@ -846,6 +846,13 @@ class MessagingViewModel
         // user was reading instead of dropping them into Main (threads-spec §6.2).
         private var pendingSharedImageThreadHex: String? = null
 
+        // Pending "Thread from here" root (0x30) captured with the batch. The
+        // composer carries it on the first send of a new thread; these sends skip
+        // the composer, so the first image has to pin the root itself
+        // (threads-spec §4.2) — otherwise the thread starts with no quoted root
+        // and Main shows no replies hook.
+        private var pendingSharedImageThreadRootHex: String? = null
+
         // Expose current conversation's link state for UI
         val currentLinkState: StateFlow<ConversationLinkManager.LinkState?> =
             combine(
@@ -3132,6 +3139,7 @@ class MessagingViewModel
             pendingSharedImageUris = emptyList()
             pendingSharedImageDestHash = null
             pendingSharedImageThreadHex = null
+            pendingSharedImageThreadRootHex = null
         }
 
         /**
@@ -3160,6 +3168,9 @@ class MessagingViewModel
             pendingSharedImageUris = uris
             pendingSharedImageDestHash = destinationHash
             pendingSharedImageThreadHex = threadIdHex
+            // Capture the root before the quality dialog suspends: a switch to
+            // another thread owns the pending root by then and must keep it.
+            pendingSharedImageThreadRootHex = threadIdHex?.let { _pendingThreadRoot.value }
 
             // Show quality dialog using the explicit destinationHash for link probing.
             // We await the probe result (up to 5s) so transfer-time estimates are accurate.
@@ -3209,11 +3220,15 @@ class MessagingViewModel
             val uris = pendingSharedImageUris.toList()
             val destHash = pendingSharedImageDestHash ?: return
             val threadHex = pendingSharedImageThreadHex
+            // Root rides the first image that actually lands, then is cleared,
+            // mirroring the composer's first-send-only semantics (threads-spec §4.2).
+            var rootHex = pendingSharedImageThreadRootHex
 
             _qualitySelectionState.value = null
             pendingSharedImageUris = emptyList()
             pendingSharedImageDestHash = null
             pendingSharedImageThreadHex = null
+            pendingSharedImageThreadRootHex = null
 
             viewModelScope.launch {
                 _isProcessingImage.value = true
@@ -3231,7 +3246,24 @@ class MessagingViewModel
                             continue
                         }
                         Log.d(TAG, "Shared image compressed to ${result.compressedImage.data.size} bytes")
-                        sendImageMessageDirect(destHash, threadHex, result.compressedImage.data, result.compressedImage.format)
+                        val rootForThisImage = rootHex
+                        val persisted =
+                            sendImageMessageDirect(
+                                destHash,
+                                threadHex,
+                                rootForThisImage,
+                                result.compressedImage.data,
+                                result.compressedImage.format,
+                            )
+                        if (persisted && rootForThisImage != null) {
+                            rootHex = null
+                            // Clear only the root this send carried: a concurrent
+                            // switch (or a new "Thread from here") owns it now.
+                            if (ownsPendingRoot(threadHex?.hexToBytesOrNull(), rootForThisImage)) {
+                                _pendingThreadRoot.value = null
+                                rememberTarget()
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error processing shared images", e)
@@ -3265,21 +3297,26 @@ class MessagingViewModel
          *
          * @param threadIdHex thread the batch was started from (null = Main); these
          *   sends skip the composer, so it must be carried explicitly.
+         * @param threadRootHex pending "Thread from here" root to pin on this send
+         *   (null = none); only the first image of a new thread carries it.
+         * @return true when the message was stored locally (the send can be
+         *   considered landed, so a carried root may be cleared).
          */
         private suspend fun sendImageMessageDirect(
             destinationHash: String,
             threadIdHex: String?,
+            threadRootHex: String?,
             imageData: ByteArray,
             imageFormat: String,
-        ) {
+        ): Boolean {
             try {
-                val sanitized = validateAndSanitizeContent("", imageData, emptyList()) ?: return
-                val destHashBytes = validateDestinationHash(destinationHash) ?: return
+                val sanitized = validateAndSanitizeContent("", imageData, emptyList()) ?: return false
+                val destHashBytes = validateDestinationHash(destinationHash) ?: return false
                 val threadIdBytes = threadIdHex?.hexToBytesOrNull()
                 val identity =
                     loadIdentityIfNeeded() ?: run {
                         Log.e(TAG, "Failed to load source identity")
-                        return
+                        return false
                     }
 
                 val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
@@ -3312,7 +3349,7 @@ class MessagingViewModel
                 Log.d(
                     TAG,
                     "Sending shared image to $destinationHash (${imageData.size} bytes, format=$imageFormat, " +
-                        "thread=${threadIdHex ?: "main"})",
+                        "thread=${threadIdHex ?: "main"}, replyTo=${threadRootHex ?: "none"})",
                 )
 
                 val result =
@@ -3325,13 +3362,16 @@ class MessagingViewModel
                         imageData = imageData,
                         imageFormat = imageFormat,
                         fileAttachments = null,
-                        replyToMessageId = null,
+                        replyToMessageId = threadRootHex,
+                        // Thread sends ship the quoted root inline as 0x31 so the
+                        // receiving client can pin it without the original message.
+                        replyQuotedContent = wireReplyQuote(threadRootHex, threadIdBytes),
                         iconAppearance = iconAppearance,
                         threadId = threadIdBytes,
                     )
 
-                result
-                    .onSuccess { receipt ->
+                return result.fold(
+                    onSuccess = { receipt ->
                         handleSendSuccess(
                             receipt,
                             sanitized,
@@ -3340,9 +3380,11 @@ class MessagingViewModel
                             imageFormat,
                             emptyList(),
                             deliveryMethodString,
+                            replyToMessageId = threadRootHex,
                             threadId = threadIdBytes,
                         )
-                    }.onFailure { error ->
+                    },
+                    onFailure = { error ->
                         handleSendFailure(
                             error = error,
                             sanitized = sanitized,
@@ -3351,14 +3393,16 @@ class MessagingViewModel
                             imageData = imageData,
                             imageFormat = imageFormat,
                             fileAttachments = emptyList(),
-                            replyToMessageId = null,
+                            replyToMessageId = threadRootHex,
                             voiceBytes = null,
                             threadId = threadIdBytes,
                         )
-                    }
+                    },
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending shared image message", e)
             }
+            return false
         }
 
         /**

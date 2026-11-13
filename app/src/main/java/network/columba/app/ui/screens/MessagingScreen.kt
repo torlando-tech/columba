@@ -526,8 +526,10 @@ fun MessagingScreen(
                 // Single image: use existing flow (preview in composer, user sends manually)
                 viewModel.processImageWithCompression(context, pendingUris.first())
             } else {
-                // Multiple images: show one quality dialog, then compress+send each as a message
-                viewModel.processSharedImages(context, pendingUris, destinationHash)
+                // Multiple images: show one quality dialog, then compress+send each as a message.
+                // The thread travels with the batch: if the saved selection has not been
+                // restored yet this is null and the batch lands in Main (prior behaviour).
+                viewModel.processSharedImages(context, pendingUris, destinationHash, viewModel.selectedThread.value)
             }
         }
     }
@@ -698,6 +700,12 @@ fun MessagingScreen(
             }
         }
 
+    // Capture the send target when the picker opens. Multi-photo picks send
+    // straight from the quality dialog without going back through the composer,
+    // so the callback must not read the live selection — it uses the thread the
+    // user was reading when they tapped "Choose photos" (null = Main).
+    var photosPickerThreadHex by remember { mutableStateOf<String?>(null) }
+
     // System Photo Picker for the attachment panel: multi-select, no storage
     // permission. One pick behaves like the single-image flow (preview in the
     // composer); several picks reuse the shared-image quality dialog and send
@@ -709,7 +717,7 @@ fun MessagingScreen(
             when {
                 uris.isEmpty() -> Unit
                 uris.size == 1 -> viewModel.processImageWithCompression(context, uris.first())
-                else -> viewModel.processSharedImages(context, uris, destinationHash)
+                else -> viewModel.processSharedImages(context, uris, destinationHash, photosPickerThreadHex)
             }
         }
 
@@ -1775,6 +1783,7 @@ fun MessagingScreen(
                         AttachmentPanel(
                             panelHeight = panelHeightDp,
                             onPhotosClick = {
+                                photosPickerThreadHex = viewModel.selectedThread.value
                                 val request =
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                 if (!photosPickerLauncher.launchSafely(request)) {

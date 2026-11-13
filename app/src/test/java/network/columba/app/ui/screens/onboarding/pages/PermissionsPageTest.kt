@@ -140,7 +140,7 @@ class PermissionsPageTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText("A nearby peer announces").assertIsDisplayed()
+        composeTestRule.onNodeWithText("A nearby peer announces (when enabled in Settings)").assertIsDisplayed()
     }
 
     // ========== Notification Card Tests ==========
@@ -654,7 +654,7 @@ class PermissionsPageTest {
         composeTestRule.onNodeWithText("Columba can notify you when:").assertIsDisplayed()
         composeTestRule.onNodeWithText("New messages arrive").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("A voice call comes in").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("A nearby peer announces").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("A nearby peer announces (when enabled in Settings)").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Notifications").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Get alerts for messages and calls").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Unrestricted Battery").performScrollTo().assertIsDisplayed()

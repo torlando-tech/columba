@@ -1,18 +1,25 @@
 package network.columba.app.rns.host.manager
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.Person
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import network.columba.app.rns.api.call.CallNotificationActions
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.host.R
 import network.columba.app.rns.host.state.ServiceState
@@ -36,6 +43,15 @@ class ServiceNotificationManager(
 
         const val NOTIFICATION_ID_RNODE = 1002
         private const val CHANNEL_ID_RNODE = "rnode_alerts"
+
+        // Ongoing-call notification (CallStyle) channel: silent, low importance.
+        const val CHANNEL_ID_CALL = "call_service"
+
+        // PendingIntent request codes for the call notification's hang-up action and
+        // content intent. Process-wide constants so every repost updates the same
+        // PendingIntents instead of creating a new one per call event.
+        private const val CALL_HANG_UP_REQUEST_CODE = 6001
+        private const val CALL_OPEN_REQUEST_CODE = 6002
     }
 
     private val notificationManager: NotificationManager by lazy {
@@ -46,6 +62,24 @@ class ServiceNotificationManager(
     // On Android 13+, users can swipe away foreground notifications; only
     // Service.startForeground() can restore them — NotificationManager.notify() cannot.
     private var service: Service? = null
+
+    // The live voice call, as presented by the foreground notification and used
+    // to claim the MICROPHONE foreground type. Null when no call is Active.
+    @Volatile
+    private var activeCall: ActiveCall? = null
+
+    /**
+     * What the foreground notification shows while a call is live.
+     *
+     * @param identityHash peer identity hash (32-char hex) carried by the hang-up action
+     * @param peerName display name for the notification's person; never blank
+     * @param startedAtWallClockMs call start (wall clock) — the chip's chronometer anchor
+     */
+    data class ActiveCall(
+        val identityHash: String,
+        val peerName: String,
+        val startedAtWallClockMs: Long,
+    )
 
     // Track current sync state for notification updates
     private var currentSyncState: Int = PropagationState.STATE_IDLE
@@ -114,6 +148,21 @@ class ServiceNotificationManager(
                     setShowBadge(true)
                 }
             notificationManager.createNotificationChannel(rnodeChannel)
+
+            // Ongoing-call channel: silent; the notification shows call duration and
+            // the hang-up action while a call is live.
+            val callChannel =
+                NotificationChannel(
+                    CHANNEL_ID_CALL,
+                    context.getString(R.string.notif_channel_calls_name),
+                    NotificationManager.IMPORTANCE_LOW,
+                ).apply {
+                    description = context.getString(R.string.notif_channel_calls_description)
+                    setShowBadge(false)
+                    setSound(null, null)
+                    enableVibration(false)
+                }
+            notificationManager.createNotificationChannel(callChannel)
         }
     }
 
@@ -124,8 +173,15 @@ class ServiceNotificationManager(
      * @return Notification to display
      */
     fun createNotification(networkStatus: String): Notification {
-        val pendingIntent = createContentIntent()
         val (statusText, detailText) = getStatusTexts(networkStatus)
+
+        activeCall?.let { call ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                return buildOngoingCallNotification(call)
+            }
+        }
+
+        val pendingIntent = createContentIntent()
 
         return NotificationCompat
             .Builder(context, CHANNEL_ID)
@@ -140,6 +196,73 @@ class ServiceNotificationManager(
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .build()
+    }
+
+    /**
+     * Ongoing-call notification for the foreground service, built as
+     * [android.app.Notification.CallStyle] (API 31+).
+     *
+     * SystemUI's ongoing-call status-bar chip only reads notifications whose style
+     * is CallStyle and whose `EXTRA_CALL_TYPE` is `CALL_TYPE_ONGOING`; the platform
+     * additionally rejects CallStyle notifications that are not enqueued through
+     * [Service.startForeground] — the reason this notification is the service's own
+     * foreground notification rather than a separate `notify()` post. The chip's
+     * chronometer counts from the notification's `when`, so it carries the call
+     * start time, not the post time. CallStyle contributes the hang-up action.
+     *
+     * The hang-up action targets the app-process `CallActionReceiver` explicitly by
+     * component name (the receiver is not exported; an explicit same-uid broadcast
+     * from this process still reaches it).
+     */
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun buildOngoingCallNotification(call: ActiveCall): Notification {
+        val hangUpIntent =
+            Intent(CallNotificationActions.ACTION_END_CALL)
+                .setComponent(
+                    ComponentName(context.packageName, CallNotificationActions.RECEIVER_CLASS),
+                )
+                .putExtra(CallNotificationActions.EXTRA_IDENTITY_HASH, call.identityHash)
+        val hangUpPendingIntent =
+            PendingIntent.getBroadcast(
+                context,
+                CALL_HANG_UP_REQUEST_CODE,
+                hangUpIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        // SystemUI's chip fires this notification's content intent, so it must land on
+        // the call screen: ACTION_OPEN_CALL on MainActivity navigates to
+        // `incoming_call/{identityHash}`, which renders whatever state the call is in.
+        val contentIntent =
+            PendingIntent.getActivity(
+                context,
+                CALL_OPEN_REQUEST_CODE,
+                Intent(CallNotificationActions.ACTION_OPEN_CALL)
+                    .setClassName(context.packageName, CallNotificationActions.MAIN_ACTIVITY_CLASS)
+                    .putExtra(CallNotificationActions.EXTRA_IDENTITY_HASH, call.identityHash)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        val callerName = call.peerName
+        val caller =
+            Person.Builder()
+                .setName(callerName)
+                .setImportant(true)
+                .build()
+
+        // Platform builder, not NotificationCompat: CallStyle lives on the platform
+        // Notification (API 31+) and this branch never runs below S.
+        return Notification.Builder(context, CHANNEL_ID_CALL)
+            .setSmallIcon(R.drawable.ic_notification_stat)
+            .setContentTitle(callerName)
+            .setContentIntent(contentIntent)
+            .setCategory(Notification.CATEGORY_CALL)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setWhen(call.startedAtWallClockMs)
+            .setUsesChronometer(true)
+            .setStyle(Notification.CallStyle.forOngoingCall(caller, hangUpPendingIntent))
             .build()
     }
 
@@ -389,6 +512,40 @@ class ServiceNotificationManager(
     }
 
     /**
+     * Track the live voice call and re-assert the foreground state.
+     *
+     * Two things follow the call state here:
+     * - **The notification becomes the ongoing-call notification** ([ActiveCall] != null):
+     *   built as [android.app.Notification.CallStyle] so SystemUI draws the status-bar
+     *   call chip with its duration, and posted through [startForeground] because the
+     *   platform rejects CallStyle notifications from an app that is neither running a
+     *   foreground service nor attaching a full-screen intent.
+     * - **The MICROPHONE type is claimed**: Android only exempts a backgrounded app
+     *   from the while-in-use microphone restriction while a foreground service with
+     *   that type is running, and the call engine (LXST) captures inside this process.
+     *
+     * @param service the service to re-assert the foreground state on
+     * @param call the live call, or null when no call is Active
+     */
+    fun setCallState(service: Service, call: ActiveCall?) {
+        if (activeCall == call) return
+        activeCall = call
+        Log.d(TAG, "Call active=${call != null}; re-asserting foreground notification")
+        startForeground(service)
+    }
+
+    private fun foregroundTypes(): Int =
+        foregroundServiceTypes(
+            callActive = activeCall != null,
+            recordAudioGranted =
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO,
+                ) == PackageManager.PERMISSION_GRANTED,
+            sdkInt = Build.VERSION.SDK_INT,
+        )
+
+    /**
      * Safely start the service in foreground mode with proper exception handling.
      * Uses FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE for Android 10+ to indicate
      * active BLE mesh connections.
@@ -405,7 +562,7 @@ class ServiceNotificationManager(
                 service.startForeground(
                     NOTIFICATION_ID,
                     notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+                    foregroundTypes(),
                 )
             } else {
                 // Android 9 and below
@@ -447,7 +604,7 @@ class ServiceNotificationManager(
                     svc.startForeground(
                         NOTIFICATION_ID,
                         notification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+                        foregroundTypes(),
                     )
                 } else {
                     svc.startForeground(NOTIFICATION_ID, notification)
@@ -510,4 +667,25 @@ class ServiceNotificationManager(
 
         return Pair(statusText, detailText)
     }
+}
+
+/**
+ * Foreground-service types to pass to [Service.startForeground].
+ *
+ * CONNECTED_DEVICE is always claimed on API 29+ (BLE mesh links). MICROPHONE is
+ * added only while a call is live and RECORD_AUDIO is granted: API 30+ FGS types
+ * must be a subset of the manifest declarations (they are), and API 34+ throws
+ * SecurityException when the service requests a type whose permission the app
+ * does not hold.
+ */
+internal fun foregroundServiceTypes(
+    callActive: Boolean,
+    recordAudioGranted: Boolean,
+    sdkInt: Int,
+): Int {
+    var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+    if (sdkInt >= Build.VERSION_CODES.R && callActive && recordAudioGranted) {
+        types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+    }
+    return types
 }

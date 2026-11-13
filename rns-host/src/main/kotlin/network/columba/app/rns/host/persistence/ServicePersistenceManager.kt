@@ -685,8 +685,10 @@ class ServicePersistenceManager(
      * Look up display name for a peer with priority:
      * 1. Contact's custom nickname (user-set, by destination hash)
      * 2. Announce peer name (from network, by destination hash)
-     * 3. Announce peer name by identity hash (for LXST calls where the caller provides
-     *    an identity hash instead of a destination hash)
+     * 3. Contact nickname, then announce peer name, resolved through the announce
+     *    that carries the given identity hash (for LXST calls, which provide an
+     *    identity hash instead of a destination hash; contacts are keyed by
+     *    destination hash, so the announce is the bridge)
      * 4. null (caller should use formatted hash as fallback)
      *
      * @param peerHash Either a destination hash or an identity hash (32-char hex).
@@ -719,12 +721,29 @@ class ServicePersistenceManager(
             }
 
             // Destination hash lookup failed — try as identity hash.
-            // This path is used by LXST incoming calls which provide identity hashes.
+            // This path is used by LXST calls, which provide identity hashes. Contacts
+            // are keyed by destination hash, so resolve the announce behind the identity
+            // first and re-run the same nickname -> peer-name chain against its
+            // destination; without that bridge a caller shown under a saved nickname
+            // while ringing would flip to the advertised name once answered.
             Log.d(TAG, "Trying identity hash lookup...")
             val announceByIdentity = announceDao.getAnnounceByIdentityHash(peerHash.lowercase())
-            if (announceByIdentity != null && !announceByIdentity.peerName.isNullOrBlank()) {
-                Log.d(TAG, "Found by identity hash")
-                return announceByIdentity.peerName
+            if (announceByIdentity != null) {
+                val destinationHash = announceByIdentity.destinationHash
+                val resolvedByIdentity =
+                    PeerNameResolver.resolve(
+                        peerHash = destinationHash,
+                        contactNicknameLookup = {
+                            activeIdentity?.let {
+                                contactDao.getContact(destinationHash, it.identityHash)?.customNickname
+                            }
+                        },
+                        announcePeerNameLookup = { announceByIdentity.peerName },
+                    )
+                if (PeerNameResolver.isValidPeerName(resolvedByIdentity)) {
+                    Log.d(TAG, "Found by identity hash")
+                    return resolvedByIdentity
+                }
             }
 
             Log.d(TAG, "No display name found for $peerHash")

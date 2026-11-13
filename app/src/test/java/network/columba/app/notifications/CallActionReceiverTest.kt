@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import network.columba.app.MainActivity
+import network.columba.app.rns.api.call.CallNotificationActions
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
@@ -319,5 +320,26 @@ class CallActionReceiverTest {
         // Verify all activities were started (check the last one)
         // Note: shadowApplication.nextStartedActivity consumes intents
         // So we just verify no exception was thrown for multiple calls
+    }
+
+    @Test
+    fun `main activity class name matches the cross-process open-call contract`() {
+        // The :reticulum service's CallStyle notification targets ACTION_OPEN_CALL at
+        // MainActivity by class name, so the chip opens the call screen. Pin it.
+        assertEquals(
+            CallNotificationActions.MAIN_ACTIVITY_CLASS,
+            MainActivity::class.java.name,
+        )
+    }
+
+    @Test
+    fun `receiver class name matches the cross-process call action contract`() {
+        // The :reticulum service posts the ongoing-call notification and targets its
+        // hang-up action at this receiver by component name (it cannot depend on the
+        // app module). A rename would silently drop hang-up, so pin the FQCN.
+        assertEquals(
+            CallNotificationActions.RECEIVER_CLASS,
+            CallActionReceiver::class.java.name,
+        )
     }
 }

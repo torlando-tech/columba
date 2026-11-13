@@ -18,6 +18,7 @@ import androidx.core.app.NotificationManagerCompat
 import network.columba.app.IncomingCallActivity
 import network.columba.app.MainActivity
 import network.columba.app.R
+import network.columba.app.rns.api.call.CallNotificationActions
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
 import javax.inject.Inject
@@ -37,22 +38,21 @@ class CallNotificationHelper
         @ApplicationContext private val context: Context,
     ) : IncomingCallNotifier {
         companion object {
-            // Notification channel IDs
+            // Notification channel ID
             private const val CHANNEL_ID_INCOMING_CALL = "incoming_calls"
-            private const val CHANNEL_ID_ONGOING_CALL = "ongoing_calls"
 
-            // Notification IDs
+            // Notification ID
             const val NOTIFICATION_ID_INCOMING_CALL = 5000
-            const val NOTIFICATION_ID_ONGOING_CALL = 5001
 
-            // Intent actions
-            const val ACTION_ANSWER_CALL = "network.columba.app.ACTION_ANSWER_CALL"
-            const val ACTION_DECLINE_CALL = "network.columba.app.ACTION_DECLINE_CALL"
-            const val ACTION_END_CALL = "network.columba.app.ACTION_END_CALL"
-            const val ACTION_OPEN_CALL = "network.columba.app.ACTION_OPEN_CALL"
+            // Intent actions and extras. The strings live in :rns-api because the
+            // :reticulum service builds the ongoing-call notification (and its
+            // hang-up action) through startForeground and must agree on them.
+            val ACTION_ANSWER_CALL = CallNotificationActions.ACTION_ANSWER_CALL
+            val ACTION_DECLINE_CALL = CallNotificationActions.ACTION_DECLINE_CALL
+            val ACTION_END_CALL = CallNotificationActions.ACTION_END_CALL
+            val ACTION_OPEN_CALL = CallNotificationActions.ACTION_OPEN_CALL
+            val EXTRA_IDENTITY_HASH = CallNotificationActions.EXTRA_IDENTITY_HASH
 
-            // Intent extras
-            const val EXTRA_IDENTITY_HASH = "identity_hash"
             const val EXTRA_CALLER_NAME = "caller_name"
         }
 
@@ -173,21 +173,8 @@ class CallNotificationHelper
                         setBypassDnd(true)
                     }
 
-                // Ongoing call channel - low importance, persistent
-                val ongoingChannel =
-                    NotificationChannel(
-                        CHANNEL_ID_ONGOING_CALL,
-                        context.getString(R.string.notif_channel_ongoing_calls),
-                        NotificationManager.IMPORTANCE_LOW,
-                    ).apply {
-                        description = context.getString(R.string.notif_channel_ongoing_calls_desc)
-                        enableVibration(false)
-                        setSound(null, null)
-                    }
-
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 manager.createNotificationChannel(incomingChannel)
-                manager.createNotificationChannel(ongoingChannel)
 
                 // Re-creating an existing channel id replaces its name/description with
                 // the current-locale text on every app start (user-set importance is
@@ -298,76 +285,6 @@ class CallNotificationHelper
         }
 
         /**
-         * Show notification for ongoing call.
-         *
-         * @param identityHash The peer's identity hash
-         * @param peerName Display name of the peer
-         * @param duration Current call duration in seconds
-         */
-        fun showOngoingCallNotification(
-            identityHash: String,
-            peerName: String?,
-            duration: Long,
-        ) {
-            val displayName = peerName ?: formatIdentityHash(identityHash)
-            val durationText = formatDuration(duration)
-
-            // Open call screen on tap
-            val openIntent =
-                Intent(context, MainActivity::class.java).apply {
-                    action = ACTION_OPEN_CALL
-                    putExtra(EXTRA_IDENTITY_HASH, identityHash)
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                }
-            val openPendingIntent =
-                PendingIntent.getActivity(
-                    context,
-                    3,
-                    openIntent,
-                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                )
-
-            // End call action
-            val endIntent =
-                Intent(context, CallActionReceiver::class.java).apply {
-                    action = ACTION_END_CALL
-                    putExtra(EXTRA_IDENTITY_HASH, identityHash)
-                }
-            val endPendingIntent =
-                PendingIntent.getBroadcast(
-                    context,
-                    4,
-                    endIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                )
-
-            val notification =
-                NotificationCompat
-                    .Builder(context, CHANNEL_ID_ONGOING_CALL)
-                    .setSmallIcon(R.drawable.ic_notification_stat)
-                    .setContentTitle(context.getString(R.string.notif_call_ongoing_title))
-                    .setContentText(context.getString(R.string.notif_call_ongoing_text, displayName, durationText))
-                    .setPriority(NotificationCompat.PRIORITY_LOW)
-                    .setCategory(NotificationCompat.CATEGORY_CALL)
-                    .setOngoing(true)
-                    .setAutoCancel(false)
-                    .setContentIntent(openPendingIntent)
-                    .addAction(
-                        android.R.drawable.ic_menu_close_clear_cancel,
-                        context.getString(R.string.notif_call_action_end),
-                        endPendingIntent,
-                    ).build()
-
-            if (ActivityCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.POST_NOTIFICATIONS,
-                ) == PackageManager.PERMISSION_GRANTED
-            ) {
-                notificationManager.notify(NOTIFICATION_ID_ONGOING_CALL, notification)
-            }
-        }
-
-        /**
          * Cancel incoming call notification.
          */
         override fun cancelIncomingCallNotification() {
@@ -385,21 +302,6 @@ class CallNotificationHelper
          */
         private val cancelTickCount = java.util.concurrent.atomic.AtomicLong(0)
 
-        /**
-         * Cancel ongoing call notification.
-         */
-        fun cancelOngoingCallNotification() {
-            notificationManager.cancel(NOTIFICATION_ID_ONGOING_CALL)
-        }
-
-        /**
-         * Cancel all call notifications.
-         */
-        fun cancelAllCallNotifications() {
-            cancelIncomingCallNotification()
-            cancelOngoingCallNotification()
-        }
-
         private fun formatIdentityHash(hash: String): String {
             return if (hash.length > 12) {
                 "${hash.take(6)}...${hash.takeLast(6)}"
@@ -408,9 +310,4 @@ class CallNotificationHelper
             }
         }
 
-        private fun formatDuration(seconds: Long): String {
-            val mins = seconds / 60
-            val secs = seconds % 60
-            return String.format(Locale.US, "%02d:%02d", mins, secs)
-        }
     }

@@ -1,0 +1,101 @@
+name: Russian Debug APK
+
+# Лёгкая сборка одного варианта для проверки русской локализации на телефоне.
+# Секреты подписи НЕ нужны: без KEYSTORE_* Gradle подписывает debug-сборку
+# стандартным debug-ключом, APK устанавливается на устройство.
+# Результат - артефакт запуска (Actions -> запуск -> Artifacts), не релиз.
+on:
+  workflow_dispatch:
+    inputs:
+      backend:
+        description: 'Бэкенд Reticulum'
+        type: choice
+        options:
+          - kotlin
+          - python
+        default: kotlin
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Debug APK (${{ inputs.backend }})
+    runs-on: ubuntu-latest
+    # Python-бэкенд тянет рантайм Python на каждую ABI (Chaquopy) и собирается дольше.
+    timeout-minutes: 40
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check Russian strings
+        run: python3 scripts/l10n/check_ru.py
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6.4.0
+        with:
+          cache-read-only: false
+
+      - name: Set up Python 3.11
+        # Нужен Chaquopy для pythonBackend.
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Resolve Gradle variant
+        id: variant
+        env:
+          BACKEND: ${{ inputs.backend }}
+        run: |
+          case "$BACKEND" in
+            kotlin) echo "name=KotlinBackend" >> "$GITHUB_OUTPUT" ;;
+            python) echo "name=PythonBackend" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::Unknown backend: $BACKEND"; exit 1 ;;
+          esac
+
+      - name: Build debug APK
+        env:
+          VARIANT: ${{ steps.variant.outputs.name }}
+        # Те же задачи, что собирает ci.yml: :app:assembleNoSentry<...>BackendDebug
+        run: ./gradlew ":app:assembleNoSentry${VARIANT}Debug" --stacktrace --max-workers=2
+
+      - name: Collect APKs
+        env:
+          VARIANT: ${{ steps.variant.outputs.name }}
+          BACKEND: ${{ inputs.backend }}
+        run: |
+          mkdir -p dist
+          src="app/build/outputs/apk/noSentry${VARIANT}/debug"
+          ls -la "$src"
+          count=0
+          for apk in "$src"/*.apk; do
+            [ -e "$apk" ] || continue
+            cp "$apk" "dist/columba-ru-${BACKEND}-$(basename "$apk")"
+            count=$((count + 1))
+          done
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No APK found in $src"
+            exit 1
+          fi
+          (cd dist && sha256sum ./*.apk > SHA256SUMS.txt)
+          ls -la dist
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v7
+        with:
+          name: columba-ru-${{ inputs.backend }}-debug-${{ github.run_number }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14

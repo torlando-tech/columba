@@ -2892,7 +2892,7 @@
     <string name="onboarding_perms_subtitle">Columba can notify you when:</string>
     <string name="onboarding_perms_feat_messages">New messages arrive</string>
     <string name="onboarding_perms_feat_call">A voice call comes in</string>
-    <string name="onboarding_perms_feat_announce">A nearby peer announces</string>
+    <string name="onboarding_perms_feat_announce">A nearby peer announces (when enabled in Settings)</string>
     <string name="onboarding_perms_notif_title">Notifications</string>
     <string name="onboarding_perms_notif_desc">Get alerts for messages and calls</string>
     <string name="onboarding_perms_battery_title">Unrestricted Battery</string>

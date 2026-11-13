@@ -43,6 +43,17 @@ jobs:
         with:
           cache-read-only: false
 
+      - name: Set up JDK 21
+        # detekt 1.23.8 (the last 1.x) refuses to run on a JVM newer than 22 and its
+        # Kotlin compiler rejects --jvm-target above 22. ubuntu-latest now defaults to
+        # JDK 25, which broke every `detekt` task in this job; pin the JDK the javac
+        # toolchain already uses. The rest of CI may stay on 25 — no other job runs
+        # detekt.
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Set up Python 3.11
         # Android `lint` covers :rns-backend-py + the pythonBackend variants, which
         # trigger Chaquopy's installPythonRequirements — and Chaquopy 17 only accepts

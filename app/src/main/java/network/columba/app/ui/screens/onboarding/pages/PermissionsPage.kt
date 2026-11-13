@@ -101,8 +101,8 @@ fun PermissionsPage(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             FeatureItem(stringResource(R.string.onboarding_perms_feat_messages))
-            FeatureItem(stringResource(R.string.onboarding_perms_feat_contact))
-            FeatureItem(stringResource(R.string.onboarding_perms_feat_delivery))
+            FeatureItem(stringResource(R.string.onboarding_perms_feat_call))
+            FeatureItem(stringResource(R.string.onboarding_perms_feat_announce))
         }
 
         Spacer(modifier = Modifier.height(24.dp))

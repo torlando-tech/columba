@@ -1586,10 +1586,7 @@
     <!-- SortModeSelector -->
     <string name="sort_mode_quality">Quality</string>
     <string name="sort_mode_proximity">Proximity</string>
-    <string name="attach_panel_allow_access_photos">Allow access to show recent photos</string>
-    <string name="attach_panel_allow_access">Allow access</string>
-    <string name="attach_panel_no_photos">No photos found</string>
-    <string name="attach_panel_photo_description">Photo</string>
+    <string name="attach_panel_choose_photos">Choose photos</string>
     <string name="file_attach_card_file_type">File type: %1$s</string>
     <string name="file_attach_opts_open_with">Open with...</string>
     <string name="file_attach_opts_open_with_description">Open in another app</string>

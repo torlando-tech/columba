@@ -835,28 +835,23 @@ class MessagingViewModel
         private val _qualitySelectionState = MutableStateFlow<QualitySelectionState?>(null)
         val qualitySelectionState: StateFlow<QualitySelectionState?> = _qualitySelectionState.asStateFlow()
 
-        // Recent photos for attachment panel
-        private val _recentPhotos = MutableStateFlow<List<Uri>>(emptyList())
-        val recentPhotos: StateFlow<List<Uri>> = _recentPhotos.asStateFlow()
-
-        private var loadPhotosJob: Job? = null
-
-        fun loadRecentPhotos(context: Context) {
-            loadPhotosJob?.cancel()
-            loadPhotosJob =
-                viewModelScope.launch(Dispatchers.IO) {
-                    val photos =
-                        network.columba.app.util.MediaStoreUtils
-                            .getRecentPhotos(context.applicationContext)
-                    _recentPhotos.value = photos
-                }
-        }
-
         // Multi-image share state: URIs pending compression+send after quality selection.
         // These are plain vars (not StateFlows) because they are always written before
         // _qualitySelectionState triggers recomposition, so no reactive subscription is needed.
         private var pendingSharedImageUris: List<Uri> = emptyList()
         private var pendingSharedImageDestHash: String? = null
+
+        // Thread the picker was opened from. Multi-image picks send outside the
+        // composer, so this is the only thing that keeps them in the thread the
+        // user was reading instead of dropping them into Main (threads-spec §6.2).
+        private var pendingSharedImageThreadHex: String? = null
+
+        // Pending "Thread from here" root (0x30) captured with the batch. The
+        // composer carries it on the first send of a new thread; these sends skip
+        // the composer, so the first image has to pin the root itself
+        // (threads-spec §4.2) — otherwise the thread starts with no quoted root
+        // and Main shows no replies hook.
+        private var pendingSharedImageThreadRootHex: String? = null
 
         // Expose current conversation's link state for UI
         val currentLinkState: StateFlow<ConversationLinkManager.LinkState?> =
@@ -3143,17 +3138,25 @@ class MessagingViewModel
             _qualitySelectionState.value = null
             pendingSharedImageUris = emptyList()
             pendingSharedImageDestHash = null
+            pendingSharedImageThreadHex = null
+            pendingSharedImageThreadRootHex = null
         }
 
         /**
-         * Show quality selection dialog for externally shared images.
+         * Show quality selection dialog for externally shared images or a
+         * multi-photo picker result.
          * When the user picks a preset, all images are compressed and sent
          * as individual messages via [selectImageQualityForSharedImages].
+         *
+         * @param threadIdHex thread the user was composing in (null = Main).
+         *   These sends bypass the composer, so the thread has to travel with
+         *   the pending batch or every image lands in Main.
          */
         fun processSharedImages(
             context: Context,
             uris: List<Uri>,
             destinationHash: String,
+            threadIdHex: String? = null,
         ) {
             if (uris.isEmpty()) return
 
@@ -3164,6 +3167,10 @@ class MessagingViewModel
 
             pendingSharedImageUris = uris
             pendingSharedImageDestHash = destinationHash
+            pendingSharedImageThreadHex = threadIdHex
+            // Capture the root before the quality dialog suspends: a switch to
+            // another thread owns the pending root by then and must keep it.
+            pendingSharedImageThreadRootHex = threadIdHex?.let { _pendingThreadRoot.value }
 
             // Show quality dialog using the explicit destinationHash for link probing.
             // We await the probe result (up to 5s) so transfer-time estimates are accurate.
@@ -3212,10 +3219,16 @@ class MessagingViewModel
             val state = _qualitySelectionState.value ?: return
             val uris = pendingSharedImageUris.toList()
             val destHash = pendingSharedImageDestHash ?: return
+            val threadHex = pendingSharedImageThreadHex
+            // Root rides the first image that actually lands, then is cleared,
+            // mirroring the composer's first-send-only semantics (threads-spec §4.2).
+            var rootHex = pendingSharedImageThreadRootHex
 
             _qualitySelectionState.value = null
             pendingSharedImageUris = emptyList()
             pendingSharedImageDestHash = null
+            pendingSharedImageThreadHex = null
+            pendingSharedImageThreadRootHex = null
 
             viewModelScope.launch {
                 _isProcessingImage.value = true
@@ -3233,7 +3246,24 @@ class MessagingViewModel
                             continue
                         }
                         Log.d(TAG, "Shared image compressed to ${result.compressedImage.data.size} bytes")
-                        sendImageMessageDirect(destHash, result.compressedImage.data, result.compressedImage.format)
+                        val rootForThisImage = rootHex
+                        val persisted =
+                            sendImageMessageDirect(
+                                destHash,
+                                threadHex,
+                                rootForThisImage,
+                                result.compressedImage.data,
+                                result.compressedImage.format,
+                            )
+                        if (persisted && rootForThisImage != null) {
+                            rootHex = null
+                            // Clear only the root this send carried: a concurrent
+                            // switch (or a new "Thread from here") owns it now.
+                            if (ownsPendingRoot(threadHex?.hexToBytesOrNull(), rootForThisImage)) {
+                                _pendingThreadRoot.value = null
+                                rememberTarget()
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error processing shared images", e)
@@ -3264,84 +3294,148 @@ class MessagingViewModel
         /**
          * Send a message with an image directly, bypassing the single-image StateFlows.
          * Used by multi-image share to send each image as a separate message.
+         *
+         * @param threadIdHex thread the batch was started from (null = Main); these
+         *   sends skip the composer, so it must be carried explicitly.
+         * @param threadRootHex pending "Thread from here" root to pin on this send
+         *   (null = none); only the first image of a new thread carries it.
+         * @return true when the message was stored locally (the send can be
+         *   considered landed, so a carried root may be cleared).
          */
         private suspend fun sendImageMessageDirect(
             destinationHash: String,
+            threadIdHex: String?,
+            threadRootHex: String?,
             imageData: ByteArray,
             imageFormat: String,
-        ) {
+        ): Boolean =
             try {
-                val sanitized = validateAndSanitizeContent("", imageData, emptyList()) ?: return
-                val destHashBytes = validateDestinationHash(destinationHash) ?: return
-                val identity =
-                    loadIdentityIfNeeded() ?: run {
-                        Log.e(TAG, "Failed to load source identity")
-                        return
-                    }
-
-                val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
-                val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                val deliveryMethod =
-                    determineDeliveryMethod(
-                        sanitized = sanitized,
-                        imageData = imageData,
-                        fileAttachments = emptyList(),
-                        defaultMethod = defaultMethod,
-                    )
-                val deliveryMethodString = deliveryMethod.toStorageString()
-
-                val iconAppearance =
-                    identityRepository.getActiveIdentitySync()?.let { activeId ->
-                        val name = activeId.iconName
-                        val fg = activeId.iconForegroundColor
-                        val bg = activeId.iconBackgroundColor
-                        if (name != null && fg != null && bg != null) {
-                            network.columba.app.rns.api.model.IconAppearance(
-                                iconName = name,
-                                foregroundColor = fg,
-                                backgroundColor = bg,
-                            )
-                        } else {
-                            null
-                        }
-                    }
-
-                Log.d(TAG, "Sending shared image to $destinationHash (${imageData.size} bytes, format=$imageFormat)")
-
-                val result =
-                    rnsLxmf.sendLxmfMessageWithMethod(
-                        destinationHash = destHashBytes,
-                        content = sanitized,
-                        sourceIdentity = identity,
-                        deliveryMethod = deliveryMethod,
-                        tryPropagationOnFail = tryPropOnFail,
-                        imageData = imageData,
-                        imageFormat = imageFormat,
-                        fileAttachments = null,
-                        replyToMessageId = null,
-                        iconAppearance = iconAppearance,
-                    )
-
-                result
-                    .onSuccess { receipt ->
-                        handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, emptyList(), deliveryMethodString)
-                    }.onFailure { error ->
-                        handleSendFailure(
-                            error = error,
-                            sanitized = sanitized,
-                            destinationHash = destinationHash,
-                            deliveryMethodString = deliveryMethodString,
-                            imageData = imageData,
-                            imageFormat = imageFormat,
-                            fileAttachments = emptyList(),
-                            replyToMessageId = null,
-                            voiceBytes = null,
-                        )
-                    }
+                dispatchSharedImage(destinationHash, threadIdHex, threadRootHex, imageData, imageFormat)
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending shared image message", e)
+                false
             }
+
+        /** Resolved inputs for a shared-image send; null when one cannot be resolved. */
+        private data class SharedImageSendRequest(
+            val sanitized: String,
+            val destinationBytes: ByteArray,
+            val identity: Identity,
+        )
+
+        private suspend fun prepareSharedImageSend(
+            destinationHash: String,
+            imageData: ByteArray,
+        ): SharedImageSendRequest? {
+            val sanitized = validateAndSanitizeContent("", imageData, emptyList())
+            val destinationBytes = validateDestinationHash(destinationHash)
+            val identity = loadIdentityIfNeeded()
+            if (sanitized == null || destinationBytes == null || identity == null) {
+                Log.e(
+                    TAG,
+                    "Cannot prepare shared image send to $destinationHash " +
+                        "(missing content, destination, or identity)",
+                )
+                return null
+            }
+            return SharedImageSendRequest(sanitized, destinationBytes, identity)
         }
+
+        private suspend fun dispatchSharedImage(
+            destinationHash: String,
+            threadIdHex: String?,
+            threadRootHex: String?,
+            imageData: ByteArray,
+            imageFormat: String,
+        ): Boolean {
+            val request =
+                prepareSharedImageSend(destinationHash, imageData) ?: run {
+                    Log.e(TAG, "Cannot send shared image to $destinationHash: unresolved request")
+                    return false
+                }
+            val threadIdBytes = threadIdHex?.hexToBytesOrNull()
+            val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
+            val deliveryMethod =
+                determineDeliveryMethod(
+                    sanitized = request.sanitized,
+                    imageData = imageData,
+                    fileAttachments = emptyList(),
+                    defaultMethod = settingsRepository.getDefaultDeliveryMethod(),
+                )
+            val deliveryMethodString = deliveryMethod.toStorageString()
+            val iconAppearance = activeIconAppearance()
+
+            Log.d(
+                TAG,
+                "Sending shared image to $destinationHash (${imageData.size} bytes, format=$imageFormat, " +
+                    "thread=${threadIdHex ?: "main"}, replyTo=${threadRootHex ?: "none"})",
+            )
+
+            val result =
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = request.destinationBytes,
+                    content = request.sanitized,
+                    sourceIdentity = request.identity,
+                    deliveryMethod = deliveryMethod,
+                    tryPropagationOnFail = tryPropOnFail,
+                    imageData = imageData,
+                    imageFormat = imageFormat,
+                    fileAttachments = null,
+                    replyToMessageId = threadRootHex,
+                    // Thread sends ship the quoted root inline as 0x31 so the
+                    // receiving client can pin it without the original message.
+                    replyQuotedContent = wireReplyQuote(threadRootHex, threadIdBytes),
+                    iconAppearance = iconAppearance,
+                    threadId = threadIdBytes,
+                )
+
+            return result.fold(
+                onSuccess = { receipt ->
+                    handleSendSuccess(
+                        receipt,
+                        request.sanitized,
+                        destinationHash,
+                        imageData,
+                        imageFormat,
+                        emptyList(),
+                        deliveryMethodString,
+                        replyToMessageId = threadRootHex,
+                        threadId = threadIdBytes,
+                    )
+                },
+                onFailure = { error ->
+                    handleSendFailure(
+                        error = error,
+                        sanitized = request.sanitized,
+                        destinationHash = destinationHash,
+                        deliveryMethodString = deliveryMethodString,
+                        imageData = imageData,
+                        imageFormat = imageFormat,
+                        fileAttachments = emptyList(),
+                        replyToMessageId = threadRootHex,
+                        voiceBytes = null,
+                        threadId = threadIdBytes,
+                    )
+                },
+            )
+        }
+
+        /** Icon appearance of the active identity, for Sideband/MeshChat interoperability. */
+        private suspend fun activeIconAppearance(): network.columba.app.rns.api.model.IconAppearance? =
+            identityRepository.getActiveIdentitySync()?.let { activeId ->
+                val name = activeId.iconName
+                val fg = activeId.iconForegroundColor
+                val bg = activeId.iconBackgroundColor
+                if (name != null && fg != null && bg != null) {
+                    network.columba.app.rns.api.model.IconAppearance(
+                        iconName = name,
+                        foregroundColor = fg,
+                        backgroundColor = bg,
+                    )
+                } else {
+                    null
+                }
+            }
 
         /**
          * Number of pending shared images (0 if not in multi-image share mode).

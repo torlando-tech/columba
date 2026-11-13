@@ -3308,102 +3308,134 @@ class MessagingViewModel
             threadRootHex: String?,
             imageData: ByteArray,
             imageFormat: String,
-        ): Boolean {
+        ): Boolean =
             try {
-                val sanitized = validateAndSanitizeContent("", imageData, emptyList()) ?: return false
-                val destHashBytes = validateDestinationHash(destinationHash) ?: return false
-                val threadIdBytes = threadIdHex?.hexToBytesOrNull()
-                val identity =
-                    loadIdentityIfNeeded() ?: run {
-                        Log.e(TAG, "Failed to load source identity")
-                        return false
-                    }
-
-                val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
-                val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                val deliveryMethod =
-                    determineDeliveryMethod(
-                        sanitized = sanitized,
-                        imageData = imageData,
-                        fileAttachments = emptyList(),
-                        defaultMethod = defaultMethod,
-                    )
-                val deliveryMethodString = deliveryMethod.toStorageString()
-
-                val iconAppearance =
-                    identityRepository.getActiveIdentitySync()?.let { activeId ->
-                        val name = activeId.iconName
-                        val fg = activeId.iconForegroundColor
-                        val bg = activeId.iconBackgroundColor
-                        if (name != null && fg != null && bg != null) {
-                            network.columba.app.rns.api.model.IconAppearance(
-                                iconName = name,
-                                foregroundColor = fg,
-                                backgroundColor = bg,
-                            )
-                        } else {
-                            null
-                        }
-                    }
-
-                Log.d(
-                    TAG,
-                    "Sending shared image to $destinationHash (${imageData.size} bytes, format=$imageFormat, " +
-                        "thread=${threadIdHex ?: "main"}, replyTo=${threadRootHex ?: "none"})",
-                )
-
-                val result =
-                    rnsLxmf.sendLxmfMessageWithMethod(
-                        destinationHash = destHashBytes,
-                        content = sanitized,
-                        sourceIdentity = identity,
-                        deliveryMethod = deliveryMethod,
-                        tryPropagationOnFail = tryPropOnFail,
-                        imageData = imageData,
-                        imageFormat = imageFormat,
-                        fileAttachments = null,
-                        replyToMessageId = threadRootHex,
-                        // Thread sends ship the quoted root inline as 0x31 so the
-                        // receiving client can pin it without the original message.
-                        replyQuotedContent = wireReplyQuote(threadRootHex, threadIdBytes),
-                        iconAppearance = iconAppearance,
-                        threadId = threadIdBytes,
-                    )
-
-                return result.fold(
-                    onSuccess = { receipt ->
-                        handleSendSuccess(
-                            receipt,
-                            sanitized,
-                            destinationHash,
-                            imageData,
-                            imageFormat,
-                            emptyList(),
-                            deliveryMethodString,
-                            replyToMessageId = threadRootHex,
-                            threadId = threadIdBytes,
-                        )
-                    },
-                    onFailure = { error ->
-                        handleSendFailure(
-                            error = error,
-                            sanitized = sanitized,
-                            destinationHash = destinationHash,
-                            deliveryMethodString = deliveryMethodString,
-                            imageData = imageData,
-                            imageFormat = imageFormat,
-                            fileAttachments = emptyList(),
-                            replyToMessageId = threadRootHex,
-                            voiceBytes = null,
-                            threadId = threadIdBytes,
-                        )
-                    },
-                )
+                dispatchSharedImage(destinationHash, threadIdHex, threadRootHex, imageData, imageFormat)
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending shared image message", e)
+                false
             }
-            return false
+
+        /** Resolved inputs for a shared-image send; null when one cannot be resolved. */
+        private data class SharedImageSendRequest(
+            val sanitized: String,
+            val destinationBytes: ByteArray,
+            val identity: Identity,
+        )
+
+        private suspend fun prepareSharedImageSend(
+            destinationHash: String,
+            imageData: ByteArray,
+        ): SharedImageSendRequest? {
+            val sanitized = validateAndSanitizeContent("", imageData, emptyList())
+            val destinationBytes = validateDestinationHash(destinationHash)
+            val identity = loadIdentityIfNeeded()
+            if (sanitized == null || destinationBytes == null || identity == null) {
+                Log.e(
+                    TAG,
+                    "Cannot prepare shared image send to $destinationHash " +
+                        "(missing content, destination, or identity)",
+                )
+                return null
+            }
+            return SharedImageSendRequest(sanitized, destinationBytes, identity)
         }
+
+        private suspend fun dispatchSharedImage(
+            destinationHash: String,
+            threadIdHex: String?,
+            threadRootHex: String?,
+            imageData: ByteArray,
+            imageFormat: String,
+        ): Boolean {
+            val request =
+                prepareSharedImageSend(destinationHash, imageData) ?: run {
+                    Log.e(TAG, "Cannot send shared image to $destinationHash: unresolved request")
+                    return false
+                }
+            val threadIdBytes = threadIdHex?.hexToBytesOrNull()
+            val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
+            val deliveryMethod =
+                determineDeliveryMethod(
+                    sanitized = request.sanitized,
+                    imageData = imageData,
+                    fileAttachments = emptyList(),
+                    defaultMethod = settingsRepository.getDefaultDeliveryMethod(),
+                )
+            val deliveryMethodString = deliveryMethod.toStorageString()
+            val iconAppearance = activeIconAppearance()
+
+            Log.d(
+                TAG,
+                "Sending shared image to $destinationHash (${imageData.size} bytes, format=$imageFormat, " +
+                    "thread=${threadIdHex ?: "main"}, replyTo=${threadRootHex ?: "none"})",
+            )
+
+            val result =
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = request.destinationBytes,
+                    content = request.sanitized,
+                    sourceIdentity = request.identity,
+                    deliveryMethod = deliveryMethod,
+                    tryPropagationOnFail = tryPropOnFail,
+                    imageData = imageData,
+                    imageFormat = imageFormat,
+                    fileAttachments = null,
+                    replyToMessageId = threadRootHex,
+                    // Thread sends ship the quoted root inline as 0x31 so the
+                    // receiving client can pin it without the original message.
+                    replyQuotedContent = wireReplyQuote(threadRootHex, threadIdBytes),
+                    iconAppearance = iconAppearance,
+                    threadId = threadIdBytes,
+                )
+
+            return result.fold(
+                onSuccess = { receipt ->
+                    handleSendSuccess(
+                        receipt,
+                        request.sanitized,
+                        destinationHash,
+                        imageData,
+                        imageFormat,
+                        emptyList(),
+                        deliveryMethodString,
+                        replyToMessageId = threadRootHex,
+                        threadId = threadIdBytes,
+                    )
+                },
+                onFailure = { error ->
+                    handleSendFailure(
+                        error = error,
+                        sanitized = request.sanitized,
+                        destinationHash = destinationHash,
+                        deliveryMethodString = deliveryMethodString,
+                        imageData = imageData,
+                        imageFormat = imageFormat,
+                        fileAttachments = emptyList(),
+                        replyToMessageId = threadRootHex,
+                        voiceBytes = null,
+                        threadId = threadIdBytes,
+                    )
+                },
+            )
+        }
+
+        /** Icon appearance of the active identity, for Sideband/MeshChat interoperability. */
+        private suspend fun activeIconAppearance(): network.columba.app.rns.api.model.IconAppearance? =
+            identityRepository.getActiveIdentitySync()?.let { activeId ->
+                val name = activeId.iconName
+                val fg = activeId.iconForegroundColor
+                val bg = activeId.iconBackgroundColor
+                if (name != null && fg != null && bg != null) {
+                    network.columba.app.rns.api.model.IconAppearance(
+                        iconName = name,
+                        foregroundColor = fg,
+                        backgroundColor = bg,
+                    )
+                } else {
+                    null
+                }
+            }
 
         /**
          * Number of pending shared images (0 if not in multi-image share mode).

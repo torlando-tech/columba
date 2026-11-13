@@ -17,7 +17,7 @@ ktlint = "12.1.1"
 detekt = "1.23.7"
 serialization = "1.12.0"
 coil = "2.7.0"
-markdownRenderer = "0.41.0"
+markdownRenderer = "0.46.0"
 desugarJdkLibs = "2.1.5"
 
 # JitPack-published libraries (formerly git submodules)

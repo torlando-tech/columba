@@ -1,7 +1,6 @@
 package network.columba.app.ui.components
 
 import android.app.Application
-import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -122,39 +121,18 @@ class AttachmentTextGoldenTest {
     // ========== AttachmentPanel ==========
 
     @Test
-    fun `attachment panel with recent photos`() {
+    fun `attachment panel`() {
         composeRule.setContent {
             MaterialTheme {
                 AttachmentPanel(
                     panelHeight = PANEL_HEIGHT,
-                    recentPhotos = RECENT_PHOTOS,
-                    hasMediaPermission = true,
-                    onRequestMediaPermission = {},
-                    onPhotoSelected = {},
+                    onPhotosClick = {},
                     onGalleryClick = {},
                     onFileClick = {},
                 )
             }
         }
-        TextGoldens.assertGolden("attachment_panel_with_recent_photos", composeRule)
-    }
-
-    @Test
-    fun `attachment panel permission prompt`() {
-        composeRule.setContent {
-            MaterialTheme {
-                AttachmentPanel(
-                    panelHeight = PANEL_HEIGHT,
-                    recentPhotos = RECENT_PHOTOS,
-                    hasMediaPermission = false,
-                    onRequestMediaPermission = {},
-                    onPhotoSelected = {},
-                    onGalleryClick = {},
-                    onFileClick = {},
-                )
-            }
-        }
-        TextGoldens.assertGolden("attachment_panel_permission_prompt", composeRule)
+        TextGoldens.assertGolden("attachment_panel", composeRule)
     }
 
     private companion object {
@@ -199,13 +177,6 @@ class AttachmentTextGoldenTest {
             )
 
         private const val PREVIEW_TOTAL_BYTES = 2_500_000 + 1_024 + 512_000
-
-        private val RECENT_PHOTOS =
-            listOf(
-                Uri.parse("content://media/external/images/media/1"),
-                Uri.parse("content://media/external/images/media/2"),
-                Uri.parse("content://media/external/images/media/3"),
-            )
 
         private val PANEL_HEIGHT = 300.dp
     }

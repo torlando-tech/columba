@@ -1,7 +1,6 @@
 package network.columba.app.ui.components
 
 import android.app.Application
-import android.net.Uri
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -29,127 +28,72 @@ class AttachmentPanelTest {
 
     val composeTestRule get() = composeRule
 
-    private var permissionRequested = false
+    private var photosClicked = false
     private var galleryClicked = false
     private var fileClicked = false
     private var voiceClicked = false
-    private var selectedPhoto: Uri? = null
 
     @Before
     fun setUp() {
-        permissionRequested = false
+        photosClicked = false
         galleryClicked = false
         fileClicked = false
         voiceClicked = false
-        selectedPhoto = null
     }
 
-    // ========== Permission Prompt Tests ==========
-
-    @Test
-    fun `shows permission prompt when no media permission`() {
+    private fun setPanel(
+        onPhotosClick: () -> Unit = {},
+        onGalleryClick: () -> Unit = {},
+        onFileClick: () -> Unit = {},
+        onVoiceClick: () -> Unit = {},
+    ) {
         composeTestRule.setContent {
             AttachmentPanel(
                 panelHeight = 300.dp,
-                recentPhotos = emptyList(),
-                hasMediaPermission = false,
-                onRequestMediaPermission = {},
-                onPhotoSelected = {},
-                onGalleryClick = {},
-                onFileClick = {},
+                onPhotosClick = onPhotosClick,
+                onGalleryClick = onGalleryClick,
+                onFileClick = onFileClick,
+                onVoiceClick = onVoiceClick,
             )
         }
+    }
 
-        composeTestRule.onNodeWithText("Allow access to show recent photos").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Allow access").assertIsDisplayed()
+    // ========== Photo Picker Entry Point ==========
+
+    @Test
+    fun `shows photo picker entry point`() {
+        setPanel()
+
+        composeTestRule.onNodeWithText("Choose photos").assertIsDisplayed()
     }
 
     @Test
-    fun `tapping allow access button requests permission`() {
-        composeTestRule.setContent {
-            AttachmentPanel(
-                panelHeight = 300.dp,
-                recentPhotos = emptyList(),
-                hasMediaPermission = false,
-                onRequestMediaPermission = { permissionRequested = true },
-                onPhotoSelected = {},
-                onGalleryClick = {},
-                onFileClick = {},
-            )
-        }
+    fun `tapping photo picker entry point calls onPhotosClick`() {
+        setPanel(onPhotosClick = { photosClicked = true })
 
-        composeTestRule.onNodeWithText("Allow access").performClick()
-        assertTrue(permissionRequested)
-    }
-
-    // ========== Empty State Tests ==========
-
-    @Test
-    fun `shows no photos found when permission granted but no photos`() {
-        composeTestRule.setContent {
-            AttachmentPanel(
-                panelHeight = 300.dp,
-                recentPhotos = emptyList(),
-                hasMediaPermission = true,
-                onRequestMediaPermission = {},
-                onPhotoSelected = {},
-                onGalleryClick = {},
-                onFileClick = {},
-            )
-        }
-
-        composeTestRule.onNodeWithText("No photos found").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Choose photos").performClick()
+        assertTrue(photosClicked)
     }
 
     // ========== Action Button Tests ==========
 
     @Test
     fun `gallery button is displayed`() {
-        composeTestRule.setContent {
-            AttachmentPanel(
-                panelHeight = 300.dp,
-                recentPhotos = emptyList(),
-                hasMediaPermission = true,
-                onRequestMediaPermission = {},
-                onPhotoSelected = {},
-                onGalleryClick = {},
-                onFileClick = {},
-            )
-        }
+        setPanel()
 
         composeTestRule.onNodeWithText("Gallery").assertIsDisplayed()
     }
 
     @Test
     fun `file button is displayed`() {
-        composeTestRule.setContent {
-            AttachmentPanel(
-                panelHeight = 300.dp,
-                recentPhotos = emptyList(),
-                hasMediaPermission = true,
-                onRequestMediaPermission = {},
-                onPhotoSelected = {},
-                onGalleryClick = {},
-                onFileClick = {},
-            )
-        }
+        setPanel()
 
         composeTestRule.onNodeWithText("File").assertIsDisplayed()
     }
 
     @Test
     fun `tapping gallery button calls onGalleryClick`() {
-        composeTestRule.setContent {
-            AttachmentPanel(
-                panelHeight = 300.dp,
-                recentPhotos = emptyList(),
-                hasMediaPermission = true,
-                onRequestMediaPermission = {},
-                onPhotoSelected = {},
-                onGalleryClick = { galleryClicked = true },
-                onFileClick = {},
-            )
-        }
+        setPanel(onGalleryClick = { galleryClicked = true })
 
         composeTestRule.onNodeWithContentDescription("Gallery").performClick()
         assertTrue(galleryClicked)
@@ -157,17 +101,7 @@ class AttachmentPanelTest {
 
     @Test
     fun `tapping file button calls onFileClick`() {
-        composeTestRule.setContent {
-            AttachmentPanel(
-                panelHeight = 300.dp,
-                recentPhotos = emptyList(),
-                hasMediaPermission = true,
-                onRequestMediaPermission = {},
-                onPhotoSelected = {},
-                onGalleryClick = {},
-                onFileClick = { fileClicked = true },
-            )
-        }
+        setPanel(onFileClick = { fileClicked = true })
 
         composeTestRule.onNodeWithContentDescription("File").performClick()
         assertTrue(fileClicked)
@@ -175,46 +109,9 @@ class AttachmentPanelTest {
 
     @Test
     fun `tapping voice button calls onVoiceClick`() {
-        composeTestRule.setContent {
-            AttachmentPanel(
-                panelHeight = 300.dp,
-                recentPhotos = emptyList(),
-                hasMediaPermission = true,
-                onRequestMediaPermission = {},
-                onPhotoSelected = {},
-                onGalleryClick = {},
-                onFileClick = {},
-                onVoiceClick = { voiceClicked = true },
-            )
-        }
+        setPanel(onVoiceClick = { voiceClicked = true })
 
         composeTestRule.onNodeWithContentDescription("Record a voice message").performClick()
         assertTrue(voiceClicked)
-    }
-
-    // ========== Photo Grid Tests ==========
-
-    @Test
-    fun `does not show permission prompt when photos are available`() {
-        val photos =
-            listOf(
-                Uri.parse("content://media/external/images/media/1"),
-                Uri.parse("content://media/external/images/media/2"),
-            )
-
-        composeTestRule.setContent {
-            AttachmentPanel(
-                panelHeight = 300.dp,
-                recentPhotos = photos,
-                hasMediaPermission = true,
-                onRequestMediaPermission = {},
-                onPhotoSelected = {},
-                onGalleryClick = {},
-                onFileClick = {},
-            )
-        }
-
-        composeTestRule.onNodeWithText("Allow access to show recent photos").assertDoesNotExist()
-        composeTestRule.onNodeWithText("No photos found").assertDoesNotExist()
     }
 }

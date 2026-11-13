@@ -12,6 +12,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -254,7 +255,6 @@ import network.columba.app.util.FileAttachment
 import network.columba.app.util.FileUtils
 import network.columba.app.util.ImageUtils
 import network.columba.app.util.LocationPermissionManager
-import network.columba.app.util.MediaPermissionManager
 import network.columba.app.util.formatTimeSince
 import network.columba.app.util.launchSafely
 import network.columba.app.util.showNoFileManagerToast
@@ -277,6 +277,9 @@ private const val URL_ANNOTATION_TAG = "url"
 private const val VOICE_PREVIEW_KEY = "voice-recording-preview"
 // Composer image preview is decoded sampled to avoid Canvas size limits (#1209)
 private const val IMAGE_PREVIEW_MAX_DIMENSION_PX = 1024
+
+// Upper bound for a single system Photo Picker multi-select.
+private const val MAX_PICKER_PHOTOS = 10
 
 @Composable
 private fun LinkifiedMessageText(
@@ -523,8 +526,10 @@ fun MessagingScreen(
                 // Single image: use existing flow (preview in composer, user sends manually)
                 viewModel.processImageWithCompression(context, pendingUris.first())
             } else {
-                // Multiple images: show one quality dialog, then compress+send each as a message
-                viewModel.processSharedImages(context, pendingUris, destinationHash)
+                // Multiple images: show one quality dialog, then compress+send each as a message.
+                // The thread travels with the batch: if the saved selection has not been
+                // restored yet this is null and the batch lands in Main (prior behaviour).
+                viewModel.processSharedImages(context, pendingUris, destinationHash, viewModel.selectedThread.value)
             }
         }
     }
@@ -695,6 +700,27 @@ fun MessagingScreen(
             }
         }
 
+    // Capture the send target when the picker opens. Multi-photo picks send
+    // straight from the quality dialog without going back through the composer,
+    // so the callback must not read the live selection — it uses the thread the
+    // user was reading when they tapped "Choose photos" (null = Main).
+    var photosPickerThreadHex by remember { mutableStateOf<String?>(null) }
+
+    // System Photo Picker for the attachment panel: multi-select, no storage
+    // permission. One pick behaves like the single-image flow (preview in the
+    // composer); several picks reuse the shared-image quality dialog and send
+    // each image as its own message.
+    val photosPickerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.PickMultipleVisualMedia(MAX_PICKER_PHOTOS),
+        ) { uris: List<Uri> ->
+            when {
+                uris.isEmpty() -> Unit
+                uris.size == 1 -> viewModel.processImageWithCompression(context, uris.first())
+                else -> viewModel.processSharedImages(context, uris, destinationHash, photosPickerThreadHex)
+            }
+        }
+
     // File picker launcher
     val filePickerLauncher =
         rememberLauncherForActivityResult(
@@ -834,20 +860,6 @@ fun MessagingScreen(
     val fallbackPanelHeightPx = with(density) { 300.dp.roundToPx() }
     val panelHeightPx = if (lastKnownKeyboardHeightPx > 0) lastKnownKeyboardHeightPx else fallbackPanelHeightPx
     val panelHeightDp = with(density) { panelHeightPx.toDp() }
-
-    // Recent photos for attachment panel
-    val recentPhotos by viewModel.recentPhotos.collectAsStateWithLifecycle()
-
-    // Media permission launcher
-    val mediaPermissionLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestMultiplePermissions(),
-        ) { permissions ->
-            val granted = permissions.values.all { it }
-            if (granted) {
-                viewModel.loadRecentPhotos(context)
-            }
-        }
 
     var showVoiceControls by remember { mutableStateOf(false) }
     var audioPermissionPermanentlyDenied by remember { mutableStateOf(false) }
@@ -1759,9 +1771,6 @@ fun MessagingScreen(
                         } else {
                             inputPanelMode = InputPanelMode.PANEL
                             keyboardController?.hide()
-                            if (MediaPermissionManager.hasPermission(context)) {
-                                viewModel.loadRecentPhotos(context)
-                            }
                         }
                     },
                     isAttachmentPanelActive = inputPanelMode == InputPanelMode.PANEL,
@@ -1773,15 +1782,13 @@ fun MessagingScreen(
                     InputPanelMode.PANEL -> {
                         AttachmentPanel(
                             panelHeight = panelHeightDp,
-                            recentPhotos = recentPhotos,
-                            hasMediaPermission = MediaPermissionManager.hasPermission(context),
-                            onRequestMediaPermission = {
-                                mediaPermissionLauncher.launch(
-                                    MediaPermissionManager.getRequiredPermissions().toTypedArray(),
-                                )
-                            },
-                            onPhotoSelected = { uri ->
-                                viewModel.processImageWithCompression(context, uri)
+                            onPhotosClick = {
+                                photosPickerThreadHex = viewModel.selectedThread.value
+                                val request =
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                if (!photosPickerLauncher.launchSafely(request)) {
+                                    context.showNoFileManagerToast()
+                                }
                                 inputPanelMode = InputPanelMode.NONE
                             },
                             onGalleryClick = {
@@ -1797,12 +1804,12 @@ fun MessagingScreen(
                                 }
                                 inputPanelMode = InputPanelMode.NONE
                             },
-                        onVoiceClick = {
-                            showVoiceMessageQualityDialog = true
-                            inputPanelMode = InputPanelMode.NONE
-                        },
-                        modifier = Modifier.navigationBarsPadding(),
-                    )
+                            onVoiceClick = {
+                                showVoiceMessageQualityDialog = true
+                                inputPanelMode = InputPanelMode.NONE
+                            },
+                            modifier = Modifier.navigationBarsPadding(),
+                        )
                 }
                     InputPanelMode.KEYBOARD -> {
                         // Manual IME spacer replaces .imePadding()

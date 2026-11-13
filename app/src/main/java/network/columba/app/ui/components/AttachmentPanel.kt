@@ -1,27 +1,20 @@
 package network.columba.app.ui.components
 
-import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -31,30 +24,28 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import network.columba.app.R
 
+/**
+ * Attachment panel shown in place of the keyboard.
+ *
+ * Photo selection goes through the system Photo Picker (launched by
+ * [onPhotosClick]), so the app never needs READ_MEDIA_IMAGES or any other
+ * broad-storage permission — see Play's Photo and Video Permissions policy.
+ * The remaining tiles open the document pickers (SAF) or the recorder.
+ */
 @Composable
 fun AttachmentPanel(
     panelHeight: Dp,
-    recentPhotos: List<Uri>,
-    hasMediaPermission: Boolean,
-    onRequestMediaPermission: () -> Unit,
-    onPhotoSelected: (Uri) -> Unit,
+    onPhotosClick: () -> Unit,
     onGalleryClick: () -> Unit,
     onFileClick: () -> Unit,
     onVoiceClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-
     Surface(
         modifier =
             modifier
@@ -63,84 +54,32 @@ fun AttachmentPanel(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column {
-            // Photo grid or permission prompt
-            Box(
+            // Photo picker entry point: a full-width tap target so the panel
+            // stays a keyboard-height surface without an in-app photo grid.
+            Column(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .clickable(onClick = onPhotosClick)
+                        .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
             ) {
-                if (!hasMediaPermission) {
-                    // Permission prompt
-                    Column(
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PhotoLibrary,
-                            contentDescription = null,
-                            modifier =
-                                Modifier
-                                    .size(48.dp)
-                                    .padding(bottom = 8.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = stringResource(R.string.attach_panel_allow_access_photos),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Button(
-                            onClick = onRequestMediaPermission,
-                            modifier = Modifier.padding(top = 12.dp),
-                        ) {
-                            Text(stringResource(R.string.attach_panel_allow_access))
-                        }
-                    }
-                } else if (recentPhotos.isEmpty()) {
-                    // No photos found
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.attach_panel_no_photos),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                } else {
-                    // Photo grid
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        items(recentPhotos, key = { it.toString() }) { uri ->
-                            AsyncImage(
-                                model =
-                                    ImageRequest
-                                        .Builder(context)
-                                        .data(uri)
-                                        .crossfade(true)
-                                        .size(256)
-                                        .build(),
-                                contentDescription = stringResource(R.string.attach_panel_photo_description),
-                                modifier =
-                                    Modifier
-                                        .aspectRatio(1f)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .clickable { onPhotoSelected(uri) },
-                                contentScale = ContentScale.Crop,
-                            )
-                        }
-                    }
-                }
+                Icon(
+                    imageVector = Icons.Default.PhotoLibrary,
+                    contentDescription = null,
+                    modifier =
+                        Modifier
+                            .size(48.dp)
+                            .padding(bottom = 8.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = stringResource(R.string.attach_panel_choose_photos),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             HorizontalDivider()

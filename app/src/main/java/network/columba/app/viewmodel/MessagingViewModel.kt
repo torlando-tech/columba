@@ -835,23 +835,6 @@ class MessagingViewModel
         private val _qualitySelectionState = MutableStateFlow<QualitySelectionState?>(null)
         val qualitySelectionState: StateFlow<QualitySelectionState?> = _qualitySelectionState.asStateFlow()
 
-        // Recent photos for attachment panel
-        private val _recentPhotos = MutableStateFlow<List<Uri>>(emptyList())
-        val recentPhotos: StateFlow<List<Uri>> = _recentPhotos.asStateFlow()
-
-        private var loadPhotosJob: Job? = null
-
-        fun loadRecentPhotos(context: Context) {
-            loadPhotosJob?.cancel()
-            loadPhotosJob =
-                viewModelScope.launch(Dispatchers.IO) {
-                    val photos =
-                        network.columba.app.util.MediaStoreUtils
-                            .getRecentPhotos(context.applicationContext)
-                    _recentPhotos.value = photos
-                }
-        }
-
         // Multi-image share state: URIs pending compression+send after quality selection.
         // These are plain vars (not StateFlows) because they are always written before
         // _qualitySelectionState triggers recomposition, so no reactive subscription is needed.

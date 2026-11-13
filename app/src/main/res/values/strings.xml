@@ -2891,10 +2891,10 @@
     <string name="onboarding_perms_title">Stay Connected</string>
     <string name="onboarding_perms_subtitle">Columba can notify you when:</string>
     <string name="onboarding_perms_feat_messages">New messages arrive</string>
-    <string name="onboarding_perms_feat_contact">Someone adds you as a contact</string>
-    <string name="onboarding_perms_feat_delivery">Delivery confirmations are received</string>
+    <string name="onboarding_perms_feat_call">A voice call comes in</string>
+    <string name="onboarding_perms_feat_announce">A nearby peer announces (when enabled in Settings)</string>
     <string name="onboarding_perms_notif_title">Notifications</string>
-    <string name="onboarding_perms_notif_desc">Get alerts for new messages</string>
+    <string name="onboarding_perms_notif_desc">Get alerts for messages and calls</string>
     <string name="onboarding_perms_battery_title">Unrestricted Battery</string>
     <string name="onboarding_perms_battery_desc">Receive messages even when phone is idle</string>
     <string name="onboarding_perms_battery_secondary">Prevents Android from pausing Columba</string>

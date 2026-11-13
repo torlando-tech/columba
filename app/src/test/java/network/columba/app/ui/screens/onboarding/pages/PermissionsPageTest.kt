@@ -104,7 +104,7 @@ class PermissionsPageTest {
     }
 
     @Test
-    fun permissionsPage_displaysSomeoneAddsContactFeature() {
+    fun permissionsPage_displaysIncomingCallFeature() {
         // When
         composeTestRule.setContent {
             PermissionsPage(
@@ -120,11 +120,11 @@ class PermissionsPageTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText("Someone adds you as a contact").assertIsDisplayed()
+        composeTestRule.onNodeWithText("A voice call comes in").assertIsDisplayed()
     }
 
     @Test
-    fun permissionsPage_displaysDeliveryConfirmationsFeature() {
+    fun permissionsPage_displaysAnnounceFeature() {
         // When
         composeTestRule.setContent {
             PermissionsPage(
@@ -140,7 +140,7 @@ class PermissionsPageTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText("Delivery confirmations are received").assertIsDisplayed()
+        composeTestRule.onNodeWithText("A nearby peer announces (when enabled in Settings)").assertIsDisplayed()
     }
 
     // ========== Notification Card Tests ==========
@@ -182,7 +182,7 @@ class PermissionsPageTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText("Get alerts for new messages").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Get alerts for messages and calls").assertIsDisplayed()
     }
 
     @Test
@@ -653,10 +653,10 @@ class PermissionsPageTest {
         composeTestRule.onNodeWithText("Stay Connected").assertIsDisplayed()
         composeTestRule.onNodeWithText("Columba can notify you when:").assertIsDisplayed()
         composeTestRule.onNodeWithText("New messages arrive").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Someone adds you as a contact").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Delivery confirmations are received").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("A voice call comes in").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("A nearby peer announces (when enabled in Settings)").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Notifications").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Get alerts for new messages").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Get alerts for messages and calls").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Unrestricted Battery").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Receive messages even when phone is idle").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Prevents Android from pausing Columba").performScrollTo().assertIsDisplayed()

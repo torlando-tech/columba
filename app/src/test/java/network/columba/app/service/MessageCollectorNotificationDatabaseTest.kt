@@ -10,6 +10,8 @@ import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -277,6 +279,38 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
                 while (messageDao.getMessageById("post-fails", identity.identityHash)?.notificationHandled != false) delay(20)
             }
             awaitPending(identity.identityHash, "post-fails")
+            assertNull(activeMessageNotification(peerHash))
+        }
+
+    @Test
+    fun `cancelling the collector mid-post releases the claim`() =
+        runBlocking {
+            val identity = insertTestIdentity()
+            seedInboundBeforeStart(identity, "cancelled-post", "Never shown")
+            val postStarted = CompletableDeferred<Unit>()
+            val blocking = mockk<NotificationHelper>()
+            coEvery {
+                blocking.notifyMessageReceived(any(), any(), any(), any(), any())
+            } coAnswers {
+                postStarted.complete(Unit)
+                awaitCancellation()
+            }
+
+            startCollector(helper = blocking)
+            withTimeout(5_000) { postStarted.await() }
+            // Claim-before-post: the row is already marked handled while the post suspends.
+            withTimeout(5_000) {
+                while (messageDao.getMessageById("cancelled-post", identity.identityHash)?.notificationHandled != true) delay(20)
+            }
+
+            // Apply & Restart cancels the collector here; nothing was shown, so the claim
+            // must be released or neither poster would ever retry this message.
+            collector?.stopCollecting()
+
+            withTimeout(5_000) {
+                while (messageDao.getMessageById("cancelled-post", identity.identityHash)?.notificationHandled != false) delay(20)
+            }
+            awaitPending(identity.identityHash, "cancelled-post")
             assertNull(activeMessageNotification(peerHash))
         }
 

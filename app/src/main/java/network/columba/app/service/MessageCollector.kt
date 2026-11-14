@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import network.columba.app.data.db.dao.MessageDao
 import network.columba.app.data.db.dao.PendingNotificationMessage
 import network.columba.app.data.db.dao.PeerIconDao
@@ -521,6 +523,12 @@ class MessageCollector
                 notificationRetryAfter.remove(pending.id)
                 NotificationAttempt.POSTED
             } catch (e: CancellationException) {
+                // Apply & Restart cancels this job mid-post. The claim must not outlive
+                // the cancellation: nothing was shown, so release it before rethrowing.
+                withContext(NonCancellable) {
+                    runCatching { messageDao.unackNotificationHandled(pending.id, identityHash) }
+                        .onFailure { Log.w(TAG, "Could not un-claim ${pending.id.take(16)}", it) }
+                }
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to process pending notification ${pending.id.take(16)}", e)

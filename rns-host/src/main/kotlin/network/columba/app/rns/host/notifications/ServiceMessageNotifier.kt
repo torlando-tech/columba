@@ -15,6 +15,7 @@ import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CancellationException
 import network.columba.app.rns.api.notify.MessageNotificationBridge
 import network.columba.app.rns.host.R
 import network.columba.app.rns.host.persistence.NotificationMirror
@@ -94,8 +95,15 @@ class ServiceMessageNotifier(
                     return
                 }
 
-        if (gatesAllow(inserted, mirror)) {
+        if (!gatesAllow(inserted, mirror)) return
+        try {
             claimAndPost(inserted, mirror)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // A notification is advisory: a failing claim/DB read must not propagate into
+            // the service's message loop, which would stop message delivery entirely.
+            Log.w(TAG, "Notification attempt failed for ${inserted.messageId.take(16)}", e)
         }
     }
 

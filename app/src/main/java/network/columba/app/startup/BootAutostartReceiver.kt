@@ -17,10 +17,12 @@ import network.columba.app.rns.host.ReticulumService
  * updated) so messages keep arriving without the user opening Columba — the
  * behaviour requested in issue #617.
  *
- * Runs in the main app process; [BootAutostartPolicy] does the deciding, this
- * is only the adapter that sends [ReticulumService.ACTION_START]. The service
- * foregrounds itself immediately in `onCreate` and self-initializes from the
- * config snapshot, so no UI is involved.
+ * Runs in the `:reticulum` process (declared in the manifest), not the app process:
+ * creating `ColumbaApplication` would start the service through its unconditional
+ * `BoundRnsCore` bind and make a reboot ignore the "Start on boot" toggle. Here
+ * [BootAutostartPolicy] does the deciding and this class only sends
+ * [ReticulumService.ACTION_START]; the service foregrounds itself in `onCreate`
+ * and self-initializes from the config snapshot, so no UI is involved.
  *
  * Not `directBootAware`: the config snapshot and credential-encrypted settings
  * live in credential-protected storage, and the identity key (Keystore) is

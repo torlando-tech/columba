@@ -2729,6 +2729,9 @@ class SettingsRepository
                     }
                 }
             }
+            // The import writes DataStore directly, so the service-side mirror would keep
+            // the pre-import gates (an imported NONE would still reveal previews).
+            mirrorNotificationSettings()
         }
 
         /**

@@ -3,6 +3,7 @@ package network.columba.app.rns.host.notifications
 import android.app.Application
 import android.app.Notification
 import android.app.NotificationManager
+import android.database.sqlite.SQLiteException
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import io.mockk.coEvery
@@ -221,6 +222,18 @@ class ServiceMessageNotifierTest {
             mirror()
             coEvery { persistence.claimNotification(any(), any()) } returns false
 
+            notifier.notifyReceivedMessage(inserted)
+
+            assertTrue(posted.isEmpty())
+        }
+
+    @Test
+    fun `a database failure while claiming does not escape into the message loop`() =
+        runBlocking {
+            mirror()
+            coEvery { persistence.claimNotification(any(), any()) } throws SQLiteException("database is locked")
+
+            // Advisory only: the service's receive loop must survive a failed claim.
             notifier.notifyReceivedMessage(inserted)
 
             assertTrue(posted.isEmpty())

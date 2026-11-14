@@ -266,6 +266,26 @@ class SettingsRepositoryCrossProcessTest {
         }
 
     @Test
+    fun `importAllPreferences refreshes the notification mirror`() =
+        runTest {
+            // Importing NONE into an install whose mirror still allows previews must not
+            // leave the service showing text the user chose to hide.
+            repository.importAllPreferences(
+                listOf(
+                    network.columba.app.migration.PreferenceEntry(
+                        key = "notification_privacy_level",
+                        type = "string",
+                        value = NotificationPrivacyLevel.NONE.name,
+                    ),
+                ),
+            )
+
+            val mirror = requireNotNull(ServiceSettingsAccessor(context).getNotificationMirror())
+            assertFalse("NONE hides the text", mirror.revealPreview)
+            assertFalse("NONE hides the sender", mirror.revealSender)
+        }
+
+    @Test
     fun `notification setters mirror the gates and privacy level`() =
         runTest {
             repository.saveNotificationsEnabled(false)

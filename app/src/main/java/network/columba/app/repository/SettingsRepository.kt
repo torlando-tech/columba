@@ -35,6 +35,7 @@ import network.columba.app.data.repository.CustomThemeRepository
 import network.columba.app.nomadnet.NomadNetSavedSite
 import network.columba.app.nomadnet.NomadNetSavedSites
 import network.columba.app.rns.api.model.BatteryProfile
+import network.columba.app.rns.api.notify.MessageNotificationBridge
 import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import network.columba.app.ui.theme.AppTheme
 import network.columba.app.ui.theme.CustomTheme
@@ -145,6 +146,10 @@ class SettingsRepository
             // Transport node preferences
             val TRANSPORT_NODE_ENABLED = booleanPreferencesKey("transport_node_enabled")
             val BATTERY_PROFILE = stringPreferencesKey("battery_profile")
+
+            // Start the Reticulum service after a reboot (mirrored to columba_prefs
+            // for BootAutostartPolicy, which runs before this DataStore is usable).
+            val AUTO_START_ON_BOOT = booleanPreferencesKey("auto_start_on_boot")
 
             // RNS shared-instance HOSTING (Python backend only — kotlin backend
             // has no SharedInstanceServer). When enabled, the rendered RNS
@@ -308,6 +313,7 @@ class SettingsRepository
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.NOTIFICATIONS_ENABLED] = enabled
             }
+            mirrorNotificationSettings()
         }
 
         /**
@@ -329,6 +335,7 @@ class SettingsRepository
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.NOTIFICATION_RECEIVED_MESSAGE] = enabled
             }
+            mirrorNotificationSettings()
         }
 
         /**
@@ -350,6 +357,7 @@ class SettingsRepository
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.NOTIFICATION_RECEIVED_MESSAGE_FAVORITE] = enabled
             }
+            mirrorNotificationSettings()
         }
 
         /**
@@ -484,6 +492,52 @@ class SettingsRepository
                 // An explicit choice supersedes the corruption-recovery fallback.
                 preferences.remove(SETTINGS_CORRUPTION_RECOVERED)
             }
+            mirrorNotificationSettings()
+        }
+
+        /**
+         * Mirror the message-notification gates into the SharedPreferences file
+         * `:reticulum` reads (see [MessageNotificationBridge]).
+         *
+         * Must run once at app start, not only on change: the service-side
+         * defaults are permissive, so an install whose level was already `NONE`
+         * would otherwise leak previews on the lock screen until the user
+         * touched the setting again.
+         */
+        suspend fun syncNotificationMirror() {
+            mirrorNotificationSettings()
+        }
+
+        /**
+         * Write the five mirrored notification keys from one consistent DataStore
+         * snapshot, so a mid-write toggle change cannot leave the service reading
+         * a mixed old/new set.
+         */
+        @Suppress("DEPRECATION") // MODE_MULTI_PROCESS: :reticulum reads this file
+        private suspend fun mirrorNotificationSettings() {
+            val preferences = context.dataStore.data.first()
+            val level =
+                NotificationPrivacyLevel.resolve(
+                    storedName = preferences[PreferencesKeys.NOTIFICATION_PRIVACY_LEVEL],
+                    corruptionRecovered = preferences[SETTINGS_CORRUPTION_RECOVERED] == true,
+                )
+            context
+                .getSharedPreferences(MessageNotificationBridge.CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+                .edit()
+                .putBoolean(
+                    MessageNotificationBridge.KEY_NOTIFICATIONS_ENABLED,
+                    preferences[PreferencesKeys.NOTIFICATIONS_ENABLED] ?: true,
+                ).putBoolean(
+                    MessageNotificationBridge.KEY_RECEIVED_MESSAGE,
+                    preferences[PreferencesKeys.NOTIFICATION_RECEIVED_MESSAGE] ?: true,
+                ).putBoolean(
+                    MessageNotificationBridge.KEY_RECEIVED_MESSAGE_FAVORITE,
+                    preferences[PreferencesKeys.NOTIFICATION_RECEIVED_MESSAGE_FAVORITE] ?: true,
+                ).putBoolean(MessageNotificationBridge.KEY_REVEAL_PREVIEW, level.revealsPreview())
+                .putBoolean(MessageNotificationBridge.KEY_REVEAL_SENDER, level.revealsSender())
+                // Marks the mirror authoritative; :reticulum refuses to notify without it.
+                .putBoolean(MessageNotificationBridge.KEY_MIRROR_WRITTEN, true)
+                .apply()
         }
 
         /**
@@ -2580,6 +2634,20 @@ class SettingsRepository
             const val KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY = "allow_calls_from_contacts_only"
             const val KEY_ALLOW_VOICE_CALLS = "allow_voice_calls"
 
+            /**
+             * Plain SharedPreferences file (not DataStore) shared by `:app` and
+             * `:reticulum`. Holds flags that must be readable before DataStore or
+             * the Hilt graph is available — notably by `BootAutostartReceiver`,
+             * which runs before any UI exists.
+             */
+            const val PREFS_NAME_LOCAL = "columba_prefs"
+
+            /** Set while the user has shut the service down; boot autostart must respect it. */
+            const val KEY_IS_USER_SHUTDOWN = "is_user_shutdown"
+
+            /** Mirrored copy of `PreferencesKeys.AUTO_START_ON_BOOT` for the boot receiver. */
+            const val KEY_AUTO_START_ON_BOOT = "auto_start_on_boot"
+
             /** Default telemetry send interval: 5 minutes */
             const val DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS = 300
 
@@ -2661,6 +2729,9 @@ class SettingsRepository
                     }
                 }
             }
+            // The import writes DataStore directly, so the service-side mirror would keep
+            // the pre-import gates (an imported NONE would still reveal previews).
+            mirrorNotificationSettings()
         }
 
         /**
@@ -2777,8 +2848,40 @@ class SettingsRepository
                 .apply()
         }
 
-        // Threads feature flag
+        // Boot autostart
 
+        /**
+         * Flow of the "start the mesh service after a reboot" toggle.
+         * Defaults to true if not set: an already-configured install keeps
+         * receiving messages without the user re-launching Columba.
+         */
+        val autoStartOnBootFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTO_START_ON_BOOT] ?: true
+                }.distinctUntilChanged()
+
+        /**
+         * Save the boot-autostart toggle.
+         *
+         * Also mirrored into [PREFS_NAME_LOCAL] because `BootAutostartReceiver`
+         * runs before DataStore and the Hilt graph are available.
+         *
+         * @param enabled Whether the Reticulum service should start after a reboot
+         */
+        @Suppress("DEPRECATION") // MODE_MULTI_PROCESS shared with :reticulum
+        suspend fun saveAutoStartOnBoot(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.AUTO_START_ON_BOOT] = enabled
+            }
+            context
+                .getSharedPreferences(PREFS_NAME_LOCAL, Context.MODE_MULTI_PROCESS)
+                .edit()
+                .putBoolean(KEY_AUTO_START_ON_BOOT, enabled)
+                .apply()
+        }
+
+        // Threads feature flag
         /**
          * Flow of the `threads_enabled` feature flag. Default false: threads
          * ship behind this flag through one beta cycle (threads-spec

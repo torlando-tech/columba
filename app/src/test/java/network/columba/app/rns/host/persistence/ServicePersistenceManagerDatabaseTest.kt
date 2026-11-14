@@ -26,6 +26,7 @@ import network.columba.app.test.DatabaseTest
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
+import network.columba.app.rns.host.notifications.ServiceMessageNotifier
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.Dispatchers
@@ -1005,7 +1006,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                         signatureStatus = SignatureStatus.VERIFIED,
                     )
 
-                assertTrue(persistenceManager.persistReceivedMessage(received))
+                assertInserted(persistenceManager.persistReceivedMessage(received))
                 assertArrayEquals(testPublicKey, peerIdentityDao.getPeerIdentity(identityHash)?.publicKey)
                 assertNull("restorable identities must not use destination-hash aliases", peerIdentityDao.getPeerIdentity(sender.toHex()))
 
@@ -1030,7 +1031,9 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                 assertEquals(identityHash, restored.first)
                 assertArrayEquals(testPublicKey, restored.second)
                 assertArrayEquals(testPublicKey, repository.getAllPeerIdentities().single().second)
-                assertTrue(persistenceManager.persistReceivedMessage(received))
+                // Redelivery of the same message id must not re-save the row: REPLACE would
+                // reset notificationHandled and re-arm a second notification.
+                assertDuplicate(persistenceManager.persistReceivedMessage(received))
                 assertEquals(1, peerIdentityDao.getAllPeerIdentities().size)
             } finally {
                 database.close()
@@ -1060,7 +1063,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                     received.copy(messageHash = "malformed-key", publicKey = byteArrayOf(1, 2, 3)),
                 )
             for (message in rejectedKeys) {
-                assertTrue("key validation must not change message admission", persistenceManager.persistReceivedMessage(message))
+                assertInserted(persistenceManager.persistReceivedMessage(message))
                 assertNotNull(messageDao.getMessageById(message.messageHash, TEST_IDENTITY_HASH))
                 assertTrue("untrusted key must not enter the global restoration/export table", peerIdentityDao.getAllPeerIdentities().isEmpty())
             }
@@ -1069,7 +1072,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             // signature verified. Preserve enrichment for pending, invalid and legacy messages.
             val statuses = listOf(null, SignatureStatus.VERIFIED, SignatureStatus.SOURCE_UNKNOWN, SignatureStatus.INVALID, SignatureStatus.UNVERIFIED)
             for (status in statuses) {
-                assertTrue(persistenceManager.persistReceivedMessage(received.copy(messageHash = "matching-key-$status", signatureStatus = status)))
+                assertInserted(persistenceManager.persistReceivedMessage(received.copy(messageHash = "matching-key-$status", signatureStatus = status)))
                 assertArrayEquals(testPublicKey, peerIdentityDao.getPeerIdentity(HashUtils.computeIdentityHash(testPublicKey))?.publicKey)
             }
         }
@@ -1100,7 +1103,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                     isBlackholeEnabled = false,
                 ),
             )
-            assertFalse(persistenceManager.persistReceivedMessage(received))
+            assertDropped(persistenceManager.persistReceivedMessage(received))
             assertTrue(peerIdentityDao.getAllPeerIdentities().isEmpty())
             assertNull(messageDao.getMessageById(received.messageHash, TEST_IDENTITY_HASH))
 
@@ -1112,13 +1115,13 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                     publicKey = otherKey,
                 )
             every { settingsAccessor.getBlockUnknownSenders() } returns true
-            assertFalse(persistenceManager.persistReceivedMessage(unknown))
+            assertDropped(persistenceManager.persistReceivedMessage(unknown))
             assertTrue(peerIdentityDao.getAllPeerIdentities().isEmpty())
             assertNull(messageDao.getMessageById(unknown.messageHash, TEST_IDENTITY_HASH))
 
             every { settingsAccessor.getBlockUnknownSenders() } returns false
             val unaddressed = unknown.copy(messageHash = "unaddressed-peer-key", destinationHash = ByteArray(16))
-            assertFalse(persistenceManager.persistReceivedMessage(unaddressed))
+            assertDropped(persistenceManager.persistReceivedMessage(unaddressed))
             assertTrue(peerIdentityDao.getAllPeerIdentities().isEmpty())
             assertNull(messageDao.getMessageById(unaddressed.messageHash, TEST_IDENTITY_HASH))
         }
@@ -1143,7 +1146,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             val source = ByteArray(16) { (it + 60).toByte() }
             val sourceHex = source.toHex()
 
-            assertTrue(
+            assertInserted(
                 persistenceManager.persistReceivedMessage(
                     network.columba.app.rns.api.model.ReceivedMessage(
                         messageHash = "service-icon-message",
@@ -1176,7 +1179,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             assertEquals("00FF00", icon.foregroundColor)
             assertEquals("000000", icon.backgroundColor)
 
-            assertTrue(
+            assertInserted(
                 persistenceManager.persistReceivedMessage(
                     network.columba.app.rns.api.model.ReceivedMessage(
                         messageHash = "service-empty-icon",
@@ -1218,7 +1221,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                     destinationHash = destination,
                     timestamp = 1_000L,
                 )
-            assertTrue(persistenceManager.persistReceivedMessage(root))
+            assertInserted(persistenceManager.persistReceivedMessage(root))
             val threaded =
                 root.copy(
                     messageHash = "threaded-service-message",
@@ -1227,7 +1230,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                     signatureStatus = SignatureStatus.SOURCE_UNKNOWN,
                     signatureEvidence = evidence,
                 )
-            assertTrue(persistenceManager.persistReceivedMessage(threaded))
+            assertInserted(persistenceManager.persistReceivedMessage(threaded))
             val stored = requireNotNull(messageDao.getMessageById(threaded.messageHash, TEST_IDENTITY_HASH))
             assertArrayEquals(threadId, stored.threadId)
             assertEquals(rootId, stored.replyToMessageId)
@@ -1242,7 +1245,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
 
             messageDao.resolvePendingSignature(threaded.messageHash, TEST_IDENTITY_HASH, SignatureStatus.VERIFIED)
             messageDao.ackNotificationHandled(threaded.messageHash, TEST_IDENTITY_HASH)
-            assertTrue(
+            assertDuplicate(
                 persistenceManager.persistReceivedMessage(
                     threaded.copy(content = "Stale replay", timestamp = 9_000L),
                 ),
@@ -1499,7 +1502,13 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             every { core.observeLinks() } returns emptyFlow()
             every { telemetry.locationTelemetryFlow } returns telemetryEvents
             every { transportAdmin.reactionReceivedFlow } returns reactions
-            val collector = PeerActivityCollector(backend, persistenceManager) { 2_000L }
+            // No messages flow in this test, so the notifier is never invoked.
+            val collector =
+                PeerActivityCollector(
+                    backend = backend,
+                    persistence = persistenceManager,
+                    notifier = mockk<ServiceMessageNotifier>(),
+                ) { 2_000L }
             val collectorJob = collector.start(this)
             runCurrent()
 
@@ -1793,4 +1802,56 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                 ),
             )
         }
+
+    @Test
+    fun `replayed message is Duplicate and claims survive a conditional ack`() =
+        testScope.runTest {
+            val destination = ByteArray(16) { (it + 40).toByte() }
+            localIdentityDao.insert(createTestIdentity().copy(destinationHash = destination.toHex()))
+            val source = ByteArray(16) { (it + 60).toByte() }
+            val received =
+                ReceivedMessage(
+                    messageHash = "duplicate-claim",
+                    content = "Only once",
+                    sourceHash = source,
+                    destinationHash = destination,
+                    timestamp = 1_000L,
+                )
+
+            val inserted = assertInserted(persistenceManager.persistReceivedMessage(received))
+            assertEquals(TEST_IDENTITY_HASH, inserted.identityHash)
+            assertEquals("duplicate-claim", inserted.messageId)
+            assertEquals(source.toHex(), inserted.peerHash)
+            assertEquals("Only once", inserted.preview)
+            assertFalse(inserted.isSavedPeer)
+
+            // Same message id again: never a second notification.
+            assertDuplicate(
+                persistenceManager.persistReceivedMessage(received.copy(content = "Replayed")),
+            )
+
+            // Claim is a compare-and-set: the first caller wins, everyone else learns it lost.
+            assertTrue(persistenceManager.claimNotification("duplicate-claim", TEST_IDENTITY_HASH))
+            assertFalse(persistenceManager.claimNotification("duplicate-claim", TEST_IDENTITY_HASH))
+            assertTrue(messageDao.getMessageById("duplicate-claim", TEST_IDENTITY_HASH)?.notificationHandled == true)
+
+            // Releasing a failed post re-arms exactly that row for a retry.
+            persistenceManager.releaseNotification("duplicate-claim", TEST_IDENTITY_HASH)
+            assertFalse(messageDao.getMessageById("duplicate-claim", TEST_IDENTITY_HASH)?.notificationHandled == true)
+            assertTrue(persistenceManager.claimNotification("duplicate-claim", TEST_IDENTITY_HASH))
+        }
+
+    /** Persist outcome assertions: [ReceivedMessagePersist] replaced the old Boolean. */
+    private fun assertInserted(result: ReceivedMessagePersist): ReceivedMessagePersist.Inserted {
+        assertTrue("expected Inserted, was $result", result is ReceivedMessagePersist.Inserted)
+        return result as ReceivedMessagePersist.Inserted
+    }
+
+    private fun assertDropped(result: ReceivedMessagePersist) {
+        assertEquals(ReceivedMessagePersist.Dropped, result)
+    }
+
+    private fun assertDuplicate(result: ReceivedMessagePersist) {
+        assertEquals(ReceivedMessagePersist.Duplicate, result)
+    }
 }

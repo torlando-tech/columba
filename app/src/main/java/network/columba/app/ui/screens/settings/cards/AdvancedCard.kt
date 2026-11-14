@@ -86,6 +86,9 @@ fun AdvancedCard(
     onCrashReportingToggle: (Boolean) -> Unit = {},
     threadsEnabled: Boolean = false,
     onThreadsToggle: (Boolean) -> Unit = {},
+    /** Start the Reticulum service after a reboot (issue #617). */
+    autoStartOnBoot: Boolean = true,
+    onAutoStartOnBootChange: (Boolean) -> Unit = {},
 ) {
     val canHostShareInstance = LocalCapabilities.current.performance.shareInstanceHosting
     val canFilterAnnounces = LocalCapabilities.current.performance.announceIngressFilter
@@ -368,6 +371,42 @@ fun AdvancedCard(
         }
         Text(
             text = stringResource(R.string.settings_threads_description),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        // Start the mesh service after a reboot (issue #617). Without it the node
+        // only comes back when the user launches the app, so messages sent in
+        // between are missed.
+        Spacer(Modifier.height(16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.RestartAlt,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(R.string.settings_advanced_autostart_title),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+            Switch(
+                checked = autoStartOnBoot,
+                onCheckedChange = onAutoStartOnBootChange,
+                modifier = Modifier.testTag("auto_start_on_boot_toggle"),
+            )
+        }
+        Text(
+            text = stringResource(R.string.settings_advanced_autostart_description),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

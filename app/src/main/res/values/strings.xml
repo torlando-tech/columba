@@ -3228,6 +3228,8 @@
     <string name="thread_unread_indicator">Unread messages in thread</string>
     <string name="settings_threads_title">Threads</string>
     <string name="settings_threads_description">Group conversations with a contact into topic threads: a thread switcher in the message header, expanding cards in the chat list, and a searchable thread sheet. Experimental \u2014 off by default.</string>
+    <string name="settings_advanced_autostart_title">Start on boot</string>
+    <string name="settings_advanced_autostart_description">Start the mesh service automatically after the phone reboots, so messages keep arriving without opening Columba. Turn this off if you prefer to start the node yourself; it also stays off after you use Stop.</string>
     <string name="thread_open_thread">Open thread</string>
 
     <!-- Threads UX delta: header pill, searchable sheet, archive/selection, titles -->

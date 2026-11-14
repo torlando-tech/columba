@@ -115,7 +115,9 @@ For newly received unknown-key messages, Columba retains the original signed mes
 
 Learning a key alone never marks a message verified. Older messages without retained signed evidence cannot be rechecked automatically. Open message details to see the recorded verification result.
 
-Messages received while only the service is running retain sender keys and icons for restoration after restart. Message notifications catch up when the app starts, and temporary database read failures are retried automatically.
+Messages received while only the service is running retain sender keys and icons for restoration after restart. The background Reticulum service posts the message notification itself whenever the app process is closed, frozen, or not running yet, so notifications also arrive right after a phone reboot. A message the service could not post (notification permission denied, or the app has not run this build yet) is shown when the app next starts, and temporary database read failures are retried automatically.
+
+The service starts automatically after a reboot once Columba has been set up at least once. Switch it off in **Settings → Advanced → Start on boot**. Using **Stop** always keeps the node stopped, including across reboots, until you start it again.
 
 ---
 

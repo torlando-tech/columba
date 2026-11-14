@@ -285,8 +285,8 @@ class DebugViewModel
             if (status is network.columba.app.rns.api.model.NetworkStatus.SHUTDOWN) return true
             // Also check SharedPreferences flag — onServiceDisconnected may not have fired yet
             return context
-                .getSharedPreferences("columba_prefs", android.content.Context.MODE_PRIVATE)
-                .getBoolean("is_user_shutdown", false)
+                .getSharedPreferences(SettingsRepository.PREFS_NAME_LOCAL, android.content.Context.MODE_PRIVATE)
+                .getBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, false)
         }
 
         private fun fetchDebugInfo() {
@@ -556,9 +556,9 @@ class DebugViewModel
 
                     // Set shutdown flag so restart mechanisms (onDestroy, START_STICKY) stay stopped
                     context
-                        .getSharedPreferences("columba_prefs", android.content.Context.MODE_PRIVATE)
+                        .getSharedPreferences(SettingsRepository.PREFS_NAME_LOCAL, android.content.Context.MODE_PRIVATE)
                         .edit()
-                        .putBoolean("is_user_shutdown", true)
+                        .putBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, true)
                         .commit()
 
                     // Clear UI immediately so status card shows clean shutdown state

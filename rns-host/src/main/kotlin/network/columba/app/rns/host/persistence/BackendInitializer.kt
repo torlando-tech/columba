@@ -13,13 +13,13 @@ import network.columba.app.rns.api.model.ReticulumConfig
 /**
  * Self-initialization driver for the `:reticulum` foreground service.
  *
- * When Android `START_STICKY`-restarts the FGS after an OOM kill (or a force-
- * stop), the UI process may not be alive to call `rnsCore.initialize(config)`.
- * This initializer reads the [ReticulumConfigSnapshot] written by the last
- * successful UI-driven initialize, decrypts the identity key via Keystore +
- * Room (the same `IdentityKeyProvider`/`IdentityRepository` pipeline the UI
- * uses, both reachable from `:data`), and invokes `rnsBackend.core.initialize`
- * locally.
+ * When Android `START_STICKY`-restarts the FGS after an OOM kill (or the boot
+ * receiver starts it after a reboot), the UI process may not be alive to call
+ * `rnsCore.initialize(config)`. This initializer reads the
+ * [ReticulumConfigSnapshot] written by the last successful UI-driven
+ * initialize, decrypts the identity key via Keystore + Room (the same
+ * `IdentityKeyProvider`/`IdentityRepository` pipeline the UI uses, both
+ * reachable from `:data`), and invokes `rnsBackend.core.initialize` locally.
  *
  * Idempotent: if the UI happens to be alive and races us to initialize,
  * [PythonRnsRuntime.start] / `NativeRnsBackendImpl.initialize` already
@@ -40,25 +40,62 @@ class BackendInitializer @Inject constructor(
         const val TAG = "BackendInitializer"
     }
 
+    /** Result of one [initializeFromSnapshot] attempt. */
+    enum class InitOutcome {
+        /** `initialize()` ran, either starting a fresh stack or short-circuiting on a running one. */
+        INITIALIZED,
+
+        /** Never-configured install: nothing on disk to initialize from. */
+        NO_SNAPSHOT,
+
+        /**
+         * The snapshot names an identity whose key cannot be decrypted here
+         * (password-protected and locked, or Keystore/DB failure). Initializing
+         * anyway would make the native stack mint a *fresh* identity and orphan
+         * the real one — the UI must drive initialize() after unlock instead.
+         */
+        KEY_UNAVAILABLE,
+
+        /** `initialize()` ran but reported failure, or it crashed. */
+        FAILED,
+    }
+
     /**
      * Attempt to initialize [backend] from the on-disk snapshot.
      *
-     * @return `true` if a snapshot was found and `initialize()` was called
-     *   (regardless of whether the call started a fresh stack or short-
-     *   circuited on already-running); `false` if no snapshot was available
-     *   or the snapshot/key restore failed.
+     * @return [InitOutcome.INITIALIZED] if `initialize()` was called (regardless
+     *   of whether it started a fresh stack or short-circuited on
+     *   already-running), [InitOutcome.NO_SNAPSHOT] on a never-configured
+     *   install, [InitOutcome.KEY_UNAVAILABLE] when the snapshot's identity
+     *   key cannot be decrypted/used here (see [InitOutcome.KEY_UNAVAILABLE]),
+     *   [InitOutcome.FAILED] when `initialize()` failed.
      */
-    suspend fun initializeFromSnapshot(backend: RnsBackend): Boolean {
-        val snapshot = ReticulumConfigSnapshot.read(context)
-        if (snapshot == null) {
-            Log.i(TAG, "No config snapshot — waiting for UI to drive initialize()")
-            return false
-        }
+    suspend fun initializeFromSnapshot(backend: RnsBackend): InitOutcome {
+        val snapshot =
+            ReticulumConfigSnapshot.read(context)
+                ?: run {
+                    Log.i(TAG, "No config snapshot — waiting for UI to drive initialize()")
+                    return InitOutcome.NO_SNAPSHOT
+                }
 
-        val deliveryKey = resolveDeliveryKey(snapshot.identityHashHex)
-        val resolvedConfig = snapshot.configWithoutKey.copy(
-            deliveryIdentityKey = deliveryKey,
-        )
+        val deliveryKey =
+            when (val resolution = resolveDeliveryKey(snapshot.identityHashHex)) {
+                is KeyResolution.Unavailable -> {
+                    Log.w(
+                        TAG,
+                        "Skipping snapshot self-init — identity key unavailable " +
+                            "(locked identity or Keystore failure). UI will drive initialize() " +
+                            "after unlock; initializing now would create a divergent identity.",
+                    )
+                    return InitOutcome.KEY_UNAVAILABLE
+                }
+                is KeyResolution.Available -> resolution.key
+            }
+
+        val resolvedConfig =
+            snapshot.configWithoutKey.copy(
+                deliveryIdentityKey = deliveryKey,
+            )
 
         Log.i(
             TAG,
@@ -72,40 +109,56 @@ class BackendInitializer @Inject constructor(
             backend.core.initialize(resolvedConfig).fold(
                 onSuccess = {
                     Log.i(TAG, "Self-init completed — backend ready")
-                    true
+                    InitOutcome.INITIALIZED
                 },
                 onFailure = { error ->
                     Log.w(TAG, "Self-init failed: ${error.message}", error)
-                    false
+                    InitOutcome.FAILED
                 },
             )
         }.getOrElse { error ->
             Log.w(TAG, "Self-init crashed: ${error.message}", error)
-            false
+            InitOutcome.FAILED
         }
     }
 
+    /** Outcome of the delivery-key lookup that precedes [initializeFromSnapshot]'s `initialize()`. */
+    private sealed interface KeyResolution {
+        /** A key, or `null` when there is no identity yet (native stack creates a default). */
+        data class Available(val key: ByteArray?) : KeyResolution
+
+        /** The identity exists but its key cannot be decrypted in this process/state. */
+        data object Unavailable : KeyResolution
+    }
+
     /**
-     * Decrypt the active identity's delivery key, or return null if there is
-     * no active identity yet (first launch — the native stack will create a
-     * default) or the decrypt fails (Keystore wipe, etc. — same fallback the
-     * UI path takes).
+     * Resolve the delivery key for [identityHashHex], falling back to the
+     * active identity when the snapshot predates identity tracking.
+     *
+     * Password-protected identities and decrypt failures both resolve to
+     * [KeyResolution.Unavailable] rather than a null key: the UI path
+     * (`ColumbaApplication`, which bails out on `requiresPassword`) is the only
+     * thing allowed to decide the identity is unusable, and it does so with the
+     * user present. Fail-safe on a DB/Keystore error too — treating an
+     * unreadable password status as "no password" is exactly the silent
+     * divergent-identity boot this guard exists to prevent.
      */
-    private suspend fun resolveDeliveryKey(identityHashHex: String?): ByteArray? {
-        val hashHex = identityHashHex
-            ?: identityRepository.getActiveIdentitySync()?.identityHash
-            ?: run {
-                Log.i(TAG, "No active identity — :reticulum will create a default")
-                return null
-            }
+    private suspend fun resolveDeliveryKey(identityHashHex: String?): KeyResolution {
+        val hashHex =
+            identityHashHex
+                ?: identityRepository.getActiveIdentitySync()?.identityHash
+                ?: run {
+                    Log.i(TAG, "No active identity — :reticulum will create a default")
+                    return KeyResolution.Available(null)
+                }
         return identityKeyProvider.getDecryptedKeyData(hashHex).fold(
             onSuccess = { bytes ->
-                Log.d(TAG, "Decrypted delivery key for $hashHex (${bytes.size} bytes)")
-                bytes
+                Log.d(TAG, "Decrypted delivery key for ${hashHex.take(8)}… (${bytes.size} bytes)")
+                KeyResolution.Available(bytes)
             },
             onFailure = { error ->
-                Log.w(TAG, "Failed to decrypt delivery key for $hashHex: $error")
-                null
+                Log.w(TAG, "Failed to decrypt delivery key for ${hashHex.take(8)}…: ${error::class.simpleName}")
+                KeyResolution.Unavailable
             },
         )
     }

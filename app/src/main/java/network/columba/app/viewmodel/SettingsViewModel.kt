@@ -179,6 +179,9 @@ data class SettingsState(
     // Transport node + battery profile state
     val transportNodeEnabled: Boolean = true,
     val batteryProfile: BatteryProfile = BatteryProfile.BALANCED,
+
+    /** Start the Reticulum service after a reboot (issue #617). Default on. */
+    val autoStartOnBoot: Boolean = true,
     // Anonymous crash reporting opt-in (sentry flavor only). Defaults to off.
     val crashReportingEnabled: Boolean = false,
     // RNS shared-instance HOSTING (python backend only; capability-gated in UI).
@@ -429,6 +432,8 @@ class SettingsViewModel
             loadMapSourceSettings()
             // Load notifications enabled setting
             loadNotificationsSettings()
+            // Load start-on-boot preference (boot receiver reads the mirrored copy)
+            loadAutoStartOnBoot()
             // Load user-configured bottom navigation tabs
             loadBottomNavTabs()
             // Load privacy settings
@@ -699,6 +704,9 @@ class SettingsViewModel
                             // Transport node + battery profile state
                             transportNodeEnabled = transportNodeEnabled,
                             batteryProfile = batteryProfile,
+                            // Collected separately (loadAutoStartOnBoot); preserve it
+                            // instead of letting the default clobber the user's choice.
+                            autoStartOnBoot = _state.value.autoStartOnBoot,
                             crashReportingEnabled = crashReportingEnabled,
                             // Share-instance hosting: persisted preference reflected
                             // immediately. `applied` anchors to the persisted value
@@ -1257,9 +1265,9 @@ class SettingsViewModel
                     // Set shutdown flag so restart mechanisms (onDestroy, START_STICKY) stay stopped
                     // Use commit() to ensure flag is on disk before service process reads it
                     context
-                        .getSharedPreferences("columba_prefs", android.content.Context.MODE_PRIVATE)
+                        .getSharedPreferences(SettingsRepository.PREFS_NAME_LOCAL, android.content.Context.MODE_PRIVATE)
                         .edit()
-                        .putBoolean("is_user_shutdown", true)
+                        .putBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, true)
                         .commit()
 
                     // Unbind FIRST to prevent auto-rebind if the service process crashes.
@@ -1973,6 +1981,18 @@ class SettingsViewModel
         }
 
         /**
+         * Load the start-on-boot preference. Subscribes so the switch reflects
+         * externally-written values (import, debug actions) as well as its own taps.
+         */
+        private fun loadAutoStartOnBoot() {
+            viewModelScope.launch {
+                settingsRepository.autoStartOnBootFlow.collect { enabled ->
+                    _state.update { it.copy(autoStartOnBoot = enabled) }
+                }
+            }
+        }
+
+        /**
          * Load the user-configured bottom navigation tabs. Subscribes to the
          * persisted value so the bar updates live when the settings card changes.
          * Values pass through [NavTab.sanitize] so a corrupt or stale layout can
@@ -2345,6 +2365,24 @@ class SettingsViewModel
         }
 
         // Location sharing methods
+        /**
+         * Persist the start-on-boot preference.
+         *
+         * Takes effect on the next boot only (there is nothing to start or stop
+         * now); the switch therefore reflects the persisted value immediately
+         * instead of showing a "pending" state.
+         */
+        fun setAutoStartOnBoot(enabled: Boolean) {
+            viewModelScope.launch {
+                try {
+                    settingsRepository.saveAutoStartOnBoot(enabled)
+                    _state.update { it.copy(autoStartOnBoot = enabled) }
+                    Log.d(TAG, "Start on boot set to $enabled")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to persist start-on-boot preference", e)
+                }
+            }
+        }
 
         /**
          * Load location sharing settings from the repository.

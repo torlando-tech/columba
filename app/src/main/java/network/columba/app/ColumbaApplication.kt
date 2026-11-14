@@ -81,6 +81,14 @@ class ColumbaApplication : Application() {
     @Inject
     lateinit var incomingCallPresenter: network.columba.app.service.IncomingCallPresenter
 
+    // Foreground heartbeat shared with :reticulum, which uses it to decide whether
+    // this process (alive) or the service (frozen/killed/never started) owns a
+    // received-message notification. Lazily constructed like serviceSettingsAccessor:
+    // a Context is all it needs, and there is exactly one call site.
+    private val uiPresencePublisher by lazy {
+        network.columba.app.notifications.UiPresencePublisher(this)
+    }
+
     @Inject
     lateinit var conversationRepository: ConversationRepository
 
@@ -189,6 +197,19 @@ class ColumbaApplication : Application() {
         // bound callState flow is safe to observe before the service is ready - it
         // just stays Idle until the service connection syncs state.
         incomingCallPresenter.start()
+
+        // Tell :reticulum whether this process is foregrounded (it decides who owns
+        // received-message notifications), and mirror the notification gates it needs.
+        // The mirror must be written on every start, not only on change: the service's
+        // defaults are permissive, so a previously chosen "hide everything" level would
+        // otherwise leak previews on the lock screen until the user touched the setting.
+        uiPresencePublisher.start()
+        applicationScope.launch {
+            runCatching { settingsRepository.syncNotificationMirror() }
+                .onFailure {
+                    android.util.Log.w("ColumbaApplication", "Notification mirror sync failed: ${it.message}")
+                }
+        }
 
         // Preload theme preference into DataStore's in-memory cache
         // This eliminates theme flash on app startup by ensuring the theme is cached

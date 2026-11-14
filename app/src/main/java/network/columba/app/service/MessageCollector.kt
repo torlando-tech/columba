@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import network.columba.app.data.db.dao.MessageDao
+import network.columba.app.data.db.dao.PendingNotificationMessage
 import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.entity.ContactStatus
 import network.columba.app.data.db.entity.PeerIconEntity
@@ -74,6 +75,26 @@ class MessageCollector
             private const val NOTIFICATION_BATCH_SIZE = 32
             private const val NOTIFICATION_RETRY_BASE_MS = 1_000L
             private const val NOTIFICATION_RETRY_MAX_MS = 30_000L
+
+            // A row whose post just failed is retried after this delay, not immediately.
+            // Releasing the claim re-arms the pending counter, whose invalidation would
+            // otherwise re-run the pass in a hot loop while the post keeps failing.
+            private const val NOTIFICATION_RETRY_BACKOFF_MS = 60_000L
+
+            /** Outcome of one [attemptPendingNotification] call. */
+            private enum class NotificationAttempt {
+                /** Posted, or claimed silently because the row was already read. */
+                POSTED,
+
+                /** The row was already claimed: another poster owns its notification. */
+                LOST_CLAIM,
+
+                /** The post threw; the row keeps a retry window and stays pending. */
+                FAILED,
+
+                /** Inside the retry window; still pending, nothing attempted this pass. */
+                BACKING_OFF,
+            }
         }
 
         // Application-scoped coroutine for background message collection
@@ -87,6 +108,10 @@ class MessageCollector
 
         // Map of peer hashes to names (populated from announces)
         private val peerNames = ConcurrentHashMap<String, String>()
+
+        // Message id -> earliest wall-clock time its notification may be retried after a
+        // failed post (see NOTIFICATION_RETRY_BACKOFF_MS).
+        private val notificationRetryAfter = ConcurrentHashMap<String, Long>()
 
         init {
             MemoryDiagnostics.registerCounter(MemoryDiagnosticCounter.PEER_NAMES) { peerNames.size }
@@ -427,36 +452,82 @@ class MessageCollector
         }
 
         /**
-         * Process pending rows in bounded batches. A normal return from
-         * [NotificationHelper.notifyMessageReceived] means handled (posted or intentionally
-         * suppressed); a throw stops this pass without acknowledging so the row is retried
-         * on a later invalidation or collector restart.
+         * Process pending rows in bounded batches.
+         *
+         * Each row is *claimed* before anything is posted: `ackNotificationHandled` is a
+         * conditional UPDATE, so exactly one of this reconciler and the service-process
+         * notifier (`ServiceMessageNotifier`, which covers a frozen or dead app) wins a
+         * row. Losing the claim means someone else already owns it — post nothing, or the
+         * user gets duplicate notifications when the app is backgrounded with both
+         * processes alive.
+         *
+         * A read row is claimed silently: the user has already seen it, so no notification,
+         * but it must still leave the pending set. If the post throws, the claim is undone
+         * so the row is retried on a later invalidation or collector restart.
          */
         private suspend fun reconcilePendingNotifications(identityHash: String) {
-            while (identityRepository.getActiveIdentitySync()?.identityHash == identityHash) {
+            var keepGoing = true
+            while (keepGoing && identityRepository.getActiveIdentitySync()?.identityHash == identityHash) {
                 val batch = messageDao.getPendingNotificationMessages(identityHash, NOTIFICATION_BATCH_SIZE)
                 if (batch.isEmpty()) return
+                var progressed = false
                 for (pending in batch) {
                     if (identityRepository.getActiveIdentitySync()?.identityHash != identityHash) return
-                    try {
-                        if (!pending.isRead) {
-                            val peerName = getPeerNameWithFallback(pending.conversationHash)
-                            notificationHelper.notifyMessageReceived(
-                                destinationHash = pending.conversationHash,
-                                peerName = peerName,
-                                messagePreview = pending.preview,
-                                isFavorite = isSavedPeer(pending.conversationHash),
-                                threadIdHex = pending.threadId?.toHex(),
-                            )
-                        }
-                        messageDao.ackNotificationHandled(pending.id, identityHash)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to process pending notification ${pending.id.take(16)}", e)
-                        return
+                    when (attemptPendingNotification(pending, identityHash)) {
+                        // Claimed by someone else, or posted: either way the row left the
+                        // pending set, so this pass made progress.
+                        NotificationAttempt.POSTED, NotificationAttempt.LOST_CLAIM -> progressed = true
+                        // Retry window not elapsed yet: the row stays pending, nothing to do.
+                        NotificationAttempt.BACKING_OFF -> Unit
+                        // Stop the pass; the remaining rows are retried after the backoff.
+                        NotificationAttempt.FAILED -> return
                     }
                 }
+                // Only loop again while rows keep leaving the pending set; otherwise the
+                // batch is all backing off and a re-read would spin on the same rows.
+                keepGoing = progressed
+            }
+        }
+
+        /**
+         * Claim and post one pending row.
+         *
+         * The claim is the cross-process compare-and-set on `notificationHandled`: [LOST_CLAIM]
+         * means the `:reticulum` notifier (or an earlier pass) owns this row, so nothing may
+         * be posted here. A read row is claimed silently — the user has seen it — and a
+         * failed post undoes its own claim so a later pass retries it.
+         */
+        private suspend fun attemptPendingNotification(
+            pending: PendingNotificationMessage,
+            identityHash: String,
+        ): NotificationAttempt {
+            val retryAt = notificationRetryAfter[pending.id]
+            if (retryAt != null && System.currentTimeMillis() < retryAt) return NotificationAttempt.BACKING_OFF
+            notificationRetryAfter.remove(pending.id)
+
+            if (messageDao.ackNotificationHandled(pending.id, identityHash) == 0) return NotificationAttempt.LOST_CLAIM
+
+            return try {
+                if (!pending.isRead) {
+                    val peerName = getPeerNameWithFallback(pending.conversationHash)
+                    notificationHelper.notifyMessageReceived(
+                        destinationHash = pending.conversationHash,
+                        peerName = peerName,
+                        messagePreview = pending.preview,
+                        isFavorite = isSavedPeer(pending.conversationHash),
+                        threadIdHex = pending.threadId?.toHex(),
+                    )
+                }
+                notificationRetryAfter.remove(pending.id)
+                NotificationAttempt.POSTED
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to process pending notification ${pending.id.take(16)}", e)
+                notificationRetryAfter[pending.id] = System.currentTimeMillis() + NOTIFICATION_RETRY_BACKOFF_MS
+                runCatching { messageDao.unackNotificationHandled(pending.id, identityHash) }
+                    .onFailure { Log.w(TAG, "Could not un-claim ${pending.id.take(16)}", it) }
+                NotificationAttempt.FAILED
             }
         }
 

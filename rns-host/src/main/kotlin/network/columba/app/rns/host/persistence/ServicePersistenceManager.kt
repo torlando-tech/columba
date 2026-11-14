@@ -39,6 +39,7 @@ import network.columba.app.data.repository.Message as DataMessage
  * and this manager persists them immediately rather than relying on IPC to
  * the app process (which may be dead).
  */
+@Suppress("TooManyFunctions") // One persistence facade: peer activity, messages, claims, announces.
 class ServicePersistenceManager(
     private val context: Context,
     private val scope: CoroutineScope,
@@ -271,8 +272,19 @@ class ServicePersistenceManager(
      * The service-local message consumer persists complete messages even with
      * no IPC observers. Use the same attachment extraction and atomic dedupe
      * as the UI fallback, scoped to the recipient on the original wire.
+     *
+     * @return [ReceivedMessagePersist.Inserted] when this call stored the message — the
+     *   only outcome that may notify, [ReceivedMessagePersist.Duplicate] when the row was
+     *   already stored (replay, or the app process stored it first) — the stored row is
+     *   left untouched, because re-saving it would REPLACE it and re-arm
+     *   `notificationHandled`, and
+     *   [ReceivedMessagePersist.Dropped] when it was filtered out or the write failed.
+     *
+     *   Inserted-vs-Duplicate is advisory under a cross-process race (both processes can
+     *   miss each other's insert); the notification claim is what guarantees exactly one
+     *   notification, so a wrong Duplicate only delays the post to the app's reconciler.
      */
-    suspend fun persistReceivedMessage(message: ReceivedMessage): Boolean =
+    suspend fun persistReceivedMessage(message: ReceivedMessage): ReceivedMessagePersist =
         try {
             val sender = message.sourceHash.toHex()
             val recipient = localIdentityDao.getIdentityByDestinationHash(message.destinationHash.toHex())
@@ -282,17 +294,19 @@ class ServicePersistenceManager(
                     !shouldBlockUnknownSender(sender, recipient.identityHash)
             // Prepare disk-backed fields before the outer transaction as well:
             // repository.saveMessage's transaction nests inside this one.
+            val alreadyStored =
+                recipient != null && messageDao.messageExists(message.messageHash, recipient.identityHash)
             val preparedFields =
-                if (recipient != null && mayPersist && !messageDao.messageExists(message.messageHash, recipient.identityHash)) {
+                if (recipient != null && mayPersist && !alreadyStored) {
                     conversationRepository.extractLargeAttachments(message.messageHash, message.fieldsJson)
                 } else {
                     message.fieldsJson
                 }
             val preparedMessage = message.toStoredMessage(sender, preparedFields)
             database.withTransaction {
-                val identity = recipient ?: return@withTransaction false
+                val identity = recipient ?: return@withTransaction ReceivedMessagePersist.Dropped
                 if (!mayPersist || isBlockedPeer(sender, identity.identityHash) || shouldBlockUnknownSender(sender, identity.identityHash)) {
-                    return@withTransaction false
+                    return@withTransaction ReceivedMessagePersist.Dropped
                 }
                 val existing = conversationDao.getConversation(sender, identity.identityHash)
                 val peerName =
@@ -302,6 +316,12 @@ class ServicePersistenceManager(
                         contactNicknameLookup = { contactDao.getContact(sender, identity.identityHash)?.customNickname },
                         announcePeerNameLookup = { announceDao.getAnnounce(sender)?.peerName },
                     )
+                if (messageDao.messageExists(message.messageHash, identity.identityHash)) {
+                    // A second delivery of the same message id: the original already owns
+                    // (or will own) the notification. Never re-save — REPLACE would
+                    // overwrite the stored content/status and reset notificationHandled.
+                    return@withTransaction ReceivedMessagePersist.Duplicate
+                }
                 conversationRepository.saveMessage(
                     peerHash = sender,
                     peerName = peerName,
@@ -327,14 +347,50 @@ class ServicePersistenceManager(
                 // appearance must survive from the service process itself. Invalid or
                 // missing appearance leaves any existing icon untouched.
                 persistReceivedIcon(sender, message.iconAppearance)
-                true
+                ReceivedMessagePersist.Inserted(
+                    identityHash = identity.identityHash,
+                    messageId = message.messageHash,
+                    peerHash = sender,
+                    peerName = peerName,
+                    preview = preparedMessage.content,
+                    threadIdHex = preparedMessage.threadId?.toHex(),
+                    // Same rule as MessageCollector.isSavedPeer: a contact, or a
+                    // favourited announce (the legacy "Save Peer" star).
+                    isSavedPeer =
+                        announceDao.getAnnounce(sender)?.isFavorite == true ||
+                            contactDao.contactExists(sender, identity.identityHash),
+                )
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Could not persist received message ${message.messageHash}", e)
-            false
+            ReceivedMessagePersist.Dropped
         }
+
+    /**
+     * Claim the notification for a stored message.
+     *
+     * A conditional UPDATE on `messages.notificationHandled`: true means this caller owns
+     * the notification for [messageId]; false means the app process (or an earlier pass)
+     * already claimed it, so nothing may be posted.
+     */
+    suspend fun claimNotification(
+        messageId: String,
+        identityHash: String,
+    ): Boolean = messageDao.ackNotificationHandled(messageId, identityHash) == 1
+
+    /**
+     * Release a claim whose post failed, so the message is retried by the app's reconciler
+     * or the next service pass instead of being silently dropped.
+     */
+    suspend fun releaseNotification(
+        messageId: String,
+        identityHash: String,
+    ) {
+        runCatching { messageDao.unackNotificationHandled(messageId, identityHash) }
+            .onFailure { Log.w(TAG, "Could not release notification claim for ${messageId.take(16)}", it) }
+    }
 
     private suspend fun persistReceivedIcon(
         sender: String,

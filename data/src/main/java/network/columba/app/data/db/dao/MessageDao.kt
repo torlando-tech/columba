@@ -303,6 +303,23 @@ interface MessageDao {
         identityHash: String,
     ): Int
 
+    /**
+     * Undo a claim whose notification was never delivered (the poster threw). Scoped to a
+     * received row that is currently claimed, so it can revive its own row and nothing else
+     * — an unfiltered reset would re-arm a message the user already dismissed.
+     */
+    @Query(
+        """
+        UPDATE messages SET notificationHandled = 0
+        WHERE id = :messageId AND identityHash = :identityHash
+          AND notificationHandled = 1 AND isFromMe = 0
+        """,
+    )
+    suspend fun unackNotificationHandled(
+        messageId: String,
+        identityHash: String,
+    ): Int
+
     /** A terminal result cannot overwrite another resolution or another identity's row. */
     @Query(
         """

@@ -31,6 +31,16 @@
     <string name="notif_detail_rnode_battery">" (RNode battery %1$d%%)"</string>
     <string name="notif_error_foreground_not_allowed">Foreground service not allowed - battery optimization may kill the service</string>
 
+    <!--
+        Received-message notifications posted by :reticulum (ServiceMessageNotifier) while
+        the app process is frozen, killed, or not started yet. Text mirrors the app's
+        notif_channel_messages / notif_generic_message so a notification looks the same
+        whichever process posted it.
+    -->
+    <string name="notif_channel_messages">Messages</string>
+    <string name="notif_channel_messages_desc">Notifications for received messages</string>
+    <string name="notif_generic_message">New message</string>
+
     <!-- Shared flasher progress text -->
     <string name="flash_parsing_package">Parsing firmware package...</string>
     <string name="flash_connecting_device">Connecting to device...</string>

@@ -1,6 +1,7 @@
 package network.columba.app.rns.host.persistence
 
 import android.content.Context
+import network.columba.app.rns.api.notify.MessageNotificationBridge
 
 /**
  * Service-side accessor for settings that need cross-process communication.
@@ -119,4 +120,61 @@ class ServiceSettingsAccessor(
      * caller can fall back to its own default.
      */
     fun getLastNetworkStatus(): String? = getCrossProcessPrefs().getString(KEY_LAST_NETWORK_STATUS, null)
+
+    /**
+     * Whether the app process is currently in the foreground, as judged by its
+     * [MessageNotificationBridge.KEY_UI_FOREGROUND_AT] heartbeat.
+     *
+     * A frozen/cached app stops ticking, so a stale heartbeat is the only signal
+     * that stays truthful after the OS freezes the process — `ProcessLifecycleOwner`
+     * state is not readable from here and is not even accurate once frozen.
+     *
+     * @param now injected for tests; defaults to wall clock.
+     */
+    fun isUiForeground(
+        now: Long = System.currentTimeMillis(),
+    ): Boolean {
+        val lastTick = getCrossProcessPrefs().getLong(MessageNotificationBridge.KEY_UI_FOREGROUND_AT, 0L)
+        if (lastTick <= 0L) return false
+        // Clock jumps backwards (or a stale value from before a reboot) fail closed.
+        if (lastTick > now) return false
+        return now - lastTick <= MessageNotificationBridge.UI_FOREGROUND_STALE_AFTER_MS
+    }
+
+    /**
+     * Read the mirrored message-notification gates written by the app process.
+     *
+     * @return null when the app has never mirrored them ([MessageNotificationBridge.KEY_MIRROR_WRITTEN]
+     *   absent). Callers must then stay silent rather than substitute defaults: the
+     *   upgrade case (booted again before the app ran this build) would otherwise leak
+     *   previews on the lock screen for a user whose level is `NONE`.
+     */
+    fun getNotificationMirror(): NotificationMirror? {
+        val prefs = getCrossProcessPrefs()
+        if (!prefs.contains(MessageNotificationBridge.KEY_MIRROR_WRITTEN)) return null
+        return NotificationMirror(
+            enabled = prefs.getBoolean(MessageNotificationBridge.KEY_NOTIFICATIONS_ENABLED, true),
+            receivedMessage = prefs.getBoolean(MessageNotificationBridge.KEY_RECEIVED_MESSAGE, true),
+            favoriteAllowed = prefs.getBoolean(MessageNotificationBridge.KEY_RECEIVED_MESSAGE_FAVORITE, true),
+            revealPreview = prefs.getBoolean(MessageNotificationBridge.KEY_REVEAL_PREVIEW, true),
+            revealSender = prefs.getBoolean(MessageNotificationBridge.KEY_REVEAL_SENDER, true),
+        )
+    }
 }
+
+/**
+ * The notification gates `:reticulum` needs, mirrored from the app's DataStore.
+ *
+ * @param enabled master notifications toggle
+ * @param receivedMessage "notify for received messages"
+ * @param favoriteAllowed "notify for saved peers" (consulted only for saved peers)
+ * @param revealPreview may the notification show message text
+ * @param revealSender may the notification show the sender
+ */
+data class NotificationMirror(
+    val enabled: Boolean,
+    val receivedMessage: Boolean,
+    val favoriteAllowed: Boolean,
+    val revealPreview: Boolean,
+    val revealSender: Boolean,
+)

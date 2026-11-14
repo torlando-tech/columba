@@ -65,6 +65,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
 
+    <!-- Start the Reticulum service after a reboot (issue #617) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!--
         reticulum-kt's rns-android AAR (pulled in by LXST-kt for voice calls)
         declares its own reticulum foreground service - network.reticulum.android.
@@ -253,6 +256,22 @@
         <receiver
             android:name=".notifications.CallActionReceiver"
             android:exported="false" />
+
+        <!--
+            Boot autostart (issue #617): bring :reticulum back up after a reboot so
+            messages keep arriving without the user launching Columba. Not
+            directBootAware — the config snapshot and identity key (Keystore) live in
+            credential-protected storage, unavailable before the first unlock.
+        -->
+        <receiver
+            android:name=".startup.BootAutostartReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

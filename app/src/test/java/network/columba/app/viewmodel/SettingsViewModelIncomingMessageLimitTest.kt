@@ -172,6 +172,8 @@ class SettingsViewModelIncomingMessageLimitTest {
 
         // Setup repository flow mocks
         every { settingsRepository.incomingMessageSizeLimitKbFlow } returns incomingMessageSizeLimitKbFlow
+        every { settingsRepository.autoStartOnBootFlow } returns MutableStateFlow(true)
+        coEvery { settingsRepository.saveAutoStartOnBoot(any()) } just Runs
         every { settingsRepository.preferOwnInstanceFlow } returns preferOwnInstanceFlow
         every { settingsRepository.isSharedInstanceFlow } returns isSharedInstanceFlow
         every { settingsRepository.shareInstanceHostingEnabledFlow } returns kotlinx.coroutines.flow.MutableStateFlow(false)

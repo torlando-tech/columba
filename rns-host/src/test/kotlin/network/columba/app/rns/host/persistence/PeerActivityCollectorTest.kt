@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import network.columba.app.data.db.entity.PeerActivityType
+import network.columba.app.rns.host.notifications.ServiceMessageNotifier
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
@@ -26,25 +27,28 @@ import network.columba.app.rns.api.model.NodeType
 import network.columba.app.rns.api.model.ReceivedMessage
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
+import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PeerActivityCollectorTest {
-    @Test
-    fun `collector records inbound events and rejects unverified states`() = runTest {
-        val backend = mockk<RnsBackend>()
-        val core = mockk<RnsCore>()
-        val lxmf = mockk<RnsLxmf>()
-        val telemetryApi = mockk<RnsTelemetry>()
-        val transportAdmin = mockk<RnsTransportAdmin>()
-        val persistence = mockk<ServicePersistenceManager>()
-        val messages = MutableSharedFlow<ReceivedMessage>(extraBufferCapacity = 4)
-        val announces = MutableSharedFlow<AnnounceEvent>(extraBufferCapacity = 4)
-        val statuses = MutableSharedFlow<DeliveryStatusUpdate>(extraBufferCapacity = 8)
-        val telemetry = MutableSharedFlow<LocationTelemetry>(extraBufferCapacity = 4)
-        val links = MutableSharedFlow<LinkEvent>(extraBufferCapacity = 4)
-        val reactions = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    private val backend = mockk<RnsBackend>()
+    private val core = mockk<RnsCore>()
+    private val lxmf = mockk<RnsLxmf>()
+    private val telemetryApi = mockk<RnsTelemetry>()
+    private val transportAdmin = mockk<RnsTransportAdmin>()
+    private val persistence = mockk<ServicePersistenceManager>()
+    private val notifier = mockk<ServiceMessageNotifier>()
+    private val messages = MutableSharedFlow<ReceivedMessage>(extraBufferCapacity = 4)
+    private val announces = MutableSharedFlow<AnnounceEvent>(extraBufferCapacity = 4)
+    private val statuses = MutableSharedFlow<DeliveryStatusUpdate>(extraBufferCapacity = 8)
+    private val telemetry = MutableSharedFlow<LocationTelemetry>(extraBufferCapacity = 4)
+    private val links = MutableSharedFlow<LinkEvent>(extraBufferCapacity = 4)
+    private val reactions = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    private lateinit var collector: PeerActivityCollector
 
+    @Before
+    fun setup() {
         every { backend.core } returns core
         every { backend.lxmf } returns lxmf
         every { backend.telemetry } returns telemetryApi
@@ -56,7 +60,20 @@ class PeerActivityCollectorTest {
         every { telemetryApi.locationTelemetryFlow } returns telemetry
         every { transportAdmin.reactionReceivedFlow } returns reactions
         coEvery { persistence.recordPeerActivity(any(), any(), any()) } returns true
-        coEvery { persistence.persistReceivedMessage(any()) } returns true
+        coEvery { notifier.notifyReceivedMessage(any()) } returns Unit
+        coEvery { persistence.persistReceivedMessage(match { it.messageHash == "message" }) } returns
+            ReceivedMessagePersist.Inserted(
+                identityHash = "identity",
+                messageId = "message",
+                peerHash = "peer",
+                peerName = "Peer",
+                preview = "hello",
+                threadIdHex = null,
+                isSavedPeer = false,
+            )
+        // A replay of an already-stored message must never notify again.
+        coEvery { persistence.persistReceivedMessage(match { it.messageHash == "replay" }) } returns
+            ReceivedMessagePersist.Duplicate
         coEvery { persistence.persistIncomingMessageActivity(any(), any(), any(), any()) } returns true
         coEvery { persistence.persistReactionActivity(any(), any(), any()) } returns true
         coEvery { persistence.persistDeliveryProof(any(), any()) } returns true
@@ -68,15 +85,39 @@ class PeerActivityCollectorTest {
             )
         } returns true
 
-        val collector = PeerActivityCollector(backend, persistence) { 500L }
+        collector = PeerActivityCollector(backend, persistence, notifier) { 500L }
+    }
+
+    @Test
+    fun `collector records inbound events and rejects unverified states`() = runTest {
         val firstJob = collector.start(this)
         val secondJob = collector.start(this)
         assertSame(firstJob, secondJob)
         runCurrent()
 
-        val source = ByteArray(16) { it.toByte() }
+        emitInboundEvents()
+        runCurrent()
+
+        verifyMessagePersistence(persistence, sourceHex(), notifier)
+        verifyAnnounceAndDeliveryPersistence(persistence, sourceHex(), announcePublicKey)
+
+        firstJob.cancel()
+        runCurrent()
+        val restartedJob = collector.start(this)
+        assertNotSame(firstJob, restartedJob)
+        restartedJob.cancel()
+        advanceUntilIdle()
+    }
+
+    private val source = ByteArray(16) { it.toByte() }
+    private val announcePublicKey = ByteArray(32) { (it + 1).toByte() }
+
+    private fun sourceHex(): String = source.joinToString("") { "%02x".format(it) }
+
+    /** One of each event type, including the ones the collector must reject. */
+    private suspend fun emitInboundEvents() {
         messages.emit(ReceivedMessage("message", "hello", source, ByteArray(16), Long.MAX_VALUE))
-        val announcePublicKey = ByteArray(32) { (it + 1).toByte() }
+        messages.emit(ReceivedMessage("replay", "hello again", source, ByteArray(16), Long.MAX_VALUE))
         val announceIdentityHash = ByteArray(16) { (it + 32).toByte() }
         announces.emit(lxmfDeliveryAnnounce(source, announceIdentityHash, announcePublicKey))
         announces.emit(lxmfDeliveryAnnounce(source, announceIdentityHash, byteArrayOf()))
@@ -94,16 +135,6 @@ class PeerActivityCollectorTest {
         every { link.destination.hexHash } returns "linked-peer"
         links.emit(LinkEvent.Established(link))
         links.emit(LinkEvent.Closed(link, "closed"))
-        runCurrent()
-
-        verifyInboundPersistence(persistence, source, announcePublicKey)
-
-        firstJob.cancel()
-        runCurrent()
-        val restartedJob = collector.start(this)
-        assertNotSame(firstJob, restartedJob)
-        restartedJob.cancel()
-        advanceUntilIdle()
     }
 
     private fun lxmfDeliveryAnnounce(
@@ -131,15 +162,31 @@ class PeerActivityCollectorTest {
         isPathResponse = false,
     )
 
-    private fun verifyInboundPersistence(
+    private fun verifyMessagePersistence(
         persistence: ServicePersistenceManager,
-        source: ByteArray,
-        announcePublicKey: ByteArray,
+        sourceHex: String,
+        notifier: ServiceMessageNotifier,
     ) {
-        val sourceHex = source.joinToString("") { "%02x".format(it) }
         coVerify(exactly = 1) {
             persistence.persistIncomingMessageActivity("message", sourceHex, null, 500L)
         }
+        coVerify(exactly = 1) {
+            persistence.persistIncomingMessageActivity("replay", sourceHex, null, 500L)
+        }
+        // Only the Inserted outcome notifies; the Duplicate above must not.
+        coVerify(exactly = 1) {
+            notifier.notifyReceivedMessage(match { it.messageId == "message" })
+        }
+        coVerify(exactly = 0) {
+            notifier.notifyReceivedMessage(match { it.messageId == "replay" })
+        }
+    }
+
+    private fun verifyAnnounceAndDeliveryPersistence(
+        persistence: ServicePersistenceManager,
+        sourceHex: String,
+        announcePublicKey: ByteArray,
+    ) {
         coVerify(exactly = 1) {
             persistence.persistAnnounce(
                 destinationHash = sourceHex,

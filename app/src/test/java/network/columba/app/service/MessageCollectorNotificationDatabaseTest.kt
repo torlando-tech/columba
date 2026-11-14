@@ -142,7 +142,10 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
         clearAllMocks()
     }
 
-    private fun startCollector(notificationDao: MessageDao = messageDao) {
+    private fun startCollector(
+        notificationDao: MessageDao = messageDao,
+        helper: NotificationHelper = notificationHelper,
+    ) {
         collector =
             MessageCollector(
                 rnsCore = rnsCore,
@@ -151,7 +154,7 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
                 announceRepository = announceRepository,
                 contactRepository = contactRepository,
                 identityRepository = identityRepository,
-                notificationHelper = notificationHelper,
+                notificationHelper = helper,
                 peerIconDao = database.peerIconDao(),
                 messageDao = notificationDao,
             ).also { it.startCollecting() }
@@ -234,6 +237,48 @@ class MessageCollectorNotificationDatabaseTest : DatabaseTest() {
             localIdentityHash = identity.identityHash,
         )
     }
+
+    @Test
+    fun `row already claimed by the service process is never re-posted`() =
+        runBlocking {
+            val identity = insertTestIdentity()
+            seedInboundBeforeStart(identity, "claimed-by-service", "Claimed elsewhere")
+            seedInboundBeforeStart(identity, "still-pending", "Still posts")
+            // The :reticulum notifier owns this row already (claim-before-post).
+            messageDao.ackNotificationHandled("claimed-by-service", identity.identityHash)
+
+            startCollector()
+
+            awaitNotification(peerHash)
+            // Same per-peer tag: the surviving notification must be the unclaimed message.
+            assertEquals(
+                "Still posts",
+                activeMessageNotification(peerHash)?.notification?.extras?.getString(Notification.EXTRA_TEXT),
+            )
+            assertEquals(
+                true,
+                messageDao.getMessageById("claimed-by-service", identity.identityHash)?.notificationHandled,
+            )
+        }
+
+    @Test
+    fun `failed post releases the claim so the message stays pending`() =
+        runBlocking {
+            val identity = insertTestIdentity()
+            seedInboundBeforeStart(identity, "post-fails", "Never posted")
+            val failing = mockk<NotificationHelper>()
+            coEvery {
+                failing.notifyMessageReceived(any(), any(), any(), any(), any())
+            } throws SecurityException("notification permission revoked")
+
+            startCollector(helper = failing)
+
+            withTimeout(5_000) {
+                while (messageDao.getMessageById("post-fails", identity.identityHash)?.notificationHandled != false) delay(20)
+            }
+            awaitPending(identity.identityHash, "post-fails")
+            assertNull(activeMessageNotification(peerHash))
+        }
 
     @Test
     fun `row persisted before start posts its real notification and records handling`() =

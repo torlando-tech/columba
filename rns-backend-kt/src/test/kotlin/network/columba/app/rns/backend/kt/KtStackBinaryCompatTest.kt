@@ -139,58 +139,68 @@ class KtStackBinaryCompatTest {
             require(input.readInt() == 0xCAFEBABE.toInt()) { "Not a class file" }
             input.readUnsignedShort() // minor version
             input.readUnsignedShort() // major version
-            val poolCount = input.readUnsignedShort()
+            val pool = readConstantPool(input, input.readUnsignedShort())
 
-            val utf8 = HashMap<Int, String>()
-            val classNames = HashMap<Int, Int>() // slot -> Utf8 slot
-            val nameAndTypes = HashMap<Int, Pair<Int, Int>>() // slot -> (name, descriptor) Utf8 slots
-            val methodRefs = ArrayList<Pair<Int, Int>>() // (class slot, nameAndType slot)
-
-            var slot = 1
-            while (slot < poolCount) {
-                when (input.readUnsignedByte()) {
-                    TAG_UTF8 -> {
-                        val buffer = ByteArray(input.readUnsignedShort())
-                        input.readFully(buffer)
-                        utf8[slot] = String(buffer, Charsets.UTF_8)
-                    }
-                    TAG_CLASS -> classNames[slot] = input.readUnsignedShort()
-                    TAG_NAME_AND_TYPE ->
-                        nameAndTypes[slot] = input.readUnsignedShort() to input.readUnsignedShort()
-                    TAG_METHOD_REF, TAG_INTERFACE_METHOD_REF ->
-                        methodRefs += input.readUnsignedShort() to input.readUnsignedShort()
-                    TAG_FIELD_REF, TAG_INVOKE_DYNAMIC ->
-                        input.readUnsignedShort() to input.readUnsignedShort()
-                    TAG_STRING, TAG_METHOD_TYPE -> input.readUnsignedShort()
-                    TAG_METHOD_HANDLE -> {
-                        input.readUnsignedByte() // reference_kind
-                        input.readUnsignedShort() // reference_index
-                    }
-                    TAG_INTEGER, TAG_FLOAT -> input.readInt()
-                    TAG_LONG, TAG_DOUBLE -> {
-                        input.readLong()
-                        slot++ // long/double occupy two pool slots
-                    }
-                    // Dynamic and InvokeDynamic both carry two unsigned shorts.
-                    TAG_DYNAMIC -> {
-                        input.readUnsignedShort()
-                        input.readUnsignedShort()
-                    }
-                    TAG_MODULE, TAG_PACKAGE -> input.readUnsignedShort()
-                    else -> error("Unexpected constant-pool tag at slot $slot")
-                }
-                slot++
-            }
-
-            return methodRefs.mapNotNull { (classSlot, nameAndTypeSlot) ->
-                val ownerNameSlot = classNames[classSlot] ?: return@mapNotNull null
-                val (nameSlot, descriptorSlot) = nameAndTypes[nameAndTypeSlot] ?: return@mapNotNull null
-                val owner = utf8[ownerNameSlot] ?: return@mapNotNull null
-                val name = utf8[nameSlot] ?: return@mapNotNull null
-                val descriptor = utf8[descriptorSlot] ?: return@mapNotNull null
+            return pool.methodRefs.mapNotNull { (classSlot, nameAndTypeSlot) ->
+                val ownerNameSlot = pool.classNames[classSlot] ?: return@mapNotNull null
+                val (nameSlot, descriptorSlot) = pool.nameAndTypes[nameAndTypeSlot] ?: return@mapNotNull null
+                val owner = pool.utf8[ownerNameSlot] ?: return@mapNotNull null
+                val name = pool.utf8[nameSlot] ?: return@mapNotNull null
+                val descriptor = pool.utf8[descriptorSlot] ?: return@mapNotNull null
                 MethodReference(owner, name, descriptor)
             }
         }
+    }
+
+    private class ConstantPool(
+        val utf8: Map<Int, String>,
+        val classNames: Map<Int, Int>,
+        val nameAndTypes: Map<Int, Pair<Int, Int>>,
+        val methodRefs: List<Pair<Int, Int>>,
+    )
+
+    private fun readConstantPool(input: DataInputStream, poolCount: Int): ConstantPool {
+        val utf8 = HashMap<Int, String>()
+        val classNames = HashMap<Int, Int>() // slot -> Utf8 slot
+        val nameAndTypes = HashMap<Int, Pair<Int, Int>>() // slot -> (name, descriptor) Utf8 slots
+        val methodRefs = ArrayList<Pair<Int, Int>>() // (class slot, nameAndType slot)
+
+        var slot = 1
+        while (slot < poolCount) {
+            when (input.readUnsignedByte()) {
+                TAG_UTF8 -> {
+                    val buffer = ByteArray(input.readUnsignedShort())
+                    input.readFully(buffer)
+                    utf8[slot] = String(buffer, Charsets.UTF_8)
+                }
+                TAG_CLASS -> classNames[slot] = input.readUnsignedShort()
+                TAG_NAME_AND_TYPE ->
+                    nameAndTypes[slot] = input.readUnsignedShort() to input.readUnsignedShort()
+                TAG_METHOD_REF, TAG_INTERFACE_METHOD_REF ->
+                    methodRefs += input.readUnsignedShort() to input.readUnsignedShort()
+                TAG_FIELD_REF, TAG_INVOKE_DYNAMIC ->
+                    input.readUnsignedShort() to input.readUnsignedShort()
+                TAG_STRING, TAG_METHOD_TYPE -> input.readUnsignedShort()
+                TAG_METHOD_HANDLE -> {
+                    input.readUnsignedByte() // reference_kind
+                    input.readUnsignedShort() // reference_index
+                }
+                TAG_INTEGER, TAG_FLOAT -> input.readInt()
+                TAG_LONG, TAG_DOUBLE -> {
+                    input.readLong()
+                    slot++ // long/double occupy two pool slots
+                }
+                // Dynamic and InvokeDynamic both carry two unsigned shorts.
+                TAG_DYNAMIC -> {
+                    input.readUnsignedShort()
+                    input.readUnsignedShort()
+                }
+                TAG_MODULE, TAG_PACKAGE -> input.readUnsignedShort()
+                else -> error("Unexpected constant-pool tag at slot $slot")
+            }
+            slot++
+        }
+        return ConstantPool(utf8, classNames, nameAndTypes, methodRefs)
     }
 
     @Test
@@ -249,7 +259,7 @@ class KtStackBinaryCompatTest {
     }
 
     private class ReturnTypeFixture {
-        @Suppress("unused")
+        @Suppress("unused", "FunctionOnlyReturningConstant")
         fun value(): Int = 1
     }
 

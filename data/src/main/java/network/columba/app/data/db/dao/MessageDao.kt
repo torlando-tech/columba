@@ -354,6 +354,17 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE id = :messageId LIMIT 1")
     fun observeMessageById(messageId: String): Flow<MessageEntity?>
 
+    /**
+     * Identity-scoped variant: `id` is only unique inside an identity (the
+     * messages table is keyed by `(id, identityHash)`), so a flow that ignores
+     * the identity can surface a different identity's row.
+     */
+    @Query("SELECT * FROM messages WHERE id = :messageId AND identityHash = :identityHash LIMIT 1")
+    fun observeMessageById(
+        messageId: String,
+        identityHash: String,
+    ): Flow<MessageEntity?>
+
     /** Invalidates when an outgoing row is inserted, including from another process. */
     @Query("SELECT COUNT(*) FROM messages WHERE isFromMe = 1")
     fun observeOutgoingMessageCount(): Flow<Int>

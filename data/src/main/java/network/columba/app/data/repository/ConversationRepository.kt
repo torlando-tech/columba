@@ -594,6 +594,15 @@ class ConversationRepository
          */
         fun observeMessageById(messageId: String): Flow<MessageEntity?> = messageDao.observeMessageById(messageId)
 
+        /**
+         * Identity-scoped observation for callers that already know which row they follow:
+         * `id` is only unique per identity, so the unscoped flow may emit a sibling row.
+         */
+        fun observeMessageById(
+            messageId: String,
+            identityHash: String,
+        ): Flow<MessageEntity?> = messageDao.observeMessageById(messageId, identityHash)
+
         suspend fun updateMessageStatus(
             messageId: String,
             status: String,

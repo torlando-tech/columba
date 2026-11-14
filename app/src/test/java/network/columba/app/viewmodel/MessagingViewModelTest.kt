@@ -1939,7 +1939,7 @@ class MessagingViewModelTest {
             // through the room-invalidated flow a moment later.
             coEvery { conversationRepository.getMessageById(receiptHashHex) } returns
                 failedRow.copy(status = "pending")
-            coEvery { conversationRepository.observeMessageById(receiptHashHex) } returns
+            coEvery { conversationRepository.observeMessageById(receiptHashHex, failedRow.identityHash) } returns
                 kotlinx.coroutines.flow.flow {
                     emit(failedRow.copy(status = "pending"))
                     kotlinx.coroutines.delay(1_000L)
@@ -2028,7 +2028,7 @@ class MessagingViewModelTest {
             // wait must still catch it and re-drive instead of dropping the retry.
             coEvery { conversationRepository.getMessageById(receiptHashHex) } returns
                 failedRow.copy(status = "pending")
-            coEvery { conversationRepository.observeMessageById(receiptHashHex) } returns
+            coEvery { conversationRepository.observeMessageById(receiptHashHex, failedRow.identityHash) } returns
                 kotlinx.coroutines.flow.flow {
                     emit(failedRow.copy(status = "pending"))
                     kotlinx.coroutines.delay(5_000L)

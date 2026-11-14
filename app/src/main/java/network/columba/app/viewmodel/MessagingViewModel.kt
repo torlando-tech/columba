@@ -3827,7 +3827,7 @@ class MessagingViewModel
             val settled =
                 kotlinx.coroutines.withTimeoutOrNull(REDRIVE_FAILED_WAIT_MS) {
                     conversationRepository
-                        .observeMessageById(messageId)
+                        .observeMessageById(messageId, row.identityHash)
                         .first { latest ->
                             latest == null ||
                                 latest.status == "failed" ||

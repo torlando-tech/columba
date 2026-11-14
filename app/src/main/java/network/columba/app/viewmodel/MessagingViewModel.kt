@@ -155,18 +155,10 @@ class MessagingViewModel
             private const val DRAFT_SAVE_DEBOUNCE_MS = 500L
 
             /**
-             * How long a relay-failover re-drive waits for the service to save the
-             * terminal FAILED row before it gives up (see [awaitSavedFailure]).
+             * Watchdog for the event-driven wait in [awaitSavedFailure]: it bounds a
+             * service that never writes, not the race with a slow write.
              */
-            private const val REDRIVE_FAILED_WAIT_MS = 2_000L
-            private const val REDRIVE_FAILED_WAIT_POLL_MS = 25L
-
-            /**
-             * Bounded re-attempts of a relay retry that lost the race with the
-             * service's terminal FAILED write (see [registerPropagationSendRecord]).
-             */
-            private const val REDRIVE_SETTLE_ATTEMPTS = 4
-            private const val REDRIVE_SETTLE_DELAY_MS = 500L
+            private const val REDRIVE_FAILED_WAIT_MS = 30_000L
 
             /**
              * Composer target across process death (D11): a target with no
@@ -3708,34 +3700,19 @@ class MessagingViewModel
                         // [onRekey] just BEFORE the re-key (while the old-hash record is
                         // still present) so we can register the record under the new hash
                         // ahead of the row swap; the stale old-hash entry is dropped after.
-                        var settleAttempts = 0
-                        var newHash: String? = null
-                        while (true) {
-                            val currentHash = rowHash.get()
-                            val rec = record
-                            newHash =
-                                reDriveMessage(
-                                    messageId = currentHash,
-                                    forcedMethod = DeliveryMethod.PROPAGATED,
-                                    onRekey = { nextHash ->
-                                        if (rec != null) {
-                                            inFlightPropagationSends[nextHash] = rec
-                                        }
-                                    },
-                                )
-                            if (newHash != null) break
-                            // The service owns the delivery-status write (#877), so this
-                            // retry can arrive before the FAILED row is saved and still be
-                            // waiting; reDriveMessage already waits briefly, and a slow write
-                            // must not cost the retry its place in the relay queue. Re-check
-                            // and re-attempt, bounded so an unsendable row cannot loop.
-                            val row = conversationRepository.getMessageById(currentHash)
-                            val waitingForFailure = row != null && row.status != "failed"
-                            if (!waitingForFailure || ++settleAttempts >= REDRIVE_SETTLE_ATTEMPTS) break
-                            kotlinx.coroutines.delay(REDRIVE_SETTLE_DELAY_MS)
-                        }
+                        val currentHash = rowHash.get()
+                        val rec = record
+                        val newHash =
+                            reDriveMessage(
+                                messageId = currentHash,
+                                forcedMethod = DeliveryMethod.PROPAGATED,
+                                onRekey = { nextHash ->
+                                    if (rec != null) {
+                                        inFlightPropagationSends[nextHash] = rec
+                                    }
+                                },
+                            )
                         if (newHash != null) {
-                            val currentHash = rowHash.get()
                             rowHash.set(newHash)
                             // Drop the stale old-hash entry — but only when the re-key actually
                             // moved to a new hash (the normal case, a new hash per hop). A
@@ -3836,17 +3813,29 @@ class MessagingViewModel
          *   failed (the row keeps its id and is marked failed again).
          */
         /**
-         * Read the row for a re-drive, waiting (bounded) for the service's terminal
-         * FAILED write when the callback beat it. Returns the latest row read, which
-         * the caller still checks for `failed`: a row that never fails is not re-driven.
+         * Read the row for a re-drive, waiting for the service's terminal write when the
+         * delivery callback beats it. The wait is event-driven off the row (Room
+         * invalidation), so it does not matter how late the service commits; the bound is
+         * only a watchdog against a service that never writes, never a race window.
+         * Returns the latest row read, which the caller still checks for `failed`.
          */
-        private suspend fun awaitSavedFailure(messageId: String): network.columba.app.data.db.entity.MessageEntity? {
-            val deadline = System.currentTimeMillis() + REDRIVE_FAILED_WAIT_MS
-            while (true) {
-                val row = conversationRepository.getMessageById(messageId) ?: return null
-                if (row.status == "failed" || System.currentTimeMillis() >= deadline) return row
-                kotlinx.coroutines.delay(REDRIVE_FAILED_WAIT_POLL_MS)
-            }
+        private suspend fun awaitSavedFailure(
+            messageId: String,
+        ): network.columba.app.data.db.entity.MessageEntity? {
+            val row = conversationRepository.getMessageById(messageId) ?: return null
+            if (row.status == "failed") return row
+            val settled =
+                kotlinx.coroutines.withTimeoutOrNull(REDRIVE_FAILED_WAIT_MS) {
+                    conversationRepository
+                        .observeMessageById(messageId)
+                        .first { latest ->
+                            latest == null ||
+                                latest.status == "failed" ||
+                                latest.status == "delivered" ||
+                                latest.status == "propagated"
+                        }
+                }
+            return settled ?: conversationRepository.getMessageById(messageId)
         }
 
         @Suppress("LongMethod", "ReturnCount")

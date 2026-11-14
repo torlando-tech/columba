@@ -1935,9 +1935,16 @@ class MessagingViewModelTest {
                     isFromMe = true,
                     status = "failed",
                 )
-            // First read still sees the pending row; the service's FAILED write lands next.
-            coEvery { conversationRepository.getMessageById(receiptHashHex) } returnsMany
-                listOf(failedRow.copy(status = "pending"), failedRow)
+            // The first read still sees the pending row; the service's FAILED write lands
+            // through the room-invalidated flow a moment later.
+            coEvery { conversationRepository.getMessageById(receiptHashHex) } returns
+                failedRow.copy(status = "pending")
+            coEvery { conversationRepository.observeMessageById(receiptHashHex) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(failedRow.copy(status = "pending"))
+                    kotlinx.coroutines.delay(1_000L)
+                    emit(failedRow)
+                }
             coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
 
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
@@ -1980,9 +1987,9 @@ class MessagingViewModelTest {
     @Test
     fun `relay failover retry survives a failure saved after the initial wait`() =
         runViewModelTest {
-            // Greptile review (#877) second pass: waiting for the FAILED write must not be a
-            // one-shot - if the service commits it after the wait expires, the retry has to
-            // stay alive rather than vanish from the relay queue.
+            // Greptile review (#877) second pass: the wait must be driven by the row's write,
+            // not a fixed window - a FAILED commit later than the old 2 s budget must still
+            // re-drive rather than vanish from the relay queue.
             coEvery { settingsRepository.getDefaultDeliveryMethod() } returns "propagated"
             coEvery { settingsRepository.getTryPropagationOnFail() } returns false
 
@@ -2017,12 +2024,16 @@ class MessagingViewModelTest {
                     isFromMe = true,
                     status = "failed",
                 )
-            // The service's FAILED write lands only after more reads than the in-call wait
-            // allows, so the retry must re-attempt instead of dropping the message.
-            val reads = java.util.concurrent.atomic.AtomicInteger(0)
-            coEvery { conversationRepository.getMessageById(receiptHashHex) } answers {
-                if (reads.incrementAndGet() <= 200) failedRow.copy(status = "pending") else failedRow
-            }
+            // The FAILED write lands well after the wait's old 2 s window; an event-driven
+            // wait must still catch it and re-drive instead of dropping the retry.
+            coEvery { conversationRepository.getMessageById(receiptHashHex) } returns
+                failedRow.copy(status = "pending")
+            coEvery { conversationRepository.observeMessageById(receiptHashHex) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(failedRow.copy(status = "pending"))
+                    kotlinx.coroutines.delay(5_000L)
+                    emit(failedRow)
+                }
             coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
 
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()

@@ -4,6 +4,7 @@ import network.columba.app.rns.api.model.InterfaceConfig
 import network.reticulum.interfaces.tcp.TCPClientInterface
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
@@ -69,6 +70,33 @@ class TorSocksProxyTest {
     )
 
     /** Minimal SOCKS5 CONNECT recorder: no-auth greeting, then one CONNECT reply. */
+    @Test
+    fun `editing the proxy settings changes the interface signature`() {
+        val base = InterfaceConfig.TCPClient(name = "tor", targetHost = ONION_HOST, targetPort = ONION_PORT)
+        val direct = NativeInterfaceFactory.configSignatureOf(base)
+        val viaOrbot =
+            NativeInterfaceFactory.configSignatureOf(
+                base.copy(socksProxyEnabled = true, socksProxyPort = 9050),
+            )
+        val viaOtherPort =
+            NativeInterfaceFactory.configSignatureOf(
+                base.copy(socksProxyEnabled = true, socksProxyPort = 9051),
+            )
+        val viaOtherHost =
+            NativeInterfaceFactory.configSignatureOf(
+                base.copy(socksProxyEnabled = true, socksProxyHost = "127.0.0.2"),
+            )
+
+        assertEquals(
+            "the same proxy route must keep the running interface",
+            viaOrbot,
+            NativeInterfaceFactory.configSignatureOf(base.copy(socksProxyEnabled = true, socksProxyPort = 9050)),
+        )
+        assertNotEquals("enabling the proxy must restart the client", direct, viaOrbot)
+        assertNotEquals("a different proxy port must restart the client", viaOrbot, viaOtherPort)
+        assertNotEquals("a different proxy host must restart the client", viaOrbot, viaOtherHost)
+    }
+
     private class FakeSocks5Proxy {
         private val server = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
         private val connections = LinkedBlockingQueue<Target>()

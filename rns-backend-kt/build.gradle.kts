@@ -1,3 +1,5 @@
+import java.io.File
+
 // :rns-backend-kt — native Kotlin RnsBackend implementation.
 //
 // Owns the `NativeRnsBackend` root impl + six sub-interface impls
@@ -112,4 +114,18 @@ dependencies {
 
 ksp {
     arg("correctErrorTypes", "true")
+}
+
+// The unit-test worker's `java.class.path` does not reliably list Gradle's test
+// runtime classpath (Gradle loads test deps through separate class loaders), so
+// expose it explicitly for tests that inspect the shipped protocol jars
+// (KtStackBinaryCompatTest). Set in doFirst because input fingerprinting cannot
+// serialize a lazy classpath value. Mirrors :app.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    doFirst {
+        systemProperty(
+            "columba.test.runtimeClasspath",
+            classpath.joinToString(File.pathSeparator),
+        )
+    }
 }

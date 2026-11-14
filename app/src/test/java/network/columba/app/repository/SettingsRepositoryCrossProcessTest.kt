@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
+import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.data.repository.CustomThemeRepository
+import network.columba.app.rns.api.notify.MessageNotificationBridge
 import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import io.mockk.clearAllMocks
 import io.mockk.every
@@ -19,7 +21,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -224,6 +228,78 @@ class SettingsRepositoryCrossProcessTest {
                     -1L,
                 )
             assertEquals(timestamp, savedValue)
+        }
+
+    // ========== Message notification mirror ==========
+
+    @Test
+    fun `syncNotificationMirror writes permissive defaults on a fresh install`() =
+        runTest {
+            repository.syncNotificationMirror()
+
+            assertTrue(crossProcessPrefs.getBoolean(MessageNotificationBridge.KEY_NOTIFICATIONS_ENABLED, false))
+            assertTrue(crossProcessPrefs.getBoolean(MessageNotificationBridge.KEY_RECEIVED_MESSAGE, false))
+            assertTrue(crossProcessPrefs.getBoolean(MessageNotificationBridge.KEY_RECEIVED_MESSAGE_FAVORITE, false))
+            assertTrue(crossProcessPrefs.getBoolean(MessageNotificationBridge.KEY_REVEAL_PREVIEW, false))
+            assertTrue(crossProcessPrefs.getBoolean(MessageNotificationBridge.KEY_REVEAL_SENDER, false))
+            assertTrue(
+                "the mirror must be marked authoritative, or :reticulum refuses to notify",
+                crossProcessPrefs.getBoolean(MessageNotificationBridge.KEY_MIRROR_WRITTEN, false),
+            )
+        }
+
+    @Test
+    fun `syncNotificationMirror reflects a level stored before this feature existed`() =
+        runTest {
+            // The user picked NONE in an earlier build; no setter ran with mirroring in it.
+            repository.saveNotificationPrivacyLevel(NotificationPrivacyLevel.NONE)
+            crossProcessPrefs.edit().clear().apply()
+
+            repository.syncNotificationMirror()
+
+            assertFalse(crossProcessPrefs.getBoolean(MessageNotificationBridge.KEY_REVEAL_PREVIEW, true))
+            assertFalse(crossProcessPrefs.getBoolean(MessageNotificationBridge.KEY_REVEAL_SENDER, true))
+            assertTrue(
+                "an upgrade sync must make the file authoritative for the service",
+                crossProcessPrefs.getBoolean(MessageNotificationBridge.KEY_MIRROR_WRITTEN, false),
+            )
+        }
+
+    @Test
+    fun `importAllPreferences refreshes the notification mirror`() =
+        runTest {
+            // Importing NONE into an install whose mirror still allows previews must not
+            // leave the service showing text the user chose to hide.
+            repository.importAllPreferences(
+                listOf(
+                    network.columba.app.migration.PreferenceEntry(
+                        key = "notification_privacy_level",
+                        type = "string",
+                        value = NotificationPrivacyLevel.NONE.name,
+                    ),
+                ),
+            )
+
+            val mirror = requireNotNull(ServiceSettingsAccessor(context).getNotificationMirror())
+            assertFalse("NONE hides the text", mirror.revealPreview)
+            assertFalse("NONE hides the sender", mirror.revealSender)
+        }
+
+    @Test
+    fun `notification setters mirror the gates and privacy level`() =
+        runTest {
+            repository.saveNotificationsEnabled(false)
+            repository.saveNotificationReceivedMessage(true)
+            repository.saveNotificationReceivedMessageFavorite(false)
+            repository.saveNotificationPrivacyLevel(NotificationPrivacyLevel.NAME_ONLY)
+
+            val serviceMirror = requireNotNull(ServiceSettingsAccessor(context).getNotificationMirror())
+
+            assertFalse(serviceMirror.enabled)
+            assertTrue(serviceMirror.receivedMessage)
+            assertFalse(serviceMirror.favoriteAllowed)
+            assertFalse("NAME_ONLY hides the text", serviceMirror.revealPreview)
+            assertTrue("NAME_ONLY still shows the sender", serviceMirror.revealSender)
         }
 
     // ========== distinctUntilChanged Tests ==========

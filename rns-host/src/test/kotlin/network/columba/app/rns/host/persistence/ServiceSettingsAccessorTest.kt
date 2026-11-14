@@ -4,8 +4,10 @@ import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.test.core.app.ApplicationProvider
+import network.columba.app.rns.api.notify.MessageNotificationBridge
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -215,5 +217,61 @@ class ServiceSettingsAccessorTest {
         assertEquals(networkTime, prefs.getLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, -1L))
         assertEquals(announceTime, prefs.getLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, -1L))
         assertTrue(accessor.getBlockUnknownSenders())
+    }
+
+    // ========== Message notification mirror + foreground heartbeat ==========
+
+    @Test
+    fun `notification mirror is absent until the app process writes it`() {
+        assertNull(
+            "an unmapped mirror must not fall back to permissive defaults: the " +
+                "upgrade-then-reboot case would leak previews for a NONE-privacy user",
+            accessor.getNotificationMirror(),
+        )
+    }
+
+    @Test
+    fun `notification mirror reflects keys written by the app process`() {
+        prefs
+            .edit()
+            .putBoolean(MessageNotificationBridge.KEY_MIRROR_WRITTEN, true)
+            .putBoolean(MessageNotificationBridge.KEY_NOTIFICATIONS_ENABLED, false)
+            .putBoolean(MessageNotificationBridge.KEY_RECEIVED_MESSAGE, true)
+            .putBoolean(MessageNotificationBridge.KEY_RECEIVED_MESSAGE_FAVORITE, false)
+            .putBoolean(MessageNotificationBridge.KEY_REVEAL_PREVIEW, false)
+            .putBoolean(MessageNotificationBridge.KEY_REVEAL_SENDER, false)
+            .apply()
+
+        val mirror = requireNotNull(accessor.getNotificationMirror())
+
+        assertFalse(mirror.enabled)
+        assertTrue(mirror.receivedMessage)
+        assertFalse(mirror.favoriteAllowed)
+        assertFalse(mirror.revealPreview)
+        assertFalse(mirror.revealSender)
+    }
+
+    @Test
+    fun `foreground heartbeat is stale when absent zero or older than the window`() {
+        assertFalse("no heartbeat ever written", accessor.isUiForeground(now = 10_000L))
+
+        prefs.edit().putLong(MessageNotificationBridge.KEY_UI_FOREGROUND_AT, 0L).apply()
+        assertFalse("explicitly backgrounded", accessor.isUiForeground(now = 10_000L))
+
+        val now = 1_000_000L
+        prefs.edit().putLong(MessageNotificationBridge.KEY_UI_FOREGROUND_AT, now - 1_000L).apply()
+        assertTrue("fresh tick", accessor.isUiForeground(now = now))
+
+        prefs
+            .edit()
+            .putLong(
+                MessageNotificationBridge.KEY_UI_FOREGROUND_AT,
+                now - MessageNotificationBridge.UI_FOREGROUND_STALE_AFTER_MS - 1,
+            ).apply()
+        assertFalse("frozen/cached app", accessor.isUiForeground(now = now))
+
+        // A value from before a reboot (clock went backwards) fails closed.
+        prefs.edit().putLong(MessageNotificationBridge.KEY_UI_FOREGROUND_AT, now + 60_000L).apply()
+        assertFalse("future timestamp", accessor.isUiForeground(now = now))
     }
 }

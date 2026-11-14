@@ -11,6 +11,7 @@ import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.LinkEvent
 import network.columba.app.rns.api.util.AppDataParser
+import network.columba.app.rns.host.notifications.ServiceMessageNotifier
 import network.columba.app.rns.host.util.PeerNameResolver
 import org.json.JSONObject
 
@@ -22,6 +23,7 @@ import org.json.JSONObject
 class PeerActivityCollector(
     private val backend: RnsBackend,
     private val persistence: ServicePersistenceManager,
+    private val notifier: ServiceMessageNotifier,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     @Volatile
@@ -34,7 +36,12 @@ class PeerActivityCollector(
             supervisorScope {
                 launch(start = CoroutineStart.UNDISPATCHED) {
                     backend.lxmf.observeMessages().collect { message ->
-                        persistence.persistReceivedMessage(message)
+                        val result = persistence.persistReceivedMessage(message)
+                        if (result is ReceivedMessagePersist.Inserted) {
+                            // Only a message this pass actually stored may notify; a replay
+                            // (Duplicate) must never re-notify.
+                            notifier.notifyReceivedMessage(result)
+                        }
                         persistence.persistIncomingMessageActivity(
                             messageHash = message.messageHash,
                             sourceHash = message.sourceHash.toHex(),

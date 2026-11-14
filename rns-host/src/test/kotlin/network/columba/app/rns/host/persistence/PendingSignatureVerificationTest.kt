@@ -3,6 +3,7 @@ package network.columba.app.rns.host.persistence
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -94,7 +95,10 @@ class PendingSignatureVerificationTest {
             try {
                 every { ServiceDatabaseProvider.getDatabase(any()) } returns database
                 val manager = ServicePersistenceManager(context, scope, settings)
-                PeerActivityCollector(backend, manager).start(scope)
+                // This test is about persistence; notifications are a different layer.
+                val notifier = mockk<network.columba.app.rns.host.notifications.ServiceMessageNotifier>()
+                coEvery { notifier.notifyReceivedMessage(any()) } returns Unit
+                PeerActivityCollector(backend, manager, notifier).start(scope)
                 incoming.emit(
                     ReceivedMessage(
                         PythonLxmfFixture.messageHash, "Service received message",

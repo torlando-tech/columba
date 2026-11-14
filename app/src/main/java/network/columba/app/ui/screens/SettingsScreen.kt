@@ -651,6 +651,8 @@ fun SettingsScreen(
                     announceFilterPending = state.announceFilterPending,
                     onAnnounceFilterToggle = { viewModel.setAnnounceFilterEnabled(it) },
                     onOpenAnnounceFilter = onNavigateToAnnounceFilter,
+                    autoStartOnBoot = state.autoStartOnBoot,
+                    onAutoStartOnBootChange = { viewModel.setAutoStartOnBoot(it) },
                 )
 
                 // About section

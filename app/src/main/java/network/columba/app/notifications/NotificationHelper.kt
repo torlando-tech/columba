@@ -21,6 +21,7 @@ import network.columba.app.R
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.model.NotificationPrivacyLevel
 import network.columba.app.repository.SettingsRepository
+import network.columba.app.rns.api.notify.MessageNotificationBridge
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -49,33 +50,36 @@ class NotificationHelper
         private val messagePrivacyLock = Mutex()
 
         companion object {
-            // Notification channel IDs
-            private const val CHANNEL_ID_MESSAGES = "messages"
+            // Message-notification identity (channel, id, tag, deep link, extras) lives in
+            // MessageNotificationBridge: :reticulum posts the same notification while this
+            // process is frozen or dead, and both must resolve to the same entry.
+            private const val CHANNEL_ID_MESSAGES = MessageNotificationBridge.CHANNEL_ID_MESSAGES
             private const val CHANNEL_ID_ANNOUNCES = "announces"
             private const val CHANNEL_ID_BLE_EVENTS = "ble_events"
 
             // Notification IDs
             @VisibleForTesting
-            internal const val NOTIFICATION_ID_MESSAGE = 1000
+            internal const val NOTIFICATION_ID_MESSAGE = MessageNotificationBridge.NOTIFICATION_ID_MESSAGE
             private const val NOTIFICATION_ID_ANNOUNCE = 2000
             private const val NOTIFICATION_ID_BLE = 3000
-            private const val NOTIFICATION_TAG_MESSAGE_PREFIX = "message:"
+            private const val NOTIFICATION_TAG_MESSAGE_PREFIX =
+                MessageNotificationBridge.NOTIFICATION_TAG_MESSAGE_PREFIX
 
 
             // Intent actions
             const val ACTION_OPEN_ANNOUNCE = "network.columba.app.ACTION_OPEN_ANNOUNCE"
-            const val ACTION_OPEN_CONVERSATION = "network.columba.app.ACTION_OPEN_CONVERSATION"
+            const val ACTION_OPEN_CONVERSATION = MessageNotificationBridge.ACTION_OPEN_CONVERSATION
             private const val ACTION_REPLY = "network.columba.app.ACTION_REPLY"
             private const val ACTION_MARK_READ = "network.columba.app.ACTION_MARK_READ"
 
             // Intent extras
-            const val EXTRA_DESTINATION_HASH = "destination_hash"
-            const val EXTRA_PEER_NAME = "peer_name"
-            const val EXTRA_THREAD_ID = "thread_id"
+            const val EXTRA_DESTINATION_HASH = MessageNotificationBridge.EXTRA_DESTINATION_HASH
+            const val EXTRA_PEER_NAME = MessageNotificationBridge.EXTRA_PEER_NAME
+            const val EXTRA_THREAD_ID = MessageNotificationBridge.EXTRA_THREAD_ID
 
             @VisibleForTesting
             internal fun messageNotificationTag(destinationHash: String): String =
-                NOTIFICATION_TAG_MESSAGE_PREFIX + destinationHash
+                MessageNotificationBridge.tag(destinationHash)
         }
 
         private val notificationManager = NotificationManagerCompat.from(context)

@@ -21,6 +21,7 @@ import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.host.binder.ReticulumServiceBinder
 import network.columba.app.rns.host.di.ServiceModule
 import network.columba.app.rns.host.manager.ServiceNotificationManager
+import network.columba.app.rns.host.notifications.ServiceMessageNotifier
 import network.columba.app.rns.host.persistence.BackendInitializer
 import network.columba.app.rns.host.persistence.PeerActivityCollector
 import network.columba.app.rns.host.rnode.KotlinRNodeBridge
@@ -166,9 +167,7 @@ class ReticulumService : Service() {
                 },
             )
 
-        // Install one lifecycle-owned protocol activity collector before backend
-        // initialization, so non-replaying events cannot race startup.
-        PeerActivityCollector(rnsBackend, managers.persistenceManager).start(serviceScope)
+        startPeerActivityCollection()
 
         // Create notification channel
         managers.notificationManager.createNotificationChannel()
@@ -284,9 +283,12 @@ class ReticulumService : Service() {
             )
 
         // A.10 follow-up: self-init from snapshot if UI isn't around to drive
-        // initialize() (OOM restart, force-stop recovery). No-op on first run
-        // (no snapshot yet). Idempotent if UI races us — `runtime.start()`
-        // already early-returns when running.
+        // initialize() (OOM restart, force-stop recovery, boot autostart via
+        // BootAutostartReceiver). No-op on first run (no snapshot yet).
+        // Idempotent if UI races us — `runtime.start()` already early-returns
+        // when running. Refuses to initialize when the snapshot's identity key
+        // cannot be decrypted (locked identity), so a headless boot can never
+        // mint a divergent identity.
         //
         // Apply-in-progress gate: when InterfaceConfigManager is mid-restart
         // (is_applying_config=true), the on-disk snapshot is STALE relative to
@@ -302,7 +304,8 @@ class ReticulumService : Service() {
             Log.i(TAG, "Skipping snapshot self-init — apply-in-progress; UI will drive initialize()")
         } else {
             serviceScope.launch {
-                backendInitializer.initializeFromSnapshot(rnsBackend)
+                val outcome = backendInitializer.initializeFromSnapshot(rnsBackend)
+                Log.i(TAG, "Snapshot self-init outcome: $outcome")
             }
         }
     }
@@ -365,6 +368,31 @@ class ReticulumService : Service() {
                 delay(BATTERY_POLL_INTERVAL_MS)
             }
         }
+    }
+
+    /**
+     * Install the one lifecycle-owned protocol activity collector, before backend
+     * initialization, so non-replaying events cannot race startup.
+     *
+     * The notifier is created here (not in `ServiceModule`) because it needs no shared
+     * state: it reads the mirrored notification gates and claims a row before posting.
+     * Channels are created in this process too — the app may not have run yet (delivery
+     * right after boot), and on API 26+ a notification posted to a missing channel is
+     * silently dropped.
+     */
+    private fun startPeerActivityCollection() {
+        val messageNotifier =
+            ServiceMessageNotifier(
+                context = this,
+                persistence = managers.persistenceManager,
+                settingsAccessor = managers.settingsAccessor,
+            )
+        messageNotifier.createChannels()
+        PeerActivityCollector(
+            backend = rnsBackend,
+            persistence = managers.persistenceManager,
+            notifier = messageNotifier,
+        ).start(serviceScope)
     }
 
     override fun onStartCommand(

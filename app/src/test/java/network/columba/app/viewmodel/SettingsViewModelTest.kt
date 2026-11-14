@@ -110,6 +110,7 @@ class SettingsViewModelTest {
     private val retrievalIntervalSecondsFlow = MutableStateFlow(30)
     private val transportNodeEnabledFlow = MutableStateFlow(true)
     private val batteryProfileFlow = MutableStateFlow(BatteryProfile.BALANCED)
+    private val autoStartOnBootFlow = MutableStateFlow(true)
     private val defaultDeliveryMethodFlow = MutableStateFlow("direct")
     private val imageCompressionPresetFlow =
         MutableStateFlow(network.columba.app.data.model.ImageCompressionPreset.AUTO)
@@ -229,6 +230,7 @@ class SettingsViewModelTest {
         every { settingsRepository.hasCompletedOnboardingFlow } returns kotlinx.coroutines.flow.MutableStateFlow(true)
         every { settingsRepository.hasSeenCrashReportingPromptFlow } returns kotlinx.coroutines.flow.MutableStateFlow(true)
         every { settingsRepository.batteryProfileFlow } returns batteryProfileFlow
+        every { settingsRepository.autoStartOnBootFlow } returns autoStartOnBootFlow
         every { settingsRepository.defaultDeliveryMethodFlow } returns defaultDeliveryMethodFlow
         every { settingsRepository.imageCompressionPresetFlow } returns imageCompressionPresetFlow
         every { settingsRepository.locationSharingEnabledFlow } returns flowOf(false)
@@ -274,6 +276,7 @@ class SettingsViewModelTest {
         coEvery { settingsRepository.saveRetrievalIntervalSeconds(any()) } just Runs
         coEvery { settingsRepository.saveTransportNodeEnabled(any()) } just Runs
         coEvery { settingsRepository.saveBatteryProfile(any()) } just Runs
+        coEvery { settingsRepository.saveAutoStartOnBoot(any()) } just Runs
         coEvery { settingsRepository.saveLocationSharingEnabled(any()) } just Runs
         coEvery { settingsRepository.saveDefaultSharingDuration(any()) } just Runs
         coEvery { settingsRepository.saveLocationPrecisionRadius(any()) } just Runs
@@ -2062,6 +2065,34 @@ class SettingsViewModelTest {
                 // Verify shutdown() is NOT called via IPC (it causes race conditions)
                 coVerify(exactly = 0) { rnsCore.shutdown() }
             }
+        }
+
+    // endregion
+
+    // region Boot autostart Tests
+
+    @Test
+    fun `autoStartOnBoot reflects the persisted value at construction`() =
+        runTest {
+            autoStartOnBootFlow.value = false
+            viewModel = createViewModel()
+
+            assertEquals(
+                "the switch must mirror storage, not a constant default",
+                false,
+                viewModel.state.value.autoStartOnBoot,
+            )
+        }
+
+    @Test
+    fun `setAutoStartOnBoot persists and updates state without a reload`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setAutoStartOnBoot(false)
+
+            coVerify { settingsRepository.saveAutoStartOnBoot(false) }
+            assertEquals(false, viewModel.state.value.autoStartOnBoot)
         }
 
     // endregion

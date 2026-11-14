@@ -35,6 +35,18 @@ enum class NotificationPrivacyLevel(
      */
     fun isMoreRestrictiveThan(other: NotificationPrivacyLevel): Boolean = ordinal > other.ordinal
 
+    /**
+     * Whether a notification at this level may show *who* sent the message.
+     *
+     * These two booleans are what `:reticulum` reads (mirrored into
+     * `cross_process_settings` by SettingsRepository), so the service never has
+     * to parse this enum name from a stale or unrecognised string.
+     */
+    fun revealsSender(): Boolean = this != NONE
+
+    /** Whether a notification at this level may show the message text. */
+    fun revealsPreview(): Boolean = this == FULL
+
     companion object {
         /** Used when no level has ever been stored: preserves the historical behaviour. */
         val DEFAULT = FULL

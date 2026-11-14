@@ -49,6 +49,22 @@ class ServicePersistenceManager(
     companion object {
         private const val TAG = "ServicePersistenceManager"
         private const val ANNOUNCE_TTL_MS = 30L * 24 * 60 * 60 * 1000 // 30 days
+
+        /**
+         * Delivery-proof deadlines for point-to-point sends (#875).
+         *
+         * An opportunistic send has no retry: its only completion signal is the
+         * recipient's proof, which a torn-down transport socket can drop. Without
+         * a deadline the row stays `pending` forever and the bubble is never
+         * retryable. A direct send waits on a link and may legitimately take
+         * minutes for large attachments. Propagated sends are exempt — the relay
+         * hand-off owns their terminal state.
+         */
+        private const val OPPORTUNISTIC_PROOF_TIMEOUT_MS = 60_000L
+        private const val DIRECT_PROOF_TIMEOUT_MS = 300_000L
+        private const val PROOF_TIMEOUT_ERROR = "No delivery proof received"
+        private const val DELIVERY_METHOD_OPPORTUNISTIC = "opportunistic"
+        private const val DELIVERY_METHOD_DIRECT = "direct"
     }
 
     /**
@@ -673,6 +689,34 @@ class ServicePersistenceManager(
         update: DeliveryStatusUpdate,
         receivedAt: Long = System.currentTimeMillis(),
     ): Boolean = pendingDeliveryPersistence.persistProof(update, receivedAt)
+
+    /**
+     * Fail point-to-point sends that outlived their delivery-proof deadline (#875).
+     *
+     * Only rows still waiting for a proof (`pending`/`sent`) are touched, so a
+     * proof that lands late or a relay hand-off (`retrying_propagated`/
+     * `propagated`) always wins the race. Returns the number of rows failed.
+     */
+    suspend fun failExpiredOutboundProofs(now: Long = System.currentTimeMillis()): Int {
+        val expired =
+            messageDao.getUnprovenOutboundMessages().mapNotNull { row ->
+                val deadlineMs =
+                    when (row.deliveryMethod) {
+                        DELIVERY_METHOD_OPPORTUNISTIC -> OPPORTUNISTIC_PROOF_TIMEOUT_MS
+                        DELIVERY_METHOD_DIRECT -> DIRECT_PROOF_TIMEOUT_MS
+                        else -> return@mapNotNull null
+                    }
+                row.takeIf { now - it.timestamp >= deadlineMs }
+            }
+        var failed = 0
+        for (row in expired) {
+            if (messageDao.failOutboundWithoutProof(row.id, row.identityHash, PROOF_TIMEOUT_ERROR) > 0) {
+                failed++
+                Log.w(TAG, "Message ${row.id.take(16)}... failed: no delivery proof within its deadline")
+            }
+        }
+        return failed
+    }
 
     /** Persist protocol lifecycle state in the service process, independent of UI ownership. */
     suspend fun persistDeliveryStatus(update: DeliveryStatusUpdate): Boolean =

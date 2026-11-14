@@ -198,6 +198,42 @@ interface MessageDao {
         identityHash: String,
     ): MessageEntity?
 
+    /**
+     * Fails an outbound row whose delivery proof never arrived (#875).
+     *
+     * Scoped to `pending`/`sent` so a proof that lands late, a sideband retry or
+     * a relay hand-off (`retrying_propagated`/`propagated`) can never be
+     * overwritten by the local proof deadline. Returns the number of rows
+     * changed, so callers can distinguish "already settled" from "timed out".
+     */
+    @Query(
+        """
+        UPDATE messages
+        SET status = 'failed', errorMessage = :errorMessage
+        WHERE id = :messageId AND identityHash = :identityHash AND isFromMe = 1
+          AND status IN ('pending', 'sent')
+        """,
+    )
+    suspend fun failOutboundWithoutProof(
+        messageId: String,
+        identityHash: String,
+        errorMessage: String,
+    ): Int
+
+    /**
+     * Outbound rows still waiting for a delivery proof, used to re-arm the proof
+     * watchdog after a process restart so rows stranded by a previous run are
+     * retryable without waiting for a new send.
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE isFromMe = 1 AND status IN ('pending', 'sent')
+          AND deliveryMethod IN ('opportunistic', 'direct')
+        """,
+    )
+    suspend fun getUnprovenOutboundMessages(): List<MessageEntity>
+
     /** Room invalidations also trigger reconciliation when an insert leaves the count unchanged. */
     @Query(
         """

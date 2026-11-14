@@ -162,6 +162,13 @@ class MessagingViewModel
             private const val REDRIVE_FAILED_WAIT_POLL_MS = 25L
 
             /**
+             * Bounded re-attempts of a relay retry that lost the race with the
+             * service's terminal FAILED write (see [registerPropagationSendRecord]).
+             */
+            private const val REDRIVE_SETTLE_ATTEMPTS = 4
+            private const val REDRIVE_SETTLE_DELAY_MS = 500L
+
+            /**
              * Composer target across process death (D11): a target with no
              * thread row exists only while it is selected, so a recreation
              * must restore the selection instead of dropping its draft.
@@ -3701,19 +3708,34 @@ class MessagingViewModel
                         // [onRekey] just BEFORE the re-key (while the old-hash record is
                         // still present) so we can register the record under the new hash
                         // ahead of the row swap; the stale old-hash entry is dropped after.
-                        val currentHash = rowHash.get()
-                        val rec = record
-                        val newHash =
-                            reDriveMessage(
-                                messageId = currentHash,
-                                forcedMethod = DeliveryMethod.PROPAGATED,
-                                onRekey = { nextHash ->
-                                    if (rec != null) {
-                                        inFlightPropagationSends[nextHash] = rec
-                                    }
-                                },
-                            )
+                        var settleAttempts = 0
+                        var newHash: String? = null
+                        while (true) {
+                            val currentHash = rowHash.get()
+                            val rec = record
+                            newHash =
+                                reDriveMessage(
+                                    messageId = currentHash,
+                                    forcedMethod = DeliveryMethod.PROPAGATED,
+                                    onRekey = { nextHash ->
+                                        if (rec != null) {
+                                            inFlightPropagationSends[nextHash] = rec
+                                        }
+                                    },
+                                )
+                            if (newHash != null) break
+                            // The service owns the delivery-status write (#877), so this
+                            // retry can arrive before the FAILED row is saved and still be
+                            // waiting; reDriveMessage already waits briefly, and a slow write
+                            // must not cost the retry its place in the relay queue. Re-check
+                            // and re-attempt, bounded so an unsendable row cannot loop.
+                            val row = conversationRepository.getMessageById(currentHash)
+                            val waitingForFailure = row != null && row.status != "failed"
+                            if (!waitingForFailure || ++settleAttempts >= REDRIVE_SETTLE_ATTEMPTS) break
+                            kotlinx.coroutines.delay(REDRIVE_SETTLE_DELAY_MS)
+                        }
                         if (newHash != null) {
+                            val currentHash = rowHash.get()
                             rowHash.set(newHash)
                             // Drop the stale old-hash entry — but only when the re-key actually
                             // moved to a new hash (the normal case, a new hash per hop). A

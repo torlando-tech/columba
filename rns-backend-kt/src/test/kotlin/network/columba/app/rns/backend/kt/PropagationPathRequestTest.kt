@@ -5,15 +5,19 @@ import network.reticulum.common.DestinationType
 import network.reticulum.common.InterfaceMode
 import network.reticulum.common.PacketType
 import network.reticulum.common.RnsConstants
+import network.reticulum.common.toKey
 import network.reticulum.destination.Destination
 import network.reticulum.identity.Identity
 import network.reticulum.lxmf.LXMRouter
 import network.reticulum.packet.Packet
 import network.reticulum.transport.InterfaceRef
+import network.reticulum.transport.PathEntry
+import network.reticulum.transport.PathState
 import network.reticulum.transport.Transport
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -123,6 +127,50 @@ class PropagationPathRequestTest {
         )
         assertEquals("exactly one path request for the relay", 1, pathRequestCountFor(relayHash))
         assertEquals("no hopeful link request without a route", 0, linkRequestCount())
+    }
+
+
+    @Test
+    fun `the relay announce resumes the sync with a link request`() {
+        assertFalse("the relay must have no path for this test", Transport.hasPath(relayHash))
+        router.requestMessagesFromPropagationNode()
+        assertEquals(
+            "sync must wait for the relay path",
+            LXMRouter.PropagationTransferState.PATH_REQUESTED,
+            router.propagationTransferState,
+        )
+
+        // The relay's announce lands: Transport now has a route through our interface.
+        installRelayPath()
+
+        // The path-wait job polls, re-enters the sync and sends the link request.
+        val deadline = System.currentTimeMillis() + 5_000
+        while (System.currentTimeMillis() < deadline && linkRequestCount() == 0) {
+            Thread.sleep(50)
+        }
+
+        assertTrue("the resumed sync must send a link request", linkRequestCount() > 0)
+        assertTrue(
+            "the sync must leave PATH_REQUESTED once the relay path exists, was ${router.propagationTransferState}",
+            router.propagationTransferState != LXMRouter.PropagationTransferState.PATH_REQUESTED,
+        )
+    }
+
+    /** Install an ACTIVE route to the relay through the capturing interface. */
+    private fun installRelayPath() {
+        val now = System.currentTimeMillis()
+        Transport.pathTable[relayHash.toKey()] =
+            PathEntry(
+                timestamp = now,
+                nextHop = relayHash,
+                hops = 1,
+                expires = now + 60_000,
+                randomBlobs = mutableListOf(),
+                receivingInterfaceHash = iface.hash,
+                announcePacketHash = ByteArray(16) { 0x11 },
+                state = PathState.ACTIVE,
+                failureCount = 0,
+            )
     }
 
     /** Distinct `Transport.requestPath` calls (by request tag) aimed at [destHash]. */

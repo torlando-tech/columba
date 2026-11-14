@@ -1642,6 +1642,74 @@ class MessagingViewModelTest {
     // ========== DELIVERY STATUS HANDLING TESTS ==========
 
     @Test
+    fun `delivery proof is consumed read-only, the service process owns the status write`() =
+        runViewModelTest {
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            val testMessageHash = "read_only_delivery_hash"
+            val existingMessage =
+                MessageEntity(
+                    id = testMessageHash,
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Test message",
+                    timestamp = 1000L,
+                    isFromMe = true,
+                    status = "pending",
+                )
+            coEvery {
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
+            } returns existingMessage
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+            coEvery { rnsCore.getNextHopInterfaceName(any()) } returns null
+            every { conversationLinkManager.recordPeerActivity(any(), any()) } just Runs
+
+            MessagingViewModel(
+                applicationContext,
+                rnsCore,
+                rnsLxmf,
+                rnsTransportAdmin,
+                conversationRepository,
+                announceRepository,
+                contactRepository,
+                activeConversationManager,
+                settingsRepository,
+                propagationNodeManager,
+                locationSharingManager,
+                identityRepository,
+                conversationLinkManager,
+                receivedLocationRepository,
+                blockedPeerRepository,
+                identityResolutionManager,
+                notificationHelper,
+                rnsTelephony,
+            )
+            advanceUntilIdle()
+
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = testMessageHash,
+                    status = DeliveryStatus.DELIVERED,
+                    timestamp = System.currentTimeMillis(),
+                    originatingIdentityHash = "test_identity_hash",
+                ),
+            )
+            advanceUntilIdle()
+
+            // GitHub #877: the :reticulum service persists every delivery status
+            // (PendingDeliveryPersistence durable inbox -> MessageDao.applyDeliveryStatus).
+            // A reader process that writes the same row again produces a second
+            // transaction, a second invalidation and a second status log per proof.
+            coVerify(exactly = 0) { conversationRepository.updateMessageStatus(any(), any()) }
+            coVerify(exactly = 1) {
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
+            }
+            // Peer activity is still recorded from the read.
+            verify { conversationLinkManager.recordPeerActivity(testPeerHash, any()) }
+        }
+
+    @Test
     fun `retrying_propagated status updates both status and deliveryMethod`() =
         runViewModelTest {
             // Setup: Create a flow that emits a retrying_propagated status update
@@ -1661,7 +1729,7 @@ class MessagingViewModelTest {
                     status = "sent",
                 )
             coEvery {
-                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
@@ -1707,7 +1775,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was called with retrying_propagated
             coVerify {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "retrying_propagated", "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             }
 
             // Delivery method changes atomically inside the repository reducer.
@@ -1749,7 +1817,7 @@ class MessagingViewModelTest {
             // Delivery-status handler applies the status to the DB before reaching the
             // failover block; the message is "not found" (null) here, which the handler
             // tolerates (it retries then proceeds to the failover check).
-            coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
+            coEvery { conversationRepository.getOutgoingMessage(any(), any()) } returns null
             // The failover retry re-drives from the persisted row: seed a FAILED row under the
             // send's hash so reDriveMessage reconstructs and re-sends it as PROPAGATED, then
             // re-keys the row to the new hash (updateMessageId) — one row, never a duplicate.
@@ -1875,7 +1943,7 @@ class MessagingViewModelTest {
                 status = "failed",
             )
             coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
-            coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
+            coEvery { conversationRepository.getOutgoingMessage(any(), any()) } returns null
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
             every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
             val vm = createTestViewModel()
@@ -1948,7 +2016,7 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
             var relayUnreachableCalls = 0
             coEvery { propagationNodeManager.reportRelayUnreachable(any(), any()) } answers { relayUnreachableCalls++; Unit }
-            coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
+            coEvery { conversationRepository.getOutgoingMessage(any(), any()) } returns null
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
             every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
             val vm = createTestViewModel()
@@ -2023,7 +2091,7 @@ class MessagingViewModelTest {
                 )
             coEvery { conversationRepository.getMessageById(receiptHashHex) } returns failedRow
             coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
-            coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
+            coEvery { conversationRepository.getOutgoingMessage(any(), any()) } returns null
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
             every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
             val vm = createTestViewModel()
@@ -2113,7 +2181,7 @@ class MessagingViewModelTest {
                 status = "failed",
             )
             coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
-            coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
+            coEvery { conversationRepository.getOutgoingMessage(any(), any()) } returns null
 
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
             every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
@@ -2170,7 +2238,7 @@ class MessagingViewModelTest {
                     status = "sent",
                 )
             coEvery {
-                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
@@ -2216,7 +2284,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was called with delivered
             coVerify {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "delivered", "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             }
 
             // Verify: updateMessageDeliveryDetails was NOT called (only called for retrying_propagated)
@@ -2247,7 +2315,7 @@ class MessagingViewModelTest {
                     status = "sent",
                 )
             coEvery {
-                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
             every { conversationLinkManager.recordPeerActivity(any(), any()) } just Runs
@@ -2328,7 +2396,7 @@ class MessagingViewModelTest {
                     status = "sent",
                 )
             coEvery {
-                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
             every { conversationLinkManager.recordPeerActivity(any(), any()) } just Runs
@@ -2433,7 +2501,7 @@ class MessagingViewModelTest {
             val rows = mutableMapOf(identityA to originalA, identityB to originalB)
             var activeIdentity = identityA
             coEvery {
-                conversationRepository.applyDeliveryStatus(duplicateHash, "delivered", identityA)
+                conversationRepository.getOutgoingMessage(duplicateHash, identityA)
             } answers {
                 rows[identityA] = requireNotNull(rows[identityA]).copy(status = "delivered")
                 rows[identityA]
@@ -2499,7 +2567,7 @@ class MessagingViewModelTest {
                     status = "pending",
                 )
             coEvery {
-                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
@@ -2545,7 +2613,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was called with failed
             coVerify {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "failed", "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             }
 
             // Verify: updateMessageDeliveryDetails was NOT called (only called for retrying_propagated)
@@ -2564,7 +2632,7 @@ class MessagingViewModelTest {
             // Mock the message does NOT exist in database (returns null after retries)
             val unknownMessageHash = "unknown_message_hash"
             coEvery {
-                conversationRepository.applyDeliveryStatus(unknownMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(unknownMessageHash, "test_identity_hash")
             } returns null
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
@@ -2608,14 +2676,9 @@ class MessagingViewModelTest {
             // Assert: Emission completed successfully
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
-            // Verify: the identity-scoped atomic reducer was called with retries
+            // Verify: the identity-scoped row lookup was retried
             coVerify(atLeast = 1) {
-                conversationRepository.applyDeliveryStatus(unknownMessageHash, "delivered", "test_identity_hash")
-            }
-
-            // The active-identity advisory API must never be used.
-            coVerify(exactly = 0) {
-                conversationRepository.applyDeliveryStatus(unknownMessageHash, any())
+                conversationRepository.getOutgoingMessage(unknownMessageHash, "test_identity_hash")
             }
         }
 
@@ -2641,7 +2704,7 @@ class MessagingViewModelTest {
                     status = "propagated", // Already in terminal success state
                 )
             coEvery {
-                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
@@ -2689,7 +2752,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was NOT called (status degradation blocked)
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "failed", "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             }
         }
 
@@ -2713,7 +2776,7 @@ class MessagingViewModelTest {
                     status = "sent", // Already in terminal success state
                 )
             coEvery {
-                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
@@ -2761,7 +2824,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was NOT called (status degradation blocked)
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "failed", "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             }
         }
 
@@ -2785,7 +2848,7 @@ class MessagingViewModelTest {
                     status = "delivered", // Already in terminal success state
                 )
             coEvery {
-                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
@@ -2833,7 +2896,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was NOT called (status degradation blocked)
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "failed", "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             }
         }
 
@@ -2857,7 +2920,7 @@ class MessagingViewModelTest {
                     status = "pending", // NOT a terminal success state
                 )
             coEvery {
-                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
@@ -2905,7 +2968,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus WAS called (legitimate failure)
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "failed", "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             }
         }
 
@@ -2929,7 +2992,7 @@ class MessagingViewModelTest {
                     status = "sent", // Will be upgraded to delivered
                 )
             coEvery {
-                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
@@ -2977,7 +3040,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus WAS called (status upgrade allowed)
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "delivered", "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             }
         }
 
@@ -3001,7 +3064,7 @@ class MessagingViewModelTest {
                     status = "delivered",
                 )
             coEvery {
-                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
@@ -3045,7 +3108,7 @@ class MessagingViewModelTest {
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "propagated", "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             }
         }
 
@@ -3067,7 +3130,7 @@ class MessagingViewModelTest {
                     status = "delivered",
                 )
             coEvery {
-                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
@@ -3111,7 +3174,7 @@ class MessagingViewModelTest {
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "retrying_propagated", "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             }
         }
 
@@ -3133,7 +3196,7 @@ class MessagingViewModelTest {
                     status = "delivered",
                 )
             coEvery {
-                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
@@ -3177,7 +3240,7 @@ class MessagingViewModelTest {
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "pending", "test_identity_hash")
+                conversationRepository.getOutgoingMessage(testMessageHash, "test_identity_hash")
             }
         }
 

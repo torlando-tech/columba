@@ -1585,15 +1585,19 @@ class MessagingViewModel
                         terminalTransferHashes.remove(terminalTransferHashes.first())
                     }
                 }
-                // Retry mechanism to handle race condition where delivery proof arrives
-                // before database transaction completes
+                // The :reticulum service owns the delivery-status write (durable inbox +
+                // reconciliation in PendingDeliveryPersistence); this process must never
+                // write the same row for the same proof, or every proof produces two
+                // transactions and two invalidations (GitHub #877).
+                //
+                // Read the row instead. The retry loop covers the race where the proof
+                // arrives before the send transaction has committed.
                 val maxRetries = 3
                 val retryDelays = listOf(50L, 100L, 200L) // ms
 
                 var message =
-                    conversationRepository.applyDeliveryStatus(
+                    conversationRepository.getOutgoingMessage(
                         update.messageHash,
-                        update.status.wireValue,
                         originatingIdentityHash,
                     )
                 var attempt = 0
@@ -1607,9 +1611,8 @@ class MessagingViewModel
                     )
                     kotlinx.coroutines.delay(retryDelays[attempt])
                     message =
-                        conversationRepository.applyDeliveryStatus(
+                        conversationRepository.getOutgoingMessage(
                             update.messageHash,
-                            update.status.wireValue,
                             originatingIdentityHash,
                         )
                     attempt++
@@ -1629,10 +1632,14 @@ class MessagingViewModel
                     // analogue). Failed / retrying paths carry too much routing
                     // ambiguity to produce accurate interface data.
                     if (update.status == DeliveryStatus.DELIVERED || update.status == DeliveryStatus.PROPAGATED) {
-                        enrichSentInterfaceOnDelivery(message)
+                        enrichSentInterfaceOnDelivery(message, update.status)
                     }
 
-                    Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status.wireValue}")
+                    Log.d(
+                        TAG,
+                        "Delivery status ${update.status.wireValue} observed for " +
+                            "${update.messageHash.take(16)}... (row status: ${message.status})",
+                    )
                 } else {
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")
                 }
@@ -1722,11 +1729,14 @@ class MessagingViewModel
          */
         private suspend fun enrichSentInterfaceOnDelivery(
             message: network.columba.app.data.db.entity.MessageEntity,
+            status: DeliveryStatus,
         ) {
             if (!message.isFromMe || message.sentInterface != null) return
             try {
+                // Decide from the callback status rather than the row: the service owns the
+                // row write and it may not have landed yet in this process.
                 val lookupHash =
-                    if (message.deliveryMethod == "propagated") {
+                    if (status == DeliveryStatus.PROPAGATED) {
                         runCatching { rnsLxmf.getOutboundPropagationNode().getOrNull() }
                             .getOrNull()
                             ?.chunked(2)

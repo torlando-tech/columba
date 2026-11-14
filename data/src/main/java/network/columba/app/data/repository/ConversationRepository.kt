@@ -603,28 +603,20 @@ class ConversationRepository
             android.util.Log.d("ConversationRepository", "Updated message $messageId status to $status")
         }
 
-        suspend fun applyDeliveryStatus(
-            messageId: String,
-            status: String,
-        ): Boolean {
-            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return false
-            return messageDao.applyDeliveryStatus(messageId, activeIdentity.identityHash, status) > 0
-        }
-
         /**
-         * Atomically applies an advisory callback to its immutable originating identity and
-         * returns the exact resulting outgoing row for identity-scoped UI side effects.
+         * Read the outgoing row a delivery callback refers to, scoped to the immutable
+         * originating identity. The `:reticulum` service owns the delivery-status write
+         * (see `PendingDeliveryPersistence`); reader processes only consume the row.
          */
-        suspend fun applyDeliveryStatus(
+        suspend fun getOutgoingMessage(
             messageId: String,
-            status: String,
             originatingIdentityHash: String,
         ): MessageEntity? =
-            messageDao.applyDeliveryStatusAndGet(
-                messageId = messageId,
-                identityHash = originatingIdentityHash,
-                status = status,
-            )
+            if (originatingIdentityHash.isBlank()) {
+                null
+            } else {
+                messageDao.getOutgoingMessageById(messageId, originatingIdentityHash)
+            }
 
         private fun ConversationEntity.toConversation() =
             Conversation(

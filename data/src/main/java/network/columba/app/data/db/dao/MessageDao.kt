@@ -412,22 +412,6 @@ interface MessageDao {
         deliveryMethod: String? = null,
     ): Int
 
-    /**
-     * Atomically reduces an identity-owned outgoing row and returns its resulting snapshot.
-     * The immutable callback identity is the authority; active-identity state is never read.
-     */
-    @Transaction
-    suspend fun applyDeliveryStatusAndGet(
-        messageId: String,
-        identityHash: String,
-        status: String,
-        deliveryMethod: String? = null,
-    ): MessageEntity? {
-        if (identityHash.isBlank()) return null
-        applyDeliveryStatus(messageId, identityHash, status, deliveryMethod)
-        return getOutgoingMessageById(messageId, identityHash)
-    }
-
     @Query(
         """
         UPDATE messages

@@ -1646,6 +1646,8 @@ class MessagingViewModelTest {
         runViewModelTest {
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
             every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
+            val transferProgressFlow = MutableSharedFlow<TransferProgressUpdate>()
+            every { rnsLxmf.observeTransferProgress() } returns transferProgressFlow
 
             val testMessageHash = "read_only_delivery_hash"
             val existingMessage =
@@ -1665,27 +1667,45 @@ class MessagingViewModelTest {
             coEvery { rnsCore.getNextHopInterfaceName(any()) } returns null
             every { conversationLinkManager.recordPeerActivity(any(), any()) } just Runs
 
-            MessagingViewModel(
-                applicationContext,
-                rnsCore,
-                rnsLxmf,
-                rnsTransportAdmin,
-                conversationRepository,
-                announceRepository,
-                contactRepository,
-                activeConversationManager,
-                settingsRepository,
-                propagationNodeManager,
-                locationSharingManager,
-                identityRepository,
-                conversationLinkManager,
-                receivedLocationRepository,
-                blockedPeerRepository,
-                identityResolutionManager,
-                notificationHelper,
-                rnsTelephony,
+            viewModel =
+                MessagingViewModel(
+                    applicationContext,
+                    rnsCore,
+                    rnsLxmf,
+                    rnsTransportAdmin,
+                    conversationRepository,
+                    announceRepository,
+                    contactRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                    locationSharingManager,
+                    identityRepository,
+                    conversationLinkManager,
+                    receivedLocationRepository,
+                    blockedPeerRepository,
+                    identityResolutionManager,
+                    notificationHelper,
+                    rnsTelephony,
+                )
+            advanceUntilIdle()
+
+            // A missed terminal progress event would leave the bar up forever; seed one
+            // in-flight transfer so the status callback has a stale entry to reconcile.
+            transferProgressFlow.emit(
+                TransferProgressUpdate(
+                    transferId = "read_only_transfer",
+                    messageHash = testMessageHash,
+                    direction = Direction.OUT,
+                    progress = 0.4f,
+                    phase = TransferPhase.TRANSFERRING,
+                ),
             )
             advanceUntilIdle()
+            assertTrue(
+                "the fixture must leave a progress entry behind",
+                viewModel.transferProgress.value.containsKey(testMessageHash),
+            )
 
             deliveryStatusFlow.emit(
                 DeliveryStatusUpdate(
@@ -1696,6 +1716,11 @@ class MessagingViewModelTest {
                 ),
             )
             advanceUntilIdle()
+
+            assertFalse(
+                "a terminal delivery status must clear the lingering progress bar",
+                viewModel.transferProgress.value.containsKey(testMessageHash),
+            )
 
             // GitHub #877: the :reticulum service persists every delivery status
             // (PendingDeliveryPersistence durable inbox -> MessageDao.applyDeliveryStatus).

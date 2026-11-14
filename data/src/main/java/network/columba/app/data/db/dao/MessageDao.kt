@@ -29,6 +29,17 @@ data class PendingNotificationMessage(
     val threadId: ByteArray?,
 )
 
+/**
+ * Minimal projection for the outbound proof watchdog: keys, method and the
+ * timestamp the row was created, never the content.
+ */
+data class OutboundWaitRow(
+    val id: String,
+    val identityHash: String,
+    val deliveryMethod: String?,
+    val timestamp: Long,
+)
+
 @Dao
 interface MessageDao {
     @Query(
@@ -224,15 +235,21 @@ interface MessageDao {
      * Outbound rows still waiting for a delivery proof, used to re-arm the proof
      * watchdog after a process restart so rows stranded by a previous run are
      * retryable without waiting for a new send.
+     *
+     * Only the keys and deadline inputs are selected: the sweep runs on a timer
+     * and must not load message bodies. [oldestCutoff] (the shortest proof
+     * window) is applied in SQL so rows that cannot be expired yet are never
+     * fetched; the per-method window and attempt start are applied in Kotlin.
      */
     @Query(
         """
-        SELECT * FROM messages
+        SELECT id, identityHash, deliveryMethod, timestamp FROM messages
         WHERE isFromMe = 1 AND status IN ('pending', 'sent')
           AND deliveryMethod IN ('opportunistic', 'direct')
+          AND timestamp <= :oldestCutoff
         """,
     )
-    suspend fun getUnprovenOutboundMessages(): List<MessageEntity>
+    suspend fun getUnprovenOutboundRows(oldestCutoff: Long): List<OutboundWaitRow>
 
     /** Room invalidations also trigger reconciliation when an insert leaves the count unchanged. */
     @Query(

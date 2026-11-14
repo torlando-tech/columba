@@ -17,6 +17,7 @@ import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.util.HashUtils
 import network.columba.app.data.util.TextSanitizer
 import network.columba.app.data.model.InterfaceType
+import network.columba.app.rns.api.model.DeliveryStatus
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.util.ThreadFieldCodec
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
@@ -46,6 +47,12 @@ class ServicePersistenceManager(
     private val settingsAccessor: ServiceSettingsAccessor,
     startDeliveryReconciliation: Boolean = true,
 ) {
+    /**
+     * Message id -> start of the send attempt in flight. Service-process local;
+     * pruned by [failExpiredOutboundProofs].
+     */
+    private val attemptStartedAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     companion object {
         private const val TAG = "ServicePersistenceManager"
         private const val ANNOUNCE_TTL_MS = 30L * 24 * 60 * 60 * 1000 // 30 days
@@ -698,20 +705,27 @@ class ServicePersistenceManager(
      * `propagated`) always wins the race. Returns the number of rows failed.
      */
     suspend fun failExpiredOutboundProofs(now: Long = System.currentTimeMillis()): Int {
-        val expired =
-            messageDao.getUnprovenOutboundMessages().mapNotNull { row ->
-                val deadlineMs =
-                    when (row.deliveryMethod) {
-                        DELIVERY_METHOD_OPPORTUNISTIC -> OPPORTUNISTIC_PROOF_TIMEOUT_MS
-                        DELIVERY_METHOD_DIRECT -> DIRECT_PROOF_TIMEOUT_MS
-                        else -> return@mapNotNull null
-                    }
-                row.takeIf { now - it.timestamp >= deadlineMs }
-            }
+        val rows = messageDao.getUnprovenOutboundRows(now - OPPORTUNISTIC_PROOF_TIMEOUT_MS)
+        // Drop attempt timestamps for rows that no longer wait (delivered, failed
+        // or re-keyed) so the map stays as small as the in-flight set.
+        val waitingIds = rows.mapTo(HashSet()) { it.id }
+        attemptStartedAt.keys.retainAll(waitingIds)
+
         var failed = 0
-        for (row in expired) {
+        for (row in rows) {
+            val deadlineMs =
+                when (row.deliveryMethod) {
+                    DELIVERY_METHOD_OPPORTUNISTIC -> OPPORTUNISTIC_PROOF_TIMEOUT_MS
+                    DELIVERY_METHOD_DIRECT -> DIRECT_PROOF_TIMEOUT_MS
+                    else -> continue
+                }
+            // A relay-failover retry re-keys the row but copies the original
+            // timestamp, so the deadline must run from the attempt in flight.
+            val attemptStart = attemptStartedAt[row.id]?.takeIf { it > row.timestamp } ?: row.timestamp
+            if (now - attemptStart < deadlineMs) continue
             if (messageDao.failOutboundWithoutProof(row.id, row.identityHash, PROOF_TIMEOUT_ERROR) > 0) {
                 failed++
+                attemptStartedAt.remove(row.id)
                 Log.w(TAG, "Message ${row.id.take(16)}... failed: no delivery proof within its deadline")
             }
         }
@@ -719,8 +733,15 @@ class ServicePersistenceManager(
     }
 
     /** Persist protocol lifecycle state in the service process, independent of UI ownership. */
-    suspend fun persistDeliveryStatus(update: DeliveryStatusUpdate): Boolean =
-        pendingDeliveryPersistence.persistStatus(update)
+    suspend fun persistDeliveryStatus(update: DeliveryStatusUpdate): Boolean {
+        if (update.status == DeliveryStatus.PENDING) {
+            // PENDING is emitted at the start of every send attempt, including a
+            // relay-failover retry that re-keys the row, so it dates the attempt
+            // the proof watchdog should measure.
+            attemptStartedAt[update.messageHash] = System.currentTimeMillis()
+        }
+        return pendingDeliveryPersistence.persistStatus(update)
+    }
 
     /** Reconcile the durable inbox after startup, Room invalidation, or a new event. */
     @androidx.annotation.VisibleForTesting

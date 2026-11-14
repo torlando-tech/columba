@@ -20,6 +20,8 @@ import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTelemetry
@@ -130,10 +132,54 @@ class OutboundProofTimeoutTest {
             job.cancel()
         }
 
+
+    @Test
+    fun `a re-keyed retry gets a fresh proof window`() =
+        runTest {
+            seedConversation()
+            // Original send is long past every window; the retry re-used its timestamp.
+            val originalSend = System.currentTimeMillis() - 10 * 60_000L
+            insertOutbound(id = "retry", status = "pending", deliveryMethod = "opportunistic", sentAt = originalSend)
+
+            val retryAt = System.currentTimeMillis()
+            val persistence = newPersistence(this)
+            persistence.persistDeliveryStatus(
+                DeliveryStatusUpdate(
+                    messageHash = "retry",
+                    status = DeliveryStatus.PENDING,
+                    timestamp = retryAt,
+                    originatingIdentityHash = IDENTITY_HASH,
+                ),
+            )
+
+            // Half a window after the retry the row must still be waiting ...
+            persistence.failExpiredOutboundProofs(retryAt + 30_000L)
+            assertEquals(
+                "a retry must not inherit the original send's spent deadline",
+                "pending",
+                database.messageDao().getOutgoingMessageById("retry", IDENTITY_HASH)?.status,
+            )
+
+            // ... and only expiry of the retry's own window fails it.
+            persistence.failExpiredOutboundProofs(retryAt + 61_000L)
+            assertEquals(
+                "failed",
+                database.messageDao().getOutgoingMessageById("retry", IDENTITY_HASH)?.status,
+            )
+        }
+
+    private fun newPersistence(scope: TestScope): ServicePersistenceManager {
+        if (!databaseProviderMocked) {
+            mockkObject(ServiceDatabaseProvider)
+            databaseProviderMocked = true
+            every { ServiceDatabaseProvider.getDatabase(any()) } returns database
+        }
+        val settings = mockk<ServiceSettingsAccessor>()
+        return ServicePersistenceManager(context, scope, settings, startDeliveryReconciliation = false)
+    }
+
     private fun startCollector(scope: TestScope): Job {
-        mockkObject(ServiceDatabaseProvider)
-        databaseProviderMocked = true
-        every { ServiceDatabaseProvider.getDatabase(any()) } returns database
+        val persistence = newPersistence(scope)
         val backend =
             mockk<RnsBackend>().apply {
                 every { core } returns
@@ -155,8 +201,6 @@ class OutboundProofTimeoutTest {
                         every { reactionReceivedFlow } returns MutableSharedFlow()
                     }
             }
-        val settings = mockk<ServiceSettingsAccessor>()
-        val persistence = ServicePersistenceManager(context, scope, settings, startDeliveryReconciliation = false)
         val notifier = mockk<ServiceMessageNotifier>()
         return PeerActivityCollector(backend, persistence, notifier) { System.currentTimeMillis() }.start(scope)
     }

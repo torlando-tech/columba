@@ -155,6 +155,13 @@ class MessagingViewModel
             private const val DRAFT_SAVE_DEBOUNCE_MS = 500L
 
             /**
+             * How long a relay-failover re-drive waits for the service to save the
+             * terminal FAILED row before it gives up (see [awaitSavedFailure]).
+             */
+            private const val REDRIVE_FAILED_WAIT_MS = 2_000L
+            private const val REDRIVE_FAILED_WAIT_POLL_MS = 25L
+
+            /**
              * Composer target across process death (D11): a target with no
              * thread row exists only while it is selected, so a recreation
              * must restore the selection instead of dropping its draft.
@@ -3806,6 +3813,20 @@ class MessagingViewModel
          *   re-drive could not run (row missing / not failed / attachment lost) or the send
          *   failed (the row keeps its id and is marked failed again).
          */
+        /**
+         * Read the row for a re-drive, waiting (bounded) for the service's terminal
+         * FAILED write when the callback beat it. Returns the latest row read, which
+         * the caller still checks for `failed`: a row that never fails is not re-driven.
+         */
+        private suspend fun awaitSavedFailure(messageId: String): network.columba.app.data.db.entity.MessageEntity? {
+            val deadline = System.currentTimeMillis() + REDRIVE_FAILED_WAIT_MS
+            while (true) {
+                val row = conversationRepository.getMessageById(messageId) ?: return null
+                if (row.status == "failed" || System.currentTimeMillis() >= deadline) return row
+                kotlinx.coroutines.delay(REDRIVE_FAILED_WAIT_POLL_MS)
+            }
+        }
+
         @Suppress("LongMethod", "ReturnCount")
         private suspend fun reDriveMessage(
             messageId: String,
@@ -3814,8 +3835,11 @@ class MessagingViewModel
         ): String? {
             Log.d(TAG, "Re-driving message: $messageId (forcedMethod=$forcedMethod)")
 
-            // Load the message from database
-            val message = conversationRepository.getMessageById(messageId) ?: run {
+            // Load the message from database. The failure may not be committed yet:
+            // the service owns the delivery-status write (#877), and this retry is
+            // fired from the delivery-status callback, so wait for the saved FAILED
+            // rather than dropping a retry that arrives first.
+            val message = awaitSavedFailure(messageId) ?: run {
                 Log.e(TAG, "Message not found for re-drive: $messageId")
                 return null
             }

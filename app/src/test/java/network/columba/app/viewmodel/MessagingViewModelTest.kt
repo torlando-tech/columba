@@ -1895,6 +1895,89 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `relay failover retry waits for the service to save the failure`() =
+        runViewModelTest {
+            // Greptile review (#877): the UI no longer writes delivery status, so a
+            // failover retry fired from the delivery callback can read the row before the
+            // service commits FAILED. reDriveMessage must wait for that write instead of
+            // dropping the retry (the retry was already popped from the relay queue).
+            coEvery { settingsRepository.getDefaultDeliveryMethod() } returns "propagated"
+            coEvery { settingsRepository.getTryPropagationOnFail() } returns false
+
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val receiptHash = ByteArray(32) { it.toByte() }
+            val receiptHashHex = receiptHash.joinToString("") { "%02x".format(it) }
+            val testReceipt =
+                MessageReceipt(
+                    messageHash = receiptHash,
+                    timestamp = 3000L,
+                    destinationHash = destHashBytes,
+                )
+            var sendCalls = 0
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } answers {
+                sendCalls++
+                Result.success(testReceipt)
+            }
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+            val failoverRetrySlot = slot<suspend () -> Unit>()
+            coEvery { propagationNodeManager.reportRelayUnreachable(any(), capture(failoverRetrySlot)) } just Runs
+            coEvery { conversationRepository.getOutgoingMessage(any(), any()) } returns null
+
+            val failedRow =
+                MessageEntity(
+                    id = receiptHashHex,
+                    conversationHash = testPeerHash,
+                    identityHash = testIdentity.hash.joinToString("") { "%02x".format(it) },
+                    content = "Propagated test",
+                    timestamp = 3000L,
+                    isFromMe = true,
+                    status = "failed",
+                )
+            // First read still sees the pending row; the service's FAILED write lands next.
+            coEvery { conversationRepository.getMessageById(receiptHashHex) } returnsMany
+                listOf(failedRow.copy(status = "pending"), failedRow)
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
+
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            val vm = createTestViewModel()
+            advanceUntilIdle()
+
+            vm.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            runCatching { vm.sendMessage(testPeerHash, "Propagated test") }
+            advanceUntilIdle()
+
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = receiptHashHex,
+                    status = DeliveryStatus.RETRYING_PROPAGATED,
+                    timestamp = 3000L,
+                    originatingIdentityHash = testIdentity.hash.joinToString("") { "%02x".format(it) },
+                ),
+            )
+            advanceUntilIdle()
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = receiptHashHex,
+                    status = DeliveryStatus.FAILED,
+                    timestamp = 3100L,
+                    originatingIdentityHash = testIdentity.hash.joinToString("") { "%02x".format(it) },
+                ),
+            )
+            advanceUntilIdle()
+
+            failoverRetrySlot.captured.invoke()
+            advanceUntilIdle()
+
+            assertEquals("the retry must survive the pending read and re-send", 2, sendCalls)
+            coVerify(exactly = 1) { conversationRepository.updateMessageId(receiptHashHex, receiptHashHex) }
+        }
+
+    @Test
     fun `direct send that falls back to propagation triggers relay failover`() =
         runViewModelTest {
             // Regression for the user's actual report: a DIRECT/OPPORTUNISTIC send to an

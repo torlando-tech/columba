@@ -138,7 +138,7 @@ class TorSocksProxyTest {
                 val ver = input.readUnsignedByte()
                 val methodCount = input.readUnsignedByte()
                 repeat(methodCount) { input.readUnsignedByte() }
-                if (ver != 5) throw IllegalStateException("not SOCKS5: ver=$ver")
+                check(ver == 5) { "not SOCKS5: ver=$ver" }
                 out.write(byteArrayOf(5, 0))
                 out.flush()
 
@@ -147,13 +147,13 @@ class TorSocksProxyTest {
                 val cmd = input.readUnsignedByte()
                 input.readUnsignedByte()
                 val atyp = input.readUnsignedByte()
-                if (cmd != 1) throw IllegalStateException("not CONNECT: cmd=$cmd")
+                check(cmd == 1) { "not CONNECT: cmd=$cmd" }
                 val host =
                     when (atyp) {
                         1 -> ByteArray(4).also(input::readFully).let { InetAddress.getByAddress(it).hostAddress }
                         3 -> ByteArray(input.readUnsignedByte()).also(input::readFully).decodeToString()
                         4 -> ByteArray(16).also(input::readFully).let { InetAddress.getByAddress(it).hostAddress }
-                        else -> throw IllegalStateException("bad atyp=$atyp")
+                        else -> error("bad atyp=$atyp")
                     }
                 val port = input.readUnsignedShort()
                 connections.put(Target(host, port))

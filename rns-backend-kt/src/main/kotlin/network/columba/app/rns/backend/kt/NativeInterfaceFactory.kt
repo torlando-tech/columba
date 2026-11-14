@@ -499,6 +499,10 @@ internal object NativeInterfaceFactory {
                     targetPort = config.targetPort,
                     useKissFraming = config.kissFraming,
                     keepAlive = false, // Disable for mobile battery
+                    // #965: a .onion target can only be reached through the proxy,
+                    // so the configured SOCKS5 route must reach the interface.
+                    socksProxyHost = config.socksProxyHost.takeIf { config.socksProxyEnabled },
+                    socksProxyPort = config.socksProxyPort,
                     ifacNetname = config.networkName,
                     ifacNetkey = config.passphrase,
                 ).withMode(config.name, config.mode)

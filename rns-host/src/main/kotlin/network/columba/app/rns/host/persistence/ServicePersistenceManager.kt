@@ -711,18 +711,22 @@ class ServicePersistenceManager(
         val waitingIds = rows.mapTo(HashSet()) { it.id }
         attemptStartedAt.keys.retainAll(waitingIds)
 
+        val expired =
+            rows.mapNotNull { row ->
+                val deadlineMs =
+                    when (row.deliveryMethod) {
+                        DELIVERY_METHOD_OPPORTUNISTIC -> OPPORTUNISTIC_PROOF_TIMEOUT_MS
+                        DELIVERY_METHOD_DIRECT -> DIRECT_PROOF_TIMEOUT_MS
+                        else -> return@mapNotNull null
+                    }
+                // A relay-failover retry re-keys the row but copies the original
+                // timestamp, so the deadline must run from the attempt in flight.
+                val attemptStart = attemptStartedAt[row.id]?.takeIf { it > row.timestamp } ?: row.timestamp
+                row.takeIf { now - attemptStart >= deadlineMs }
+            }
+
         var failed = 0
-        for (row in rows) {
-            val deadlineMs =
-                when (row.deliveryMethod) {
-                    DELIVERY_METHOD_OPPORTUNISTIC -> OPPORTUNISTIC_PROOF_TIMEOUT_MS
-                    DELIVERY_METHOD_DIRECT -> DIRECT_PROOF_TIMEOUT_MS
-                    else -> continue
-                }
-            // A relay-failover retry re-keys the row but copies the original
-            // timestamp, so the deadline must run from the attempt in flight.
-            val attemptStart = attemptStartedAt[row.id]?.takeIf { it > row.timestamp } ?: row.timestamp
-            if (now - attemptStart < deadlineMs) continue
+        for (row in expired) {
             if (messageDao.failOutboundWithoutProof(row.id, row.identityHash, PROOF_TIMEOUT_ERROR) > 0) {
                 failed++
                 attemptStartedAt.remove(row.id)

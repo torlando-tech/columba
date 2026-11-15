@@ -385,4 +385,54 @@ class RnsConfigFileTest {
         assertTrue(loggingIdx in 0 until filterIdx)
         assertTrue(filterIdx < interfacesIdx)
     }
+
+    @Test
+    fun `RNode BLE and USB render the bundled adapter type with force_ble only for Bluetooth`() {
+        fun rnode(mode: String) = InterfaceConfig.RNode(
+            name = "RNode 735D BLE",
+            targetDeviceName = "RNode 735D",
+            connectionMode = mode,
+            frequency = 927250000L,
+            bandwidth = 500000,
+            txPower = 17,
+            spreadingFactor = 7,
+            codingRate = 5,
+            mode = "boundary",
+            enableFramebuffer = true,
+        )
+
+        // Bluetooth transports are injected as upstream's BLE connection, so the
+        // `force_ble` key is what makes validateRadioState() treat them as such.
+        val ble = RnsConfigFile.build(cfg(interfaces = listOf(rnode("ble"))))
+        assertTrue(ble.contains("type = ColumbaRNodeInterface"))
+        assertTrue(ble.contains("connection_mode = ble"))
+        assertTrue(ble.contains("force_ble = yes"))
+        assertTrue(ble.contains("txpower = 17"))
+        assertTrue(ble.contains("enable_framebuffer = yes"))
+
+        val usb = RnsConfigFile.build(cfg(interfaces = listOf(rnode("usb"))))
+        assertTrue(usb.contains("type = ColumbaRNodeInterface"))
+        assertTrue(usb.contains("connection_mode = usb"))
+        // The USB bridge is a plain stream: no BLE lifecycle, no force_ble.
+        assertFalse(usb.contains("force_ble"))
+    }
+
+    @Test
+    fun `RNode TCP uses the upstream type with no bundled adapter keys`() {
+        val rnode = InterfaceConfig.RNode(
+            name = "RNode TCP",
+            connectionMode = "tcp",
+            tcpHost = "10.0.0.5",
+            frequency = 868000000L,
+            bandwidth = 125000,
+            txPower = 14,
+        )
+        val out = RnsConfigFile.build(cfg(interfaces = listOf(rnode)))
+        assertTrue(out.contains("type = RNodeInterface"))
+        assertTrue(out.contains("tcp_host = 10.0.0.5"))
+        assertTrue(out.contains("txpower = 14"))
+        assertFalse(out.contains("type = ColumbaRNodeInterface"))
+        assertFalse(out.contains("connection_mode"))
+        assertFalse(out.contains("force_ble"))
+    }
 }

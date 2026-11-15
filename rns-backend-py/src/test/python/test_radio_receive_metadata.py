@@ -29,6 +29,7 @@ class RadioReceiveMetadataTests(unittest.TestCase):
 
 def _run_real_radio_tests():
     import tempfile
+    import time
     from types import SimpleNamespace
     import RNS
     import LXMF
@@ -37,6 +38,8 @@ def _run_real_radio_tests():
     adapter = importlib.import_module("columba_rnode_interface")
     bridge = importlib.import_module("event_bridge")
     router_module = importlib.import_module("LXMF.LXMRouter")
+    from RNS.Interfaces.Android.RNodeInterface import RNodeInterface as UpstreamRNodeInterface
+    upstream_rnode = importlib.import_module("RNS.Interfaces.Android.RNodeInterface")
 
     class DeferredThread:
         jobs = []
@@ -53,16 +56,49 @@ def _run_real_radio_tests():
             self.target(*self.args, **self.kwargs)
 
     class ByteBridge:
-        def __init__(self, frame_bytes, interface):
+        """Synthetic transport: hands upstream's read loop the KISS bytes only.
+
+        Mirrors the members columba_rnode_interface.BridgeConnection exposes, so
+        the real upstream read loop (framing, stats, packet accounting) runs.
+        """
+
+        CONNECT_TIMEOUT = 7.0
+
+        def __init__(self, frame_bytes, link_open=True):
             self.frame_bytes = frame_bytes
-            self.interface = interface
+            self.link_open = link_open
+            self.written = []
+
+        @property
+        def is_open(self):
+            return self.link_open
+
+        @property
+        def connected(self):
+            return self.link_open
+
+        @property
+        def device_disappeared(self):
+            return False
 
         def read(self):
             if self.frame_bytes:
                 result, self.frame_bytes = self.frame_bytes, b""
                 return result
-            self.interface._running.clear()
+            # Drop the link once the queued frames are consumed: the upstream
+            # read loop exits on is_open/connected and stops asking for bytes.
+            self.link_open = False
             return b""
+
+        def write(self, data):
+            self.written.append(bytes(data))
+            return len(data)
+
+        def close(self):
+            self.link_open = False
+
+        def cleanup(self):
+            self.link_open = False
 
     class RealRadioTests(unittest.TestCase):
         @classmethod
@@ -97,12 +133,38 @@ def _run_real_radio_tests():
             bridge._incoming_message_size_limit_kb = 0
             DeferredThread.jobs = []
 
-        def make_interface(self):
-            # Suppress hardware startup only, not the adapter constructor or
-            # KISS parsing. This catches a missing reports_phy_stats declaration.
-            with mock.patch.object(adapter.ColumbaRNodeInterface, "_get_kotlin_bridge"), \
+        def make_interface(self, hardware, mode="ble"):
+            # Suppress the hardware handshake only (upstream's detect/validate
+            # would need a live radio); the adapter constructor, the inherited
+            # KISS parsing and the read loop all stay real. This catches a
+            # missing reports_phy_stats declaration.
+            with mock.patch.object(adapter.ColumbaRNodeInterface, "_open_bluetooth_port", return_value=hardware), \
+                    mock.patch.object(adapter.ColumbaRNodeInterface, "_open_usb_port", return_value=hardware), \
+                    mock.patch.object(UpstreamRNodeInterface, "configure_device"), \
+                    mock.patch.object(RNS.vendor.platformutils, "is_android", return_value=True), \
                     mock.patch.object(threading.Thread, "start"):
-                interface = adapter.ColumbaRNodeInterface(RNS.Transport, {"name": "radio-test"})
+                interface = adapter.ColumbaRNodeInterface(
+                    RNS.Transport,
+                    {
+                        "name": "radio-test",
+                        "connection_mode": mode,
+                        "target_device_name": "test-node",
+                        # Upstream validates the radio config before it talks to
+                        # the device, so these must be legal values.
+                        "frequency": 915000000,
+                        "bandwidth": 125000,
+                        "txpower": 7,
+                        "spreadingfactor": 7,
+                        "codingrate": 5,
+                    },
+                )
+            # Reticulum's loader normally runs interface_post_init(), which is
+            # what sets ifac_size for the transport's packet accounting.
+            interface.ifac_size = interface.DEFAULT_IFAC_SIZE
+            # Upstream's read loop re-detects the device when the port looks
+            # idle (last_port_io starts at 0), which would block on the fake
+            # transport; mark the port as freshly active instead.
+            interface.last_port_io = time.time()
             interface.online = True
             return interface
 
@@ -130,15 +192,13 @@ def _run_real_radio_tests():
             return packet
 
         def frame(self, command, data):
-            kiss = adapter.KISS
+            kiss = upstream_rnode.KISS
             return bytes([kiss.FEND, command]) + kiss.escape(data) + bytes([kiss.FEND])
 
         def test_signed_opportunistic_bursts_keep_packet_local_radio_metrics(self):
             for usb in (False, True):
                 with self.subTest(usb=usb):
                     self.setUp()
-                    interface = self.make_interface()
-                    self.assertTrue(interface.reports_phy_stats)
                     source = RNS.Destination(RNS.Identity(), RNS.Destination.IN, RNS.Destination.SINGLE, "lxmf", "delivery")
                     destination = RNS.Destination(RNS.Identity(), RNS.Destination.IN, RNS.Destination.SINGLE, "lxmf", "delivery")
                     RNS.Identity.remember(None, source.hash, source.identity.get_public_key())
@@ -147,7 +207,7 @@ def _run_real_radio_tests():
                         self.signed_packet(destination, source, "negative signal", 3),
                         self.signed_packet(destination, source, "zero signal", 0),
                     ]
-                    kiss = adapter.KISS
+                    kiss = upstream_rnode.KISS
                     frames = (
                         self.frame(kiss.CMD_STAT_RSSI, bytes([85]))  # -72 dBm
                         + self.frame(kiss.CMD_STAT_SNR, bytes([226]))  # signed -30 / 4
@@ -158,13 +218,20 @@ def _run_real_radio_tests():
                         + self.frame(kiss.CMD_STAT_RSSI, bytes([37]))  # unrelated later stats
                         + self.frame(kiss.CMD_STAT_SNR, bytes([36]))
                     )
-                    hardware = ByteBridge(frames, interface)
-                    if usb:
-                        interface.usb_bridge = hardware
-                    else:
-                        interface.kotlin_bridge = hardware
-                    interface._running.set()
-                    (interface._read_loop_usb if usb else interface._read_loop)()
+                    hardware = ByteBridge(frames)
+                    interface = self.make_interface(hardware, "usb" if usb else "ble")
+                    self.assertTrue(interface.reports_phy_stats)
+                    # The loop exits when the fake link drops; the reconnect
+                    # supervisor would then retry the (already closed)
+                    # transport forever, which is not what this test is about.
+                    # Do not patch threading.Thread here: process_incoming()
+                    # hands each frame to RNS.Transport on a real thread.
+                    with mock.patch.object(interface, "reconnect_port"):
+                        interface.readLoop()
+                    # Dropping the fake link marks the device offline; the radio
+                    # in this scenario is up, and Transport._inbound() ignores
+                    # packets from an offline interface.
+                    interface.online = True
                     self.assertEqual(2, RNS.Transport.inbound_queues.qsize())
                     self.assertEqual((-120, 9.0), (interface.get_rssi(), interface.get_snr()))
                     queued = [RNS.Transport.inbound_queues.get(), RNS.Transport.inbound_queues.get()]
@@ -199,7 +266,7 @@ def _run_real_radio_tests():
                     self.assertEqual([], RNS.Transport.local_client_q_cache)
 
         def test_missing_message_phy_is_not_filled_from_stale_interface(self):
-            interface = self.make_interface()
+            interface = self.make_interface(ByteBridge(b""))
             interface.r_stat_rssi, interface.r_stat_snr = -40, 12.0
             source = RNS.Destination(RNS.Identity(), RNS.Destination.IN, RNS.Destination.SINGLE, "lxmf", "delivery")
             destination = RNS.Destination(RNS.Identity(), RNS.Destination.IN, RNS.Destination.SINGLE, "lxmf", "delivery")

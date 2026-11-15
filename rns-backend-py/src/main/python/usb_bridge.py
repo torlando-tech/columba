@@ -6,7 +6,7 @@ with RNode devices. Handles device enumeration, permission requests, and
 bridge initialization.
 
 This module serves as the Python-side wrapper for the Kotlin USB bridge,
-providing a clean interface for the rnode_interface.py to use when
+providing a clean interface for columba_rnode_interface.py to use when
 operating in USB mode.
 """
 

@@ -76,7 +76,7 @@ interface UsbConnectionListener {
  * @property context Application context for USB access
  */
 @Suppress("TooManyFunctions", "LargeClass")
-@ReflectivelyKept // Python (rnode_interface.py / usb_bridge.py) calls this via Chaquopy reflection — R8 must not strip/rename it
+@ReflectivelyKept // Python (columba_rnode_interface.py / usb_bridge.py) calls this via Chaquopy reflection — R8 must not strip/rename it
 class KotlinUSBBridge(
     private val context: Context,
 ) : SerialInputOutputManager.Listener {

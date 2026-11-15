@@ -463,7 +463,7 @@ class PythonRnsTransportAdmin(
     // ==================== RNode ====================
 
     override suspend fun reconnectRNodeInterface() {
-        // Documented no-op. RNode-over-python (the python `rnode_interface.py`
+        // Documented no-op. RNode-over-python (the python `columba_rnode_interface.py`
         // RNS.Interface adapter + USB/BLE bring-up) is an on-device follow-up;
         // there is no python RNode interface to reconnect in this structural cut.
         Log.i(TAG, "reconnectRNodeInterface: no-op — python RNode support is on-device follow-up")

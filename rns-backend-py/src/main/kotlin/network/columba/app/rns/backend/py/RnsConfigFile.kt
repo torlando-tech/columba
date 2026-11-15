@@ -247,13 +247,14 @@ internal object RnsConfigFile {
                 //     port 7633". No jnius, no Kotlin bridge needed — pure
                 //     sockets. We emit `type = RNodeInterface` so RNS's
                 //     internal dispatch (Reticulum.py:900) picks it up.
-                //   • BLE / Classic / USB — upstream needs jnius for
-                //     Bluetooth (broken under Chaquopy). We bundle a
-                //     Columba-authored RNS.Interface
-                //     (columba_rnode_interface.py, deployed by
+                //   • BLE / Classic / USB — upstream's own connections need
+                //     jnius/able for Bluetooth (broken under Chaquopy), so
+                //     columba_rnode_interface.py (deployed by
                 //     event_bridge.deploy_bundled_interfaces to
-                //     <configdir>/interfaces/ColumbaRNodeInterface.py) that
-                //     bridges via KotlinRNodeBridge / KotlinUSBBridge.
+                //     <configdir>/interfaces/ColumbaRNodeInterface.py) is a
+                //     subclass of upstream's Android RNodeInterface that
+                //     injects KotlinRNodeBridge / KotlinUSBBridge as its
+                //     transport and inherits the whole protocol.
                 if (iface.connectionMode == "tcp") {
                     val host = iface.tcpHost
                     if (host.isNullOrBlank()) {
@@ -285,6 +286,12 @@ internal object RnsConfigFile {
                     sb.appendLine("    type = ColumbaRNodeInterface")
                     sb.appendLine("    enabled = yes")
                     sb.appendLine("    connection_mode = ${iface.connectionMode}")
+                    // force_ble makes upstream treat the injected transport as
+                    // its BLE connection: `use_ble` drives the
+                    // `device_disappeared` check in validateRadioState().
+                    if (iface.connectionMode == "ble" || iface.connectionMode == "classic") {
+                        sb.appendLine("    force_ble = yes")
+                    }
                     if (iface.targetDeviceName.isNotBlank()) {
                         sb.appendLine("    target_device_name = ${iface.targetDeviceName}")
                     }

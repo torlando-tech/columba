@@ -786,7 +786,14 @@ class RNodeWizardViewModel
                     frequency = if ("frequency" !in userModifiedFields) region.frequency.toString() else it.frequency,
                     frequencyError = if ("frequency" !in userModifiedFields) null else it.frequencyError,
                     txPower = if ("txPower" !in userModifiedFields) region.defaultTxPower.toString() else it.txPower,
-                    txPowerError = if ("txPower" !in userModifiedFields) null else it.txPowerError,
+                    // Keep the user's value but re-check it against the new region ceiling,
+                    // otherwise a stale error from the previous region would survive.
+                    txPowerError =
+                        if ("txPower" !in userModifiedFields) {
+                            null
+                        } else {
+                            RNodeConfigValidator.validateTxPower(it.txPower, region).error?.toUiMessage()
+                        },
                     stAlock = if ("stAlock" !in userModifiedFields) airtimeLimit else it.stAlock,
                     stAlockError = if ("stAlock" !in userModifiedFields) null else it.stAlockError,
                     ltAlock = if ("ltAlock" !in userModifiedFields) airtimeLimit else it.ltAlock,
@@ -3469,8 +3476,11 @@ class RNodeWizardViewModel
         // ========== FREQUENCY REGION SELECTION ==========
 
         fun selectFrequencyRegion(region: FrequencyRegion) {
-            // Clear user modifications - user is explicitly requesting region defaults
-            userModifiedFields.clear()
+            // Frequency and airtime limits are owned by the region, so selecting a region
+            // resets them to its defaults. TX power is a user preference that stays within
+            // the region ceiling, so a value the user already entered survives the region
+            // change and is revalidated by applyFrequencyRegionSettings().
+            userModifiedFields.retainAll(setOf("txPower"))
             _state.update {
                 it.copy(
                     selectedFrequencyRegion = region,
@@ -3479,7 +3489,8 @@ class RNodeWizardViewModel
                     isCustomMode = false,
                 )
             }
-            // Apply region defaults (frequency, tx power, airtime limits) when region changes
+            // Apply region defaults (frequency, airtime limits, and tx power only when the
+            // user never touched it) when the region changes
             // This ensures validation errors from a previous region are cleared
             applyFrequencyRegionSettings()
         }

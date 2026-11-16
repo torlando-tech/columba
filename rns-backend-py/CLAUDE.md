@@ -10,7 +10,7 @@ The `src/main/python/` tree contains **only**:
 1. **Upstream RNS/LXMF wheels** — pip-installed via the `chaquopy { pip { ... } }`
    block in `build.gradle.kts`. Pinned in `PINNED_VERSIONS.md`.
 2. **Architecturally-forced `RNS.Interface` adapters** — `ble_modules/`,
-   `drivers/`, `rnode_interface.py`, `usb_bridge.py`. These exist in Python
+   `drivers/`, `columba_rnode_interface.py`, `usb_bridge.py`. These exist in Python
    because `Transport.find_interfaces()` only discovers Python `RNS.Interface`
    subclasses — they cannot be replaced by Kotlin.
 3. **Chaquopy environment stubs** — `jnius/`, `usb4a/`, `usbserial4a/`. Tiny

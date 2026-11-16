@@ -1,1702 +1,399 @@
+"""ColumbaRNodeInterface — upstream's Android RNode interface with Columba transports.
+
+`RNS.Interfaces.Android.RNodeInterface` owns the complete RNode implementation:
+KISS framing, detect/init/validate, the read loop, framebuffer, battery, airtime
+limits and TCP mode. Its single transport seam is the connection object it stores
+in `self.serial` from `open_port()`; the class only requires
+
+    is_open, read(), write(bytes) -> int, close(), cleanup()
+    connected, CONNECT_TIMEOUT, device_disappeared   (BLE lifecycle)
+
+Upstream cannot supply those connections under Chaquopy: its BLE path is built on
+`able` (pyjnius GATT) and its Bluetooth-Classic path on `pyjnius` BluetoothSocket,
+both unusable in an embedded Python. Columba already owns byte-level transports in
+Kotlin (`KotlinRNodeBridge` for BLE/Classic, `KotlinUSBBridge` for USB-serial), so
+this module injects them and inherits everything else from upstream.
+
+One method is overridden: `validateRadioState()` adopts the TX power the device
+echoes (firmware clamps/quantises it) instead of failing the interface, so a
+sub-floor power setting still brings the radio online with the achievable value.
+
+Deployment (unchanged): `event_bridge` copies this file to
+`<configdir>/interfaces/ColumbaRNodeInterface.py`, and `RnsConfigFile` emits
+`type = ColumbaRNodeInterface` for BLE/Classic/USB RNode interfaces (TCP RNode
+uses upstream `type = RNodeInterface` directly).
+
+Config keys consumed here: `connection_mode` (ble|classic|usb|tcp),
+`target_device_name`, `target_device_address`, `usb_device_id`,
+`usb_vendor_id`/`usb_product_id`, `enable_framebuffer`.
 """
-ColumbaRNodeInterface — Columba-authored RNS.Interface for RNode LoRa hardware.
 
-Bridges BLE (Classic SPP or BLE GATT) and USB-serial RNode connections to RNS's
-custom-interface loader path. TCP-mode RNode rides on upstream
-`RNS.Interfaces.Android.RNodeInterface` (no Columba interface needed) — this
-file handles ONLY BLE/Classic + USB because the upstream Android paths rely on
-pyjnius for Bluetooth/USB, which is non-functional under Chaquopy.
-
-The KISS framing, frame parsing, and RNode binary protocol are direct ports
-from upstream `RNS.Interfaces.RNodeInterface`. Only the I/O layer changes:
-upstream uses a `serial.Serial` port; here we delegate to the Kotlin bridges
-(`KotlinRNodeBridge` for Classic/BLE, `KotlinUSBBridge` for USB-serial) via
-event-bridge accessors. The bridge instances are populated by Kotlin
-(`PythonRnsRuntime.start`) before `Reticulum()` is constructed, so the
-interface's `__init__` can resolve them synchronously.
-
-External-interface loader contract (Reticulum.py:919-937):
-    • file path:   <configdir>/interfaces/ColumbaRNodeInterface.py
-    • config type: type = ColumbaRNodeInterface
-    • module footer: interface_class = ColumbaRNodeInterface
-    • class signature: __init__(self, owner, configuration)
-    • subclass of RNS.Interfaces.Interface.Interface
-"""
-
-import collections
+import RNS
 import threading
 import time
-import RNS
+
 from RNS.Interfaces.Interface import Interface
+from RNS.Interfaces.Android.RNodeInterface import RNodeInterface as AndroidRNodeInterface
 
 
-class KISS:
-    """KISS protocol constants and helpers."""
+class BridgeConnection:
+    """Stream adapter exposing an RNode transport the way upstream expects.
 
-    # Frame delimiters
-    FEND = 0xC0
-    FESC = 0xDB
-    TFEND = 0xDC
-    TFESC = 0xDD
-
-    # Commands
-    CMD_UNKNOWN = 0xFE
-    CMD_DATA = 0x00
-    CMD_FREQUENCY = 0x01
-    CMD_BANDWIDTH = 0x02
-    CMD_TXPOWER = 0x03
-    CMD_SF = 0x04
-    CMD_CR = 0x05
-    CMD_RADIO_STATE = 0x06
-    CMD_RADIO_LOCK = 0x07
-    CMD_DETECT = 0x08
-    CMD_LEAVE = 0x0A
-    CMD_ST_ALOCK = 0x0B
-    CMD_LT_ALOCK = 0x0C
-    CMD_READY = 0x0F
-    CMD_STAT_RX = 0x21
-    CMD_STAT_TX = 0x22
-    CMD_STAT_RSSI = 0x23
-    CMD_STAT_SNR = 0x24
-    CMD_STAT_CHTM = 0x25
-    CMD_STAT_PHYPRM = 0x26
-    CMD_STAT_BAT = 0x27
-    CMD_BLINK = 0x30
-    CMD_RANDOM = 0x40
-    CMD_BT_CTRL = 0x46
-    CMD_BT_PIN = 0x62      # Bluetooth PIN response (4-byte big-endian integer)
-    CMD_PLATFORM = 0x48
-    CMD_MCU = 0x49
-    CMD_FW_VERSION = 0x50
-    CMD_RESET = 0x55
-    CMD_ERROR = 0x90
-
-    # External framebuffer (display)
-    CMD_FB_EXT = 0x41      # Enable/disable external framebuffer
-    CMD_FB_WRITE = 0x43    # Write framebuffer data
-
-    # Framebuffer constants
-    FB_BYTES_PER_LINE = 8  # 64 pixels / 8 bits per byte
-
-    # Detection
-    DETECT_REQ = 0x73
-    DETECT_RESP = 0x46
-
-    # Radio state
-    RADIO_STATE_OFF = 0x00
-    RADIO_STATE_ON = 0x01
-    RADIO_STATE_ASK = 0xFF
-
-    # Bluetooth control commands
-    BT_CTRL_PAIRING_MODE = 0x02  # Enter Bluetooth pairing mode
-
-    # Platforms
-    PLATFORM_AVR = 0x90
-    PLATFORM_ESP32 = 0x80
-    PLATFORM_NRF52 = 0x70
-
-    # Errors
-    ERROR_INITRADIO = 0x01
-    ERROR_TXFAILED = 0x02
-    ERROR_QUEUE_FULL = 0x04
-    ERROR_INVALID_CONFIG = 0x40
-
-    # Human-readable error messages
-    ERROR_MESSAGES = {
-        0x01: "Radio initialization failed",
-        0x02: "Transmission failed",
-        0x04: "Data queue overflowed",
-        0x40: (
-            "Invalid configuration - TX power may exceed device limits. "
-            "Try reducing TX power (common limits: SX1262=22dBm, SX1276=17dBm)"
-        ),
-    }
-
-    @staticmethod
-    def get_error_message(error_code):
-        """Get human-readable error message for error code."""
-        return KISS.ERROR_MESSAGES.get(error_code, f"Unknown error (0x{error_code:02X})")
-
-    @staticmethod
-    def escape(data):
-        """Escape special bytes in KISS data."""
-        data = data.replace(bytes([0xDB]), bytes([0xDB, 0xDD]))
-        data = data.replace(bytes([0xC0]), bytes([0xDB, 0xDC]))
-        return data
-
-    @staticmethod
-    def unescape(data):
-        """
-        Unescape KISS data.
-
-        Handles escape sequences:
-        - 0xDB 0xDC -> 0xC0 (FEND)
-        - 0xDB 0xDD -> 0xDB (FESC)
-        - Invalid escape (0xDB followed by other) -> skipped entirely
-        - Trailing 0xDB -> skipped
-        """
-        result = bytearray()
-        i = 0
-        while i < len(data):
-            if data[i] == 0xDB:  # FESC - escape character
-                if i + 1 >= len(data):
-                    # Trailing FESC at end of data - skip it
-                    break
-                next_byte = data[i + 1]
-                if next_byte == 0xDC:
-                    result.append(0xC0)  # TFEND -> FEND
-                    i += 2
-                elif next_byte == 0xDD:
-                    result.append(0xDB)  # TFESC -> FESC
-                    i += 2
-                else:
-                    # Invalid escape sequence - skip both bytes
-                    i += 2
-            else:
-                result.append(data[i])
-                i += 1
-        return bytes(result)
-
-
-class ColumbaRNodeInterface(Interface):
-    """
-    Columba-authored RNS.Interface speaking KISS to RNode LoRa hardware
-    over Bluetooth Classic (SPP/RFCOMM), Bluetooth Low Energy (GATT), or
-    USB serial. Bridges to Kotlin-side hardware drivers
-    (`KotlinRNodeBridge`, `KotlinUSBBridge`) via `event_bridge` accessors —
-    pyjnius is non-functional under Chaquopy so we cannot use the upstream
-    Android BLE/USB paths.
+    Upstream treats the object as `self.serial`: non-blocking `read()`, `write()`
+    returning the byte count, `is_open`, plus the BLE lifecycle members
+    (`connected`, `CONNECT_TIMEOUT`, `device_disappeared`, `close`, `cleanup`).
     """
 
-    # Validation limits
-    FREQ_MIN = 137000000
-    FREQ_MAX = 3000000000
+    CONNECT_TIMEOUT = 7.0
 
-    # Required firmware version
-    REQUIRED_FW_VER_MAJ = 1
-    REQUIRED_FW_VER_MIN = 52
+    def __init__(self, name, read_fn, write_fn, connected_fn, close_fn=None):
+        self.name = name
+        self._read = read_fn
+        self._write = write_fn
+        self._connected = connected_fn
+        self._close = close_fn
 
-    # Timeouts
-    DETECT_TIMEOUT = 5.0
-    CONFIG_DELAY = 0.15
+    @property
+    def connected(self):
+        try:
+            return bool(self._connected())
+        except Exception:  # noqa: BLE001
+            return False
 
-    # Connection modes (string values mirror what RnsConfigFile.kt emits)
-    MODE_CLASSIC = "classic"  # Bluetooth Classic (SPP/RFCOMM)
-    MODE_BLE = "ble"          # Bluetooth Low Energy (GATT)
-    MODE_USB = "usb"          # USB Serial
+    @property
+    def is_open(self):
+        return self.connected
 
-    # IMPORTANT: HW_MTU must NOT be None on the instance.
-    # When HW_MTU is None, RNS Transport truncates packet.data by 3 bytes
-    # before computing link_id in Link.validate_request(). 500 (LoRa typical
-    # MTU) matches the v0.10.x reference and prevents this truncation.
-    HW_MTU = 500
+    @property
+    def in_waiting(self):
+        return 0
 
-    # Mirrors upstream RNS.Interfaces.RNodeInterface.DEFAULT_IFAC_SIZE.
-    # Reticulum.py:1050 falls back to `interface.DEFAULT_IFAC_SIZE` when no
-    # `ifac_size` is configured on the interface — it's a per-interface-type
-    # class attribute on the upstream RNode interface (not defined on the
-    # `Interface` base), so subclassing `Interface.Interface` alone doesn't
-    # inherit it. Without this, RNS panics with `AttributeError` during
-    # external-interface init and the whole interface bring-up fails.
-    DEFAULT_IFAC_SIZE = 8
+    @property
+    def device_disappeared(self):
+        return not self.connected
+
+    def read(self, *args, **kwargs):
+        if not self.connected:
+            raise IOError(f"RNode transport for {self.name} is not connected")
+        return bytes(self._read() or b"")
+
+    def write(self, data):
+        data = bytes(data)
+        if not self.connected:
+            return 0
+        written = self._write(data)
+        # writeSync/write report -1 when Android rejects the write; keep that
+        # value so upstream's `written != len(frame)` check raises IOError
+        # instead of accepting a frame the radio never received.
+        return 0 if written is None else written
+
+    def close(self):
+        if self._close is not None:
+            try:
+                self._close()
+            except Exception as e:  # noqa: BLE001
+                RNS.log(f"Error closing RNode transport for {self.name}: {e}", RNS.LOG_DEBUG)
+
+    def cleanup(self):
+        self.close()
+
+
+class ColumbaRNodeInterface(AndroidRNodeInterface):
+    """Upstream Android RNode interface with Kotlin-backed BLE/Classic/USB transports."""
+
+    MODE_BLE = "ble"
+    MODE_CLASSIC = "classic"
+    MODE_USB = "usb"
+    MODE_TCP = "tcp"
 
     def __init__(self, owner, configuration):
-        """
-        Initialize the RNode interface from upstream RNS's loader contract.
-
-        Args:
-            owner: The Reticulum.Transport (passed by the external-interface
-                loader at Reticulum.py:936).
-            configuration: ConfigObj section or dict for this interface block
-                from the on-disk `config` file. Parsed via
-                `Interface.get_config_obj()` to normalise either shape.
-        """
-        super().__init__()
-
-        # Parse the configuration block. `RnsConfigFile.kt` writes the keys
-        # without underscores to match upstream RNS convention (txpower,
-        # spreadingfactor, codingrate). Optional fields are guarded with
-        # `in c` to preserve None for "not set".
         c = Interface.get_config_obj(configuration)
-
-        self.owner = owner
-        self.name = c["name"]
-        self.online = False
-        self.detached = False
-        self.detected = False
-        self.firmware_ok = False
-        self.interface_ready = False
-
-        # Standard RNS interface attributes. IN/OUT set explicitly here even
-        # though the loader at Reticulum.py:959 force-sets OUT=True post-init;
-        # mirror the pattern from android_ble_interface.py so the class is
-        # consistent on its own.
-        self.IN = True
-        self.OUT = True
-        # Transport copies these per-frame KISS readings onto inbound packets.
-        self.reports_phy_stats = True
-        self.bitrate = 10000  # Approximate LoRa bitrate (varies with SF/BW)
-        self.rxb = 0
-        self.txb = 0
-        self.held_announces = []
-        self.announce_allowed_at = 0
-        self.announce_cap = RNS.Reticulum.ANNOUNCE_CAP
-        self.oa_freq_deque = collections.deque(maxlen=16)
-        self.ia_freq_deque = collections.deque(maxlen=16)
-        self.announce_rate_target = None
-        self.announce_rate_grace = 0
-        self.announce_rate_penalty = 0
-        self.ifac_size = 16
-        self.ifac_netname = c["network_name"] if "network_name" in c else None
-        # Raw passphrase; RNS.Transport derives the key.
-        self.ifac_netkey = c["passphrase"] if "passphrase" in c else None
-        self.AUTOCONFIGURE_MTU = False
-        self.FIXED_MTU = True
-        # Force HW_MTU back onto the instance because the base
-        # Interface.__init__ above set it to None. Matches the BLEInterface
-        # workaround for the same RNS bug — see BLEInterface.py:284-302.
-        self.HW_MTU = ColumbaRNodeInterface.HW_MTU
-        self.mtu = RNS.Reticulum.MTU
-
-        # Interface mode (RNS Transport behaviour selector).
-        mode_str = c["mode"] if "mode" in c else "full"
-        if mode_str == "full":
-            self.mode = Interface.MODE_FULL
-        elif mode_str == "gateway":
-            self.mode = Interface.MODE_GATEWAY
-        elif mode_str == "access_point":
-            self.mode = Interface.MODE_ACCESS_POINT
-        elif mode_str == "point_to_point":
-            self.mode = Interface.MODE_POINT_TO_POINT
-        elif mode_str == "roaming":
-            self.mode = Interface.MODE_ROAMING
-        elif mode_str == "boundary":
-            self.mode = Interface.MODE_BOUNDARY
-        else:
-            RNS.log(f"ColumbaRNodeInterface '{self.name}': unknown mode '{mode_str}', defaulting to full", RNS.LOG_WARNING)
-            self.mode = Interface.MODE_FULL
-
-        # Connection target + mode.
-        self.connection_mode = c["connection_mode"] if "connection_mode" in c else self.MODE_CLASSIC
+        self.connection_mode = (c["connection_mode"] if "connection_mode" in c else self.MODE_CLASSIC) or self.MODE_CLASSIC
+        self.connection_mode = str(self.connection_mode).lower()
         self.target_device_name = c["target_device_name"] if "target_device_name" in c else None
-        # USB-specific fields. usb_device_id may be stale (Android reassigns
-        # IDs across plug cycles); usb_vendor_id + usb_product_id are stable
-        # and used by KotlinUSBBridge.findDeviceByVidPid() at start time.
-        self.usb_device_id = int(c["usb_device_id"]) if "usb_device_id" in c else None
-        self.usb_vendor_id = int(c["usb_vendor_id"]) if "usb_vendor_id" in c else None
-        self.usb_product_id = int(c["usb_product_id"]) if "usb_product_id" in c else None
-
-        # Radio config — RnsConfigFile.kt emits the no-underscore key names
-        # to match upstream RNS convention (RNodeInterface.py:151-155).
-        self.frequency = int(c["frequency"]) if "frequency" in c else 915000000
-        self.bandwidth = int(c["bandwidth"]) if "bandwidth" in c else 125000
-        self.txpower = int(c["txpower"]) if "txpower" in c else 7
-        self.sf = int(c["spreadingfactor"]) if "spreadingfactor" in c else 7
-        self.cr = int(c["codingrate"]) if "codingrate" in c else 5
-        self.st_alock = float(c["st_alock"]) if "st_alock" in c else None
-        self.lt_alock = float(c["lt_alock"]) if "lt_alock" in c else None
-
-        # External framebuffer (Columba logo on RNode display).
+        self.target_device_address = c["target_device_address"] if "target_device_address" in c else None
+        self.usb_device_id = int(c["usb_device_id"]) if "usb_device_id" in c and c["usb_device_id"] is not None else None
+        self.usb_vendor_id = int(c["usb_vendor_id"]) if "usb_vendor_id" in c and c["usb_vendor_id"] is not None else None
+        self.usb_product_id = int(c["usb_product_id"]) if "usb_product_id" in c and c["usb_product_id"] is not None else None
         self.enable_framebuffer = c.as_bool("enable_framebuffer") if "enable_framebuffer" in c else False
-        self.framebuffer_enabled = False
 
-        # Reject TCP mode early — RnsConfigFile.kt splits TCP RNodes to
-        # upstream `RNS.RNodeInterface`, so a TCP request reaching this file
-        # is a misconfiguration.
-        if self.connection_mode == "tcp":
-            RNS.log(
-                f"ColumbaRNodeInterface '{self.name}': connection_mode='tcp' "
-                "is not supported by this interface — TCP RNodes use the "
-                "upstream RNS.RNodeInterface. Marking offline.",
-                RNS.LOG_ERROR,
-            )
-            return
-
-        # Resolve the bridges via event_bridge accessors. Both may be None if
-        # the Kotlin runtime didn't set them yet; we log + mark offline rather
-        # than crash so RNS Transport can keep other interfaces alive.
-        self.kotlin_bridge = None
-        self.usb_bridge = None
-        self._get_kotlin_bridge()
-
-        # State tracking
-        self.state = KISS.RADIO_STATE_OFF
-        self.platform = None
-        self.mcu = None
-        self.maj_version = 0
-        self.min_version = 0
-
-        # Radio state readback
-        self.r_frequency = None
-        self.r_bandwidth = None
-        self.r_txpower = None
-        self.r_sf = None
-        self.r_cr = None
-        self.r_state = None
-        self.r_stat_rssi = None
-        self.r_stat_snr = None
-        self.r_stat_bat = None
-
-        # Read thread
-        self._read_thread = None
-        self._running = threading.Event()  # Thread-safe flag for read loop control
-        self._read_lock = threading.Lock()
-        self._start_lock = threading.Lock()
-        self._online_notification_lock = threading.RLock()
-
-        # Auto-reconnection
-        self._reconnect_lock = threading.Lock()
-        self._reconnect_thread = None
-        self._reconnecting = False
-        self._reconnect_requested = False
-        self._reconnect_cancelled = threading.Event()
-        self._max_reconnect_attempts = 30  # Try for ~5 minutes (30 * 10s)
-        self._reconnect_interval = 10.0  # Seconds between reconnection attempts
-        self._long_reconnect_interval = 15 * 60  # Indefinite low-duty recovery cadence
+        self._online = False
+        # Contract attribute read by PythonRnsTransportAdmin (`status_reason`):
+        # the UI shows the pairing warning + repair action when it is
+        # "pairing_required".
         self.status_reason = None
+        self._online_lock = threading.Lock()
+        self._kotlin_bridge = None
+        self._usb_bridge = None
+        self._logo_requested = False
 
-        # Error / status callbacks (Kotlin sets these via setOnErrorReceived /
-        # setOnOnlineStatusChanged on the constructed interface — optional).
-        self._on_error_callback = None
-        self._on_online_status_changed = None
+        # Upstream's own connections (able / pyjnius) must never be built here:
+        # `allow_bluetooth` would construct AndroidBluetoothManager -> autoclass.
+        # RnsConfigFile emits ble/classic as force_ble, usb as a serial port name.
+        super().__init__(owner, configuration)
 
-        # Validate configuration. If invalid, log and bail without raising so
-        # other interfaces stay up.
-        try:
-            self._validate_config()
-        except ValueError as e:
-            RNS.log(
-                f"ColumbaRNodeInterface '{self.name}': invalid config — {e}",
-                RNS.LOG_ERROR,
-            )
-            return
+        self._display_logo()
 
-        RNS.log(f"ColumbaRNodeInterface '{self.name}' initialized", RNS.LOG_DEBUG)
+    # ---- online state: mirror transitions to the Kotlin bridge ----
 
-        # Trigger the actual hardware connection in a daemon thread. In
-        # v0.10.x, this was driven by `reticulum_wrapper.initialize()`
-        # post-Reticulum-construct (the wrapper would call start() on each
-        # custom interface). Slim-python doesn't have a wrapper, and RNS's
-        # external-interface loader (Reticulum.py:1020) only calls __init__
-        # + final_init — it does NOT call start() on non-RNodeMulti
-        # interfaces. So if we don't kick off start() here, the interface
-        # stays registered-but-offline forever.
-        #
-        # Daemon thread (not synchronous) because start() can take seconds
-        # (BLE scan + GATT connect) and RNS iterates interfaces in a single
-        # for-loop — blocking here would delay every subsequent interface's
-        # init and trip the apply-changes timeout. start() itself spawns
-        # the read thread + configure_device and returns when the device
-        # is ready (or False on failure); the daemon wrapper just keeps
-        # that error surface from killing the process.
-        threading.Thread(
-            target=self._safe_start, name=f"ColumbaRNode-start-{self.name}", daemon=True,
-        ).start()
+    @property
+    def online(self):
+        return self._online
 
-    def _safe_start(self):
-        """Wraps start() so a connection failure in the daemon thread doesn't
-        leak an uncaught exception. Errors are already logged by start();
-        this just catches anything start() let through and keeps the
-        interface in a sane (offline) state."""
-        try:
-            self.start()
-        except Exception as e:  # noqa: BLE001
-            RNS.log(
-                f"ColumbaRNodeInterface[{self.name}] start() raised: {e} — interface staying offline",
-                RNS.LOG_ERROR,
-            )
-            import traceback
-            traceback.print_exc()
-            self.online = False
+    @online.setter
+    def online(self, value):
+        value = bool(value)
+        with getattr(self, "_online_lock", threading.Lock()):
+            changed = getattr(self, "_online", False) != value
+            self._online = value
+        if changed:
+            self._notify_online_status(value)
+            if value and self.enable_framebuffer and not self._logo_requested:
+                # Upstream only re-displays last_imagedata from reconnect_port(),
+                # so the first connection has to show the logo itself. Off the
+                # validation path so a slow write cannot delay going online.
+                self._logo_requested = True
+                threading.Thread(target=self._display_logo, daemon=True).start()
 
-    def _get_kotlin_bridge(self):
-        """Resolve the Kotlin BLE/Classic bridge via event_bridge.
-
-        The bridge is populated by `PythonRnsRuntime.start()` before
-        `Reticulum()` is constructed; if it's still None here, log + give
-        up — the interface will stay offline but RNS won't crash.
-        """
-        try:
-            from event_bridge import get_rnode_bridge
-            self.kotlin_bridge = get_rnode_bridge()
-            if self.kotlin_bridge is not None:
-                RNS.log("ColumbaRNodeInterface: KotlinRNodeBridge resolved via event_bridge", RNS.LOG_DEBUG)
-            else:
-                RNS.log(
-                    "ColumbaRNodeInterface: KotlinRNodeBridge not available "
-                    "(event_bridge.get_rnode_bridge() returned None) — "
-                    "BLE/Classic mode will not function",
-                    RNS.LOG_ERROR,
-                )
-        except Exception as e:  # noqa: BLE001
-            RNS.log(f"ColumbaRNodeInterface: failed to get KotlinRNodeBridge: {e}", RNS.LOG_ERROR)
-
-    def _get_usb_bridge(self):
-        """Resolve the Kotlin USB-serial bridge via the usb_bridge slim-Python module."""
-        try:
-            import usb_bridge
-            self.usb_bridge = usb_bridge.get_usb_bridge()
-            if self.usb_bridge is not None:
-                RNS.log("ColumbaRNodeInterface: KotlinUSBBridge resolved via usb_bridge module", RNS.LOG_DEBUG)
-            else:
-                RNS.log(
-                    "ColumbaRNodeInterface: KotlinUSBBridge not available "
-                    "(usb_bridge.get_usb_bridge() returned None) — USB mode will not function",
-                    RNS.LOG_ERROR,
-                )
-        except Exception as e:  # noqa: BLE001
-            RNS.log(f"ColumbaRNodeInterface: failed to get KotlinUSBBridge: {e}", RNS.LOG_ERROR)
-
-    def _validate_config(self):
-        """Validate configuration parameters."""
-        if self.frequency < self.FREQ_MIN or self.frequency > self.FREQ_MAX:
-            raise ValueError(f"Invalid frequency: {self.frequency}")
-
-        # Max TX power varies by region (up to 36 dBm for NZ 865)
-        # The RNode firmware will validate against actual hardware limits
-        # and return error 0x40 if TX power exceeds device capability
-        if self.txpower < 0 or self.txpower > 36:
-            raise ValueError(f"Invalid TX power: {self.txpower}")
-
-        if self.bandwidth < 7800 or self.bandwidth > 1625000:
-            raise ValueError(f"Invalid bandwidth: {self.bandwidth}")
-
-        if self.sf < 5 or self.sf > 12:
-            raise ValueError(f"Invalid spreading factor: {self.sf}")
-
-        if self.cr < 5 or self.cr > 8:
-            raise ValueError(f"Invalid coding rate: {self.cr}")
-
-        if self.st_alock is not None and (self.st_alock < 0.0 or self.st_alock > 100.0):
-            raise ValueError(f"Invalid short-term airtime limit: {self.st_alock}")
-
-        if self.lt_alock is not None and (self.lt_alock < 0.0 or self.lt_alock > 100.0):
-            raise ValueError(f"Invalid long-term airtime limit: {self.lt_alock}")
-
-    def start(self):
-        """Run one complete transport/configuration attempt at a time."""
-        with self._start_lock:
-            return self._start_once()
-
-    def _start_once(self):
-        """Start the interface - connect to RNode and configure radio."""
-        # Handle USB mode separately
+    def _notify_online_status(self, online):
+        # The Kotlin side raises/dismisses the "RNode Disconnected" heads-up
+        # notification from this listener. USB has its own detach broadcast path
+        # and its bridge has no online-status listener, so it is filtered out.
         if self.connection_mode == self.MODE_USB:
-            return self._start_usb()
+            return
+        bridge = self._kotlin_bridge
+        if bridge is None or not hasattr(bridge, "notifyOnlineStatusChanged"):
+            return
+        try:
+            bridge.notifyOnlineStatusChanged(online, self.name)
+        except Exception as e:  # noqa: BLE001
+            RNS.log(f"Failed to notify Kotlin bridge of online status change: {e}", RNS.LOG_DEBUG)
 
-        if self.kotlin_bridge is None:
-            RNS.log("Cannot start - KotlinRNodeBridge not available", RNS.LOG_ERROR)
-            return False
+    # ---- transports ----
+
+    def open_port(self):
+        if self.connection_mode == self.MODE_TCP:
+            return super().open_port()
+
+        if self.connection_mode == self.MODE_USB:
+            connection = self._open_usb_port()
+        else:
+            connection = self._open_bluetooth_port()
+
+        if connection is None:
+            self.serial = None
+            self.ble = None
+            raise IOError(f"Could not connect RNode '{self.name}' via {self.connection_mode}")
+
+        self.serial = connection
+        self.ble = connection if self.connection_mode in (self.MODE_BLE, self.MODE_CLASSIC) else None
+        self.port = f"{self.connection_mode}://{self.target_device_name or self.name}"
+
+    def _open_bluetooth_port(self):
+        import event_bridge
+
+        self._kotlin_bridge = event_bridge.get_rnode_bridge()
+        if self._kotlin_bridge is None:
+            RNS.log("ColumbaRNodeInterface: KotlinRNodeBridge unavailable — RNode stays offline", RNS.LOG_ERROR)
+            return None
 
         if not self.target_device_name:
-            RNS.log("Cannot start - no target device name configured", RNS.LOG_ERROR)
-            return False
+            RNS.log(f"ColumbaRNodeInterface '{self.name}': no target_device_name configured", RNS.LOG_ERROR)
+            return None
 
-        mode_str = "BLE" if self.connection_mode == self.MODE_BLE else "Bluetooth Classic"
-
-        # The KotlinRNodeBridge is a process-wide singleton with one
-        # connectedDeviceName / one GATT client / one shared read buffer at a
-        # time. If a sibling ColumbaRNodeInterface has already won the
-        # connect-race (two interfaces' start() threads can fire in the same
-        # millisecond because RNS spawns them in the interface-init for-loop),
-        # calling bridge.connect() again clobbers the first connection's state
-        # AND has both python interfaces reading from the same byte stream,
-        # which corrupts both. Bail out cleanly so the first one keeps
-        # working and this one stays offline. (Architectural constraint
-        # inherited from v0.10.x — same single-bridge design.)
+        bridge = self._kotlin_bridge
+        already = None
         try:
-            if (
-                hasattr(self.kotlin_bridge, "isConnected")
-                and self.kotlin_bridge.isConnected()
-                and hasattr(self.kotlin_bridge, "getConnectedDeviceName")
-            ):
-                already = self.kotlin_bridge.getConnectedDeviceName()
-                if already and already != self.target_device_name:
-                    RNS.log(
-                        f"Cannot start - KotlinRNodeBridge already serving '{already}'; "
-                        f"only one BLE/Classic RNode at a time. '{self.target_device_name}' "
-                        f"staying offline. To use this RNode, disable the other one "
-                        f"and Apply & Restart.",
-                        RNS.LOG_ERROR,
-                    )
-                    return False
+            if bridge.isConnected():
+                already = bridge.getConnectedDeviceName()
         except Exception as e:  # noqa: BLE001
-            RNS.log(f"Bridge contention check failed (continuing): {e}", RNS.LOG_DEBUG)
+            RNS.log(f"ColumbaRNodeInterface: bridge contention check failed (continuing): {e}", RNS.LOG_DEBUG)
 
-        # Stop the previous generation's poller before creating a replacement
-        # transport. Otherwise it can consume and drop bytes from the fresh
-        # Kotlin bridge owner before the post-connect cleanup below runs.
-        if self._read_thread is not None and self._read_thread.is_alive():
+        if already and already != self.target_device_name:
+            # KotlinRNodeBridge is a process-wide singleton with one connection
+            # and one read buffer. A second interface must not reconnect under
+            # the first one's feet and split its byte stream.
             RNS.log(
-                f"ColumbaRNodeInterface[{self.name}]: stopping stale BLE/Classic "
-                "read thread before reconnect transport",
-                RNS.LOG_INFO,
+                f"ColumbaRNodeInterface: KotlinRNodeBridge already serving '{already}'; "
+                f"'{self.target_device_name}' stays offline until the other RNode is disabled",
+                RNS.LOG_ERROR,
             )
-            self._running.clear()
-            self._read_thread.join(timeout=2.0)
-            if self._read_thread.is_alive():
-                RNS.log(
-                    f"ColumbaRNodeInterface[{self.name}]: stale read thread did not stop "
-                    "within timeout — aborting start to prevent race",
-                    RNS.LOG_ERROR,
-                )
-                return False
+            return None
 
-        RNS.log(f"Connecting to RNode '{self.target_device_name}' via {mode_str}...", RNS.LOG_INFO)
-
-        # Install observers before connect(). Kotlin can synchronously report
-        # both connection and immediate disconnection before connect returns.
-        try:
-            if hasattr(self.kotlin_bridge, "setOnDataReceived"):
-                self.kotlin_bridge.setOnDataReceived(self._on_data_received)
-            if hasattr(self.kotlin_bridge, "setOnConnectionStateChanged"):
-                self.kotlin_bridge.setOnConnectionStateChanged(self._on_connection_state_changed)
-        except Exception as e:  # noqa: BLE001
-            RNS.log(f"ColumbaRNodeInterface: optional callback registration failed (non-fatal): {e}", RNS.LOG_DEBUG)
-
-        # Connect and consume its reason atomically. The Kotlin bridge is shared by
-        # every Python RNode interface, so a separate connect()/failure getter pair
-        # can be overwritten by another interface starting concurrently.
-        failure_reason = None
-        if hasattr(self.kotlin_bridge, "connectWithResult"):
-            connection_result = self.kotlin_bridge.connectWithResult(
-                self.target_device_name,
-                self.connection_mode,
-            )
-            connected = connection_result == "connected"
-            if not connected and connection_result != "failed":
-                failure_reason = connection_result
-        else:
-            connected = self.kotlin_bridge.connect(
-                self.target_device_name,
-                self.connection_mode,
-            )
+        kotlin_mode = "ble" if self.connection_mode == self.MODE_BLE else "classic"
+        RNS.log(f"Connecting to RNode '{self.target_device_name}' via "
+               f"{'BLE' if kotlin_mode == 'ble' else 'Bluetooth Classic'}...", RNS.LOG_INFO)
+        if not bridge.connect(self.target_device_name, kotlin_mode):
+            reason = None
             try:
-                if not connected and hasattr(self.kotlin_bridge, "getLastConnectionFailure"):
-                    failure_reason = self.kotlin_bridge.getLastConnectionFailure()
-            except Exception as e:  # noqa: BLE001
-                RNS.log(f"Could not read RNode connection failure reason: {e}", RNS.LOG_DEBUG)
-
-        if not connected:
-            self.status_reason = failure_reason
-            if failure_reason == "pairing_required":
-                RNS.log(
-                    f"Pairing required for {self.target_device_name}; stopping automatic reconnect until the user repairs the bond",
-                    RNS.LOG_ERROR,
-                )
-            else:
-                RNS.log(f"Failed to connect to {self.target_device_name}", RNS.LOG_ERROR)
-            return False
+                reason = bridge.getLastConnectionFailure()
+            except Exception:  # noqa: BLE001
+                pass
+            RNS.log(f"ColumbaRNodeInterface: failed to connect '{self.target_device_name}' ({reason or 'no reason reported'})", RNS.LOG_ERROR)
+            self.status_reason = reason
+            return None
 
         self.status_reason = None
+        return BridgeConnection(
+            name=self.name,
+            read_fn=bridge.read,
+            write_fn=bridge.writeSync,
+            connected_fn=bridge.isConnected,
+            close_fn=bridge.disconnect,
+        )
 
-        if self._reconnect_cancelled.is_set():
-            self.kotlin_bridge.disconnect()
-            return False
+    def reconnect_port(self):
+        # A broken bond cannot be repaired by retrying: upstream would attempt a
+        # GATT connect every reconnect_w forever. The UI's repair action opens
+        # the RNode wizard, whose save restarts this interface.
+        if self.status_reason == "pairing_required":
+            RNS.log(f"{self} reconnect suppressed: pairing required", RNS.LOG_WARNING)
+            return
+        return super().reconnect_port()
 
+    def _open_usb_port(self):
+        import usb_bridge
 
-        # A prior connection's protocol responses must not validate this
-        # transport. Require fresh detection, firmware, and radio readback.
-        self.detected = False
-        self.firmware_ok = False
-        self.interface_ready = False
-        self.platform = None
-        self.mcu = None
-        self.maj_version = 0
-        self.min_version = 0
-        with self._read_lock:
-            self.r_frequency = None
-            self.r_bandwidth = None
-            self.r_txpower = None
-            self.r_sf = None
-            self.r_cr = None
-            self.r_state = None
+        self._usb_bridge = usb_bridge.get_usb_bridge()
+        if self._usb_bridge is None:
+            RNS.log("ColumbaRNodeInterface: KotlinUSBBridge unavailable — RNode stays offline", RNS.LOG_ERROR)
+            return None
 
-        # Start read thread
-        self._running.set()
-        self._read_thread = threading.Thread(target=self._read_loop, daemon=True)
-        self._read_thread.start()
-
-        # Configure device
-        try:
-            time.sleep(1.5)  # Allow BLE connection to fully stabilize
-            self._configure_device()
-            if self._reconnect_cancelled.is_set() or not self.online:
-                raise IOError("RNode connection did not reach online state")
-            return True
-        except Exception as e:  # noqa: BLE001
-            RNS.log(f"Failed to configure RNode: {e}", RNS.LOG_ERROR)
-            # GATT/RFCOMM transport readiness is not a complete reconnect.
-            # Keep the bounded reconnect owner alive when RNode detection or
-            # radio configuration fails after the transport connected.
-            self.stop(cancel_reconnection=False)
-            return False
-
-    def _start_usb(self):
-        """Start the interface in USB mode."""
-        self._get_usb_bridge()
-
-        if self.usb_bridge is None:
-            RNS.log("Cannot start USB mode - KotlinUSBBridge not available", RNS.LOG_ERROR)
-            return False
-
-        # Try to find device by VID/PID first (stable identifiers)
-        # Device ID can change between plug/unplug cycles, so VID/PID is preferred
+        bridge = self._usb_bridge
+        device_id = self.usb_device_id
         if self.usb_vendor_id is not None and self.usb_product_id is not None:
-            current_device_id = self.usb_bridge.findDeviceByVidPid(self.usb_vendor_id, self.usb_product_id)
-            if current_device_id >= 0:
-                RNS.log(f"Found USB device by VID/PID: VID={hex(self.usb_vendor_id)}, PID={hex(self.usb_product_id)} -> device ID {current_device_id}", RNS.LOG_INFO)
-                self.usb_device_id = current_device_id
-            else:
-                RNS.log(f"USB device not found by VID/PID: VID={hex(self.usb_vendor_id)}, PID={hex(self.usb_product_id)}", RNS.LOG_WARNING)
-                return False
-
-        if self.usb_device_id is None:
-            RNS.log("Cannot start USB mode - no USB device ID configured and no VID/PID to look up", RNS.LOG_ERROR)
-            return False
-
-        # If we're reconnecting (interface offline but bridge thinks it's connected),
-        # disconnect first to clear any stale state from previous USB connection
-        if not self.online and self.usb_bridge.isConnected():
-            RNS.log("Clearing stale USB connection before reconnecting...", RNS.LOG_INFO)
-            self.usb_bridge.disconnect()
-
-        RNS.log(f"Connecting to RNode via USB (device ID {self.usb_device_id})...", RNS.LOG_INFO)
-
-        # Connect via USB bridge (baud rate 115200 is standard for RNode)
-        if not self.usb_bridge.connect(self.usb_device_id, 115200):
-            RNS.log(f"Failed to connect to USB device {self.usb_device_id}", RNS.LOG_ERROR)
-            return False
-
-        # Optional callbacks — see start() above for rationale.
-        try:
-            if hasattr(self.usb_bridge, "setOnDataReceived"):
-                self.usb_bridge.setOnDataReceived(self._on_data_received)
-            if hasattr(self.usb_bridge, "setOnConnectionStateChanged"):
-                self.usb_bridge.setOnConnectionStateChanged(self._on_usb_connection_state_changed)
-        except Exception as e:  # noqa: BLE001
-            RNS.log(f"ColumbaRNodeInterface: optional USB callback registration failed (non-fatal): {e}", RNS.LOG_DEBUG)
-
-        # Stop any existing read thread before starting a new one
-        # This prevents thread leaks if the disconnect callback didn't fire properly
-        # (e.g., if callback was overwritten by another interface on shared USB bridge)
-        if self._read_thread is not None and self._read_thread.is_alive():
-            RNS.log(f"Stopping existing read loop thread before starting new one...", RNS.LOG_INFO)
-            self._running.clear()
-            self._read_thread.join(timeout=2.0)
-            if self._read_thread.is_alive():
-                RNS.log(f"Old read thread did not stop within timeout - aborting start to prevent race", RNS.LOG_ERROR)
-                return False
-
-        # Reset detection state for fresh configuration
-        self.detected = False
-        self.firmware_ok = False
-        self.interface_ready = False
-
-        # Start read thread
-        self._running.set()
-        self._read_thread = threading.Thread(target=self._read_loop_usb, daemon=True)
-        self._read_thread.start()
-
-        # Configure device
-        try:
-            self._configure_device()
-            return True
-        except Exception as e:  # noqa: BLE001
-            RNS.log(f"Failed to configure RNode: {e}", RNS.LOG_ERROR)
-            self.stop()
-            return False
-
-    def _on_usb_connection_state_changed(self, connected, device_id):
-        """Callback when USB connection state changes."""
-        RNS.log(f"[{self.name}] _on_usb_connection_state_changed called: connected={connected}, device_id={device_id}, my_device_id={self.usb_device_id}", RNS.LOG_INFO)
-        if connected:
-            RNS.log(f"[{self.name}] USB device connected: {device_id}", RNS.LOG_INFO)
-        else:
-            RNS.log(f"[{self.name}] USB device disconnected: {device_id}, setting online=False", RNS.LOG_WARNING)
-            self._set_online(False)
-            self.detected = False
-            # Stop the read loop to prevent thread leak and data races
-            # When the device is re-plugged, start() will create a fresh read loop
-            self._running.clear()
-            RNS.log(f"[{self.name}] After disconnect: online={self.online}, read loop stopped", RNS.LOG_INFO)
-            # Note: USB doesn't auto-reconnect - user must re-plug or re-select device
-
-    def stop(self, cancel_reconnection=True):
-        """Stop and disconnect, optionally preserving the reconnect owner."""
-        self._running.clear()
-        if cancel_reconnection:
-            with self._reconnect_lock:
-                self._reconnecting = False
-                self._reconnect_requested = False
-                self._reconnect_cancelled.set()
-        self._set_online(False)
-
-        # Disconnect based on connection mode
-        if self.connection_mode == self.MODE_USB:
-            if self.usb_bridge:
-                self.usb_bridge.disconnect()
-        else:
-            if self.kotlin_bridge:
-                self.kotlin_bridge.disconnect()
-
-        if self._read_thread:
-            self._read_thread.join(timeout=2.0)
-
-        if (
-            cancel_reconnection
-            and self._reconnect_thread
-            and self._reconnect_thread is not threading.current_thread()
-        ):
-            self._reconnect_thread.join(timeout=2.0)
-
-        RNS.log(f"RNode interface '{self.name}' stopped", RNS.LOG_INFO)
-
-    def _configure_device(self):
-        """Detect and configure the RNode."""
-        if self._reconnect_cancelled.is_set():
-            raise IOError("RNode connection cancelled")
-
-        # Send detect command
-        self._detect()
-
-        # Wait for detection response
-        start_time = time.time()
-        while not self.detected and (time.time() - start_time) < self.DETECT_TIMEOUT:
-            if self._reconnect_cancelled.is_set():
-                raise IOError("RNode connection cancelled")
-            time.sleep(0.1)
-
-        if not self.detected:
-            raise IOError("Could not detect RNode device")
-
-        # Race-safety wait for firmware_ok. The _detect() request bundles
-        # CMD_DETECT + CMD_FW_VERSION + CMD_PLATFORM + CMD_MCU into one
-        # 4-frame KISS payload. Under BLE GATT, the RNode responds with all
-        # 4 frames in a single notification (observed: 17-byte burst
-        # `c00846c0 c0500155c0 c04870c0 c04971c0`). _read_loop parses the
-        # bytes sequentially, setting self.detected = True on the first
-        # frame (DETECT) and self.firmware_ok = True on the second frame
-        # (FW_VERSION). The DETECT-watch loop above polls every 100ms — once
-        # detected flips, it exits immediately. Python's GIL can preempt
-        # _read_loop between those two writes (any bytecode boundary), so
-        # the main thread can grab the GIL, see detected=True, and proceed
-        # to the firmware_ok check below before _read_loop has finished
-        # parsing the FW_VERSION frame. v0.10.x reference has the same race
-        # but only on BLE — over Classic SPP / USB serial, frames arrive in
-        # separate reads with kernel delays between them, hiding the race.
-        # Short bounded wait closes it without inventing an Event mechanism.
-        fw_wait_start = time.time()
-        while not self.firmware_ok and (time.time() - fw_wait_start) < 1.0:
-            if self._reconnect_cancelled.is_set():
-                raise IOError("RNode connection cancelled")
-            time.sleep(0.02)
-
-        if not self.firmware_ok:
-            raise IOError(f"Invalid firmware version: {self.maj_version}.{self.min_version}")
-
-        RNS.log(f"RNode detected: platform={hex(self.platform or 0)}, "
-                f"firmware={self.maj_version}.{self.min_version}", RNS.LOG_INFO)
-
-        # Configure radio parameters
-        RNS.log("Configuring RNode radio...", RNS.LOG_VERBOSE)
-        self._init_radio()
-
-        if self._reconnect_cancelled.is_set():
-            raise IOError("RNode connection cancelled")
-
-        # Validate configuration
-        if self._validate_radio_state():
-            self.interface_ready = True
-            if self._reconnect_cancelled.is_set():
-                self.interface_ready = False
-                raise IOError("RNode connection cancelled")
-            self._set_online(True)
-            RNS.log(f"RNode '{self.name}' is online", RNS.LOG_INFO)
-
-            # Display Columba logo on RNode if enabled
-            self._display_logo()
-        else:
-            raise IOError("Radio configuration validation failed")
-
-    def _detect(self):
-        """Send detect command to RNode."""
-        # Send detect command - each KISS frame needs FEND at start and end
-        kiss_command = bytes([
-            KISS.FEND, KISS.CMD_DETECT, KISS.DETECT_REQ, KISS.FEND,
-            KISS.FEND, KISS.CMD_FW_VERSION, 0x00, KISS.FEND,
-            KISS.FEND, KISS.CMD_PLATFORM, 0x00, KISS.FEND,
-            KISS.FEND, KISS.CMD_MCU, 0x00, KISS.FEND
-        ])
-        RNS.log(f"Sending detect command: {kiss_command.hex()}", RNS.LOG_DEBUG)
-        self._write(kiss_command)
-
-    def _init_radio(self):
-        """Initialize radio with configured parameters."""
-        self._set_frequency()
-        time.sleep(self.CONFIG_DELAY)
-
-        self._set_bandwidth()
-        time.sleep(self.CONFIG_DELAY)
-
-        self._set_tx_power()
-        time.sleep(self.CONFIG_DELAY)
-
-        self._set_spreading_factor()
-        time.sleep(self.CONFIG_DELAY)
-
-        self._set_coding_rate()
-        time.sleep(self.CONFIG_DELAY)
-
-        if self.st_alock is not None:
-            self._set_st_alock()
-            time.sleep(self.CONFIG_DELAY)
-
-        if self.lt_alock is not None:
-            self._set_lt_alock()
-            time.sleep(self.CONFIG_DELAY)
-
-        self._set_radio_state(KISS.RADIO_STATE_ON)
-        time.sleep(self.CONFIG_DELAY)
-
-    def _set_frequency(self):
-        """Set radio frequency."""
-        c1 = (self.frequency >> 24) & 0xFF
-        c2 = (self.frequency >> 16) & 0xFF
-        c3 = (self.frequency >> 8) & 0xFF
-        c4 = self.frequency & 0xFF
-        data = KISS.escape(bytes([c1, c2, c3, c4]))
-        kiss_command = bytes([KISS.FEND, KISS.CMD_FREQUENCY]) + data + bytes([KISS.FEND])
-        self._write(kiss_command)
-
-    def _set_bandwidth(self):
-        """Set radio bandwidth."""
-        c1 = (self.bandwidth >> 24) & 0xFF
-        c2 = (self.bandwidth >> 16) & 0xFF
-        c3 = (self.bandwidth >> 8) & 0xFF
-        c4 = self.bandwidth & 0xFF
-        data = KISS.escape(bytes([c1, c2, c3, c4]))
-        kiss_command = bytes([KISS.FEND, KISS.CMD_BANDWIDTH]) + data + bytes([KISS.FEND])
-        self._write(kiss_command)
-
-    def _set_tx_power(self):
-        """Set TX power."""
-        kiss_command = bytes([KISS.FEND, KISS.CMD_TXPOWER, self.txpower, KISS.FEND])
-        self._write(kiss_command)
-
-    def _set_spreading_factor(self):
-        """Set spreading factor."""
-        kiss_command = bytes([KISS.FEND, KISS.CMD_SF, self.sf, KISS.FEND])
-        self._write(kiss_command)
-
-    def _set_coding_rate(self):
-        """Set coding rate."""
-        kiss_command = bytes([KISS.FEND, KISS.CMD_CR, self.cr, KISS.FEND])
-        self._write(kiss_command)
-
-    def _set_st_alock(self):
-        """Set short-term airtime lock."""
-        at = int(self.st_alock * 100)
-        c1 = (at >> 8) & 0xFF
-        c2 = at & 0xFF
-        data = KISS.escape(bytes([c1, c2]))
-        kiss_command = bytes([KISS.FEND, KISS.CMD_ST_ALOCK]) + data + bytes([KISS.FEND])
-        self._write(kiss_command)
-
-    def _set_lt_alock(self):
-        """Set long-term airtime lock."""
-        at = int(self.lt_alock * 100)
-        c1 = (at >> 8) & 0xFF
-        c2 = at & 0xFF
-        data = KISS.escape(bytes([c1, c2]))
-        kiss_command = bytes([KISS.FEND, KISS.CMD_LT_ALOCK]) + data + bytes([KISS.FEND])
-        self._write(kiss_command)
-
-    def _set_radio_state(self, state):
-        """Set radio state (on/off)."""
-        self.state = state
-        kiss_command = bytes([KISS.FEND, KISS.CMD_RADIO_STATE, state, KISS.FEND])
-        self._write(kiss_command)
-
-    def _validate_radio_state(self):
-        """Validate that radio state matches configuration."""
-        # Poll for radio state with timeout — different RNode hardware reports
-        # state at different speeds. T-Beam Supreme answers within ~300ms;
-        # Heltec V3 (ESP32-S3) and T114 (nRF52) can take 1-2 seconds to
-        # transition to RADIO_STATE_ON and emit the CMD_RADIO_STATE frame.
-        # Original v0.10.x code did a single sleep(0.3) which is too short
-        # for the slower variants — observed "Radio state not ON: None" on
-        # Fold tonight with the Heltec E517. Poll for up to 5s, checking
-        # every 100ms, then proceed with whatever state we have for the
-        # final validation pass below.
-        validation_deadline = time.time() + 5.0
-        while time.time() < validation_deadline:
-            with self._read_lock:
-                r_state_poll = self.r_state
-            if r_state_poll == KISS.RADIO_STATE_ON:
-                break
-            time.sleep(0.1)
-
-        # Read all reported radio state under lock for thread safety.
-        # The read loop updates these from a background thread.
-        with self._read_lock:
-            r_frequency = self.r_frequency
-            r_bandwidth = self.r_bandwidth
-            r_sf = self.r_sf
-            r_cr = self.r_cr
-            r_state = self.r_state
-
-        # Check if we got the expected values back
-        if r_frequency is not None and r_frequency != self.frequency:
-            RNS.log(f"Frequency mismatch: configured={self.frequency}, reported={r_frequency}", RNS.LOG_ERROR)
-            return False
-
-        if r_bandwidth is not None and r_bandwidth != self.bandwidth:
-            RNS.log(f"Bandwidth mismatch: configured={self.bandwidth}, reported={r_bandwidth}", RNS.LOG_ERROR)
-            return False
-
-        if r_sf is not None and r_sf != self.sf:
-            RNS.log(f"SF mismatch: configured={self.sf}, reported={r_sf}", RNS.LOG_ERROR)
-            return False
-
-        if r_cr is not None and r_cr != self.cr:
-            RNS.log(f"CR mismatch: configured={self.cr}, reported={r_cr}", RNS.LOG_ERROR)
-            return False
-
-        if r_state != KISS.RADIO_STATE_ON:
-            RNS.log(f"Radio state not ON: {r_state}", RNS.LOG_ERROR)
-            return False
-
-        return True
-
-    # Exponential backoff delays for write retries (in seconds)
-    WRITE_BACKOFF_DELAYS = [0.3, 1.0, 3.0]
-
-    def _write(self, data, max_retries=3):
-        """Write data to the RNode via Kotlin bridge with exponential backoff retry."""
-        # Select bridge based on connection mode
-        if self.connection_mode == self.MODE_USB:
-            if self.usb_bridge is None:
-                raise IOError("USB bridge not available")
-            bridge = self.usb_bridge
-        else:
-            if self.kotlin_bridge is None:
-                raise IOError("Kotlin bridge not available")
-            bridge = self.kotlin_bridge
-
-        last_error = None
-        for attempt in range(max_retries):
-            # USB bridge uses write(), Bluetooth bridge uses writeSync()
-            if self.connection_mode == self.MODE_USB:
-                written = bridge.write(data)
-            else:
-                written = bridge.writeSync(data)
-
-            if written == len(data):
-                return  # Success
-
-            last_error = f"expected {len(data)}, wrote {written}"
-            if attempt < max_retries - 1:
-                # Use exponential backoff delay (0.3s, 1.0s, 3.0s, ...)
-                delay = self.WRITE_BACKOFF_DELAYS[min(attempt, len(self.WRITE_BACKOFF_DELAYS) - 1)]
-                RNS.log(f"Write attempt {attempt + 1} failed ({last_error}), retrying in {delay}s...", RNS.LOG_WARNING)
-                time.sleep(delay)
-
-        raise IOError(f"Write failed after {max_retries} attempts: {last_error}")
-
-    # -------------------------------------------------------------------------
-    # External Framebuffer (Display) Methods
-    # -------------------------------------------------------------------------
-
-    def enable_external_framebuffer(self):
-        """Enable external framebuffer mode on RNode display."""
-        kiss_command = bytes([KISS.FEND, KISS.CMD_FB_EXT, 0x01, KISS.FEND])
-        self._write(kiss_command)
-        self.framebuffer_enabled = True
-        RNS.log(f"{self} External framebuffer enabled", RNS.LOG_DEBUG)
-
-    def disable_external_framebuffer(self):
-        """Disable external framebuffer, return to normal RNode UI."""
-        kiss_command = bytes([KISS.FEND, KISS.CMD_FB_EXT, 0x00, KISS.FEND])
-        self._write(kiss_command)
-        self.framebuffer_enabled = False
-        RNS.log(f"{self} External framebuffer disabled", RNS.LOG_DEBUG)
-
-    def write_framebuffer(self, line, line_data):
-        """Write 8 bytes of pixel data to a specific line (0-63).
-
-        Args:
-            line: Line number (0-63)
-            line_data: 8 bytes of pixel data (64 pixels, 1 bit per pixel)
-        """
-        if line < 0 or line > 63:
-            raise ValueError(f"Line must be 0-63, got {line}")
-        if len(line_data) != KISS.FB_BYTES_PER_LINE:
-            raise ValueError(f"Line data must be {KISS.FB_BYTES_PER_LINE} bytes")
-
-        data = bytes([line]) + line_data
-        escaped = KISS.escape(data)
-        kiss_command = bytes([KISS.FEND, KISS.CMD_FB_WRITE]) + escaped + bytes([KISS.FEND])
-        self._write(kiss_command)
-
-    def display_image(self, imagedata):
-        """Send a 64x64 monochrome image to RNode display.
-
-        Args:
-            imagedata: List or bytes of 512 bytes (64 lines x 8 bytes per line)
-        """
-        if len(imagedata) != 512:
-            raise ValueError(f"Image data must be 512 bytes, got {len(imagedata)}")
-
-        for line in range(64):
-            line_start = line * KISS.FB_BYTES_PER_LINE
-            line_end = line_start + KISS.FB_BYTES_PER_LINE
-            line_data = bytes(imagedata[line_start:line_end])
-            self.write_framebuffer(line, line_data)
-            # Small delay to prevent BLE write throttling
-            time.sleep(0.015)
-
-        RNS.log(f"{self} Sent 64x64 image to RNode framebuffer", RNS.LOG_DEBUG)
-
-    def _display_logo(self):
-        """Display or disable the Columba logo on RNode based on settings."""
-        if self.enable_framebuffer:
-            try:
-                from columba_logo import columba_fb_data
-                self.display_image(columba_fb_data)
-                # Delay before enable command to ensure framebuffer data is processed
-                time.sleep(0.05)
-                self.enable_external_framebuffer()
-                RNS.log(f"{self} Displayed Columba logo on RNode", RNS.LOG_DEBUG)
-            except ImportError:
-                RNS.log(f"{self} columba_logo module not found, skipping logo display", RNS.LOG_WARNING)
-            except Exception as e:  # noqa: BLE001
-                RNS.log(f"{self} Failed to display logo: {e}", RNS.LOG_WARNING)
-        else:
-            # Explicitly disable external framebuffer to restore normal RNode UI
-            try:
-                self.disable_external_framebuffer()
-                RNS.log(f"{self} Disabled external framebuffer on RNode", RNS.LOG_DEBUG)
-            except Exception as e:  # noqa: BLE001
-                RNS.log(f"{self} Failed to disable framebuffer: {e}", RNS.LOG_WARNING)
-
-    def _read_loop(self):
-        """Background thread for reading and parsing KISS frames."""
-        in_frame = False
-        escape = False
-        command = KISS.CMD_UNKNOWN
-        data_buffer = b""
-
-        RNS.log("RNode read loop started", RNS.LOG_DEBUG)
-
-        while self._running.is_set():
-            try:
-                # Read available data
-                raw_data = self.kotlin_bridge.read()
-                # Convert to bytes if needed (Chaquopy may return jarray)
-                if hasattr(raw_data, '__len__'):
-                    data = bytes(raw_data)
-                else:
-                    data = bytes(raw_data) if raw_data else b""
-
-                if len(data) == 0:
-                    time.sleep(0.01)
-                    continue
-
-                # Parse KISS frames
-                RNS.log(f"RNode parsing {len(data)} bytes: {data.hex()}", RNS.LOG_DEBUG)
-                for byte in data:
-                    if in_frame and byte == KISS.FEND and command == KISS.CMD_DATA:
-                        # End of data frame
-                        in_frame = False
-                        self._process_incoming(data_buffer)
-                        data_buffer = b""
-                    elif byte == KISS.FEND:
-                        # Start of frame
-                        in_frame = True
-                        command = KISS.CMD_UNKNOWN
-                        data_buffer = b""
-                    elif in_frame and len(data_buffer) < 512:
-                        if escape:
-                            if byte == KISS.TFEND:
-                                data_buffer += bytes([KISS.FEND])
-                            elif byte == KISS.TFESC:
-                                data_buffer += bytes([KISS.FESC])
-                            else:
-                                # Invalid escape sequence - FESC should only be followed by TFEND or TFESC
-                                RNS.log(f"Invalid KISS escape sequence: FESC followed by 0x{byte:02X}", RNS.LOG_WARNING)
-                                data_buffer += bytes([byte])
-                            escape = False
-                        elif byte == KISS.FESC:
-                            escape = True
-                        elif command == KISS.CMD_UNKNOWN:
-                            command = byte
-                        elif command == KISS.CMD_DATA:
-                            data_buffer += bytes([byte])
-                        elif command == KISS.CMD_FREQUENCY:
-                            if len(data_buffer) < 4:
-                                data_buffer += bytes([byte])
-                                if len(data_buffer) == 4:
-                                    freq = (data_buffer[0] << 24) | (data_buffer[1] << 16) | (data_buffer[2] << 8) | data_buffer[3]
-                                    with self._read_lock:
-                                        self.r_frequency = freq
-                                    RNS.log(f"RNode frequency: {freq}", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_BANDWIDTH:
-                            if len(data_buffer) < 4:
-                                data_buffer += bytes([byte])
-                                if len(data_buffer) == 4:
-                                    bw = (data_buffer[0] << 24) | (data_buffer[1] << 16) | (data_buffer[2] << 8) | data_buffer[3]
-                                    with self._read_lock:
-                                        self.r_bandwidth = bw
-                                    RNS.log(f"RNode bandwidth: {bw}", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_TXPOWER:
-                            with self._read_lock:
-                                self.r_txpower = byte
-                            RNS.log(f"RNode TX power: {byte}", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_SF:
-                            with self._read_lock:
-                                self.r_sf = byte
-                            RNS.log(f"RNode SF: {byte}", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_CR:
-                            with self._read_lock:
-                                self.r_cr = byte
-                            RNS.log(f"RNode CR: {byte}", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_RADIO_STATE:
-                            with self._read_lock:
-                                self.r_state = byte
-                            RNS.log(f"RNode radio state: {byte}", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_STAT_RSSI:
-                            with self._read_lock:
-                                self.r_stat_rssi = byte - 157  # RSSI offset
-                        elif command == KISS.CMD_STAT_SNR:
-                            with self._read_lock:
-                                self.r_stat_snr = int.from_bytes([byte], "big", signed=True) / 4.0
-                        elif command == KISS.CMD_STAT_BAT:
-                            # RNode battery level. Convention: 0-100 percent.
-                            # (Confirm scale on-device - see plan OPEN ITEM.)
-                            with self._read_lock:
-                                self.r_stat_bat = byte
-                        elif command == KISS.CMD_FW_VERSION:
-                            if len(data_buffer) < 2:
-                                data_buffer += bytes([byte])
-                                if len(data_buffer) == 2:
-                                    self.maj_version = data_buffer[0]
-                                    self.min_version = data_buffer[1]
-                                    self._validate_firmware()
-                        elif command == KISS.CMD_PLATFORM:
-                            self.platform = byte
-                        elif command == KISS.CMD_MCU:
-                            self.mcu = byte
-                        elif command == KISS.CMD_DETECT:
-                            if byte == KISS.DETECT_RESP:
-                                self.detected = True
-                                RNS.log("RNode detected!", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_ERROR:
-                            error_message = KISS.get_error_message(byte)
-                            RNS.log(f"RNode error (0x{byte:02X}): {error_message}", RNS.LOG_ERROR)
-                            # Surface error to UI via callback
-                            if self._on_error_callback:
-                                try:
-                                    self._on_error_callback(byte, error_message)
-                                except Exception as cb_err:  # noqa: BLE001
-                                    RNS.log(f"Error callback failed: {cb_err}", RNS.LOG_ERROR)
-                        elif command == KISS.CMD_READY:
-                            pass  # Device ready
-
-            except Exception as e:  # noqa: BLE001
-                if self._running.is_set():
-                    RNS.log(f"Read loop error: {e}", RNS.LOG_ERROR)
-                    time.sleep(0.1)
-
-        RNS.log("RNode read loop stopped", RNS.LOG_DEBUG)
-
-    def _read_loop_usb(self):
-        """Background thread for reading and parsing KISS frames from USB.
-
-        Similar to _read_loop but uses USB bridge instead of Bluetooth bridge,
-        and includes handling for CMD_BT_PIN during Bluetooth pairing mode.
-        """
-        in_frame = False
-        escape = False
-        command = KISS.CMD_UNKNOWN
-        data_buffer = b""
-
-        RNS.log("RNode USB read loop started", RNS.LOG_DEBUG)
-
-        while self._running.is_set():
-            try:
-                # Read available data from USB bridge
-                raw_data = self.usb_bridge.read()
-                # Convert to bytes if needed (Chaquopy may return jarray)
-                if hasattr(raw_data, '__len__'):
-                    data = bytes(raw_data)
-                else:
-                    data = bytes(raw_data) if raw_data else b""
-
-                if len(data) == 0:
-                    time.sleep(0.01)
-                    continue
-
-                # Parse KISS frames
-                RNS.log(f"RNode USB parsing {len(data)} bytes: {data.hex()}", RNS.LOG_DEBUG)
-                for byte in data:
-                    if in_frame and byte == KISS.FEND and command == KISS.CMD_DATA:
-                        # End of data frame
-                        in_frame = False
-                        self._process_incoming(data_buffer)
-                        data_buffer = b""
-                    elif byte == KISS.FEND:
-                        # Start of frame
-                        in_frame = True
-                        command = KISS.CMD_UNKNOWN
-                        data_buffer = b""
-                    elif in_frame and len(data_buffer) < 512:
-                        if escape:
-                            if byte == KISS.TFEND:
-                                data_buffer += bytes([KISS.FEND])
-                            elif byte == KISS.TFESC:
-                                data_buffer += bytes([KISS.FESC])
-                            else:
-                                # Invalid escape sequence
-                                RNS.log(f"Invalid KISS escape sequence: FESC followed by 0x{byte:02X}", RNS.LOG_WARNING)
-                                data_buffer += bytes([byte])
-                            escape = False
-                        elif byte == KISS.FESC:
-                            escape = True
-                        elif command == KISS.CMD_UNKNOWN:
-                            command = byte
-                        elif command == KISS.CMD_DATA:
-                            data_buffer += bytes([byte])
-                        elif command == KISS.CMD_FREQUENCY:
-                            if len(data_buffer) < 4:
-                                data_buffer += bytes([byte])
-                                if len(data_buffer) == 4:
-                                    freq = (data_buffer[0] << 24) | (data_buffer[1] << 16) | (data_buffer[2] << 8) | data_buffer[3]
-                                    with self._read_lock:
-                                        self.r_frequency = freq
-                                    RNS.log(f"RNode frequency: {freq}", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_BANDWIDTH:
-                            if len(data_buffer) < 4:
-                                data_buffer += bytes([byte])
-                                if len(data_buffer) == 4:
-                                    bw = (data_buffer[0] << 24) | (data_buffer[1] << 16) | (data_buffer[2] << 8) | data_buffer[3]
-                                    with self._read_lock:
-                                        self.r_bandwidth = bw
-                                    RNS.log(f"RNode bandwidth: {bw}", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_TXPOWER:
-                            with self._read_lock:
-                                self.r_txpower = byte
-                            RNS.log(f"RNode TX power: {byte}", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_SF:
-                            with self._read_lock:
-                                self.r_sf = byte
-                            RNS.log(f"RNode SF: {byte}", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_CR:
-                            with self._read_lock:
-                                self.r_cr = byte
-                            RNS.log(f"RNode CR: {byte}", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_RADIO_STATE:
-                            with self._read_lock:
-                                self.r_state = byte
-                            RNS.log(f"RNode radio state: {byte}", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_STAT_RSSI:
-                            with self._read_lock:
-                                self.r_stat_rssi = byte - 157  # RSSI offset
-                        elif command == KISS.CMD_STAT_SNR:
-                            with self._read_lock:
-                                self.r_stat_snr = int.from_bytes([byte], "big", signed=True) / 4.0
-                        elif command == KISS.CMD_STAT_BAT:
-                            # RNode battery level. Convention: 0-100 percent.
-                            # (Confirm scale on-device - see plan OPEN ITEM.)
-                            with self._read_lock:
-                                self.r_stat_bat = byte
-                        elif command == KISS.CMD_FW_VERSION:
-                            if len(data_buffer) < 2:
-                                data_buffer += bytes([byte])
-                                if len(data_buffer) == 2:
-                                    self.maj_version = data_buffer[0]
-                                    self.min_version = data_buffer[1]
-                                    self._validate_firmware()
-                        elif command == KISS.CMD_PLATFORM:
-                            self.platform = byte
-                        elif command == KISS.CMD_MCU:
-                            self.mcu = byte
-                        elif command == KISS.CMD_DETECT:
-                            if byte == KISS.DETECT_RESP:
-                                self.detected = True
-                                RNS.log("RNode detected!", RNS.LOG_DEBUG)
-                        elif command == KISS.CMD_BT_PIN:
-                            # Bluetooth PIN response during pairing mode
-                            # PIN is sent as 4-byte big-endian integer by RNode firmware
-                            if len(data_buffer) < 4:
-                                data_buffer += bytes([byte])
-                                if len(data_buffer) == 4:
-                                    pin_value = int.from_bytes(data_buffer, byteorder='big')
-                                    pin = f"{pin_value:06d}"
-                                    RNS.log(f"RNode Bluetooth PIN: {pin}", RNS.LOG_INFO)
-                                    # Note: Kotlin USB bridge also parses PIN and notifies UI
-                                    # This is a backup notification in case Kotlin missed it
-                                    if self.usb_bridge:
-                                        try:
-                                            self.usb_bridge.notifyBluetoothPin(pin)
-                                        except Exception as e:  # noqa: BLE001
-                                            RNS.log(f"Failed to notify BT PIN: {e}", RNS.LOG_ERROR)
-                        elif command == KISS.CMD_ERROR:
-                            error_message = KISS.get_error_message(byte)
-                            RNS.log(f"RNode error (0x{byte:02X}): {error_message}", RNS.LOG_ERROR)
-                            # Surface error to UI via callback
-                            if self._on_error_callback:
-                                try:
-                                    self._on_error_callback(byte, error_message)
-                                except Exception as cb_err:  # noqa: BLE001
-                                    RNS.log(f"Error callback failed: {cb_err}", RNS.LOG_ERROR)
-                        elif command == KISS.CMD_READY:
-                            pass  # Device ready
-
-            except Exception as e:  # noqa: BLE001
-                if self._running.is_set():
-                    RNS.log(f"USB read loop error: {e}", RNS.LOG_ERROR)
-                    time.sleep(0.1)
-
-        RNS.log("RNode USB read loop stopped", RNS.LOG_DEBUG)
-
-    def _validate_firmware(self):
-        """Check if firmware version is acceptable."""
-        if self.maj_version > self.REQUIRED_FW_VER_MAJ:
-            self.firmware_ok = True
-        elif self.maj_version == self.REQUIRED_FW_VER_MAJ and self.min_version >= self.REQUIRED_FW_VER_MIN:
-            self.firmware_ok = True
-        else:
-            self.firmware_ok = False
-            RNS.log(f"Firmware version {self.maj_version}.{self.min_version} is below required "
-                    f"{self.REQUIRED_FW_VER_MAJ}.{self.REQUIRED_FW_VER_MIN}", RNS.LOG_WARNING)
-
-    def _process_incoming(self, data):
-        """Process incoming data frame from RNode."""
-        if len(data) > 0 and self.online:
-            # Update receive counter
-            self.rxb += len(data)
-            # Pass to Reticulum Transport for processing
-            RNS.Transport.inbound(data, self)
-            RNS.log(f"RNode received {len(data)} bytes", RNS.LOG_DEBUG)
-
-    def _on_data_received(self, data):
-        """Callback from Kotlin bridge when data is received."""
-        # Data is already being processed in _read_loop via polling
-        # This callback is for future async implementation
-        pass
-
-    def _on_connection_state_changed(self, connected, device_name):
-        """Callback when Bluetooth connection state changes."""
-        if connected:
-            RNS.log(f"RNode connected: {device_name}", RNS.LOG_INFO)
-            # Transport connection alone is not successful recovery. The
-            # reconnect loop clears its owner only after start() completes
-            # RNode detection, radio configuration, and online validation.
-        else:
-            RNS.log(f"RNode disconnected: {device_name}", RNS.LOG_WARNING)
-            self._set_online(False)
-            self.detected = False
-            # Start auto-reconnection if not already reconnecting
-            self._start_reconnection_loop()
-
-    def setOnErrorReceived(self, callback):
-        """
-        Set callback for RNode error events.
-
-        The callback will be called when the RNode reports an error,
-        with signature: callback(error_code: int, error_message: str)
-
-        @param callback: Callable that receives (error_code, error_message)
-        """
-        self._on_error_callback = callback
-
-    def setOnOnlineStatusChanged(self, callback):
-        """
-        Set callback for online status change events.
-
-        The callback will be called when the interface's online status changes,
-        with signature: callback(is_online: bool)
-
-        This enables event-driven UI updates when the RNode connects/disconnects.
-
-        @param callback: Callable that receives (is_online)
-        """
-        self._on_online_status_changed = callback
-
-    def _set_online(self, is_online):
-        """
-        Set online status and notify callback if status changed.
-
-        Thread-safe: Uses _read_lock to synchronize with process_outgoing().
-
-        @param is_online: New online status
-        """
-        # Serialize state mutation and observer publication so stop() cannot
-        # return before an older online=True notification finishes and then
-        # publish a stale True after the terminal False transition.
-        with self._online_notification_lock:
-            with self._read_lock:
-                if is_online and self._reconnect_cancelled.is_set():
-                    return False
-                old_status = self.online
-                self.online = is_online
-            if old_status != is_online:
-                # Existing in-Python observer chain (callbacks registered by other
-                # python-side code that wants the live online state).
-                if self._on_online_status_changed:
-                    try:
-                        self._on_online_status_changed(is_online)
-                    except Exception as e:  # noqa: BLE001
-                        RNS.log(f"Error in online status callback: {e}", RNS.LOG_ERROR)
-                # The Python observer may synchronously stop the interface and
-                # publish a newer state through this reentrant method. Do not
-                # send the superseded outer transition to Kotlin afterward.
-                with self._read_lock:
-                    transition_is_current = self.online == is_online
-                # Notify the Kotlin RNodeBridge so ServiceNotificationManager can
-                # raise / dismiss its "RNode Disconnected" heads-up notification.
-                # ReticulumService.onCreate registers an RNodeOnlineStatusListener
-                # against the bridge singleton.
-                #
-                # USB-mode interfaces don't share the BLE/Classic kotlin_bridge —
-                # for those, KotlinUSBBridge fires its own UsbConnectionListener
-                # on ACTION_USB_DEVICE_DETACHED system broadcast, which converges
-                # in the same notification path. Filter here to avoid invoking a
-                # bridge method that doesn't exist on KotlinUSBBridge.
-                if (
-                    transition_is_current
-                    and self.connection_mode != self.MODE_USB
-                    and self.kotlin_bridge is not None
-                ):
-                    try:
-                        self.kotlin_bridge.notifyOnlineStatusChanged(is_online, self.name)
-                    except Exception as e:  # noqa: BLE001
-                        RNS.log(
-                            f"Failed to notify kotlin bridge of online status change: {e}",
-                            RNS.LOG_DEBUG,
-                        )
-        return True
-
-    def _start_reconnection_loop(self):
-        """Start a background thread to attempt reconnection."""
-        with self._reconnect_lock:
-            if self._reconnect_cancelled.is_set():
-                RNS.log("Ignoring reconnect request after explicit stop", RNS.LOG_DEBUG)
-                return
-            if self._reconnecting:
-                # Preserve a disconnect which arrives while the current owner
-                # is between successful start() and ownership teardown.
-                self._reconnect_requested = True
-                RNS.log("Reconnection already in progress", RNS.LOG_DEBUG)
-                return
-
-            self._reconnect_requested = False
-            self._reconnecting = True
-            self._reconnect_thread = threading.Thread(target=self._reconnection_loop, daemon=True)
-            self._reconnect_thread.start()
-        RNS.log(f"Started auto-reconnection loop for {self.target_device_name}", RNS.LOG_INFO)
-
-    def _reconnection_loop(self):
-        """Background thread that attempts to reconnect to the RNode."""
-        attempt = 0
-        while self._reconnecting and not self._reconnect_cancelled.is_set():
-            attempt += 1
-            if attempt <= self._max_reconnect_attempts:
-                attempt_label = f"{attempt}/{self._max_reconnect_attempts}"
-            else:
-                attempt_label = f"long-term {attempt - self._max_reconnect_attempts}"
-            RNS.log(
-                f"Reconnection attempt {attempt_label} for {self.target_device_name}...",
-                RNS.LOG_INFO,
-            )
-
-            # A disconnect observed during a failed attempt is already accounted
-            # for by the retry this loop is about to perform. Do not let that
-            # request poison a later successful attempt and force an unnecessary
-            # idempotent reconnect against stale GATT state. A disconnect during
-            # this new attempt sets the flag again and is consumed below before
-            # successful ownership teardown.
-            with self._reconnect_lock:
-                self._reconnect_requested = False
-
-            try:
-                if self.start():
-                    with self._reconnect_lock:
-                        if self._reconnect_requested and not self._reconnect_cancelled.is_set():
-                            self._reconnect_requested = False
-                            retry_after_disconnect = True
-                        else:
-                            self._reconnecting = False
-                            retry_after_disconnect = False
-                    if retry_after_disconnect:
-                        RNS.log(
-                            f"Connection to {self.target_device_name} dropped during "
-                            "reconnect completion; retrying",
-                            RNS.LOG_WARNING,
-                        )
-                        continue
-                    RNS.log(f"Successfully reconnected to {self.target_device_name}", RNS.LOG_INFO)
-                    return
-                else:
-                    RNS.log(f"Reconnection attempt {attempt_label} failed", RNS.LOG_WARNING)
-                    if self.status_reason == "pairing_required":
-                        with self._reconnect_lock:
-                            self._reconnecting = False
-                            self._reconnect_requested = False
-                        RNS.log(
-                            f"Automatic reconnect stopped for {self.target_device_name}: pairing required",
-                            RNS.LOG_WARNING,
-                        )
-                        return
-            except Exception as e:  # noqa: BLE001
-                RNS.log(f"Reconnection attempt {attempt_label} error: {e}", RNS.LOG_ERROR)
-
-            delay = (
-                self._reconnect_interval
-                if attempt < self._max_reconnect_attempts
-                else self._long_reconnect_interval
-            )
-            if attempt == self._max_reconnect_attempts:
+            device_id = bridge.findDeviceByVidPid(self.usb_vendor_id, self.usb_product_id)
+            if device_id < 0:
                 RNS.log(
-                    f"Fast reconnect phase exhausted for {self.target_device_name}; "
-                    f"continuing every {int(self._long_reconnect_interval / 60)} minutes",
+                    f"ColumbaRNodeInterface: USB device {RNS.hexrep(self.usb_vendor_id)}:{RNS.hexrep(self.usb_product_id)} not found",
                     RNS.LOG_WARNING,
                 )
-            if self._wait_for_reconnect(delay):
-                return
+                return None
+            self.usb_device_id = device_id
 
-    def _wait_for_reconnect(self, delay):
-        """Wait for the next attempt, returning true when lifecycle stop cancels it."""
-        return self._reconnect_cancelled.wait(delay) or not self._reconnecting
-
-    def process_held_announces(self):
-        """Process any held announces. Required by RNS Transport.
-
-        Overrides the base Interface implementation because we store held
-        announces in a list (the legacy v0.10.x shape) rather than the base
-        class's dict-keyed-by-destination-hash structure. The base behaviour
-        is "release the lowest-hop announce when ingress freq drops below
-        the threshold"; this simpler version just releases everything in
-        order. Same overall correctness for low-volume mesh announces.
-        """
-        # Process and clear held announces
-        for announce in self.held_announces:
-            try:
-                RNS.Transport.inbound(announce, self)
-            except Exception as e:  # noqa: BLE001
-                RNS.log(f"Error processing held announce: {e}", RNS.LOG_ERROR)
-        self.held_announces = []
-
-    def sent_announce(self, size=0, from_spawned=False):
-        """Called when an announce is sent on this interface. Tracks announce frequency.
-
-        Signature follows the RNS >= 1.5.0 base Interface contract
-        (`sent_announce(self, size=0, from_spawned=False)`); the 1.5.x
-        transport calls this with the `size=` keyword, so the old 1.4.x
-        two-arg form raises TypeError on every RNode announce.
-        """
-        self.oa_freq_deque.append(time.time())
-
-    def received_announce(self, size=0, from_spawned=False):
-        """Called when an announce is received on this interface. Tracks announce frequency.
-
-        Signature follows the RNS >= 1.5.0 base Interface contract
-        (`received_announce(self, size=0, from_spawned=False)`); see
-        `sent_announce` for why the 1.4.x form is no longer callable.
-        """
-        self.ia_freq_deque.append(time.time())
-
-    def should_ingress_limit(self):
-        """Check if ingress limiting should be applied. Required by RNS Transport."""
-        return False
-
-    def process_outgoing(self, data):
-        """Send data through the RNode interface."""
-        # Thread-safe check of online status (synchronized with _set_online)
-        with self._read_lock:
-            is_online = self.online
-        if not is_online:
-            RNS.log("Cannot send - interface is offline", RNS.LOG_WARNING)
-            return
-
-        # KISS-frame the data
-        escaped_data = KISS.escape(data)
-        kiss_frame = bytes([KISS.FEND, KISS.CMD_DATA]) + escaped_data + bytes([KISS.FEND])
+        if device_id is None:
+            RNS.log("ColumbaRNodeInterface: no USB device id configured", RNS.LOG_ERROR)
+            return None
 
         try:
-            self._write(kiss_frame)
-            # Update transmit counter
-            self.txb += len(data)
-            RNS.log(f"RNode sent {len(data)} bytes", RNS.LOG_DEBUG)
+            if bridge.isConnected():
+                bridge.disconnect()
         except Exception as e:  # noqa: BLE001
-            RNS.log(f"Failed to send data: {e}", RNS.LOG_ERROR)
+            RNS.log(f"ColumbaRNodeInterface: clearing stale USB connection failed: {e}", RNS.LOG_DEBUG)
+
+        if not bridge.connect(device_id, 115200):
+            RNS.log(f"ColumbaRNodeInterface: failed to connect USB device {device_id}", RNS.LOG_ERROR)
+            return None
+
+        def paced_read():
+            # Upstream's read loop only sleeps for BLE/Classic transports; USB
+            # would spin on an empty bridge queue, so pace the read here.
+            data = bridge.read()
+            if not data:
+                time.sleep(0.02)
+            return data
+
+        return BridgeConnection(
+            name=self.name,
+            read_fn=paced_read,
+            write_fn=bridge.write,
+            connected_fn=bridge.isConnected,
+            close_fn=bridge.disconnect,
+        )
+
+    # ---- radio configuration validation ----
+
+    def validateRadioState(self):
+        """Adopt the device's TX power instead of failing the whole interface.
+
+        RNode firmware rewrites the requested TX power before echoing it: it
+        clamps to the modem/board ceiling (22 dBm SX1262, 17 dBm SX127x,
+        13/20 dBm SX1280) and, on LoRa-PA boards, quantises the request through
+        its PA gain table, so a legitimate sub-floor setting reports the lowest
+        power the PA can produce (1 dBm -> 11 dBm on a 735D, `PA_GC1109` gain
+        table). Upstream compares the echo with the configuration and aborts
+        the startup on any divergence, which leaves the radio offline with no
+        recovery path — sub-floor power settings are unusable that way.
+
+        The device's value is adopted as the interface's TX power, so the
+        running interface matches what the radio actually transmits. Every
+        other parameter keeps upstream's fatal validation: frequency,
+        bandwidth, spreading factor, coding rate and radio state have no
+        legitimate device-side rewrite, so a mismatch there means the radio is
+        not on the configured channel plan. See issue #1255.
+        """
+        if self.r_txpower is None:
+            # The echo is produced by the read loop after `setTXPower()`; it is
+            # normally already here by the time configuration is validated.
+            deadline = time.time() + 2.5
+            while self.r_txpower is None and time.time() < deadline:
+                time.sleep(0.05)
+
+        reported = self.r_txpower
+        if reported is not None and reported != self.txpower:
+            if 0 <= reported <= 37:
+                RNS.log(
+                    f"{self} TX power: configured {self.txpower} dBm, the device can only "
+                    f"transmit {reported} dBm — adopting the device value",
+                    RNS.LOG_WARNING,
+                )
+                self.txpower = reported
+            else:
+                # 0xFF is the firmware's "unset" sentinel; anything else is
+                # outside the range upstream accepts for a configuration.
+                RNS.log(
+                    f"{self} reported an invalid TX power ({reported} dBm); "
+                    f"keeping the configured {self.txpower} dBm",
+                    RNS.LOG_ERROR,
+                )
+
+        return super().validateRadioState()
+
+    # ---- accessors the Kotlin service layer polls ----
 
     def get_rssi(self):
-        """Get last received signal strength."""
-        with self._read_lock:
-            return self.r_stat_rssi
+        return self.r_stat_rssi
 
     def get_snr(self):
-        """Get last received signal-to-noise ratio."""
-        with self._read_lock:
-            return self.r_stat_snr
+        return self.r_stat_snr
 
     def get_battery(self):
-        """Get last reported battery level (0-100 percent), or None if not yet
-        received or the interface is offline.
+        # None while offline or before the device reports 0x27: the AIDL layer
+        # maps None to its "no reading" sentinel instead of showing a stale value.
+        if not self.online:
+            return None
+        if self.r_battery_state == AndroidRNodeInterface.BATTERY_STATE_UNKNOWN:
+            return None
+        return self.r_battery_percent
 
-        The cached value is only meaningful while connected: on a transient
-        drop the interface stays registered but the last 0x27 frame is stale,
-        so callers must treat an offline interface as "no reading" (the AIDL
-        layer maps this to the -1 absent sentinel).
-        """
-        with self._read_lock:
-            if not self.online:
-                return None
-            return self.r_stat_bat
+    # ---- framebuffer logo ----
 
-    def enter_bluetooth_pairing_mode(self):
-        """
-        Send command to enter Bluetooth pairing mode (USB mode only).
-
-        When connected via USB, this sends the CMD_BT_CTRL command with
-        BT_CTRL_PAIRING_MODE parameter to put the RNode into Bluetooth
-        pairing mode. The RNode will respond with CMD_BT_PIN containing
-        the 6-digit PIN that must be entered on the Android device's
-        Bluetooth settings to complete pairing.
-
-        This is primarily useful for T114 devices and RNodes without
-        a user button for entering pairing mode manually.
-
-        Returns:
-            True if command was sent successfully, False otherwise
-        """
-        if self.connection_mode != self.MODE_USB:
-            RNS.log("Bluetooth pairing mode is only available via USB connection", RNS.LOG_WARNING)
-            return False
-
-        if self.usb_bridge is None or not self.usb_bridge.isConnected():
-            RNS.log("Cannot enter pairing mode - not connected via USB", RNS.LOG_ERROR)
-            return False
-
-        RNS.log("Sending Bluetooth pairing mode command...", RNS.LOG_INFO)
-
+    def _display_logo(self):
+        if not self.enable_framebuffer:
+            return
         try:
-            # KISS frame: FEND CMD_BT_CTRL BT_CTRL_PAIRING_MODE FEND
-            kiss_cmd = bytes([KISS.FEND, KISS.CMD_BT_CTRL, KISS.BT_CTRL_PAIRING_MODE, KISS.FEND])
-            self._write(kiss_cmd)
-            RNS.log("Bluetooth pairing mode command sent", RNS.LOG_INFO)
-            return True
+            from columba_logo import columba_fb_data
         except Exception as e:  # noqa: BLE001
-            RNS.log(f"Failed to send pairing mode command: {e}", RNS.LOG_ERROR)
-            return False
+            RNS.log(f"{self} columba logo not available: {e}", RNS.LOG_DEBUG)
+            return
+
+        self.last_imagedata = bytes(columba_fb_data)
+        if not self.online:
+            # Upstream re-displays last_imagedata from reconnect_port() once the
+            # radio is back, so holding it here is enough.
+            return
+        if self.display is None:
+            # Detected device reports no framebuffer (see upstream detect()).
+            return
+        try:
+            self.display_image(self.last_imagedata)
+            self.enable_external_framebuffer()
+            RNS.log(f"{self} displayed columba logo on RNode", RNS.LOG_DEBUG)
+        except Exception as e:  # noqa: BLE001
+            RNS.log(f"{self} could not display logo: {e}", RNS.LOG_DEBUG)
 
     def __str__(self):
         return f"ColumbaRNodeInterface[{self.name}]"
 
 
-# RNS external-interface loader contract: the module must expose
-# `interface_class` pointing to the class to instantiate. See
-# Reticulum.py:933 — `interface_class = interface_globals["interface_class"]`.
 interface_class = ColumbaRNodeInterface

@@ -8,7 +8,14 @@ Columba is a simple messaging and voice app for the [Reticulum](https://github.c
 
 Built with a native Android interface and Material Design 3, Columba brings mesh networking to your pocket in a familiar, easy-to-use package.
 
-<img src="https://github.com/user-attachments/assets/77532689-3568-4224-a75d-62fb08a4ad33" width="33%"></img> <img src="https://github.com/user-attachments/assets/70804d27-6307-441f-b29f-b32ecfe72098" width="33%"></img> <img src="https://github.com/user-attachments/assets/c2d2c9ad-63da-42e0-a045-bc30ec3bb128" width="33%"></img>
+<p align="center">
+  <img src="./docs/screenshots/01_contacts.png" width="32%" alt="Contacts">
+  <img src="./docs/screenshots/02_chats.png" width="32%" alt="Chats">
+  <img src="./docs/screenshots/03_map.png" width="32%" alt="Map">
+  <img src="./docs/screenshots/04_conversation.png" width="32%" alt="Conversation">
+  <img src="./docs/screenshots/05_call.png" width="32%" alt="Voice call">
+  <img src="./docs/screenshots/06_interfaces.png" width="32%" alt="Interfaces">
+</p>
 
 ## What You Can Do
 

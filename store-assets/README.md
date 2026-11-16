@@ -99,3 +99,5 @@ has no text, so that tap is a coordinate (964,2221 on the 1080x2400 device).
 - Play Console accepts the PNGs directly (1080x1920 is inside limits).
 - To review on-device over Columba itself, send the webp (Columba renders
   webp inline, not png).
+- The repo README embeds the RAW captures, not the composited finals:
+  `cp captures/*.png ../docs/screenshots/` after a run refreshes them.

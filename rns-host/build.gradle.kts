@@ -132,7 +132,7 @@ dependencies {
     api(libs.lxmf.kt)
 
     // USB serial — KotlinUSBBridge wraps mik3y's lib for RNode-over-USB.
-    api("com.github.mik3y:usb-serial-for-android:3.7.0")
+    api("com.github.mik3y:usb-serial-for-android:3.11.0")
 
     // MessagePack — RNode KISS frames + LXMF field encoding.
     implementation(libs.msgpack)

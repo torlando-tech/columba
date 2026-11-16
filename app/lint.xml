@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Локальная (форк columba-ru) конфигурация lint. Файл отсутствует в upstream,
+  поэтому не конфликтует при слиянии обновлений.
+
+  Когда upstream добавляет строку в values/strings.xml, русского перевода для неё
+  ещё нет. По умолчанию MissingTranslation - ошибка, из-за которой падает
+  lintVital при assembleRelease. Понижаем до warning: приложение собирается,
+  недостающая строка временно показывается по-английски, а полноту перевода
+  контролирует scripts/l10n/check_ru.py (см. docs/LOCALIZATION_RU.md).
+-->
+<lint>
+    <issue id="MissingTranslation" severity="warning" />
+</lint>

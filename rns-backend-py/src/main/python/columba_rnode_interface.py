@@ -14,6 +14,10 @@ both unusable in an embedded Python. Columba already owns byte-level transports 
 Kotlin (`KotlinRNodeBridge` for BLE/Classic, `KotlinUSBBridge` for USB-serial), so
 this module injects them and inherits everything else from upstream.
 
+One method is overridden: `validateRadioState()` adopts the TX power the device
+echoes (firmware clamps/quantises it) instead of failing the interface, so a
+sub-floor power setting still brings the radio online with the achievable value.
+
 Deployment (unchanged): `event_bridge` copies this file to
 `<configdir>/interfaces/ColumbaRNodeInterface.py`, and `RnsConfigFile` emits
 `type = ColumbaRNodeInterface` for BLE/Classic/USB RNode interfaces (TCP RNode
@@ -296,6 +300,54 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
             connected_fn=bridge.isConnected,
             close_fn=bridge.disconnect,
         )
+
+    # ---- radio configuration validation ----
+
+    def validateRadioState(self):
+        """Adopt the device's TX power instead of failing the whole interface.
+
+        RNode firmware rewrites the requested TX power before echoing it: it
+        clamps to the modem/board ceiling (22 dBm SX1262, 17 dBm SX127x,
+        13/20 dBm SX1280) and, on LoRa-PA boards, quantises the request through
+        its PA gain table, so a legitimate sub-floor setting reports the lowest
+        power the PA can produce (1 dBm -> 11 dBm on a 735D, `PA_GC1109` gain
+        table). Upstream compares the echo with the configuration and aborts
+        the startup on any divergence, which leaves the radio offline with no
+        recovery path — sub-floor power settings are unusable that way.
+
+        The device's value is adopted as the interface's TX power, so the
+        running interface matches what the radio actually transmits. Every
+        other parameter keeps upstream's fatal validation: frequency,
+        bandwidth, spreading factor, coding rate and radio state have no
+        legitimate device-side rewrite, so a mismatch there means the radio is
+        not on the configured channel plan. See issue #1255.
+        """
+        if self.r_txpower is None:
+            # The echo is produced by the read loop after `setTXPower()`; it is
+            # normally already here by the time configuration is validated.
+            deadline = time.time() + 2.5
+            while self.r_txpower is None and time.time() < deadline:
+                time.sleep(0.05)
+
+        reported = self.r_txpower
+        if reported is not None and reported != self.txpower:
+            if 0 <= reported <= 37:
+                RNS.log(
+                    f"{self} TX power: configured {self.txpower} dBm, the device can only "
+                    f"transmit {reported} dBm — adopting the device value",
+                    RNS.LOG_WARNING,
+                )
+                self.txpower = reported
+            else:
+                # 0xFF is the firmware's "unset" sentinel; anything else is
+                # outside the range upstream accepts for a configuration.
+                RNS.log(
+                    f"{self} reported an invalid TX power ({reported} dBm); "
+                    f"keeping the configured {self.txpower} dBm",
+                    RNS.LOG_ERROR,
+                )
+
+        return super().validateRadioState()
 
     # ---- accessors the Kotlin service layer polls ----
 

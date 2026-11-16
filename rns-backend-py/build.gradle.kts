@@ -102,7 +102,7 @@ chaquopy {
             // RNS 1.6.0 with Android AutoInterface lifecycle fixes and
             // packet-local PHY snapshots before the async receive queue.
             // Stamps and Resource remain identical to upstream 1.6.0.
-            install("git+https://github.com/torlando-tech/Reticulum@d989bc31c3e72a3533dd51076786e3f4248fe52f")
+            install("git+https://github.com/torlando-tech/Reticulum@9aa9d29e1ee0eaa58e6d810c42a29b348c8168ed")
 
             // LXMF 1.3.0 with opportunistic receiving-interface/hop capture
             // and mutex-protected SQLite compatibility. LXStamper is upstream

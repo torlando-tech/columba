@@ -204,6 +204,66 @@ class RNodeUpstreamAdapterTests(unittest.TestCase):
         self.assertIsNone(self._ble_interface(bridge))
         self.assertEqual("RNode Other", bridge.getConnectedDeviceName())
 
+    # ---- radio configuration validation ----
+
+    def _radio_state(self, **overrides):
+        """Configured state plus the matching echo, as `validateRadioState()` compares them."""
+        iface = self._new_interface()
+        iface.platform = 0
+        iface.frequency = 869525000
+        iface.r_frequency = 869525000
+        iface.bandwidth = 125000
+        iface.r_bandwidth = 125000
+        iface.txpower = 1
+        iface.r_txpower = 11
+        iface.sf = 7
+        iface.r_sf = 7
+        iface.state = 1
+        iface.r_state = 1
+        for key, value in overrides.items():
+            setattr(iface, key, value)
+        return iface
+
+    def _validate(self, iface):
+        # Upstream waits 1-2 s for the echoes before comparing; the adapter's
+        # wait loop is skipped unless the TX power echo is still missing.
+        with mock.patch.object(self.upstream, "sleep", lambda *_: None):
+            return iface.validateRadioState()
+
+    def test_device_rewritten_tx_power_is_adopted_not_fatal(self):
+        # The firmware clamps/quantises TX power and echoes its own value: 1 dBm
+        # on a 735D reports 11 dBm (PA gain table floor). The interface has to
+        # come online at the achievable power instead of aborting startup.
+        iface = self._radio_state()
+
+        self.assertTrue(self._validate(iface))
+        self.assertEqual(11, iface.txpower)
+
+    def test_adoption_does_not_mask_the_other_radio_parameters(self):
+        iface = self._radio_state(r_sf=9)
+
+        self.assertFalse(self._validate(iface))
+        # The TX power was still reconciled, so a later restart does not repeat
+        # the mismatch for a parameter the device never rewrote.
+        self.assertEqual(11, iface.txpower)
+
+    def test_missing_tx_power_echo_is_left_to_upstreams_validation(self):
+        # No echo means the device never reported a power: adopt nothing and
+        # let upstream's comparison decide (it fails, as before this change).
+        iface = self._radio_state(r_txpower=None)
+        fake_time = types.SimpleNamespace(sleep=lambda *_: None, time=lambda: float("inf"))
+
+        with mock.patch.object(self.mod, "time", fake_time):
+            self.assertFalse(self._validate(iface))
+        self.assertEqual(1, iface.txpower)
+
+    def test_unset_tx_power_sentinel_is_not_adopted(self):
+        # 0xFF is the firmware's "not configured" sentinel, not a power level.
+        iface = self._radio_state(r_txpower=0xFF)
+
+        self.assertFalse(self._validate(iface))
+        self.assertEqual(1, iface.txpower)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -265,6 +265,30 @@ def _run_real_radio_tests():
                     self.assertEqual(2, len(RNS.Transport.local_client_snr_cache))
                     self.assertEqual([], RNS.Transport.local_client_q_cache)
 
+        def test_device_rewritten_tx_power_still_validates_the_radio(self):
+            # Firmware rewrites TX power and echoes the achievable value (the
+            # PA gain table floor: 11 dBm on a 735D). Upstream's own read loop
+            # decodes the echo; validation must adopt it, or a sub-floor
+            # request leaves the radio offline (issue #1255).
+            kiss = upstream_rnode.KISS
+            frames = (
+                self.frame(kiss.CMD_FREQUENCY, (915000000).to_bytes(4, "big"))
+                + self.frame(kiss.CMD_BANDWIDTH, (125000).to_bytes(4, "big"))
+                + self.frame(kiss.CMD_TXPOWER, bytes([11]))
+                + self.frame(kiss.CMD_SF, bytes([7]))
+                + self.frame(kiss.CMD_RADIO_STATE, bytes([kiss.RADIO_STATE_OFF]))
+            )
+            hardware = ByteBridge(frames)
+            interface = self.make_interface(hardware)
+            interface.txpower = 1  # below what the board's PA can emit
+            with mock.patch.object(interface, "reconnect_port"):
+                interface.readLoop()
+            self.assertEqual(11, interface.r_txpower)
+
+            with mock.patch.object(upstream_rnode, "sleep", lambda *_: None):
+                self.assertTrue(interface.validateRadioState())
+            self.assertEqual(11, interface.txpower)
+
         def test_missing_message_phy_is_not_filled_from_stale_interface(self):
             interface = self.make_interface(ByteBridge(b""))
             interface.r_stat_rssi, interface.r_stat_snr = -40, 12.0

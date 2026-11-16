@@ -2066,7 +2066,7 @@ class RNodeWizardViewModel
                     }
 
                     // Send pairing mode command via Python bridge
-                    // Note: This will be handled by the Python rnode_interface
+                    // Note: This will be handled by the Python columba_rnode_interface
                     // For now, we send raw KISS command directly
                     // KISS frame: FEND (0xC0), CMD_BT_CTRL (0x46), BT_CTRL_PAIRING_MODE (0x02), FEND (0xC0)
                     val kissPairingCmd =

@@ -105,7 +105,7 @@ internal fun interface RNodeConnectionStateNotifier {
  */
 @SuppressLint("MissingPermission")
 @Suppress("LargeClass", "InjectDispatcher") // Bridge class doesn't use DI - dispatcher used for BLE/serial I/O
-@ReflectivelyKept // Python (rnode_interface.py) calls this via Chaquopy reflection — R8 must not strip/rename it
+@ReflectivelyKept // Python (columba_rnode_interface.py) calls this via Chaquopy reflection — R8 must not strip/rename it
 class KotlinRNodeBridge(
     private val context: Context,
 ) {

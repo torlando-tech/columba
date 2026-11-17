@@ -425,6 +425,65 @@ class RNodeWizardViewModelTest {
         }
 
     @Test
+    fun `selectFrequencyRegion keeps user txPower instead of applying region default`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            viewModel.selectFrequencyRegion(euRegionP)
+            viewModel.updateTxPower("1")
+            advanceUntilIdle()
+
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals("1", state.txPower)
+            assertNull(state.txPowerError)
+        }
+
+    @Test
+    fun `selectFrequencyRegion revalidates kept txPower against the new region ceiling`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            viewModel.selectFrequencyRegion(usRegion)
+            viewModel.updateTxPower("27")
+            advanceUntilIdle()
+
+            viewModel.selectFrequencyRegion(euRegionL)
+            advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals("27", state.txPower)
+            assertNotNull(state.txPowerError)
+        }
+
+    @Test
+    fun `selectFrequencyRegion still applies region defaults to frequency and airtime`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            viewModel.selectFrequencyRegion(usRegion)
+            viewModel.updateTxPower("1")
+            viewModel.updateFrequency("915000000")
+            viewModel.updateStAlock("50")
+            viewModel.updateLtAlock("60")
+            advanceUntilIdle()
+
+            viewModel.selectFrequencyRegion(euRegionP)
+            advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals(euRegionP.frequency.toString(), state.frequency)
+            assertEquals("1", state.txPower)
+            // Both airtime limits were edited, so only a region change that
+            // clears their modification flags can put the region default back.
+            val regionAirtime = euRegionP.dutyCycle.toDouble().toString()
+            assertEquals(regionAirtime, state.stAlock)
+            assertEquals(regionAirtime, state.ltAlock)
+        }
+
+    @Test
     fun `getFrequencyRegions returns all regions`() =
         runViewModelTest {
             advanceUntilIdle()

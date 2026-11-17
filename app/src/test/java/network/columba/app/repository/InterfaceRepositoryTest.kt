@@ -1016,7 +1016,7 @@ class InterfaceRepositoryTest {
     @Test
     fun `entityToConfig autoInterface legacy json without restriction defaults to wifi only`() =
         runTest {
-            // Pre-network_restriction AutoInterface row (Tyler's response: existing installs
+            // Pre-network_restriction AutoInterface row (intended behavior: existing installs
             // get the new wifi_only default for AutoInterface specifically).
             val legacy =
                 InterfaceEntity(

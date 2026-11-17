@@ -26,10 +26,11 @@ import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.repository.BleStatusRepository
 import network.columba.app.repository.InterfaceRepository
-import network.columba.app.rns.api.model.InterfaceConfig
-import network.columba.app.rns.api.model.NetworkRestriction
+import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.host.manager.CurrentTransport
 import network.columba.app.rns.host.manager.filterByTransport
 import network.columba.app.service.InterfaceConfigManager
@@ -1244,16 +1245,27 @@ class InterfaceManagementViewModel
         private var syncJob: kotlinx.coroutines.Job? = null
 
         private fun syncNativeInterfaces() {
-            // On backends that can't hot-reload interfaces (capabilities.
-            // interfaces.hotReloadInterfaces = false) RnsTransportAdmin.
-            // reloadInterfaces() is a documented no-op. Calling it would
-            // silently do nothing and leave no Apply button. Instead, mark
-            // the change pending: the UI surfaces an "Apply & Restart"
-            // action that drives applyChanges() (config rewrite + shutdown
-            // + reinitialise). On backends with hotReloadInterfaces = true
-            // (kotlin backend, and the Python backend since RNS 1.5.5) the
-            // change applies live below.
-            if (!rnsBackend.capabilities.value.interfaces.hotReloadInterfaces) {
+            // The bound backend seeds BackendCapabilities.UNKNOWN (whose
+            // hotReloadInterfaces = false) until the service reports its real
+            // capabilities — a window that is open right after every service
+            // bind/restart. Deciding from that seed would persist the toggle in
+            // the DB, flip the switch in the UI, and never touch the running
+            // stack: the interface keeps announcing until some later Apply or
+            // restart. Wait for the first reported snapshot instead, then
+            // apply (or fall back to the pending Apply & Restart path).
+            //
+            // On backends that can't hot-reload (capabilities.interfaces.
+            // hotReloadInterfaces = false) RnsTransportAdmin.reloadInterfaces()
+            // is a documented no-op. Calling it would silently do nothing and
+            // leave no Apply button, so mark the change pending instead and let
+            // the UI's "Apply & Restart" action drive applyChanges() (config
+            // rewrite + shutdown + reinitialise).
+            //
+            // Reference identity, not equality: UNKNOWN is the single sentinel
+            // instance the bound backend seeds its StateFlow with, while every
+            // real (IPC-decoded) snapshot is a new object.
+            val reported = rnsBackend.capabilities.value
+            if (reported !== BackendCapabilities.UNKNOWN && !reported.interfaces.hotReloadInterfaces) {
                 _state.update { it.copy(hasPendingChanges = true) }
                 return
             }
@@ -1261,6 +1273,13 @@ class InterfaceManagementViewModel
             syncJob =
                 viewModelScope.launch(ioDispatcher) {
                     try {
+                        if (rnsBackend.capabilities.value === BackendCapabilities.UNKNOWN) {
+                            rnsBackend.capabilities.first { it !== BackendCapabilities.UNKNOWN }
+                        }
+                        if (!rnsBackend.capabilities.value.interfaces.hotReloadInterfaces) {
+                            _state.update { it.copy(hasPendingChanges = true) }
+                            return@launch
+                        }
                         val configs = interfaceRepository.enabledInterfaces.first()
                         val filtered = filterByTransport(configs, transportObserver.snapshotTransport())
                         transportAdmin.reloadInterfaces(filtered)

@@ -51,7 +51,7 @@ SOURCE_DIR = "values"
 # values-ru, values-pl, values-ru-rRU, values-b+sr+Latn, values-zh-rCN.
 # Android configuration qualifiers (values-v31, values-night, values-sw600dp,
 # values-xxhdpi, ...) must not match.
-LOCALE_DIR = re.compile(r"^values-(?:b\+[A-Za-z+]+|[a-z]{2,3}(?:-r(?:[A-Z]{2}|\d{3}))?)$")
+LOCALE_DIR = re.compile(r"^values-(?:b\+[A-Za-z0-9+]+|[a-z]{2,3}(?:-r(?:[A-Z]{2}|\d{3}))?)$")
 SKIP_DIRS = {"build", ".git", ".gradle", ".worktrees", "node_modules"}
 FORMAT_SPEC = re.compile(r"%(?:(\d+)\$)?([-+#0 ]*)(\d+)?(?:\.(\d+))?([A-Za-z%])")
 ALLOW_PREFIX = "l10n-allow:"
@@ -83,7 +83,7 @@ class Item:
 
 
 def specs(text):
-    """Return (positional args by position, malformed fragments, saw implicit arg)."""
+    """Return (conversions per position, malformed fragments, saw implicit arg)."""
     args, bad, implicit, order = {}, [], False, 0
     i = 0
     while i < len(text):
@@ -103,9 +103,19 @@ def specs(text):
             implicit = True
             order += 1
             position = str(order)
-        args[position] = m.group(5)
+        args.setdefault(position, set()).add(m.group(5))
         i = m.end()
     return args, bad, implicit
+
+
+def element_text(el):
+    """All text of an element, including markup children and their tails, minus comments."""
+    parts = [el.text or ""]
+    for child in el:
+        if child.tag is not ET.Comment:
+            parts.append(element_text(child))
+        parts.append(child.tail or "")
+    return "".join(parts)
 
 
 def load_resources(path):
@@ -127,18 +137,18 @@ def load_resources(path):
         translatable = el.get("translatable") != "false"
         formatted = el.get("formatted") != "false"
         if el.tag == "string":
-            items[name] = Item("string", el.text or "", translatable=translatable,
+            items[name] = Item("string", element_text(el), translatable=translatable,
                                formatted=formatted, allow=pending_allow)
         elif el.tag == "plurals":
-            quantities = {it.get("quantity"): (it.text or "") for it in el}
+            quantities = {it.get("quantity"): element_text(it) for it in el}
             items[name] = Item("plural", quantities=quantities, translatable=translatable,
                                formatted=formatted, allow=pending_allow)
         elif el.tag in ("string-array", "array", "integer-array"):
-            items[name] = Item("array", [it.text or "" for it in el],
+            items[name] = Item("array", [element_text(it) for it in el],
                                translatable=translatable, formatted=formatted,
                                allow=pending_allow)
         elif el.tag == "item" and el.get("type") == "string":
-            items[name] = Item("string", el.text or "", translatable=translatable,
+            items[name] = Item("string", element_text(el), translatable=translatable,
                                formatted=formatted, allow=pending_allow)
         pending_allow = False
     return items, duplicates
@@ -154,7 +164,7 @@ def texts_of(item):
 
 
 def union_args(item):
-    """Placeholder arguments used anywhere in the entry: position -> conversion."""
+    """Placeholder arguments used anywhere in the entry: position -> set of conversions."""
     args, bad, implicit = {}, [], False
     if not item.formatted:
         return args, bad, implicit
@@ -162,8 +172,8 @@ def union_args(item):
         fragment_args, fragment_bad, fragment_implicit = specs(fragment)
         bad.extend(fragment_bad)
         implicit = implicit or fragment_implicit
-        for position, conversion in fragment_args.items():
-            args.setdefault(position, conversion)
+        for position, conversions in fragment_args.items():
+            args.setdefault(position, set()).update(conversions)
     return args, bad, implicit
 
 
@@ -180,7 +190,7 @@ def check_entry(name, source, target, locale):
     if source.kind == "plural":
         if "other" not in target.quantities:
             errors.append(f'plurals missing "other": {name}')
-        unknown = set(target.quantities) - set(source.quantities) - {"one", "few", "many", "two", "zero"}
+        unknown = set(target.quantities) - {"zero", "one", "two", "few", "many", "other"}
         if unknown:
             errors.append(f"unknown plural quantity {sorted(unknown)}: {name}")
     if source.kind == "array" and len(target.text) != len(source.text):
@@ -196,15 +206,18 @@ def check_entry(name, source, target, locale):
         errors.append(f"malformed percent sequence in source (fix values/strings.xml): {name}")
     if target_bad:
         errors.append(f"malformed percent sequence in {locale}: {name} ({', '.join(target_bad)})")
-    for position, conversion in source_args.items():
+    for position, conversions in source_args.items():
+        allowed = "/".join(sorted(conversions))
         if position not in target_args:
             if not target.allow:
                 errors.append(
-                    f"placeholder %{position}${conversion} dropped: {name}"
+                    f"placeholder %{position}${allowed} dropped: {name}"
                     f"  (add `<!-- l10n-allow: reason -->` above it if intentional)")
             continue
-        if target_args[position] != conversion:
-            errors.append(f"placeholder %{position}$ type {conversion} -> {target_args[position]}: {name}")
+        unexpected = target_args[position] - conversions
+        if unexpected:
+            used = "/".join(sorted(unexpected))
+            errors.append(f"placeholder %{position}$ type {allowed} -> {used}: {name}")
     for position in target_args.keys() - source_args.keys():
         errors.append(f"placeholder %{position}$ does not exist in source: {name}")
     # Legacy source entries still use bare %s/%d; only require positional
@@ -215,9 +228,11 @@ def check_entry(name, source, target, locale):
 
 
 def locale_files(res_dir):
+    """values-<tag>/ directories that actually hold a strings.xml (the tracked file)."""
     if not res_dir.is_dir():
         return []
-    return sorted(p for p in res_dir.iterdir() if p.is_dir() and LOCALE_DIR.match(p.name))
+    return sorted(p for p in res_dir.iterdir()
+                  if p.is_dir() and LOCALE_DIR.match(p.name) and (p / "strings.xml").is_file())
 
 
 def discover_modules():
@@ -264,6 +279,7 @@ def main():
 
     errors, warnings, rows, stale_total = [], [], [], 0
     missing = {}
+    seen = set()
     state = load_state()
     state_changed = False
 
@@ -275,6 +291,7 @@ def main():
 
         for locale_dir in locale_files(module_dir / "src/main/res"):
             locale = locale_dir.name[len("values-"):]
+            seen.add((module, locale))
             try:
                 target_items, target_dupes = load_resources(locale_dir / "strings.xml")
             except ET.ParseError as exc:
@@ -328,6 +345,17 @@ def main():
                                     f"source changed since recorded: {stale[:5]}")
                 rows.append((module, locale, len(target_items.keys() & source_items.keys()),
                              len(source_items), len(stale), identical))
+
+    # A recorded locale whose directory is gone (or no longer has strings.xml)
+    # must not keep bookkeeping entries: prune on write, report on verify.
+    recorded_pairs = {(m, loc) for m, locales in state.items() for loc in locales}
+    for module, locale in sorted(recorded_pairs - seen):
+        if args.write_state:
+            del state[module][locale]
+            state_changed = True
+        elif args.verify:
+            errors.append(f"{module}/{locale}: l10n/state.json tracks translations but "
+                          f"src/main/res/values-{locale}/strings.xml does not exist")
 
     if state_changed and not errors:
         save_state(state)

@@ -49,6 +49,8 @@ jobs:
         # plurals without "other", translatable="false" drift, duplicate names,
         # and l10n/state.json bookkeeping. Missing keys and stale translations
         # are reported, not fatal.
+        # `shell: bash` adds -eo pipefail, so tee cannot mask a failing check.
+        shell: bash
         run: python3 scripts/l10n/check_locales.py --verify --summary-md | tee -a "$GITHUB_STEP_SUMMARY"
 
   lint:

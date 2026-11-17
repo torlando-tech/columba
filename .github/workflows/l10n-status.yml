@@ -33,4 +33,6 @@ jobs:
       - name: Report locale status
         # Structural and bookkeeping errors fail the job; stale translations are
         # reported in the summary. Add --fail-on-stale to gate a release.
+        # `shell: bash` adds -eo pipefail, so tee cannot mask a failing check.
+        shell: bash
         run: python3 scripts/l10n/check_locales.py --verify --summary-md | tee -a "$GITHUB_STEP_SUMMARY"

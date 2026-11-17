@@ -26,6 +26,33 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v6.4.1
 
+  l10n-locales:
+    name: Locale resources (l10n)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate locale resources and translation bookkeeping
+        # Compares every values-<lang>/strings.xml against values/strings.xml:
+        # extra keys, dropped/mistyped placeholders, malformed percent sequences,
+        # plurals without "other", translatable="false" drift, duplicate names,
+        # and l10n/state.json bookkeeping. Missing keys and stale translations
+        # are reported, not fatal.
+        # `shell: bash` adds -eo pipefail, so tee cannot mask a failing check.
+        shell: bash
+        run: python3 scripts/l10n/check_locales.py --verify --summary-md | tee -a "$GITHUB_STEP_SUMMARY"
+
   lint:
     name: Code Quality (ktlint + detekt + CPD + Android Lint)
     runs-on: ubuntu-latest

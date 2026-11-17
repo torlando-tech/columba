@@ -213,6 +213,18 @@ class MapScreenTest {
     }
 
     @Test
+    fun `formatTimeAgo with 1 hour ago returns singular hour`() {
+        val now = System.currentTimeMillis() / 1000
+        assertEquals("1 hour ago", formatTimeAgo(ApplicationProvider.getApplicationContext(), now - 3600))
+    }
+
+    @Test
+    fun `formatTimeAgo with 1 day ago returns singular day`() {
+        val now = System.currentTimeMillis() / 1000
+        assertEquals("1 day ago", formatTimeAgo(ApplicationProvider.getApplicationContext(), now - 86400))
+    }
+
+    @Test
     fun `formatTimeAgo with 3 days ago returns days ago`() {
         val now = System.currentTimeMillis() / 1000
         assertEquals("3 days ago", formatTimeAgo(ApplicationProvider.getApplicationContext(), now - 259200))

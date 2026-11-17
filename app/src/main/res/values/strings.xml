@@ -946,20 +946,20 @@
     <string name="time_relative_just_now">Just now</string>
     <string name="time_since_just_now">just now</string>
     <plurals name="time_minutes_ago">
-        <item quantity="one">%d minute ago</item>
-        <item quantity="other">%d minutes ago</item>
+        <item quantity="one">%1$d minute ago</item>
+        <item quantity="other">%1$d minutes ago</item>
     </plurals>
     <plurals name="time_hours_ago">
-        <item quantity="one">%d hour ago</item>
-        <item quantity="other">%d hours ago</item>
+        <item quantity="one">%1$d hour ago</item>
+        <item quantity="other">%1$d hours ago</item>
     </plurals>
     <plurals name="time_days_ago">
-        <item quantity="one">%d day ago</item>
-        <item quantity="other">%d days ago</item>
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
     </plurals>
     <plurals name="time_weeks_ago">
-        <item quantity="one">%d week ago</item>
-        <item quantity="other">%d weeks ago</item>
+        <item quantity="one">%1$d week ago</item>
+        <item quantity="other">%1$d weeks ago</item>
     </plurals>
     <string name="label_unknown">Unknown</string>
     <!-- DestinationHashValidator -->
@@ -1244,8 +1244,14 @@
     <string name="iface_never">Never</string>
     <string name="iface_just_now">just now</string>
     <string name="iface_min_ago">%1$d min ago</string>
-    <string name="iface_hours_ago">%1$d hours ago</string>
-    <string name="iface_days_ago">%1$d days ago</string>
+    <plurals name="iface_hours_ago">
+        <item quantity="one">%1$d hour ago</item>
+        <item quantity="other">%1$d hours ago</item>
+    </plurals>
+    <plurals name="iface_days_ago">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
     <string name="iface_yes">yes</string>
     <string name="iface_no">no</string>
     <string name="iface_discovery_title">Interface Discovery</string>
@@ -2171,8 +2177,14 @@
     <string name="map_focus_marker_label">Location</string>
     <string name="map_just_now">Just now</string>
     <string name="map_time_minutes_ago">%1$d min ago</string>
-    <string name="map_time_hours_ago">%1$d hours ago</string>
-    <string name="map_time_days_ago">%1$d days ago</string>
+    <plurals name="map_time_hours_ago">
+        <item quantity="one">%1$d hour ago</item>
+        <item quantity="other">%1$d hours ago</item>
+    </plurals>
+    <plurals name="map_time_days_ago">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
     <!-- i18n ticket 15: identity screens (IdentityScreen / IdentityManagerScreen / MyIdentityScreen / QR dialogs) -->
     <string name="identity_network_status">Network Status</string>
     <string name="identity_reticulum_status">Reticulum Status</string>
@@ -2300,9 +2312,18 @@
     <string name="identity_rename_enter">Enter a new display name:</string>
     <string name="identity_rename_hash">Identity: %1$s...</string>
     <string name="identity_save_action">SAVE</string>
-    <string name="identity_time_minutes_ago">%1$d minutes ago</string>
-    <string name="identity_time_hours_ago">%1$d hours ago</string>
-    <string name="identity_time_days_ago">%1$d days ago</string>
+    <plurals name="identity_time_minutes_ago">
+        <item quantity="one">%1$d minute ago</item>
+        <item quantity="other">%1$d minutes ago</item>
+    </plurals>
+    <plurals name="identity_time_hours_ago">
+        <item quantity="one">%1$d hour ago</item>
+        <item quantity="other">%1$d hours ago</item>
+    </plurals>
+    <plurals name="identity_time_days_ago">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
     <string name="identity_my_identity_title">My Identity</string>
     <string name="identity_icon_cd">Identity</string>
     <string name="identity_display_name_identity">Display Name &amp; Identity</string>
@@ -2741,12 +2762,22 @@
         <item quantity="other">%1$d hops away</item>
     </plurals>
     <string name="settings_delivery_just_now">Just now</string>
-    <string name="settings_delivery_seconds_ago">%1$d seconds ago</string>
-    <string name="settings_delivery_one_minute_ago">1 minute ago</string>
-    <string name="settings_delivery_minutes_ago">%1$d minutes ago</string>
-    <string name="settings_delivery_one_hour_ago">1 hour ago</string>
-    <string name="settings_delivery_hours_ago">%1$d hours ago</string>
-    <string name="settings_delivery_days_ago">%1$d days ago</string>
+    <plurals name="settings_delivery_seconds_ago">
+        <item quantity="one">%1$d second ago</item>
+        <item quantity="other">%1$d seconds ago</item>
+    </plurals>
+    <plurals name="settings_delivery_minutes_ago">
+        <item quantity="one">%1$d minute ago</item>
+        <item quantity="other">%1$d minutes ago</item>
+    </plurals>
+    <plurals name="settings_delivery_hours_ago">
+        <item quantity="one">%1$d hour ago</item>
+        <item quantity="other">%1$d hours ago</item>
+    </plurals>
+    <plurals name="settings_delivery_days_ago">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
     <string name="settings_delivery_custom_interval_title">Custom Retrieval Interval</string>
     <string name="settings_delivery_interval_prompt">Enter retrieval interval (1-12 hours):</string>
     <string name="settings_delivery_seconds_label">Seconds</string>
@@ -2838,12 +2869,22 @@
     <string name="settings_location_contacts_selected">%1$d contact(s) selected</string>
     <string name="settings_location_cancel">Cancel</string>
     <string name="settings_location_just_now">Just now</string>
-    <string name="settings_location_seconds_ago">%1$d seconds ago</string>
-    <string name="settings_location_one_minute_ago">1 minute ago</string>
-    <string name="settings_location_minutes_ago">%1$d minutes ago</string>
-    <string name="settings_location_one_hour_ago">1 hour ago</string>
-    <string name="settings_location_hours_ago">%1$d hours ago</string>
-    <string name="settings_location_days_ago">%1$d days ago</string>
+    <plurals name="settings_location_seconds_ago">
+        <item quantity="one">%1$d second ago</item>
+        <item quantity="other">%1$d seconds ago</item>
+    </plurals>
+    <plurals name="settings_location_minutes_ago">
+        <item quantity="one">%1$d minute ago</item>
+        <item quantity="other">%1$d minutes ago</item>
+    </plurals>
+    <plurals name="settings_location_hours_ago">
+        <item quantity="one">%1$d hour ago</item>
+        <item quantity="other">%1$d hours ago</item>
+    </plurals>
+    <plurals name="settings_location_days_ago">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
     <string name="settings_location_myself">Myself</string>
     <string name="settings_location_select_group_host_title">Select Group Host</string>
     <string name="settings_location_select_group_host_desc">Select yourself to host the group, or choose a contact to send your location to.</string>

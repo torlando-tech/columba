@@ -106,6 +106,12 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
     MODE_USB = "usb"
     MODE_TCP = "tcp"
 
+    # After a missed permission prompt, wait this long before asking again.
+    USB_PERMISSION_RETRY_S = 60.0
+    # Chaquopy cannot use Kotlin default arguments, so the blocking permission
+    # request always gets an explicit timeout (the Kotlin default is the same).
+    USB_PERMISSION_TIMEOUT_MS = 30000
+
     def __init__(self, owner, configuration):
         c = Interface.get_config_obj(configuration)
         self.connection_mode = (c["connection_mode"] if "connection_mode" in c else self.MODE_CLASSIC) or self.MODE_CLASSIC
@@ -126,6 +132,10 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
         self._kotlin_bridge = None
         self._usb_bridge = None
         self._logo_requested = False
+        # Android drops USB grants when the app is reinstalled. Track the outcome
+        # so the reconnect loop asks once instead of opening a dialog every retry.
+        self._usb_permission_denied = False
+        self._usb_permission_next_attempt = 0.0
 
         # Upstream's own connections (able / pyjnius) must never be built here:
         # `allow_bluetooth` would construct AndroidBluetoothManager -> autoclass.
@@ -192,16 +202,16 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
     def _open_bluetooth_port(self):
         import event_bridge
 
-        self._kotlin_bridge = event_bridge.get_rnode_bridge()
-        if self._kotlin_bridge is None:
+        # Local until this interface actually owns the connection: the bridge is a
+        # process-wide singleton, and detach() closes whatever _kotlin_bridge holds.
+        bridge = event_bridge.get_rnode_bridge()
+        if bridge is None:
             RNS.log("ColumbaRNodeInterface: KotlinRNodeBridge unavailable — RNode stays offline", RNS.LOG_ERROR)
             return None
 
         if not self.target_device_name:
             RNS.log(f"ColumbaRNodeInterface '{self.name}': no target_device_name configured", RNS.LOG_ERROR)
             return None
-
-        bridge = self._kotlin_bridge
         already = None
         try:
             if bridge.isConnected():
@@ -234,6 +244,7 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
             return None
 
         self.status_reason = None
+        self._kotlin_bridge = bridge
         return BridgeConnection(
             name=self.name,
             read_fn=bridge.read,
@@ -251,15 +262,90 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
             return
         return super().reconnect_port()
 
+    def detach(self):
+        """Detach even when the transport never opened.
+
+        Upstream's detach() finishes with `self.ble.close()` / `self.serial.close()`,
+        assuming open_port() succeeded. A transport that never came up - USB
+        permission missing, radio unplugged, bridge held by another interface -
+        leaves those members None, so the AttributeError aborts Reticulum's
+        detach_interface() and disabling the interface fails with "needs a restart
+        to apply" instead of detaching. Close whatever bridge exists instead.
+        """
+        try:
+            super().detach()
+            return
+        except Exception as e:  # noqa: BLE001
+            RNS.log(f"ColumbaRNodeInterface: detach on an unopened transport ({e})", RNS.LOG_WARNING)
+
+        self.detached = True
+        for bridge in (self._usb_bridge, self._kotlin_bridge):
+            if bridge is None:
+                continue
+            try:
+                if bridge.isConnected():
+                    bridge.disconnect()
+            except Exception as e:  # noqa: BLE001
+                RNS.log(f"ColumbaRNodeInterface: closing transport during detach failed: {e}", RNS.LOG_DEBUG)
+
+    def _ensure_usb_permission(self, bridge, device_id):
+        """Request Android's USB permission for this device before opening it.
+
+        The Kotlin backend asks for the grant when it opens a USB serial interface;
+        the Python path has to do the same. Grants are per app install, so a
+        reinstall leaves a configured USB RNode in "No permission for device" with
+        no prompt, and the reconnect loop retries forever.
+        """
+        try:
+            if bridge.hasPermission(device_id):
+                self._usb_permission_denied = False
+                return True
+        except Exception as e:  # noqa: BLE001
+            # Old bridge without the query: let connect() report the real failure.
+            RNS.log(f"ColumbaRNodeInterface: USB permission check failed: {e}", RNS.LOG_DEBUG)
+            return True
+
+        now = time.time()
+        if self._usb_permission_denied or now < self._usb_permission_next_attempt:
+            return False
+
+        self._usb_permission_next_attempt = now + self.USB_PERMISSION_RETRY_S
+        RNS.log(f"ColumbaRNodeInterface: requesting USB permission for device {device_id}", RNS.LOG_INFO)
+        try:
+            granted = bool(bridge.requestPermissionBlocking(device_id, self.USB_PERMISSION_TIMEOUT_MS))
+        except Exception as e:  # noqa: BLE001
+            RNS.log(f"ColumbaRNodeInterface: USB permission request failed: {e}", RNS.LOG_ERROR)
+            return False
+
+        if not granted:
+            # The system dialog outlives the wait: the user can answer it after
+            # we stopped waiting. A later grant is still picked up by the
+            # hasPermission() check at the top of the next attempt, so only the
+            # prompt is suppressed here.
+            try:
+                if bridge.hasPermission(device_id):
+                    self._usb_permission_denied = False
+                    return True
+            except Exception as e:  # noqa: BLE001
+                RNS.log(f"ColumbaRNodeInterface: USB permission re-check failed: {e}", RNS.LOG_DEBUG)
+            self._usb_permission_denied = True
+            RNS.log(
+                f"ColumbaRNodeInterface: USB permission for device {device_id} not granted "
+                "(prompt unanswered or denied); re-enable the interface to ask again",
+                RNS.LOG_ERROR,
+            )
+        return granted
+
     def _open_usb_port(self):
         import usb_bridge
 
-        self._usb_bridge = usb_bridge.get_usb_bridge()
-        if self._usb_bridge is None:
+        # Local until this interface actually owns the connection: detach() closes
+        # whatever _usb_bridge holds, and the bridge is a singleton.
+        bridge = usb_bridge.get_usb_bridge()
+        if bridge is None:
             RNS.log("ColumbaRNodeInterface: KotlinUSBBridge unavailable — RNode stays offline", RNS.LOG_ERROR)
             return None
 
-        bridge = self._usb_bridge
         device_id = self.usb_device_id
         if self.usb_vendor_id is not None and self.usb_product_id is not None:
             device_id = bridge.findDeviceByVidPid(self.usb_vendor_id, self.usb_product_id)
@@ -273,6 +359,9 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
 
         if device_id is None:
             RNS.log("ColumbaRNodeInterface: no USB device id configured", RNS.LOG_ERROR)
+            return None
+
+        if not self._ensure_usb_permission(bridge, device_id):
             return None
 
         try:
@@ -293,6 +382,7 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
                 time.sleep(0.02)
             return data
 
+        self._usb_bridge = bridge
         return BridgeConnection(
             name=self.name,
             read_fn=paced_read,

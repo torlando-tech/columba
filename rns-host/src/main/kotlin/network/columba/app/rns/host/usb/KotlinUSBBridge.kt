@@ -31,7 +31,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.IOException
 import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
@@ -86,6 +88,11 @@ class KotlinUSBBridge(
 
         // Buffer sizes
         private const val WRITE_TIMEOUT_MS = 1000
+
+        // How long a blocking permission request waits for the user to answer the
+        // system dialog. Callers run on a background thread (the Python RNode
+        // adapter's reconnect loop), never the main thread.
+        private const val USB_PERMISSION_TIMEOUT_MS = 30_000L
 
         // KISS protocol constants
         private const val KISS_FEND: Byte = 0xC0.toByte()
@@ -558,6 +565,33 @@ class KotlinUSBBridge(
                 cont.resume(granted)
             }
         }
+
+    /**
+     * Blocking permission request for callers that cannot suspend or hand Kotlin a
+     * callback - specifically the Python RNode adapter, which reaches this through
+     * Chaquopy and needs the same prompt the Kotlin backend issues before it opens a
+     * USB serial interface. Without it, a reinstall (which drops USB grants) leaves
+     * a configured USB RNode spinning on "No permission for device" with no prompt.
+     *
+     * MUST NOT be called from the main thread: it waits up to [timeoutMs] for the
+     * user to answer the system dialog.
+     *
+     * @param deviceId The device ID to request permission for
+     * @param timeoutMs How long to wait for the answer
+     * @return true when permission was granted before the timeout
+     */
+    fun requestPermissionBlocking(
+        deviceId: Int,
+        timeoutMs: Long = USB_PERMISSION_TIMEOUT_MS,
+    ): Boolean {
+        val latch = CountDownLatch(1)
+        val granted = AtomicBoolean(false)
+        requestPermission(deviceId) { result ->
+            granted.set(result)
+            latch.countDown()
+        }
+        return latch.await(timeoutMs, TimeUnit.MILLISECONDS) && granted.get()
+    }
 
     /**
      * Open a USB serial device and return InputStream/OutputStream for use by RNodeInterface.

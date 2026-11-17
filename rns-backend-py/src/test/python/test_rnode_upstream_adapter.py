@@ -84,6 +84,54 @@ class _FakeBridge:
         self._connected = False
 
 
+class _FakeUsbBridge:
+    """Stand-in for KotlinUSBBridge: permission handling plus a one-shot connect."""
+
+    def __init__(
+        self,
+        device_id=1002,
+        permission=False,
+        grant=True,
+        connect_ok=True,
+    ):
+        self.device_id = device_id
+        self.permission = permission
+        self.grant = grant
+        self.connect_ok = connect_ok
+        self.permission_requests = 0
+        self.connected = False
+
+    def findDeviceByVidPid(self, vendor_id, product_id):
+        return self.device_id
+
+    def hasPermission(self, device_id):
+        return self.permission
+
+    def requestPermissionBlocking(self, device_id, timeout_ms):
+        # Chaquopy cannot use Kotlin default arguments: the adapter must pass both.
+        self.permission_timeouts = getattr(self, "permission_timeouts", [])
+        self.permission_timeouts.append(timeout_ms)
+        self.permission_requests += 1
+        self.permission = self.grant
+        return self.grant
+
+    def isConnected(self):
+        return self.connected
+
+    def connect(self, device_id, baud_rate):
+        self.connected = self.connect_ok
+        return self.connect_ok
+
+    def disconnect(self):
+        self.connected = False
+
+    def read(self):
+        return b""
+
+    def write(self, data):
+        return len(data)
+
+
 @unittest.skipUnless(_real_rns_available(), "real pinned RNS not importable in this environment")
 class RNodeUpstreamAdapterTests(unittest.TestCase):
     @classmethod
@@ -128,6 +176,42 @@ class RNodeUpstreamAdapterTests(unittest.TestCase):
 
     def _ble_interface(self, bridge):
         return self._open_ble(self._new_interface(), bridge)
+
+    def _fake_usb_bridge_module(self, bridge):
+        module = types.ModuleType("usb_bridge")
+        module.get_usb_bridge = lambda: bridge
+        return module
+
+    def _detach_ready(self, iface):
+        iface.serial = None
+        iface.ble = None
+        iface.tcp = None
+        iface.use_ble = False
+        iface.use_tcp = False
+        iface.enable_framebuffer = False
+        iface.detached = False
+        return iface
+
+    def _new_usb_interface(self, vendor_id=0x303A, product_id=0x1001):
+        iface = self._new_interface()
+        iface.connection_mode = self.mod.ColumbaRNodeInterface.MODE_USB
+        iface.usb_device_id = None
+        iface.usb_vendor_id = vendor_id
+        iface.usb_product_id = product_id
+        iface._usb_permission_denied = False
+        iface._usb_permission_next_attempt = 0.0
+        return iface
+
+    def _open_usb(self, iface, bridge):
+        previous = sys.modules.get("usb_bridge")
+        sys.modules["usb_bridge"] = self._fake_usb_bridge_module(bridge)
+        try:
+            return iface._open_usb_port()
+        finally:
+            if previous is not None:
+                sys.modules["usb_bridge"] = previous
+            else:
+                sys.modules.pop("usb_bridge", None)
 
     def test_adapter_inherits_upstream_android_interface(self):
         self.assertTrue(
@@ -203,6 +287,120 @@ class RNodeUpstreamAdapterTests(unittest.TestCase):
         bridge = _FakeBridge(connected=True, device_name="RNode Other")
         self.assertIsNone(self._ble_interface(bridge))
         self.assertEqual("RNode Other", bridge.getConnectedDeviceName())
+
+
+    # ---- USB permission + detach ----
+
+    def test_usb_open_requests_permission_before_connecting(self):
+        # A reinstall drops the USB grant; the Python path must ask for it the way
+        # the Kotlin backend does instead of looping on "No permission".
+        bridge = _FakeUsbBridge(permission=False, grant=True)
+        iface = self._new_usb_interface()
+
+        connection = self._open_usb(iface, bridge)
+
+        self.assertIsInstance(connection, self.mod.BridgeConnection)
+        self.assertEqual(1, bridge.permission_requests)
+        self.assertEqual(
+            [self.mod.ColumbaRNodeInterface.USB_PERMISSION_TIMEOUT_MS],
+            bridge.permission_timeouts,
+        )
+
+    def test_usb_open_does_not_repeat_a_denied_prompt(self):
+        bridge = _FakeUsbBridge(permission=False, grant=False)
+        iface = self._new_usb_interface()
+
+        self.assertIsNone(self._open_usb(iface, bridge))
+        self.assertIsNone(self._open_usb(iface, bridge))
+
+        self.assertEqual(1, bridge.permission_requests)
+        self.assertTrue(iface._usb_permission_denied)
+
+    def test_permission_answered_after_the_wait_still_connects(self):
+        # The system dialog outlives the blocking wait: the interface must pick up
+        # a grant the user gave after the request returned, not demand a re-enable.
+        bridge = _FakeUsbBridge(permission=False, grant=False)
+        iface = self._new_usb_interface()
+
+        self.assertIsNone(self._open_usb(iface, bridge))
+        self.assertTrue(iface._usb_permission_denied)
+
+        bridge.permission = True
+        self.assertIsNotNone(self._open_usb(iface, bridge))
+        self.assertFalse(iface._usb_permission_denied)
+
+
+    def test_failed_ble_contention_does_not_own_the_shared_bridge(self):
+        # The bridge is a process-wide singleton serving one RNode. The interface
+        # that loses the contention never opened it, so detaching it must not
+        # disconnect the working radio.
+        bridge = _FakeBridge(connected=True, device_name="RNode Other")
+        iface = self._detach_ready(self._new_interface())
+        self.assertIsNone(self._open_ble(iface, bridge))
+        self.assertIsNone(iface._kotlin_bridge)
+
+        iface.detach()
+
+        self.assertTrue(bridge.isConnected())
+
+    def test_failed_usb_open_does_not_own_the_shared_bridge(self):
+        bridge = _FakeUsbBridge(device_id=-1, permission=True)
+        bridge.connected = True
+        iface = self._detach_ready(self._new_usb_interface())
+        self.assertIsNone(self._open_usb(iface, bridge))
+        self.assertIsNone(iface._usb_bridge)
+
+        iface.detach()
+
+        self.assertTrue(bridge.connected)
+
+    def test_failed_usb_permission_does_not_own_the_shared_bridge(self):
+        bridge = _FakeUsbBridge(permission=False, grant=False)
+        bridge.connected = True
+        iface = self._detach_ready(self._new_usb_interface())
+        self.assertIsNone(self._open_usb(iface, bridge))
+        self.assertIsNone(iface._usb_bridge)
+
+        iface.detach()
+
+        self.assertTrue(bridge.connected)
+    def test_detach_survives_a_transport_that_never_opened(self):
+        # open_port() never succeeded (permission denied, radio unplugged), so
+        # serial is None. Upstream's detach() would raise AttributeError and
+        # Reticulum would report the failed detach as "needs a restart".
+        iface = self._new_interface()
+        iface.serial = None
+        iface.ble = None
+        iface.tcp = None
+        iface.use_ble = False
+        iface.use_tcp = False
+        iface.enable_framebuffer = False
+        iface.detached = False
+        bridge = _FakeUsbBridge(permission=True)
+        bridge.connected = True
+        iface._usb_bridge = bridge
+
+        iface.detach()
+
+        self.assertTrue(iface.detached)
+        self.assertFalse(bridge.connected)
+
+    def test_detach_survives_an_unopened_ble_transport(self):
+        iface = self._new_interface()
+        iface.serial = None
+        iface.ble = None
+        iface.tcp = None
+        iface.use_ble = True
+        iface.use_tcp = False
+        iface.enable_framebuffer = False
+        iface.detached = False
+        bridge = _FakeBridge(connected=True)
+        iface._kotlin_bridge = bridge
+
+        iface.detach()
+
+        self.assertTrue(iface.detached)
+        self.assertFalse(bridge.isConnected())
 
     # ---- radio configuration validation ----
 

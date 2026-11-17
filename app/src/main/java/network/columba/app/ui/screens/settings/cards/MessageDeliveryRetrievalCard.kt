@@ -777,12 +777,22 @@ private fun formatRelativeTime(
 
     return when {
         diff < 5_000 -> stringResource(R.string.settings_delivery_just_now)
-        diff < 60_000 -> stringResource(R.string.settings_delivery_seconds_ago, (diff / 1000).toInt())
-        diff < 120_000 -> stringResource(R.string.settings_delivery_one_minute_ago)
-        diff < 3600_000 -> stringResource(R.string.settings_delivery_minutes_ago, (diff / 60_000).toInt())
-        diff < 7200_000 -> stringResource(R.string.settings_delivery_one_hour_ago)
-        diff < 86400_000 -> stringResource(R.string.settings_delivery_hours_ago, (diff / 3600_000).toInt())
-        else -> stringResource(R.string.settings_delivery_days_ago, (diff / 86400_000).toInt())
+        diff < 60_000 -> {
+            val seconds = (diff / 1000).toInt()
+            pluralStringResource(R.plurals.settings_delivery_seconds_ago, seconds, seconds)
+        }
+        diff < 3_600_000 -> {
+            val minutes = (diff / 60_000).toInt()
+            pluralStringResource(R.plurals.settings_delivery_minutes_ago, minutes, minutes)
+        }
+        diff < 86_400_000 -> {
+            val hours = (diff / 3_600_000).toInt()
+            pluralStringResource(R.plurals.settings_delivery_hours_ago, hours, hours)
+        }
+        else -> {
+            val days = (diff / 86_400_000).toInt()
+            pluralStringResource(R.plurals.settings_delivery_days_ago, days, days)
+        }
     }
 }
 

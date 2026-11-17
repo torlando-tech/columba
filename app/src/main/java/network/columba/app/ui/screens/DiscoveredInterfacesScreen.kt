@@ -1697,8 +1697,14 @@ internal fun formatLastHeard(context: Context, timestamp: Long): String {
     return when {
         diff < 60 -> context.getString(R.string.iface_just_now)
         diff < 3600 -> context.getString(R.string.iface_min_ago, diff / 60)
-        diff < 86400 -> context.getString(R.string.iface_hours_ago, diff / 3600)
-        diff < 604800 -> context.getString(R.string.iface_days_ago, diff / 86400)
+        diff < 86400 -> {
+            val hours = (diff / 3600).toInt()
+            context.resources.getQuantityString(R.plurals.iface_hours_ago, hours, hours)
+        }
+        diff < 604800 -> {
+            val days = (diff / 86400).toInt()
+            context.resources.getQuantityString(R.plurals.iface_days_ago, days, days)
+        }
         else -> {
             val sdf = SimpleDateFormat("MMM d", Locale.getDefault())
             sdf.format(Date(timestamp * 1000))

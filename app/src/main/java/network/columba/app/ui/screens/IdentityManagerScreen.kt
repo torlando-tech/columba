@@ -1056,9 +1056,18 @@ private fun formatTimestamp(context: Context, timestamp: Long): String {
 
     return when {
         diff < 60_000 -> context.getString(R.string.time_relative_just_now)
-        diff < 3600_000 -> context.getString(R.string.identity_time_minutes_ago, diff / 60_000)
-        diff < 86400_000 -> context.getString(R.string.identity_time_hours_ago, diff / 3600_000)
-        diff < 604800_000 -> context.getString(R.string.identity_time_days_ago, diff / 86400_000)
+        diff < 3600_000 -> {
+            val minutes = (diff / 60_000).toInt()
+            context.resources.getQuantityString(R.plurals.identity_time_minutes_ago, minutes, minutes)
+        }
+        diff < 86400_000 -> {
+            val hours = (diff / 3600_000).toInt()
+            context.resources.getQuantityString(R.plurals.identity_time_hours_ago, hours, hours)
+        }
+        diff < 604800_000 -> {
+            val days = (diff / 86400_000).toInt()
+            context.resources.getQuantityString(R.plurals.identity_time_days_ago, days, days)
+        }
         else -> SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(timestamp))
     }
 }

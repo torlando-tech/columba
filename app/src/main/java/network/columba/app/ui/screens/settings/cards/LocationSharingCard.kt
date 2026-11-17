@@ -53,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -1322,12 +1323,22 @@ private fun formatTelemetryRelativeTime(
 
     return when {
         diff < 5_000 -> stringResource(R.string.settings_location_just_now)
-        diff < 60_000 -> stringResource(R.string.settings_location_seconds_ago, (diff / 1000).toInt())
-        diff < 120_000 -> stringResource(R.string.settings_location_one_minute_ago)
-        diff < 3600_000 -> stringResource(R.string.settings_location_minutes_ago, (diff / 60_000).toInt())
-        diff < 7200_000 -> stringResource(R.string.settings_location_one_hour_ago)
-        diff < 86400_000 -> stringResource(R.string.settings_location_hours_ago, (diff / 3600_000).toInt())
-        else -> stringResource(R.string.settings_location_days_ago, (diff / 86400_000).toInt())
+        diff < 60_000 -> {
+            val seconds = (diff / 1000).toInt()
+            pluralStringResource(R.plurals.settings_location_seconds_ago, seconds, seconds)
+        }
+        diff < 3_600_000 -> {
+            val minutes = (diff / 60_000).toInt()
+            pluralStringResource(R.plurals.settings_location_minutes_ago, minutes, minutes)
+        }
+        diff < 86_400_000 -> {
+            val hours = (diff / 3_600_000).toInt()
+            pluralStringResource(R.plurals.settings_location_hours_ago, hours, hours)
+        }
+        else -> {
+            val days = (diff / 86_400_000).toInt()
+            pluralStringResource(R.plurals.settings_location_days_ago, days, days)
+        }
     }
 }
 

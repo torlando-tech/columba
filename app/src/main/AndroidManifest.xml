@@ -20,6 +20,10 @@
     <!-- Battery optimization exemption for background mesh networking -->
     <!-- Required to prevent Android from killing service during Deep Doze mode -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- AutoInterface keepalive pulse: exact elapsed-realtime alarms to
+         wake the :reticulum service inside AutoInterface's 27.5s peering
+         timeout while duty-cycling. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- Bluetooth permissions for BLE interface -->
     <!-- Legacy Bluetooth permissions (Android 11 and below) -->

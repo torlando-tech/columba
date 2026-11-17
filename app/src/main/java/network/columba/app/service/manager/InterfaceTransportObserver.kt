@@ -20,6 +20,7 @@ import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.host.manager.CurrentTransport
 import network.columba.app.rns.host.manager.currentTransportOf
 import network.columba.app.rns.host.manager.filterByTransport
+import network.columba.app.service.notifyServiceLockPolicy
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -172,6 +173,12 @@ class InterfaceTransportObserver
                             "Reload-on-transport: ${configs.size} enabled → ${filtered.size} active for $transport",
                         )
                         transportAdmin.reloadInterfaces(filtered)
+                        // The service-held MulticastLock and keepalive pulse
+                        // follow the interfaces actually running: a boot
+                        // without Wi-Fi leaves AutoInterface filtered out, and
+                        // the reload that brings it back must refresh the
+                        // service's lock policy too.
+                        notifyServiceLockPolicy(context, filtered, TAG)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

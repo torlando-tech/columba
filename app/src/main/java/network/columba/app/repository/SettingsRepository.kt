@@ -173,6 +173,7 @@ class SettingsRepository
             val ALLOW_CALLS_FROM_CONTACTS_ONLY = booleanPreferencesKey("allow_calls_from_contacts_only")
             val ALLOW_VOICE_CALLS = booleanPreferencesKey("allow_voice_calls")
             val PERSISTENT_WAKE_LOCK = booleanPreferencesKey("persistent_wake_lock")
+            val KEEPALIVE_PULSE = booleanPreferencesKey("autointerface_keepalive_pulse")
 
             // Telemetry collector preferences
             val TELEMETRY_COLLECTOR_ADDRESS = stringPreferencesKey("telemetry_collector_address")
@@ -2221,6 +2222,7 @@ class SettingsRepository
             const val KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY = "allow_calls_from_contacts_only"
             const val KEY_ALLOW_VOICE_CALLS = "allow_voice_calls"
             const val KEY_PERSISTENT_WAKE_LOCK = "persistent_wake_lock"
+            const val KEY_KEEPALIVE_PULSE = "autointerface_keepalive_pulse"
 
             /** Default telemetry send interval: 5 minutes */
             const val DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS = 300
@@ -2309,15 +2311,20 @@ class SettingsRepository
             // toggle push — which a restore doesn't send. Mirror the
             // restored value or the service would keep the pre-restore
             // wake policy across restarts.
-            entries.firstOrNull { it.key == KEY_PERSISTENT_WAKE_LOCK }
-                ?.takeIf { it.type == "boolean" }
-                ?.let { entry ->
-                    context.getSharedPreferences(
-                        CROSS_PROCESS_PREFS_NAME,
-                        Context.MODE_MULTI_PROCESS,
-                    ).edit()
-                        .putBoolean(KEY_PERSISTENT_WAKE_LOCK, entry.value.toBoolean())
-                        .apply()
+            entries
+                .filter { it.type == "boolean" }
+                .filter { it.key == KEY_PERSISTENT_WAKE_LOCK || it.key == KEY_KEEPALIVE_PULSE }
+                .takeIf { it.isNotEmpty() }
+                ?.let { mirrored ->
+                    val editor =
+                        context.getSharedPreferences(
+                            CROSS_PROCESS_PREFS_NAME,
+                            Context.MODE_MULTI_PROCESS,
+                        ).edit()
+                    mirrored.forEach { entry ->
+                        editor.putBoolean(entry.key, entry.value.toBoolean())
+                    }
+                    editor.apply()
                 }
         }
 
@@ -2566,6 +2573,37 @@ class SettingsRepository
         }
 
         /**
+         * AutoInterface keepalive-pulse setting. When enabled, the
+         * `:reticulum` service briefly wakes the CPU every ~22 s in
+         * duty-cycle mode so LAN peers keep this device in their
+         * AutoInterface peering tables. Defaults to false until measured.
+         */
+        val keepalivePulseFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.KEEPALIVE_PULSE] ?: false
+                }.distinctUntilChanged()
+
+        /**
+         * Save the AutoInterface keepalive-pulse setting.
+         *
+         * Dual-writes DataStore + MODE_MULTI_PROCESS SharedPreferences so the
+         * `:reticulum` process reads the persisted value at cold-start; the
+         * ViewModel pushes `ACTION_SET_KEEPALIVE_PULSE` for live changes.
+         */
+        @Suppress("DEPRECATION") // MODE_MULTI_PROCESS needed for cross-process reads
+        suspend fun saveKeepalivePulse(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.KEEPALIVE_PULSE] = enabled
+            }
+            context
+                .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+                .edit()
+                .putBoolean(KEY_KEEPALIVE_PULSE, enabled)
+                .apply()
+        }
+
+        /**
          * Re-push every mirrored setting from DataStore into the cross-process
          * SharedPreferences file.
          *
@@ -2586,6 +2624,7 @@ class SettingsRepository
                     allowCallsFromContactsOnlyFlow.first() to KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY,
                     allowVoiceCallsFlow.first() to KEY_ALLOW_VOICE_CALLS,
                     persistentWakeLockFlow.first() to KEY_PERSISTENT_WAKE_LOCK,
+                    keepalivePulseFlow.first() to KEY_KEEPALIVE_PULSE,
                 )
             @Suppress("DEPRECATION") // MODE_MULTI_PROCESS needed for cross-process writes
             context

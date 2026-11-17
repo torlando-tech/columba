@@ -18,10 +18,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.host.binder.ReticulumServiceBinder
 import network.columba.app.rns.host.di.ServiceModule
 import network.columba.app.rns.host.persistence.BackendInitializer
 import network.columba.app.rns.host.persistence.PeerActivityCollector
+import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import network.columba.app.rns.host.rnode.KotlinRNodeBridge
 import network.columba.app.rns.host.rnode.RNodeOnlineStatusListener
 import network.columba.app.rns.host.usb.KotlinUSBBridge
@@ -50,8 +52,14 @@ class ReticulumService : Service() {
         const val ACTION_RESTART_BLE = "network.columba.app.RESTART_BLE"
         const val ACTION_UPDATE_NOTIFICATION = "network.columba.app.service.UPDATE_NOTIFICATION"
         const val ACTION_SET_WAKE_LOCK_MODE = "network.columba.app.service.SET_WAKE_LOCK_MODE"
+        // Re-run the wake/multicast lock policy after interface configs change
+        // (AutoInterface enable toggles the service-held MulticastLock).
+        const val ACTION_REEVALUATE_LOCKS = "network.columba.app.service.REEVALUATE_LOCKS"
+        const val ACTION_KEEPALIVE_PULSE = "network.columba.app.service.KEEPALIVE_PULSE"
         const val EXTRA_NETWORK_STATUS = "network_status"
         const val EXTRA_PERSISTENT_WAKE_LOCK = "persistent_wake_lock"
+        const val EXTRA_AUTO_INTERFACE_ENABLED = "auto_interface_enabled"
+        const val EXTRA_KEEPALIVE_PULSE = "keepalive_pulse_enabled"
 
         // Grace window for treating ACTION_STOP as a stale redelivery during an
         // Apply & Restart. The original STOP intent travels at most a few seconds
@@ -376,6 +384,8 @@ class ReticulumService : Service() {
                 }
             }
             ACTION_SET_WAKE_LOCK_MODE -> handleSetWakeLockMode(intent)
+            ACTION_REEVALUATE_LOCKS -> handleReevaluateLocks(intent)
+            ACTION_KEEPALIVE_PULSE -> managers.keepalivePulse.onPulseFired()
         }
 
         return START_STICKY
@@ -441,6 +451,14 @@ class ReticulumService : Service() {
             } catch (e: Exception) {
                 Log.w(TAG, "Error during BLE immediate shutdown", e)
             }
+            // Cancel the pulse alarm before System.exit(0): onDestroy never
+            // runs on this path, and a surviving alarm would wake the whole
+            // service (foreground notification + init) right after shutdown.
+            try {
+                managers.keepalivePulse.cancel()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error cancelling keepalive pulse on stop", e)
+            }
         }
 
         try {
@@ -458,6 +476,15 @@ class ReticulumService : Service() {
     }
 
     /**
+     * Latest live AutoInterface-enabled flag pushed from the UI
+     * (ACTION_REEVALUATE_LOCKS). Hot-reload does not rewrite the config
+     * snapshot, so later intents without the extra — wake-lock or pulse
+     * toggles — must reuse this instead of the stale snapshot, or they
+     * would release the multicast lock under a running AutoInterface.
+     */
+    private var liveAutoInterfaceEnabled: Boolean? = null
+
+    /**
      * Apply the persisted wake-lock mode and install the duty-cycle traffic
      * hook. Persistent vs duty-cycle mode comes from the user setting
      * (cross-process mirror; UI pushes ACTION_SET_WAKE_LOCK_MODE for live
@@ -467,10 +494,22 @@ class ReticulumService : Service() {
      * RX/TX bursts. No-op while the persistent lock is held; the kotlin
      * backend's default setter is a no-op (it manages its own locks).
      */
-    private fun configureWakeLocksAndTrafficHook() {
-        // CRITICAL: Acquire wake lock early to prevent CPU sleep during initialization
-        // Native stack manages multicast lock per-AutoInterface for battery savings.
-        managers.lockManager.skipMulticastLock = true
+    private fun configureWakeLocksAndTrafficHook(
+        autoInterfaceOverride: Boolean? = null,
+        pulseEnabledOverride: Boolean? = null,
+    ) {
+        // CRITICAL: Acquire wake locks early to prevent CPU sleep during
+        // initialization. The MulticastLock is held by the service only when
+        // the backend cannot manage it itself (python: upstream RNS is pure
+        // Python and cannot acquire Android locks) AND an AutoInterface is
+        // enabled — holding it without an AutoInterface just drains radio.
+        autoInterfaceOverride?.let { liveAutoInterfaceEnabled = it }
+        val autoIface = liveAutoInterfaceEnabled ?: autoInterfaceEnabled()
+        val backendManagesMulticast =
+            rnsBackend.capabilities.value.performance.managesOwnMulticastLock
+        managers.lockManager.applyMulticastLockPolicy(
+            skip = backendManagesMulticast || !autoIface,
+        )
         // Duty-cycle mode only exists where traffic signals exist: backends
         // without them (kotlin native) keep the persistent lock regardless of
         // the stored preference, or transfers would run with no CPU lock.
@@ -483,11 +522,56 @@ class ReticulumService : Service() {
             Log.i(TAG, "Duty-cycle wake-lock mode (persistent lock off)")
         }
         managers.lockManager.setPersistentWakeLockEnabled(persistent)
+        managers.keepalivePulse.reevaluate(
+            dutyCycleActive = !persistent,
+            autoInterfaceEnabled = autoIface,
+            pulseEnabledOverride = pulseEnabledOverride,
+        )
         Log.d(TAG, "Wake locks acquired in onCreate")
 
         rnsBackend.setTrafficActivityCallback {
             managers.lockManager.acquireTrafficWakeLock()
         }
+    }
+
+    /**
+     * Whether the persisted config snapshot has an enabled AutoInterface —
+     * the only consumer of multicast RX. Defaults to true when no snapshot
+     * exists yet (fresh install ships AutoInterface enabled), so the lock is
+     * held until the UI's first snapshot says otherwise.
+     */
+    private fun autoInterfaceEnabled(): Boolean =
+        ReticulumConfigSnapshot
+            .read(this)
+            ?.configWithoutKey
+            ?.enabledInterfaces
+            ?.any { it is InterfaceConfig.AutoInterface && it.enabled }
+            ?: true
+
+    /**
+     * Re-run the lock policy after an interface-config change or a
+     * wake/pulse setting toggle. The UI pushes the live AutoInterface-enabled
+     * flag on config changes because hot-reload does not rewrite the config
+     * snapshot; the flag is remembered ([liveAutoInterfaceEnabled]) so later
+     * intents without the extra reuse it instead of the stale snapshot.
+     */
+    private fun handleReevaluateLocks(intent: Intent?) {
+        val override =
+            if (intent?.hasExtra(EXTRA_AUTO_INTERFACE_ENABLED) == true) {
+                intent.getBooleanExtra(EXTRA_AUTO_INTERFACE_ENABLED, true)
+            } else {
+                null
+            }
+        val pulseOverride =
+            if (intent?.hasExtra(EXTRA_KEEPALIVE_PULSE) == true) {
+                intent.getBooleanExtra(EXTRA_KEEPALIVE_PULSE, false)
+            } else {
+                null
+            }
+        configureWakeLocksAndTrafficHook(
+            autoInterfaceOverride = override,
+            pulseEnabledOverride = pulseOverride,
+        )
     }
 
     /** Apply a live persistent-wake-lock toggle pushed from the UI process. */
@@ -498,6 +582,10 @@ class ReticulumService : Service() {
                 BackendCapabilities.Support.FULL
         val enabled = !dutyCycleSupported || requested
         managers.lockManager.setPersistentWakeLockEnabled(enabled)
+        managers.keepalivePulse.reevaluate(
+            dutyCycleActive = !enabled,
+            autoInterfaceEnabled = liveAutoInterfaceEnabled ?: autoInterfaceEnabled(),
+        )
         Log.i(
             TAG,
             "Persistent wake lock ${if (enabled) "enabled" else "disabled (duty-cycle mode)"} via UI toggle",
@@ -564,6 +652,7 @@ class ReticulumService : Service() {
         if (::managers.isInitialized) {
             managers.notificationManager.resetSyncNotification()
             managers.networkChangeManager.stop()
+            managers.keepalivePulse.cancel()
             managers.lockManager.releaseAll()
             // Safety net: stop BLE if not already stopped by ACTION_STOP
             managers.bleCoordinator.stopImmediate()

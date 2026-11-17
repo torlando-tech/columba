@@ -60,5 +60,8 @@ val NATIVE_CAPABILITIES: BackendCapabilities = BackendCapabilities(
         // dutyCycleWakeLock stays UNSUPPORTED (default): reticulum-kt emits
         // no traffic-activity signals, so the service keeps the persistent
         // wake lock and the UI hides the toggle on this backend.
+        // NativeInterfaceFactory acquires the Android MulticastLock per
+        // AutoInterface in-process, so the service must not hold one too.
+        managesOwnMulticastLock = true,
     ),
 )

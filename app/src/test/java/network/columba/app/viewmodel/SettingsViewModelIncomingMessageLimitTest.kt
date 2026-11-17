@@ -220,6 +220,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.allowCallsFromContactsOnlyFlow } returns MutableStateFlow(false)
         every { settingsRepository.allowVoiceCallsFlow } returns MutableStateFlow(true)
         every { settingsRepository.persistentWakeLockFlow } returns MutableStateFlow(true)
+        every { settingsRepository.keepalivePulseFlow } returns MutableStateFlow(false)
 
         // Telemetry request settings flows
         every { settingsRepository.telemetryRequestEnabledFlow } returns MutableStateFlow(false)

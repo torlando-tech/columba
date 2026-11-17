@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import network.columba.app.rns.host.binder.ReticulumServiceBinder
 import network.columba.app.rns.host.manager.BleCoordinator
 import network.columba.app.rns.host.manager.CurrentTransport
+import network.columba.app.rns.host.manager.KeepalivePulseManager
 import network.columba.app.rns.host.manager.LockManager
 import network.columba.app.rns.host.manager.NetworkChangeManager
 import network.columba.app.rns.host.manager.ServiceNotificationManager
@@ -31,6 +32,7 @@ object ServiceModule {
         val bleCoordinator: BleCoordinator,
         val persistenceManager: ServicePersistenceManager,
         val settingsAccessor: ServiceSettingsAccessor,
+        val keepalivePulse: KeepalivePulseManager,
     )
 
     /**
@@ -72,6 +74,7 @@ object ServiceModule {
             bleCoordinator = bleCoordinator,
             persistenceManager = persistenceManager,
             settingsAccessor = settingsAccessor,
+            keepalivePulse = KeepalivePulseManager(context, lockManager, settingsAccessor),
         )
     }
 

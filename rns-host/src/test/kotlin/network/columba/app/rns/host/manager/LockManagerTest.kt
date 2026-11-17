@@ -62,6 +62,61 @@ class LockManagerTest {
     }
 
     @Test
+    fun `acquireKeepalivePulseWakeLock holds a 5s timed lock in duty-cycle mode`() {
+        lockManager.setPersistentWakeLockEnabled(false)
+        every { wakeLock.isHeld } returns true
+
+        lockManager.acquireKeepalivePulseWakeLock()
+
+        verify { wakeLock.acquire(5_000L) }
+        val tagCaptor = io.mockk.slot<String>()
+        verify { powerManager.newWakeLock(any(), capture(tagCaptor)) }
+        assertEquals("Columba::ReticulumKeepalivePulse", tagCaptor.captured)
+        assertTrue(lockManager.getLockStatus().pulseHeld)
+    }
+
+    @Test
+    fun `acquireKeepalivePulseWakeLock is a no-op while the persistent lock is held`() {
+        lockManager.acquireKeepalivePulseWakeLock()
+
+        verify(exactly = 0) { wakeLock.acquire(5_000L) }
+        assertFalse("no pulse lock may exist while persistent", lockManager.getLockStatus().pulseHeld)
+    }
+
+    @Test
+    fun `applyMulticastLockPolicy false acquires the multicast lock`() {
+        every { multicastLock.isHeld } returns true
+
+        lockManager.applyMulticastLockPolicy(skip = false)
+
+        verify { multicastLock.acquire() }
+        assertFalse(lockManager.skipMulticastLock)
+        assertTrue(lockManager.getLockStatus().multicastHeld)
+    }
+
+    @Test
+    fun `applyMulticastLockPolicy true releases a held multicast lock`() {
+        every { multicastLock.isHeld } returnsMany listOf(true, false)
+
+        lockManager.applyMulticastLockPolicy(skip = false)
+        lockManager.applyMulticastLockPolicy(skip = true)
+
+        verify { multicastLock.acquire() }
+        verify { multicastLock.release() }
+        assertTrue(lockManager.skipMulticastLock)
+    }
+
+    @Test
+    fun `applyMulticastLockPolicy true then acquireAll does not acquire`() {
+        lockManager.applyMulticastLockPolicy(skip = true)
+
+        lockManager.acquireAll()
+
+        verify(exactly = 0) { multicastLock.acquire() }
+        assertFalse(lockManager.getLockStatus().multicastHeld)
+    }
+
+    @Test
     fun `acquireAll acquires all locks`() {
         // After acquire, mark locks as held
         every { multicastLock.isHeld } returns true

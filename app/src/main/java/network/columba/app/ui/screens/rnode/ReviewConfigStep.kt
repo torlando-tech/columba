@@ -449,6 +449,17 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                     )
                 }
 
+                // The wire command is one unsigned byte and the firmware clamps above
+                // the board ceiling (SX127x 17, SX1280 13/20, SX1262 22 dBm, lower with a
+                // PA gain table). Say so instead of letting a saved higher value look
+                // like it took effect (issue #1255).
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.rnode_wizard_tx_power_clamp_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
                 // Airtime limits, interface mode, and framebuffer are not relevant for transport mode
                 if (!state.transportMode) {
                     Spacer(Modifier.height(16.dp))

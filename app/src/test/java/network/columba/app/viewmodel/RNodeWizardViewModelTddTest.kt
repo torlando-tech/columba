@@ -312,6 +312,40 @@ class RNodeWizardViewModelTddTest {
         }
 
     @Test
+    fun `region re-selection preserves user-chosen TX power`() =
+        runViewModelTest {
+            viewModel.selectDevice(testBleDevice)
+            viewModel.goToNextStep()
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.updateTxPower("1")
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val stateBeforeReselect = awaitItem()
+                assertEquals("1", stateBeforeReselect.txPower)
+            }
+
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val stateAfterReselect = awaitItem()
+                assertEquals(
+                    "An explicit TX power must survive a region re-selection (issue #1255)",
+                    "1",
+                    stateAfterReselect.txPower,
+                )
+                assertEquals(
+                    "Frequency still follows the region",
+                    usRegion.frequency.toString(),
+                    stateAfterReselect.frequency,
+                )
+            }
+        }
+
+    @Test
     fun `navigation forward preserves user-modified txPower error`() =
         runViewModelTest {
             viewModel.selectDevice(testBleDevice)

@@ -2036,8 +2036,14 @@ internal fun formatTimeAgo(context: Context, timestamp: Long): String {
     return when {
         diff < 60 -> context.getString(R.string.map_just_now)
         diff < 3600 -> context.getString(R.string.map_time_minutes_ago, diff / 60)
-        diff < 86400 -> context.getString(R.string.map_time_hours_ago, diff / 3600)
-        else -> context.getString(R.string.map_time_days_ago, diff / 86400)
+        diff < 86400 -> {
+            val hours = (diff / 3600).toInt()
+            context.resources.getQuantityString(R.plurals.map_time_hours_ago, hours, hours)
+        }
+        else -> {
+            val days = (diff / 86400).toInt()
+            context.resources.getQuantityString(R.plurals.map_time_days_ago, days, days)
+        }
     }
 }
 

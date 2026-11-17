@@ -202,16 +202,16 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
     def _open_bluetooth_port(self):
         import event_bridge
 
-        self._kotlin_bridge = event_bridge.get_rnode_bridge()
-        if self._kotlin_bridge is None:
+        # Local until this interface actually owns the connection: the bridge is a
+        # process-wide singleton, and detach() closes whatever _kotlin_bridge holds.
+        bridge = event_bridge.get_rnode_bridge()
+        if bridge is None:
             RNS.log("ColumbaRNodeInterface: KotlinRNodeBridge unavailable — RNode stays offline", RNS.LOG_ERROR)
             return None
 
         if not self.target_device_name:
             RNS.log(f"ColumbaRNodeInterface '{self.name}': no target_device_name configured", RNS.LOG_ERROR)
             return None
-
-        bridge = self._kotlin_bridge
         already = None
         try:
             if bridge.isConnected():
@@ -244,6 +244,7 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
             return None
 
         self.status_reason = None
+        self._kotlin_bridge = bridge
         return BridgeConnection(
             name=self.name,
             read_fn=bridge.read,
@@ -338,12 +339,13 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
     def _open_usb_port(self):
         import usb_bridge
 
-        self._usb_bridge = usb_bridge.get_usb_bridge()
-        if self._usb_bridge is None:
+        # Local until this interface actually owns the connection: detach() closes
+        # whatever _usb_bridge holds, and the bridge is a singleton.
+        bridge = usb_bridge.get_usb_bridge()
+        if bridge is None:
             RNS.log("ColumbaRNodeInterface: KotlinUSBBridge unavailable — RNode stays offline", RNS.LOG_ERROR)
             return None
 
-        bridge = self._usb_bridge
         device_id = self.usb_device_id
         if self.usb_vendor_id is not None and self.usb_product_id is not None:
             device_id = bridge.findDeviceByVidPid(self.usb_vendor_id, self.usb_product_id)
@@ -380,6 +382,7 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
                 time.sleep(0.02)
             return data
 
+        self._usb_bridge = bridge
         return BridgeConnection(
             name=self.name,
             read_fn=paced_read,

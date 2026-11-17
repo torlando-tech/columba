@@ -182,6 +182,16 @@ class RNodeUpstreamAdapterTests(unittest.TestCase):
         module.get_usb_bridge = lambda: bridge
         return module
 
+    def _detach_ready(self, iface):
+        iface.serial = None
+        iface.ble = None
+        iface.tcp = None
+        iface.use_ble = False
+        iface.use_tcp = False
+        iface.enable_framebuffer = False
+        iface.detached = False
+        return iface
+
     def _new_usb_interface(self, vendor_id=0x303A, product_id=0x1001):
         iface = self._new_interface()
         iface.connection_mode = self.mod.ColumbaRNodeInterface.MODE_USB
@@ -319,6 +329,41 @@ class RNodeUpstreamAdapterTests(unittest.TestCase):
         self.assertIsNotNone(self._open_usb(iface, bridge))
         self.assertFalse(iface._usb_permission_denied)
 
+
+    def test_failed_ble_contention_does_not_own_the_shared_bridge(self):
+        # The bridge is a process-wide singleton serving one RNode. The interface
+        # that loses the contention never opened it, so detaching it must not
+        # disconnect the working radio.
+        bridge = _FakeBridge(connected=True, device_name="RNode Other")
+        iface = self._detach_ready(self._new_interface())
+        self.assertIsNone(self._open_ble(iface, bridge))
+        self.assertIsNone(iface._kotlin_bridge)
+
+        iface.detach()
+
+        self.assertTrue(bridge.isConnected())
+
+    def test_failed_usb_open_does_not_own_the_shared_bridge(self):
+        bridge = _FakeUsbBridge(device_id=-1, permission=True)
+        bridge.connected = True
+        iface = self._detach_ready(self._new_usb_interface())
+        self.assertIsNone(self._open_usb(iface, bridge))
+        self.assertIsNone(iface._usb_bridge)
+
+        iface.detach()
+
+        self.assertTrue(bridge.connected)
+
+    def test_failed_usb_permission_does_not_own_the_shared_bridge(self):
+        bridge = _FakeUsbBridge(permission=False, grant=False)
+        bridge.connected = True
+        iface = self._detach_ready(self._new_usb_interface())
+        self.assertIsNone(self._open_usb(iface, bridge))
+        self.assertIsNone(iface._usb_bridge)
+
+        iface.detach()
+
+        self.assertTrue(bridge.connected)
     def test_detach_survives_a_transport_that_never_opened(self):
         # open_port() never succeeded (permission denied, radio unplugged), so
         # serial is None. Upstream's detach() would raise AttributeError and

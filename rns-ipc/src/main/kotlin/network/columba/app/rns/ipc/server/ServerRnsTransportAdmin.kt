@@ -19,6 +19,14 @@ import network.columba.app.rns.ipc.toBundle
 internal class ServerRnsTransportAdmin(
     private val impl: RnsTransportAdmin,
     private val scope: CoroutineScope,
+    /**
+     * Invoked after a live interface reload succeeds. The host service uses
+     * this to mirror the live interface set into the restart snapshot so a
+     * `:reticulum` restart cannot resurrect interfaces the user just
+     * disabled (the snapshot is otherwise written only by cold start and
+     * Apply & Restart).
+     */
+    private val onInterfacesReloaded: (List<InterfaceConfig>) -> Unit = {},
 ) : IRnsTransportAdmin.Stub() {
     private val interfaceStatusChangedHub = ObserverHub<Unit, IRnsUnitEventCallback>(
         scope = scope,
@@ -37,7 +45,11 @@ internal class ServerRnsTransportAdmin(
     }
 
     override fun reloadInterfaces(configs: MutableList<InterfaceConfig>, cb: IRnsResultCallback) =
-        dispatch(cb, scope) { impl.reloadInterfaces(configs); Bundle.EMPTY }
+        dispatch(cb, scope) {
+            impl.reloadInterfaces(configs)
+            onInterfacesReloaded(configs)
+            Bundle.EMPTY
+        }
 
     override fun setDiscoveryEnabled(enabled: Boolean, cb: IRnsResultCallback) =
         dispatch(cb, scope) { impl.setDiscoveryEnabled(enabled); Bundle.EMPTY }

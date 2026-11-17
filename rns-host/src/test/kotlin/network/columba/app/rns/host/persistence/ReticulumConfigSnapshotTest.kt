@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Parcel
 import androidx.test.core.app.ApplicationProvider
+import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.ReticulumConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -137,5 +138,42 @@ class ReticulumConfigSnapshotTest {
         ReticulumConfigSnapshot.clear(context)
         ReticulumConfigSnapshot.updateIncomingMessageSizeLimitKb(context, 512L)
         assertNull(ReticulumConfigSnapshot.read(context))
+    }
+
+    @Test
+    fun `updateEnabledInterfaces rewrites only the interface set, preserving the rest`() {
+        ReticulumConfigSnapshot.clear(context)
+        val rnode = InterfaceConfig.RNode(
+            name = "RNode 735D BLE",
+            enabled = true,
+            frequency = 915_000_000L,
+        )
+        val tcp = InterfaceConfig.TCPClient(name = "VoiceE2E", targetHost = "10.0.0.238", targetPort = 4244)
+        val config = sampleConfig().copy(enabledInterfaces = listOf(rnode, tcp), incomingMessageSizeLimitKb = 4096L)
+
+        ReticulumConfigSnapshot.write(context, config, identityHashHex = "deadbeefcafe")
+        // The live toggle path disables the RNode and reloads only the remaining
+        // interface; a :reticulum restart must self-init with that same set.
+        ReticulumConfigSnapshot.updateEnabledInterfaces(context, listOf(tcp))
+        val snap = ReticulumConfigSnapshot.read(context)
+
+        assertNotNull(snap)
+        assertEquals(listOf(tcp), snap!!.configWithoutKey.enabledInterfaces)
+        assertEquals("deadbeefcafe", snap.identityHashHex)
+        assertEquals(
+            "every non-interface field must survive the read-modify-write",
+            config.copy(deliveryIdentityKey = null, enabledInterfaces = listOf(tcp)),
+            snap.configWithoutKey,
+        )
+    }
+
+    @Test
+    fun `updateEnabledInterfaces is a no-op without a snapshot`() {
+        ReticulumConfigSnapshot.clear(context)
+        ReticulumConfigSnapshot.updateEnabledInterfaces(
+            context,
+            listOf(InterfaceConfig.TCPClient(name = "VoiceE2E", targetHost = "10.0.0.238", targetPort = 4244)),
+        )
+        assertNull("a missing snapshot must stay missing (UI writes a fresh one on next init)", ReticulumConfigSnapshot.read(context))
     }
 }

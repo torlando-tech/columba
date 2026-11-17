@@ -24,6 +24,7 @@ import network.columba.app.rns.host.manager.ServiceNotificationManager
 import network.columba.app.rns.host.notifications.ServiceMessageNotifier
 import network.columba.app.rns.host.persistence.BackendInitializer
 import network.columba.app.rns.host.persistence.PeerActivityCollector
+import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import network.columba.app.rns.host.rnode.KotlinRNodeBridge
 import network.columba.app.rns.host.rnode.RNodeOnlineStatusListener
 import network.columba.app.rns.host.usb.KotlinUSBBridge
@@ -543,6 +544,15 @@ class ReticulumService : Service() {
             // Shared app cache (same UID as the UI process) for staging
             // out-of-band inbound fields blobs; see FieldsBlob / IRnsMessageCallback.
             cacheDir = cacheDir,
+            // A live interface toggle (hot reload) changes what this service
+            // runs but writes no RNS config file. Mirror the applied set into
+            // the restart snapshot, or a reaped/START_STICKY restart re-reads
+            // the pre-toggle snapshot and resurrects interfaces the user just
+            // disabled — the UI shows them off while the daemon keeps
+            // announcing on them.
+            onInterfacesReloaded = { configs ->
+                ReticulumConfigSnapshot.updateEnabledInterfaces(this, configs)
+            },
         ).also {
             aidlServer = it
         }

@@ -116,3 +116,6 @@ sentry-wizard
 .planning/
 .swarm/
 .mcp.json
+
+# Local evidence/debug artifacts (not for the repo)
+evidence/

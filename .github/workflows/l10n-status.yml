@@ -1,0 +1,38 @@
+name: Translation status
+
+# Weekly, repo-local translation status board: coverage, staleness, and
+# untranslated copies per locale, written to the job summary. No third-party
+# localization service is involved; see docs/translation-workflow.md.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    name: Translation coverage and staleness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Report locale status
+        # Structural and bookkeeping errors fail the job; stale translations are
+        # reported in the summary. Add --fail-on-stale to gate a release.
+        # `shell: bash` adds -eo pipefail, so tee cannot mask a failing check.
+        shell: bash
+        run: python3 scripts/l10n/check_locales.py --verify --summary-md | tee -a "$GITHUB_STEP_SUMMARY"

@@ -317,6 +317,15 @@ android {
         }
     }
 
+    androidResources {
+        // AGP generates the LocaleConfig (res/xml + manifest android:localeConfig)
+        // from the values-* resource dirs, so Android 13+ lists Columba under
+        // Settings > Apps > Columba > Language with no file to maintain.
+        // Do not hand-write res/xml/locale_config.xml: the build fails when both
+        // mechanisms are present. The default locale lives in res/resources.properties.
+        generateLocaleConfig = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

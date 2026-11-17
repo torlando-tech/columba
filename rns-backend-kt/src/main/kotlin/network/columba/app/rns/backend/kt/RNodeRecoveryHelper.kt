@@ -13,6 +13,14 @@ internal object RNodeRecoveryHelper {
     private const val RNODE_RECOVERY_RETRY_MS = 5000L
     private const val RNODE_RECOVERY_ATTEMPT_WINDOW_MS = 12000L
 
+    /**
+     * Polls without ever being online before the interface is reported as
+     * misconfigured (20 s at the 1 s cadence). A healthy RNode is online within
+     * a few seconds of start; past this the firmware has stopped answering the
+     * configuration handshake, and retrying the same parameters cannot help.
+     */
+    private const val RNODE_NEVER_ONLINE_POLLS = 20L
+
     fun monitorLifecycle(
         config: InterfaceConfig.RNode,
         iface: network.reticulum.interfaces.rnode.RNodeInterface,
@@ -23,6 +31,8 @@ internal object RNodeRecoveryHelper {
     ) {
         scope.launch(Dispatchers.IO) {
             var wasOnline = false
+            var pollsWithoutOnline = 0L
+            var reportedNeverOnline = false
             while (isActive) {
                 if (runningInterfaces[config.name] !== iface || iface.detached.get()) return@launch
 
@@ -33,12 +43,33 @@ internal object RNodeRecoveryHelper {
                     onNotifyListeners()
                     onEnsureRecovery(config)
                     return@launch
+                } else {
+                    pollsWithoutOnline++
+                    if (!reportedNeverOnline && pollsWithoutOnline >= RNODE_NEVER_ONLINE_POLLS) {
+                        reportedNeverOnline = true
+                        Log.w(TAG, neverOnlineDiagnostic(config))
+                    }
                 }
 
                 kotlinx.coroutines.delay(RNODE_MONITOR_POLL_MS)
             }
         }
     }
+
+    /**
+     * The interface never reached the online state. RNode firmware refuses the
+     * radio handshake when it has to rewrite a configured parameter: TX power is
+     * clamped to the board ceiling (SX127x 17 dBm, SX1262 22 dBm, LoRa-PA boards
+     * report the PA-quantised value), and a device running from its own saved
+     * radio config (TNC mode) ignores host configuration entirely. Both used to
+     * only surface as one line in the RNode log while the interface sat offline
+     * forever with no explanation (issue #1255).
+     */
+    private fun neverOnlineDiagnostic(config: InterfaceConfig.RNode): String =
+        "RNode interface ${config.name} never came online: the device's firmware likely rewrote a " +
+            "configured radio parameter (configured txPower=${config.txPower} dBm; firmware clamps to " +
+            "the board ceiling, and a TNC-mode device ignores host radio config). Look for " +
+            "\"TX power mismatch\" in the RNode log."
 
     fun ensureRecovery(
         config: InterfaceConfig.RNode,

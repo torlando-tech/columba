@@ -84,4 +84,42 @@ class NativeInterfaceFactorySignatureTest {
         val udp = InterfaceConfig.UDP(name = "udp", enabled = true, mode = "full")
         assertEquals(udp.mode, NativeInterfaceFactory.configSignatureOf(udp))
     }
+
+    private fun rnode(
+        txPower: Int = 7,
+        connectionMode: String = "ble",
+        targetDeviceName: String = "AA:BB:CC:DD:EE:FF",
+    ) = InterfaceConfig.RNode(
+        name = "rnode",
+        enabled = true,
+        mode = "full",
+        connectionMode = connectionMode,
+        targetDeviceName = targetDeviceName,
+        frequency = 915000000,
+        bandwidth = 125000,
+        txPower = txPower,
+        spreadingFactor = 7,
+        codingRate = 5,
+    )
+
+    @Test
+    fun `TX power edit changes the RNode signature`() {
+        // The RNodeInterface constructor takes txPower, so a live edit is only
+        // applied by restarting the interface — the signature must force that
+        // (issue #1255: a 1 dBm setting was dropped as an unchanged config).
+        assertNotEquals(
+            NativeInterfaceFactory.configSignatureOf(rnode(txPower = 1)),
+            NativeInterfaceFactory.configSignatureOf(rnode(txPower = 17)),
+        )
+    }
+
+    @Test
+    fun `RNode endpoint edit changes the signature`() {
+        assertNotEquals(
+            NativeInterfaceFactory.configSignatureOf(rnode()),
+            NativeInterfaceFactory.configSignatureOf(
+                rnode(connectionMode = "tcp", targetDeviceName = "").copy(tcpHost = "10.0.0.5"),
+            ),
+        )
+    }
 }

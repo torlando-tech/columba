@@ -112,7 +112,9 @@ value each key was translated from:
   for every key present in the locale file (and prunes entries for removed
   keys). This is the only way state changes.
 - CI (`--verify`) fails if a locale key has no state entry — forgetting to
-  commit state after adding translations is a merge-blocking mistake.
+  commit state after adding translations is a merge-blocking mistake — and if
+  state still tracks a locale whose `values-<lang>/strings.xml` is gone.
+  `--write-state` prunes those entries.
 - When English text later changes, the recorded hash no longer matches and the
   key is listed as **stale** in CI output and in the weekly report. Staleness is
   never a merge gate for ordinary PRs (any English edit would poison them);

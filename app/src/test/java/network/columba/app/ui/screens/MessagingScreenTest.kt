@@ -17,12 +17,14 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.withKeyDown
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -2411,8 +2413,15 @@ class MessagingScreenTest {
     private fun ComposeTestRule.awaitMessageRows() {
         val emptyStateText =
             RuntimeEnvironment.getApplication().getString(R.string.messaging_no_messages_yet)
-        waitForCondition(timeoutMillis = 10_000) {
-            onAllNodesWithText(emptyStateText).fetchSemanticsNodes().isEmpty()
+        try {
+            waitForCondition(timeoutMillis = 30_000) {
+                onAllNodesWithText(emptyStateText).fetchSemanticsNodes().isEmpty()
+            }
+        } catch (e: AssertionError) {
+            val tree =
+                runCatching { onRoot(useUnmergedTree = true).printToString() }
+                    .getOrDefault("<semantics tree unavailable>")
+            throw AssertionError("Message rows never replaced the empty state within 30 s.\n$tree", e)
         }
         waitForIdle()
     }

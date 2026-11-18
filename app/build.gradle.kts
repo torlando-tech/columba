@@ -424,6 +424,15 @@ android {
                 // CI test sharding: distribute test classes across parallel jobs
                 val shard = project.findProperty("testShard")?.toString()?.toIntOrNull()
                 val total = project.findProperty("testShardTotal")?.toString()?.toIntOrNull()
+                // Classes CI runs in their own JVM (see ci.yml). Keep them out of the shard
+                // forks: sharing a fork with the rest of a shard leaves Paging's lazy items
+                // unrendered for these Compose tests, while an isolated run is deterministic.
+                val shardExcluded =
+                    project.findProperty("testShardExcludeClasses")?.toString()
+                        ?.split(',')
+                        ?.map { it.trim() }
+                        ?.filter { it.isNotEmpty() }
+                        ?: emptyList()
                 if (shard != null && total != null && total > 1) {
                     val testSourceDir = project.file("src/test/java")
                     val allTestClasses =
@@ -437,7 +446,9 @@ android {
                                     .removeSuffix(".kt")
                             }.sorted()
                     val shardClasses = allTestClasses.filterIndexed { i, _ -> i % total == shard }
-                    shardClasses.forEach { cls -> it.filter.includeTestsMatching(cls) }
+                    shardClasses
+                        .filterNot { it in shardExcluded }
+                        .forEach { cls -> it.filter.includeTestsMatching(cls) }
                 }
             }
         }

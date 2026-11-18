@@ -300,7 +300,7 @@ jobs:
     name: Kotlin Tests (Shard ${{ matrix.shard }}/4)
     needs: [lint, validate-wrapper]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -374,7 +374,7 @@ jobs:
         # Build cache enabled for faster incremental builds
         # AIDL and JaCoCo caching issues are handled by clean steps above
         # Shared behavior runs on noSentry; the privacy adapter has its own sentry-flavor check below.
-        run: ./gradlew :app:testNoSentryKotlinBackendDebugUnitTest -PtestShard=${{ matrix.shard }} -PtestShardTotal=4 --stacktrace --max-workers=4
+        run: ./gradlew :app:testNoSentryKotlinBackendDebugUnitTest -PtestShard=${{ matrix.shard }} -PtestShardTotal=4 --stacktrace --max-workers=4 --no-build-cache
 
       - name: Verify Sentry privacy and memory diagnostics
         if: matrix.shard == 0

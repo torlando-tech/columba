@@ -1,7 +1,8 @@
 package network.columba.app.ui.screens
 
-import android.app.Application
 import android.Manifest
+import android.app.Application
+import android.os.Looper
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.assert
@@ -2421,21 +2422,24 @@ class MessagingScreenTest {
             // PROBE: dump what the tree actually contains plus which threads are parked,
             // so the CI-only failure can be read off the log instead of guessed at.
             val rootDump = runCatching { onRoot().printToString() }.getOrElse { "unavailable: $it" }
-            val threadDump = Thread.getAllStackTraces()
-                .filterKeys {
-                    it.name == "main" ||
-                        it.name.startsWith("DefaultDispatcher") ||
-                        it.name.startsWith("Test worker")
-                }
-                .entries
+            val threadDump = Thread.getAllStackTraces().entries
                 .joinToString("\n\n") { (thread, stack) ->
                     "${thread.name} [${thread.state}]\n" +
                         stack.joinToString("\n") { "    at $it" }
                 }
+            // PROBE: the page-apply runs as a continuation posted to the main looper.
+            // If draining that looper flips the condition, the wait never pumped it.
+            val idleOutcome = runCatching {
+                shadowOf(Looper.getMainLooper()).idle()
+                val nodesAfterIdle =
+                    onAllNodesWithText(emptyStateText).fetchSemanticsNodes().size
+                "emptyStateNodesAfterLooperIdle=$nodesAfterIdle (was 1)"
+            }.getOrElse { "looper idle failed: $it" }
             throw AssertionError(
                 "awaitMessageRows timed out after 10s\n" +
                     "emptyStateText='$emptyStateText'\n" +
                     "emptyStateNodes=${onAllNodesWithText(emptyStateText).fetchSemanticsNodes().size}\n" +
+                    "$idleOutcome\n" +
                     "ROOT SEMANTICS:\n$rootDump\n\nTHREADS:\n$threadDump",
                 failure,
             )

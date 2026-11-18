@@ -370,20 +370,22 @@ jobs:
             sleep 15
           done
 
+      - name: Run MessagingScreenTest in an isolated fork
+        # In a shard fork the class fails CI-only with every Paging-backed test stuck on the
+        # empty state, even after the main looper is drained (see #1296); running it alone in a
+        # fresh JVM passes deterministically. Runs BEFORE the shard step so the artifacts
+        # uploaded below keep the shard results - a second invocation of the same Gradle test
+        # task replaces its results/reports. A failure here stops the job with this run's own
+        # reports on disk (the upload steps run with `if: always()`).
+        if: matrix.shard == 0
+        run: ./gradlew :app:testNoSentryKotlinBackendDebugUnitTest --tests 'network.columba.app.ui.screens.MessagingScreenTest' --stacktrace --max-workers=4
+
       - name: Run app unit tests (shard ${{ matrix.shard }})
         # Build cache enabled for faster incremental builds
         # AIDL and JaCoCo caching issues are handled by clean steps above
         # Shared behavior runs on noSentry; the privacy adapter has its own sentry-flavor check below.
-        # MessagingScreenTest runs in its own JVM below: sharing a shard fork leaves its Paging
-        # rows unrendered (see #1296), while the isolated run is deterministic.
+        # MessagingScreenTest is excluded here: it runs in its own JVM in the step above.
         run: ./gradlew :app:testNoSentryKotlinBackendDebugUnitTest -PtestShard=${{ matrix.shard }} -PtestShardTotal=4 -PtestShardExcludeClasses=network.columba.app.ui.screens.MessagingScreenTest --stacktrace --max-workers=4
-
-      - name: Run MessagingScreenTest in an isolated fork
-        # In a shard fork the class fails CI-only with every Paging-backed test stuck on the
-        # empty state, even after the main looper is drained; running it first in a fresh JVM
-        # passes consistently (verified by running shard 1 with and without this split).
-        if: matrix.shard == 0
-        run: ./gradlew :app:testNoSentryKotlinBackendDebugUnitTest --tests 'network.columba.app.ui.screens.MessagingScreenTest' --stacktrace --max-workers=4
 
       - name: Verify Sentry privacy and memory diagnostics
         if: matrix.shard == 0

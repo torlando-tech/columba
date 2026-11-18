@@ -17,9 +17,11 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
@@ -2411,8 +2413,32 @@ class MessagingScreenTest {
     private fun ComposeTestRule.awaitMessageRows() {
         val emptyStateText =
             RuntimeEnvironment.getApplication().getString(R.string.messaging_no_messages_yet)
-        waitForCondition(timeoutMillis = 10_000) {
-            onAllNodesWithText(emptyStateText).fetchSemanticsNodes().isEmpty()
+        try {
+            waitForCondition(timeoutMillis = 10_000) {
+                onAllNodesWithText(emptyStateText).fetchSemanticsNodes().isEmpty()
+            }
+        } catch (failure: Throwable) {
+            // PROBE: dump what the tree actually contains plus which threads are parked,
+            // so the CI-only failure can be read off the log instead of guessed at.
+            val rootDump = runCatching { onRoot().printToString() }.getOrElse { "unavailable: $it" }
+            val threadDump = Thread.getAllStackTraces()
+                .filterKeys {
+                    it.name == "main" ||
+                        it.name.startsWith("DefaultDispatcher") ||
+                        it.name.startsWith("Test worker")
+                }
+                .entries
+                .joinToString("\n\n") { (thread, stack) ->
+                    "${thread.name} [${thread.state}]\n" +
+                        stack.joinToString("\n") { "    at $it" }
+                }
+            throw AssertionError(
+                "awaitMessageRows timed out after 10s\n" +
+                    "emptyStateText='$emptyStateText'\n" +
+                    "emptyStateNodes=${onAllNodesWithText(emptyStateText).fetchSemanticsNodes().size}\n" +
+                    "ROOT SEMANTICS:\n$rootDump\n\nTHREADS:\n$threadDump",
+                failure,
+            )
         }
         waitForIdle()
     }

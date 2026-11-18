@@ -21,8 +21,8 @@ markdownRenderer = "0.41.0"
 desugarJdkLibs = "2.1.5"
 
 # JitPack-published libraries (formerly git submodules)
-reticulumKt = "v0.0.24"
-lxmfKt = "v0.0.14"
+reticulumKt = "v0.0.25"
+lxmfKt = "v0.0.15"
 lxstKt = "v0.1.2"
 
 [libraries]

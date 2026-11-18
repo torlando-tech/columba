@@ -102,7 +102,9 @@ class MessagingScreenTest {
     }
 
     private val registerActivityRule = RegisterComponentActivityRule()
-    private val composeRule = createComposeRule()
+    // Effects and paging resumptions run on the Robolectric main looper so the
+    // test rule drains them deterministically (CI-only paging stalls, PR #1296).
+    private val composeRule = createComposeRule(effectContext = kotlinx.coroutines.Dispatchers.Main)
 
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)

@@ -373,12 +373,11 @@ jobs:
       - name: Run MessagingScreenTest in an isolated fork
         # In a shard fork the class fails CI-only with every Paging-backed test stuck on the
         # empty state, even after the main looper is drained (see #1296); running it alone in a
-        # fresh JVM passes deterministically. Runs BEFORE the shard step so the artifacts
-        # uploaded below keep the shard results - a second invocation of the same Gradle test
-        # task replaces its results/reports. A failure here stops the job with this run's own
-        # reports on disk (the upload steps run with `if: always()`).
+        # fresh JVM passes deterministically.
+        # -PtestResultsSuffix keeps this run's results and reports in their own directories, so
+        # the shard invocation in the next step cannot replace them and both sets are uploaded.
         if: matrix.shard == 0
-        run: ./gradlew :app:testNoSentryKotlinBackendDebugUnitTest --tests 'network.columba.app.ui.screens.MessagingScreenTest' --stacktrace --max-workers=4
+        run: ./gradlew :app:testNoSentryKotlinBackendDebugUnitTest --tests 'network.columba.app.ui.screens.MessagingScreenTest' -PtestResultsSuffix=messaging-isolated --stacktrace --max-workers=4
 
       - name: Run app unit tests (shard ${{ matrix.shard }})
         # Build cache enabled for faster incremental builds

@@ -376,6 +376,21 @@ android {
             isReturnDefaultValues = true
             all {
                 it.maxHeapSize = "2048m"
+                // CI runs one class twice in the same job (sharded run plus an isolated run of a
+                // class that cannot share a fork). A second invocation of the same Test task
+                // replaces its results and reports, so the isolated run passes this suffix and
+                // writes to separate result/report directories instead of clobbering the shard.
+                val testTask = it
+                project.findProperty("testResultsSuffix")?.toString()
+                    ?.takeIf { suffix -> suffix.isNotBlank() }
+                    ?.let { suffix ->
+                        testTask.reports.junitXml.outputLocation.set(
+                            layout.buildDirectory.dir("test-results/${testTask.name}-$suffix"),
+                        )
+                        testTask.reports.html.outputLocation.set(
+                            layout.buildDirectory.dir("reports/tests/$suffix"),
+                        )
+                    }
                 // Restart the test JVM after at most ten classes. Reusing a fork amortizes
                 // Robolectric/JVM startup cost while keeping cross-class coroutine accumulation
                 // bounded. A single fork for the whole shard still hangs, and parallel forks can

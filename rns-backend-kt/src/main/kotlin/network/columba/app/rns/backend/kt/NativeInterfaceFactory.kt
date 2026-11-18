@@ -191,7 +191,18 @@ internal object NativeInterfaceFactory {
     internal fun configSignatureOf(config: InterfaceConfig): String =
         when (config) {
             is InterfaceConfig.AutoInterface -> config.mode
-            is InterfaceConfig.TCPClient -> config.mode + if (config.kissFraming) "|kiss" else "|raw"
+            is InterfaceConfig.TCPClient -> {
+                val framing = if (config.kissFraming) "|kiss" else "|raw"
+                // #965: the proxy is part of the route, so editing it must restart
+                // the client instead of leaving the previously dialled route live.
+                val route =
+                    if (config.socksProxyEnabled) {
+                        "|socks=${config.socksProxyHost}:${config.socksProxyPort}"
+                    } else {
+                        "|direct"
+                    }
+                config.mode + framing + route
+            }
             is InterfaceConfig.TCPServer -> config.mode
             is InterfaceConfig.UDP -> config.mode
             is InterfaceConfig.RNode -> config.mode
@@ -499,6 +510,10 @@ internal object NativeInterfaceFactory {
                     targetPort = config.targetPort,
                     useKissFraming = config.kissFraming,
                     keepAlive = false, // Disable for mobile battery
+                    // #965: a .onion target can only be reached through the proxy,
+                    // so the configured SOCKS5 route must reach the interface.
+                    socksProxyHost = config.socksProxyHost.takeIf { config.socksProxyEnabled },
+                    socksProxyPort = config.socksProxyPort,
                     ifacNetname = config.networkName,
                     ifacNetkey = config.passphrase,
                 ).withMode(config.name, config.mode)

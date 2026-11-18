@@ -5,6 +5,7 @@ import android.os.Parcel
 import android.util.Log
 import java.io.File
 import java.io.RandomAccessFile
+import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.ReticulumConfig
 
 /**
@@ -258,6 +259,49 @@ object ReticulumConfigSnapshot {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to update snapshot incoming limit: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Update only [ReticulumConfig.enabledInterfaces] on the existing snapshot,
+     * without re-initializing the backend.
+     *
+     * Interface enable/disable is applied live on hot-reload backends
+     * (`RnsTransportAdmin.reloadInterfaces`), but the snapshot is otherwise
+     * written only by cold start and Apply & Restart. Without this update a
+     * `:reticulum` process restart self-initializes from the pre-toggle
+     * snapshot and resurrects every interface the user just disabled — the UI
+     * shows them off while the daemon keeps announcing on them. Same failure
+     * class as [updateIncomingMessageSizeLimitKb] (columba#1106).
+     *
+     * The list passed to `reloadInterfaces` is exactly the transport-filtered
+     * live set Apply & Restart uses, so the snapshot keeps that same semantics.
+     * No-op (debug-logged) when no snapshot exists yet, or when the set is
+     * unchanged.
+     */
+    fun updateEnabledInterfaces(
+        context: Context,
+        interfaces: List<InterfaceConfig>,
+    ) {
+        try {
+            withSnapshotLock(context) {
+                val snapshot = readLocked(context)
+                if (snapshot == null) {
+                    Log.d(TAG, "No snapshot to update for interface set (${interfaces.size} interfaces)")
+                    return@withSnapshotLock
+                }
+                if (snapshot.configWithoutKey.enabledInterfaces == interfaces) {
+                    return@withSnapshotLock
+                }
+                writeLocked(
+                    context = context,
+                    config = snapshot.configWithoutKey.copy(enabledInterfaces = interfaces),
+                    identityHashHex = snapshot.identityHashHex,
+                )
+                Log.d(TAG, "Snapshot interface set updated: ${interfaces.size} interfaces")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to update snapshot interface set: ${e.message}", e)
         }
     }
 

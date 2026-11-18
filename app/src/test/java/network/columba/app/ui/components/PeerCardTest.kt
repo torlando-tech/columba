@@ -324,7 +324,7 @@ class PeerCardTest {
 
     @Test
     fun peerCard_displaysIcon_evenWhenCachedTypeIsStaleUnknown() {
-        // Regression-pin for the brittleness Tyler called out: a row whose
+        // Regression-pin for the observed brittleness: a row whose
         // cached `receivingInterfaceType` was set to "UNKNOWN" by an old
         // (buggy) classifier run must still render the icon if the raw
         // `receivingInterface` can be classified now. PeerCard reads the raw

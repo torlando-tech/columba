@@ -763,6 +763,7 @@
     <string name="rnode_wizard_frequency_hz">Frequency (Hz)</string>
     <string name="rnode_wizard_bandwidth_hz">Bandwidth (Hz)</string>
     <string name="rnode_wizard_max_dbm">Max: %1$d dBm</string>
+    <string name="rnode_wizard_tx_power_clamp_note">The RNode clamps to its board maximum (17/20/22 dBm) and cannot go below 0 dBm.</string>
     <string name="rnode_wizard_airtime_limits">Airtime Limits</string>
     <string name="rnode_wizard_short_term" formatted="false">Short-term (%)</string>
     <string name="rnode_wizard_long_term" formatted="false">Long-term (%)</string>

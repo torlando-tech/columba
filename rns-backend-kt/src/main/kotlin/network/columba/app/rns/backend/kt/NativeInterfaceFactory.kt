@@ -132,11 +132,12 @@ internal object NativeInterfaceFactory {
         }
 
         // Restart interfaces whose saved signature (mode, plus KISS framing for
-        // TCP clients) changed while they were running. The diff-based sync
-        // below only *starts* names not already running, so a persisted edit on
-        // a running interface would otherwise be dropped (the running object
-        // keeps the settings it was started with). Issue #1169, PR #1188 review
-        // P1; PR #1226 review P1 (framing).
+        // TCP clients, plus the RNode endpoint/radio parameters) changed while
+        // they were running. The diff-based sync only *starts* names not already
+        // running, so a persisted edit on a running interface would otherwise be
+        // dropped (the running object keeps the settings it was started with).
+        // Issue #1169, PR #1188 review P1; PR #1226 review P1 (framing);
+        // issue #1255 (RNode radio parameters).
         for (name in runningNames intersect desiredNames) {
             val config = configs.first { it.name == name }
             val previousSignature = runningSignatures[name]
@@ -187,6 +188,12 @@ internal object NativeInterfaceFactory {
      * The subset of an [InterfaceConfig] baked into the running object that a
      * later edit must restart the interface to apply: the mode, plus KISS
      * framing for TCP clients (it selects the packet codec at construction).
+     *
+     * An RNode also bakes in its transport endpoint and every radio parameter
+     * (`frequency`/`bandwidth`/`txPower`/`spreadingFactor`/`codingRate`) plus
+     * `enableFramebuffer` at construction. Omitting them made a live edit (e.g.
+     * a new TX power) a silent no-op: the diff-based sync saw an unchanged
+     * signature and never restarted the interface (issue #1255).
      */
     internal fun configSignatureOf(config: InterfaceConfig): String =
         when (config) {
@@ -194,7 +201,16 @@ internal object NativeInterfaceFactory {
             is InterfaceConfig.TCPClient -> config.mode + if (config.kissFraming) "|kiss" else "|raw"
             is InterfaceConfig.TCPServer -> config.mode
             is InterfaceConfig.UDP -> config.mode
-            is InterfaceConfig.RNode -> config.mode
+            is InterfaceConfig.RNode ->
+                listOf(
+                    config.mode,
+                    config.connectionMode,
+                    config.targetDeviceName,
+                    "${config.tcpHost}:${config.tcpPort}",
+                    "${config.usbDeviceId}:${config.usbVendorId}:${config.usbProductId}",
+                    "${config.frequency}:${config.bandwidth}:${config.txPower}:${config.spreadingFactor}:${config.codingRate}",
+                    if (config.enableFramebuffer) "fb-on" else "fb-off",
+                ).joinToString("|")
             is InterfaceConfig.AndroidBLE -> config.mode
         }
 

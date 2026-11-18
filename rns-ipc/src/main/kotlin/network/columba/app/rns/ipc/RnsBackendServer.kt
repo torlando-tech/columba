@@ -39,6 +39,9 @@ class RnsBackendServer(
     // App cache dir used to stage out-of-band inbound `fieldsJson` blobs
     // (received images/files) for delivery to the UI process; see [FieldsBlob].
     private val cacheDir: java.io.File,
+    // Mirrors every successful live interface reload into the host's restart
+    // snapshot (see ServerRnsTransportAdmin.onInterfacesReloaded).
+    private val onInterfacesReloaded: (List<network.columba.app.rns.api.model.InterfaceConfig>) -> Unit = {},
 ) : IRnsBackend.Stub() {
     // Lazy server-adapter construction. `synchronized` guards the double-check
     // pattern so two concurrent UI processes (binder dispatch is multi-thread)
@@ -96,7 +99,8 @@ class RnsBackendServer(
     override fun getTransportAdmin(cb: IRnsTransportAdminCallback) {
         val server = transportAdminServer ?: synchronized(constructLock) {
             transportAdminServer
-                ?: ServerRnsTransportAdmin(impl.transportAdmin, scope).also { transportAdminServer = it }
+                ?: ServerRnsTransportAdmin(impl.transportAdmin, scope, onInterfacesReloaded)
+                    .also { transportAdminServer = it }
         }
         try { cb.onTransportAdmin(server) } catch (_: RemoteException) { /* client dead */ }
     }

@@ -780,16 +780,19 @@ class RNodeWizardViewModel
                 }
 
             // Only apply defaults for fields that the user hasn't explicitly modified
-            // This preserves user changes and validation errors during navigation
+            // This preserves user changes and validation errors during navigation.
+            // An existing interface's saved TX power is explicit too: a region
+            // re-selection while editing must not replace it (issue #1255).
+            val txPowerIsExplicit = "txPower" in userModifiedFields || _state.value.isEditMode
             _state.update {
                 it.copy(
                     frequency = if ("frequency" !in userModifiedFields) region.frequency.toString() else it.frequency,
                     frequencyError = if ("frequency" !in userModifiedFields) null else it.frequencyError,
-                    txPower = if ("txPower" !in userModifiedFields) region.defaultTxPower.toString() else it.txPower,
+                    txPower = if (!txPowerIsExplicit) region.defaultTxPower.toString() else it.txPower,
                     // Keep the user's value but re-check it against the new region ceiling,
                     // otherwise a stale error from the previous region would survive.
                     txPowerError =
-                        if ("txPower" !in userModifiedFields) {
+                        if (!txPowerIsExplicit) {
                             null
                         } else {
                             RNodeConfigValidator.validateTxPower(it.txPower, region).error?.toUiMessage()
@@ -3476,11 +3479,13 @@ class RNodeWizardViewModel
         // ========== FREQUENCY REGION SELECTION ==========
 
         fun selectFrequencyRegion(region: FrequencyRegion) {
-            // Frequency and airtime limits are owned by the region, so selecting a region
-            // resets them to its defaults. TX power is a user preference that stays within
-            // the region ceiling, so a value the user already entered survives the region
-            // change and is revalidated by applyFrequencyRegionSettings().
-            userModifiedFields.retainAll(setOf("txPower"))
+            // A region switch re-derives frequency and airtime limits from the
+            // region, but an explicitly chosen TX power is a deliberate setting:
+            // dropping its override marker made a 1 dBm test config snap back to
+            // the region default (17 dBm) on the next region tap (issue #1255).
+            userModifiedFields.remove("frequency")
+            userModifiedFields.remove("stAlock")
+            userModifiedFields.remove("ltAlock")
             _state.update {
                 it.copy(
                     selectedFrequencyRegion = region,
@@ -3489,8 +3494,8 @@ class RNodeWizardViewModel
                     isCustomMode = false,
                 )
             }
-            // Apply region defaults (frequency, airtime limits, and tx power only when the
-            // user never touched it) when the region changes
+            // Apply region defaults (frequency and airtime limits; TX power only
+            // when it was never explicitly chosen) when region changes
             // This ensures validation errors from a previous region are cleared
             applyFrequencyRegionSettings()
         }

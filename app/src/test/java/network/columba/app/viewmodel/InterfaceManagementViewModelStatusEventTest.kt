@@ -1499,4 +1499,95 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     // endregion
+
+    // region toggle -> live interface sync
+
+    /**
+     * Regression: a toggle issued while the bound backend is still reporting
+     * `BackendCapabilities.UNKNOWN` used to be classified as "backend cannot hot
+     * reload" and dropped into the Apply & Restart path without ever touching
+     * the running stack — the switch showed off while the interface kept
+     * announcing. The sync must wait for the first reported capability snapshot
+     * and then apply live.
+     */
+    @Test
+    fun `toggle issued before capabilities are reported applies once the backend reports hot reload`() =
+        runTest {
+            val capabilities = MutableStateFlow(BackendCapabilities.UNKNOWN)
+            every { rnsBackend.capabilities } returns capabilities
+            every { interfaceRepository.enabledInterfaces } returns flowOf(emptyList())
+            coEvery { interfaceRepository.toggleInterfaceEnabled(any(), any()) } returns Unit
+            coEvery { serviceProtocol.reloadInterfaces(any()) } returns Unit
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+
+            viewModel.toggleInterface(id = 11, enabled = false)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { serviceProtocol.reloadInterfaces(any()) }
+            assertFalse(
+                "UNKNOWN must not be mistaken for a restart-gated backend",
+                viewModel.state.value.hasPendingChanges,
+            )
+
+            capabilities.value =
+                BackendCapabilities.UNKNOWN.copy(
+                    interfaces = BackendCapabilities.InterfaceCaps(hotReloadInterfaces = true),
+                )
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { serviceProtocol.reloadInterfaces(emptyList()) }
+            assertFalse(viewModel.state.value.hasPendingChanges)
+        }
+
+    @Test
+    fun `toggle issued before capabilities are reported marks pending on a restart-gated backend`() =
+        runTest {
+            val capabilities = MutableStateFlow(BackendCapabilities.UNKNOWN)
+            every { rnsBackend.capabilities } returns capabilities
+            every { interfaceRepository.enabledInterfaces } returns flowOf(emptyList())
+            coEvery { interfaceRepository.toggleInterfaceEnabled(any(), any()) } returns Unit
+            coEvery { serviceProtocol.reloadInterfaces(any()) } returns Unit
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+
+            viewModel.toggleInterface(id = 11, enabled = false)
+            advanceUntilIdle()
+
+            // Python-flavored snapshot: restart-gated. The backendId change also
+            // keeps StateFlow from conflating the emission with the UNKNOWN
+            // sentinel (equal values are not re-emitted).
+            capabilities.value =
+                BackendCapabilities.UNKNOWN.copy(
+                    backendId = network.columba.app.rns.api.BackendCapabilities.BackendId.PYTHON_CHAQUOPY,
+                    interfaces = BackendCapabilities.InterfaceCaps(hotReloadInterfaces = false),
+                )
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { serviceProtocol.reloadInterfaces(any()) }
+            assertTrue(
+                "no-hot-reload backends still need the Apply & Restart path",
+                viewModel.state.value.hasPendingChanges,
+            )
+        }
+
+    // endregion
 }

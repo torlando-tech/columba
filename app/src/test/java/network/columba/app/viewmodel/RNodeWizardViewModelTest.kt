@@ -2219,6 +2219,100 @@ class RNodeWizardViewModelTest {
         }
 
     @Test
+    fun `region re-selection while editing preserves the saved TX power`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            val interfaceId = 8L
+            val entity =
+                InterfaceEntity(
+                    id = interfaceId,
+                    name = "Low Power RNode",
+                    type = "RNode",
+                    enabled = true,
+                    configJson = """{"connection_mode":"ble"}""",
+                )
+            val rnodeConfig =
+                InterfaceConfig.RNode(
+                    name = "Low Power RNode",
+                    enabled = true,
+                    connectionMode = "ble",
+                    targetDeviceName = "AA:BB:CC:DD:EE:FF",
+                    frequency = 915000000,
+                    bandwidth = 125000,
+                    txPower = 1,
+                    spreadingFactor = 7,
+                    codingRate = 5,
+                )
+
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
+            coEvery { interfaceRepository.entityToConfig(entity) } returns rnodeConfig
+
+            viewModel.loadExistingConfig(interfaceId)
+            advanceUntilIdle()
+
+            // Editing starts at the review step, but going back to the region step
+            // and picking a region must not overwrite the saved TX power (#1255).
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.isEditMode)
+                assertEquals("1", state.txPower)
+                assertEquals(usRegion.frequency.toString(), state.frequency)
+            }
+        }
+
+    @Test
+    fun `editing an RNode saves the TX power the user kept through a region re-selection`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            val interfaceId = 11L
+            val entity =
+                InterfaceEntity(
+                    id = interfaceId,
+                    name = "Low Power RNode",
+                    type = "RNode",
+                    enabled = true,
+                    configJson = """{"connection_mode":"ble"}""",
+                )
+            val rnodeConfig =
+                InterfaceConfig.RNode(
+                    name = "Low Power RNode",
+                    enabled = true,
+                    connectionMode = "ble",
+                    targetDeviceName = "AA:BB:CC:DD:EE:FF",
+                    targetDeviceAddress = "AA:BB:CC:DD:EE:FF",
+                    frequency = 915000000,
+                    bandwidth = 125000,
+                    txPower = 1,
+                    spreadingFactor = 7,
+                    codingRate = 5,
+                )
+
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
+            coEvery { interfaceRepository.entityToConfig(entity) } returns rnodeConfig
+            val savedSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.updateInterface(interfaceId, capture(savedSlot)) } just Runs
+
+            viewModel.loadExistingConfig(interfaceId)
+            advanceUntilIdle()
+
+            // The edit flow re-derives frequency/airtime from a region pick; before the
+            // fix it also replaced the explicit 1 dBm with the region default (#1255).
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            coVerify { interfaceRepository.updateInterface(interfaceId, any()) }
+            assertEquals(1, (savedSlot.captured as InterfaceConfig.RNode).txPower)
+        }
+
+    @Test
     fun `loadExistingConfig handles exception gracefully`() =
         runViewModelTest {
             advanceUntilIdle()

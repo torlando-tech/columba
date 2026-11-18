@@ -2,6 +2,7 @@ package network.columba.app.ui.screens
 
 import android.app.Application
 import android.Manifest
+import android.os.Looper
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.assert
@@ -55,6 +56,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -1148,6 +1150,46 @@ class MessagingScreenTest {
         // Then
         assertTrue("Screen composition should succeed", result.isSuccess)
         verify { mockViewModel.loadMessages(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH, MessagingTestFixtures.Constants.TEST_PEER_NAME) }
+    }
+
+    // PROBE (never merge): distinguishes "flow never collected" from "page emitted
+    // but never rendered" for the CI-only paging stall in this class.
+    @Test
+    fun probe_pagingFlowCollectedAndEmitted() {
+        val collected = java.util.concurrent.atomic.AtomicBoolean(false)
+        val emitted = java.util.concurrent.atomic.AtomicBoolean(false)
+        every { mockViewModel.messages } returns flow {
+            collected.set(true)
+            emit(PagingData.from(listOf(MessagingTestFixtures.createSentMessage(content = "probe-row"))))
+            emitted.set(true)
+        }
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        val emptyStateText =
+            RuntimeEnvironment.getApplication().getString(R.string.messaging_no_messages_yet)
+        val deadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < deadline &&
+            composeTestRule.onAllNodesWithText("probe-row").fetchSemanticsNodes().isEmpty()
+        ) {
+            composeTestRule.mainClock.advanceTimeByFrame()
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(5)
+        }
+        throw AssertionError(
+            "PROBE collected=${collected.get()} emitted=${emitted.get()} " +
+                "mainDispatcher=${kotlinx.coroutines.Dispatchers.Main} " +
+                "messagesGetterCalled=${
+                    runCatching { io.mockk.verify(atLeast = 1) { mockViewModel.messages } }.isSuccess
+                } " +
+                "rowNodes=${composeTestRule.onAllNodesWithText("probe-row").fetchSemanticsNodes().size} " +
+                "emptyStateNodes=${composeTestRule.onAllNodesWithText(emptyStateText).fetchSemanticsNodes().size}",
+        )
     }
 
     // ========== Message Display Tests ==========

@@ -376,6 +376,21 @@ android {
             isReturnDefaultValues = true
             all {
                 it.maxHeapSize = "2048m"
+                // CI runs one class twice in the same job (sharded run plus an isolated run of a
+                // class that cannot share a fork). A second invocation of the same Test task
+                // replaces its results and reports, so the isolated run passes this suffix and
+                // writes to separate result/report directories instead of clobbering the shard.
+                val testTask = it
+                project.findProperty("testResultsSuffix")?.toString()
+                    ?.takeIf { suffix -> suffix.isNotBlank() }
+                    ?.let { suffix ->
+                        testTask.reports.junitXml.outputLocation.set(
+                            layout.buildDirectory.dir("test-results/${testTask.name}-$suffix"),
+                        )
+                        testTask.reports.html.outputLocation.set(
+                            layout.buildDirectory.dir("reports/tests/$suffix"),
+                        )
+                    }
                 // Restart the test JVM after at most ten classes. Reusing a fork amortizes
                 // Robolectric/JVM startup cost while keeping cross-class coroutine accumulation
                 // bounded. A single fork for the whole shard still hangs, and parallel forks can
@@ -424,6 +439,15 @@ android {
                 // CI test sharding: distribute test classes across parallel jobs
                 val shard = project.findProperty("testShard")?.toString()?.toIntOrNull()
                 val total = project.findProperty("testShardTotal")?.toString()?.toIntOrNull()
+                // Classes CI runs in their own JVM (see ci.yml). Keep them out of the shard
+                // forks: sharing a fork with the rest of a shard leaves Paging's lazy items
+                // unrendered for these Compose tests, while an isolated run is deterministic.
+                val shardExcluded =
+                    project.findProperty("testShardExcludeClasses")?.toString()
+                        ?.split(',')
+                        ?.map { it.trim() }
+                        ?.filter { it.isNotEmpty() }
+                        ?: emptyList()
                 if (shard != null && total != null && total > 1) {
                     val testSourceDir = project.file("src/test/java")
                     val allTestClasses =
@@ -437,7 +461,9 @@ android {
                                     .removeSuffix(".kt")
                             }.sorted()
                     val shardClasses = allTestClasses.filterIndexed { i, _ -> i % total == shard }
-                    shardClasses.forEach { cls -> it.filter.includeTestsMatching(cls) }
+                    shardClasses
+                        .filterNot { it in shardExcluded }
+                        .forEach { cls -> it.filter.includeTestsMatching(cls) }
                 }
             }
         }

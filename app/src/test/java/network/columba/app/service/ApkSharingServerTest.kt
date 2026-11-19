@@ -16,7 +16,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
+import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.Socket
+import java.net.SocketTimeoutException
 import java.net.URL
 
 /**
@@ -177,6 +180,39 @@ class ApkSharingServerTest {
         }
 
     @Test
+    fun `connections beyond the in-flight cap are closed instead of queued`() =
+        runTest {
+            // A fixed thread pool bounds workers, not its queue. With a cap of two,
+            // the third and fourth sockets must be closed by the accept loop rather
+            // than queued behind the busy workers.
+            val capped = ApkSharingServer(maxInFlightConnections = 2)
+            val portDeferred = capped.prepareStart()
+            val job = serverScope.launch { capped.start(apkFile) }
+            val sockets = mutableListOf<Socket>()
+            try {
+                val port = portDeferred.await()
+
+                repeat(4) { sockets += Socket("127.0.0.1", port) }
+
+                sockets.drop(2).forEach { socket ->
+                    assertTrue(
+                        "connection beyond the cap was queued instead of closed",
+                        awaitEof(socket),
+                    )
+                }
+                assertEquals(
+                    "a connection within the cap must stay open",
+                    READ_TIMED_OUT,
+                    readWithin(sockets.first(), 500),
+                )
+            } finally {
+                sockets.forEach { runCatching { it.close() } }
+                capped.stop()
+                job.cancel()
+            }
+        }
+
+    @Test
     fun `returns 404 when APK file is deleted after server start`() =
         runTest {
             val (port) = startAndAwaitPort()
@@ -238,4 +274,43 @@ class ApkSharingServerTest {
                 conn.disconnect()
             }
         }
+
+    private companion object {
+        /** Returned by [readWithin] when the socket stayed open without sending. */
+        const val READ_TIMED_OUT = 0
+    }
+
+    /**
+     * Read one byte from [socket], capping the wait at [timeoutMs].
+     * Returns -1 on EOF/close, [READ_TIMED_OUT] when the connection stayed open
+     * without sending anything, and the byte value otherwise.
+     */
+    private fun readWithin(
+        socket: Socket,
+        timeoutMs: Int,
+    ): Int =
+        try {
+            socket.soTimeout = timeoutMs
+            socket.getInputStream().read()
+        } catch (_: SocketTimeoutException) {
+            READ_TIMED_OUT
+        } catch (_: IOException) {
+            -1
+        }
+
+    /** Polls until [socket] observes EOF (the server closed it) or the deadline passes. */
+    private fun awaitEof(
+        socket: Socket,
+        timeoutMs: Long = 5_000,
+    ): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            when (readWithin(socket, 200)) {
+                -1 -> return true
+                READ_TIMED_OUT -> continue
+                else -> return false
+            }
+        }
+        return false
+    }
 }

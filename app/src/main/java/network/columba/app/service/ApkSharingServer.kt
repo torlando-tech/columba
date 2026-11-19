@@ -12,8 +12,10 @@ import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -27,11 +29,27 @@ import java.util.concurrent.atomic.AtomicBoolean
  * scans a QR code containing the download URL, which opens in their browser
  * and downloads the APK.
  */
-class ApkSharingServer {
+class ApkSharingServer(
+    /**
+     * Maximum accepted-but-not-yet-finished client connections (workers plus
+     * queued). Sockets beyond this are closed immediately: the executor's
+     * thread count bounds workers, not its queue, so without this cap a peer on
+     * the same network could queue connections faster than they are served and
+     * exhaust the process's open sockets/memory while sharing.
+     */
+    private val maxInFlightConnections: Int = DEFAULT_MAX_IN_FLIGHT_CONNECTIONS,
+) {
+    init {
+        require(maxInFlightConnections >= 1) { "maxInFlightConnections must be positive" }
+    }
+
     companion object {
         private const val TAG = "ApkSharingServer"
         private const val CLIENT_TIMEOUT_MS = 30_000
         private const val MAX_CONCURRENT_CLIENTS = 4
+
+        /** Default cap on connections accepted but not yet fully handled. */
+        internal const val DEFAULT_MAX_IN_FLIGHT_CONNECTIONS = 20
 
         /**
          * Get the device's local WiFi IP address.
@@ -93,6 +111,9 @@ class ApkSharingServer {
     private val isRunning = AtomicBoolean(false)
     private var clientExecutor: ExecutorService? = null
 
+    /** Sockets accepted but not yet fully handled; drained when the server stops. */
+    private val inFlightSockets = ConcurrentHashMap.newKeySet<Socket>()
+
     /**
      * Deferred that completes with the bound port once the server socket is ready,
      * or with 0 if binding failed. Callers obtain this via [prepareStart] to guarantee
@@ -148,6 +169,10 @@ class ApkSharingServer {
             } finally {
                 clientExecutor?.shutdownNow()
                 clientExecutor = null
+                // Queued-but-never-started sockets are not closed by shutdownNow();
+                // drop them here so a stopped server never holds client FDs.
+                inFlightSockets.forEach(::closeQuietly)
+                inFlightSockets.clear()
                 isRunning.set(false)
                 Log.i(TAG, "APK sharing server stopped")
             }
@@ -166,11 +191,43 @@ class ApkSharingServer {
                 return
             }
 
-            // Handle each client in a bounded thread pool so we don't exhaust threads
-            clientExecutor?.execute {
-                handleClient(clientSocket, apkFile)
+            // The fixed thread pool bounds workers, NOT its queue: every accepted
+            // socket would otherwise sit in an unbounded queue until a worker frees
+            // up, and its read timeout is only armed inside handleClient. Cap the
+            // accepted-but-unfinished set and close the excess instead.
+            if (inFlightSockets.size >= maxInFlightConnections) {
+                Log.w(TAG, "Rejecting connection: $maxInFlightConnections sockets already in flight")
+                closeQuietly(clientSocket)
+                continue
+            }
+            inFlightSockets.add(clientSocket)
+
+            val executor = clientExecutor
+            if (executor == null) {
+                inFlightSockets.remove(clientSocket)
+                closeQuietly(clientSocket)
+                return
+            }
+
+            try {
+                executor.execute {
+                    try {
+                        handleClient(clientSocket, apkFile)
+                    } finally {
+                        inFlightSockets.remove(clientSocket)
+                    }
+                }
+            } catch (e: RejectedExecutionException) {
+                // stop() shut the pool down between accept() and execute().
+                Log.w(TAG, "Client rejected after server shutdown", e)
+                inFlightSockets.remove(clientSocket)
+                closeQuietly(clientSocket)
             }
         }
+    }
+
+    private fun closeQuietly(socket: Socket) {
+        runCatching { socket.close() }
     }
 
     /**

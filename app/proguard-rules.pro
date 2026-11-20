@@ -110,6 +110,17 @@
 # silences the build-time warning.
 -dontwarn java.net.UnixDomainSocketAddress
 
+# ===== Edge-to-edge entry point =====
+# Play's edge-to-edge detection inspects the release DEX (and the AAB's
+# proguard.map) for an `enableEdgeToEdge()` / `EdgeToEdge.enable()` call site
+# and reports "Edge-to-edge may not display for all users" when none exists.
+# R8 inlined androidx.activity's EdgeToEdge into MainActivity/IncomingCallActivity
+# onCreate, removing the class from the DEX. `-keep` retains it and disables its
+# optimization, so `EdgeToEdge.enable` survives as a call site.
+# (The Kotlin extension `enableEdgeToEdge()` folds into `EdgeToEdge.enable`;
+# activity 1.9.3 has no ComponentActivityKt class to keep.)
+-keep class androidx.activity.EdgeToEdge { *; }
+
 # ===== ProGuard Debugging (Optional) =====
 # Uncomment these to see what R8 is removing in build/outputs/mapping/release/
 # -printconfiguration build/outputs/mapping/release/configuration.txt

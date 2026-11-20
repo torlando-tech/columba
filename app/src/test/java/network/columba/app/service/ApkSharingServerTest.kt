@@ -213,6 +213,55 @@ class ApkSharingServerTest {
         }
 
     @Test
+    fun `stopping the server closes connections still queued behind busy workers`() =
+        runTest {
+            // Five accepted connections against a four-worker pool: one socket is
+            // still queued in the executor when stop() runs. The pool drops queued
+            // tasks without closing their sockets, so only the shutdown drain in
+            // start()'s finally block releases it — this test fails if that drain
+            // is removed.
+            val capped = ApkSharingServer(maxInFlightConnections = 5)
+            val portDeferred = capped.prepareStart()
+            val job = serverScope.launch { capped.start(apkFile) }
+            val sockets = mutableListOf<Socket>()
+            try {
+                val port = portDeferred.await()
+
+                // Silent clients keep every worker blocked in its request read, so
+                // no socket leaves the in-flight set on its own.
+                repeat(6) { sockets += Socket("127.0.0.1", port) }
+
+                // Once the accept loop refuses a connection it has registered five
+                // in flight, so exactly one of the six must observe EOF and the
+                // other five are all accepted and unfinished.
+                val deadline = System.currentTimeMillis() + 5_000
+                var eofStatuses: List<Boolean>
+                do {
+                    eofStatuses = sockets.map { awaitEof(it, 200) }
+                } while (eofStatuses.none { it } && System.currentTimeMillis() < deadline)
+                assertEquals(
+                    "the cap must refuse exactly one of six connections",
+                    1,
+                    eofStatuses.count { it },
+                )
+
+                capped.stop()
+                job.join()
+
+                sockets.filterIndexed { index, _ -> !eofStatuses[index] }.forEach { socket ->
+                    assertTrue(
+                        "in-flight connection was left open after stop",
+                        awaitEof(socket),
+                    )
+                }
+            } finally {
+                sockets.forEach { runCatching { it.close() } }
+                capped.stop()
+                job.cancel()
+            }
+        }
+
+    @Test
     fun `returns 404 when APK file is deleted after server start`() =
         runTest {
             val (port) = startAndAwaitPort()

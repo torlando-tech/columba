@@ -12,7 +12,6 @@ import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -30,6 +29,7 @@ import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.ui.screens.IncomingCallActivityScreen
 import network.columba.app.ui.theme.ThemeMode
+import network.columba.app.ui.theme.enableTransparentEdgeToEdge
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.launch
 import network.columba.app.di.RnsTelephonyEntryPoint
@@ -98,7 +98,7 @@ class IncomingCallActivity : ComponentActivity() {
         // call screen is up.
         startVibration()
 
-        enableEdgeToEdge()
+        enableTransparentEdgeToEdge()
 
         // Monitor call state to auto-finish when call ends or is answered
         lifecycleScope.launch {
@@ -132,8 +132,9 @@ class IncomingCallActivity : ComponentActivity() {
             val themeMode = settingsRepository.themeModeFlow.collectAsState(initial = ThemeMode.SYSTEM).value
             // Use a simple Material 3 theme (no Hilt-based theme needed)
             val darkTheme = themeMode.resolveDark(isSystemInDarkTheme())
-            // Match system-bar icon brightness to the forced color scheme
-            // (enableEdgeToEdge defaulted to the device theme at onCreate).
+            // Match system-bar icon brightness to the forced color scheme;
+            // enableTransparentEdgeToEdge() leaves the bars transparent on
+            // every API level, so the icons sit directly on this theme.
             val view = LocalView.current
             SideEffect {
                 val window = (view.context as ComponentActivity).window

@@ -17,7 +17,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -142,6 +141,7 @@ import network.columba.app.ui.screens.onboarding.OnboardingPagerScreen
 import network.columba.app.ui.screens.tcpclient.TcpClientWizardScreen
 import network.columba.app.ui.theme.ColumbaTheme
 import network.columba.app.ui.theme.ThemeMode
+import network.columba.app.ui.theme.enableTransparentEdgeToEdge
 import network.columba.app.ui.util.LifecycleGuard
 import network.columba.app.util.CrashReportManager
 import network.columba.app.util.InterfaceReconnectSignal
@@ -287,7 +287,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Enable edge-to-edge mode for proper IME insets handling
-        enableEdgeToEdge()
+        enableTransparentEdgeToEdge()
 
         // Reset location permission sheet dismissal on fresh app launch
         // This ensures users see the permission prompt again when the app is relaunched

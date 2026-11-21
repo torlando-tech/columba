@@ -158,6 +158,12 @@ class MessagingViewModel
             private const val DRAFT_SAVE_DEBOUNCE_MS = 500L
 
             /**
+             * Watchdog for the event-driven wait in [awaitSavedFailure]: it bounds a
+             * service that never writes, not the race with a slow write.
+             */
+            private const val REDRIVE_FAILED_WAIT_MS = 30_000L
+
+            /**
              * Composer target across process death (D11): a target with no
              * thread row exists only while it is selected, so a recreation
              * must restore the selection instead of dropping its draft.
@@ -1589,15 +1595,19 @@ class MessagingViewModel
                         terminalTransferHashes.remove(terminalTransferHashes.first())
                     }
                 }
-                // Retry mechanism to handle race condition where delivery proof arrives
-                // before database transaction completes
+                // The :reticulum service owns the delivery-status write (durable inbox +
+                // reconciliation in PendingDeliveryPersistence); this process must never
+                // write the same row for the same proof, or every proof produces two
+                // transactions and two invalidations (GitHub #877).
+                //
+                // Read the row instead. The retry loop covers the race where the proof
+                // arrives before the send transaction has committed.
                 val maxRetries = 3
                 val retryDelays = listOf(50L, 100L, 200L) // ms
 
                 var message =
-                    conversationRepository.applyDeliveryStatus(
+                    conversationRepository.getOutgoingMessage(
                         update.messageHash,
-                        update.status.wireValue,
                         originatingIdentityHash,
                     )
                 var attempt = 0
@@ -1611,9 +1621,8 @@ class MessagingViewModel
                     )
                     kotlinx.coroutines.delay(retryDelays[attempt])
                     message =
-                        conversationRepository.applyDeliveryStatus(
+                        conversationRepository.getOutgoingMessage(
                             update.messageHash,
-                            update.status.wireValue,
                             originatingIdentityHash,
                         )
                     attempt++
@@ -1633,10 +1642,14 @@ class MessagingViewModel
                     // analogue). Failed / retrying paths carry too much routing
                     // ambiguity to produce accurate interface data.
                     if (update.status == DeliveryStatus.DELIVERED || update.status == DeliveryStatus.PROPAGATED) {
-                        enrichSentInterfaceOnDelivery(message)
+                        enrichSentInterfaceOnDelivery(message, update.status)
                     }
 
-                    Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status.wireValue}")
+                    Log.d(
+                        TAG,
+                        "Delivery status ${update.status.wireValue} observed for " +
+                            "${update.messageHash.take(16)}... (row status: ${message.status})",
+                    )
                 } else {
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")
                 }
@@ -1726,11 +1739,14 @@ class MessagingViewModel
          */
         private suspend fun enrichSentInterfaceOnDelivery(
             message: network.columba.app.data.db.entity.MessageEntity,
+            status: DeliveryStatus,
         ) {
             if (!message.isFromMe || message.sentInterface != null) return
             try {
+                // Decide from the callback status rather than the row: the service owns the
+                // row write and it may not have landed yet in this process.
                 val lookupHash =
-                    if (message.deliveryMethod == "propagated") {
+                    if (status == DeliveryStatus.PROPAGATED) {
                         runCatching { rnsLxmf.getOutboundPropagationNode().getOrNull() }
                             .getOrNull()
                             ?.chunked(2)
@@ -3925,6 +3941,32 @@ class MessagingViewModel
          *   re-drive could not run (row missing / not failed / attachment lost) or the send
          *   failed (the row keeps its id and is marked failed again).
          */
+        /**
+         * Read the row for a re-drive, waiting for the service's terminal write when the
+         * delivery callback beats it. The wait is event-driven off the row (Room
+         * invalidation), so it does not matter how late the service commits; the bound is
+         * only a watchdog against a service that never writes, never a race window.
+         * Returns the latest row read, which the caller still checks for `failed`.
+         */
+        private suspend fun awaitSavedFailure(
+            messageId: String,
+        ): network.columba.app.data.db.entity.MessageEntity? {
+            val row = conversationRepository.getMessageById(messageId) ?: return null
+            if (row.status == "failed") return row
+            val settled =
+                kotlinx.coroutines.withTimeoutOrNull(REDRIVE_FAILED_WAIT_MS) {
+                    conversationRepository
+                        .observeMessageById(messageId, row.identityHash)
+                        .first { latest ->
+                            latest == null ||
+                                latest.status == "failed" ||
+                                latest.status == "delivered" ||
+                                latest.status == "propagated"
+                        }
+                }
+            return settled ?: conversationRepository.getMessageById(messageId)
+        }
+
         @Suppress("LongMethod", "ReturnCount")
         private suspend fun reDriveMessage(
             messageId: String,
@@ -3933,8 +3975,11 @@ class MessagingViewModel
         ): String? {
             Log.d(TAG, "Re-driving message: $messageId (forcedMethod=$forcedMethod)")
 
-            // Load the message from database
-            val message = conversationRepository.getMessageById(messageId) ?: run {
+            // Load the message from database. The failure may not be committed yet:
+            // the service owns the delivery-status write (#877), and this retry is
+            // fired from the delivery-status callback, so wait for the saved FAILED
+            // rather than dropping a retry that arrives first.
+            val message = awaitSavedFailure(messageId) ?: run {
                 Log.e(TAG, "Message not found for re-drive: $messageId")
                 return null
             }

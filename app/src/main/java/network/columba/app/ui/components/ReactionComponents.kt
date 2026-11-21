@@ -35,10 +35,12 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
@@ -829,6 +831,10 @@ fun ReactionModeOverlay(
     onSelectText: (() -> Unit)? = null,
     onViewDetails: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
+    /** Download the voice attachment of a sent message. Null = action hidden. */
+    onVoiceDownload: (() -> Unit)? = null,
+    /** Re-send a fresh copy of a sent voice message. Null = action hidden. */
+    onVoiceResend: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     /** Threads P2: "Thread from here" (case 2). Null = action hidden (flag off or inside a thread). */
     onThreadFromHere: (() -> Unit)? = null,
@@ -946,6 +952,24 @@ fun ReactionModeOverlay(
             }
         }
 
+    val wrappedOnVoiceDownload: (() -> Unit)? =
+        onVoiceDownload?.let {
+            {
+                // Launch the document picker before the dismiss animation so the
+                // launcher runs while composition is still active.
+                it()
+                handleDismiss()
+            }
+        }
+
+    val wrappedOnVoiceResend: (() -> Unit)? =
+        onVoiceResend?.let {
+            {
+                // The resend confirmation dialog handles its own dismiss.
+                it()
+            }
+        }
+
     AnimatedVisibility(
         visible = visible,
         enter =
@@ -1053,6 +1077,8 @@ fun ReactionModeOverlay(
                     onSelectText = wrappedOnSelectText,
                     onViewDetails = wrappedOnViewDetails,
                     onRetry = wrappedOnRetry,
+                    onVoiceDownload = wrappedOnVoiceDownload,
+                    onVoiceResend = wrappedOnVoiceResend,
                     onThreadFromHere = wrappedOnThreadFromHere,
                     onDelete = wrappedOnDelete,
                     modifier =
@@ -1229,6 +1255,8 @@ private fun MessageActionButtons(
     onSelectText: (() -> Unit)? = null,
     onViewDetails: (() -> Unit)?,
     onRetry: (() -> Unit)?,
+    onVoiceDownload: (() -> Unit)? = null,
+    onVoiceResend: (() -> Unit)? = null,
     onThreadFromHere: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -1276,6 +1304,22 @@ private fun MessageActionButtons(
                 label = stringResource(R.string.qr_composables_copy),
                 onClick = onCopy,
             )
+
+            // Voice actions (sent voice messages only)
+            if (onVoiceDownload != null) {
+                ReactionModeActionButton(
+                    icon = Icons.Default.Download,
+                    label = stringResource(R.string.message_voice_download),
+                    onClick = onVoiceDownload,
+                )
+            }
+            if (onVoiceResend != null) {
+                ReactionModeActionButton(
+                    icon = Icons.AutoMirrored.Filled.Send,
+                    label = stringResource(R.string.message_voice_resend),
+                    onClick = onVoiceResend,
+                )
+            }
 
             // Select text button (only for messages with selectable text content)
             if (onSelectText != null) {

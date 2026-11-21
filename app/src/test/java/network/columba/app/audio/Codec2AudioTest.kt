@@ -13,7 +13,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tech.torlando.lxst.codec.Codec2
 import tech.torlando.lxst.recording.RecorderState
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -45,6 +48,88 @@ class Codec2AudioTest {
         assertThrows(IllegalArgumentException::class.java) {
             codec.decode(ByteArray(30_002), Codec2.CODEC2_1200)
         }
+    }
+
+    @Test
+    fun `decoded codec2 exports a mono 8kHz PCM WAV directly to a stream`() {
+        val codec = Codec2RawAudioCodec { FakeCodec2Session() }
+        val decoded = codec.decode(byteArrayOf(1, 2, 3, 4), Codec2.CODEC2_1200)
+        val output = ByteArrayOutputStream()
+
+        codec.writeWave(decoded, output)
+
+        val wave = output.toByteArray()
+        val header = ByteBuffer.wrap(wave).order(ByteOrder.LITTLE_ENDIAN)
+        assertEquals(684, wave.size)
+        assertArrayEquals("RIFF".encodeToByteArray(), wave.copyOfRange(0, 4))
+        assertEquals(676, header.getInt(4))
+        assertArrayEquals("WAVEfmt ".encodeToByteArray(), wave.copyOfRange(8, 16))
+        assertEquals(16, header.getInt(16))
+        assertEquals(1, header.getShort(20).toInt())
+        assertEquals(1, header.getShort(22).toInt())
+        assertEquals(8_000, header.getInt(24))
+        assertEquals(16_000, header.getInt(28))
+        assertEquals(2, header.getShort(32).toInt())
+        assertEquals(16, header.getShort(34).toInt())
+        assertArrayEquals("data".encodeToByteArray(), wave.copyOfRange(36, 40))
+        assertEquals(640, header.getInt(40))
+        repeat(160) { index ->
+            assertEquals(1, header.getShort(44 + index * 2).toInt())
+            assertEquals(3, header.getShort(364 + index * 2).toInt())
+        }
+    }
+
+    @Test
+    fun `WAV samples retain signed 16 bit little endian values`() {
+        val codec = Codec2RawAudioCodec { FakeCodec2Session() }
+        val decoded = DecodedCodec2Audio(shortArrayOf(Short.MIN_VALUE, -257, -1, 0, 1, 0x1234, Short.MAX_VALUE))
+        val output = ByteArrayOutputStream()
+
+        codec.writeWave(decoded, output)
+
+        assertArrayEquals(
+            byteArrayOf(
+                0x00, 0x80.toByte(),
+                0xff.toByte(), 0xfe.toByte(),
+                0xff.toByte(), 0xff.toByte(),
+                0x00, 0x00,
+                0x01, 0x00,
+                0x34, 0x12,
+                0xff.toByte(), 0x7f,
+            ),
+            output.toByteArray().copyOfRange(44, 58),
+        )
+    }
+
+    @Test
+    fun `WAV writer leaves flushing and closing to the caller`() {
+        val codec = Codec2RawAudioCodec { FakeCodec2Session() }
+        val output =
+            object : ByteArrayOutputStream() {
+                var closed = false
+                var flushed = false
+
+                override fun close() {
+                    closed = true
+                    super.close()
+                }
+
+                override fun flush() {
+                    flushed = true
+                    super.flush()
+                }
+            }
+
+        output.use {
+            codec.writeWave(DecodedCodec2Audio(shortArrayOf(7)), it)
+            assertFalse(output.closed)
+            assertFalse(output.flushed)
+            output.write(0x7f)
+            assertEquals(47, output.size())
+            output.flush()
+            assertTrue(output.flushed)
+        }
+        assertTrue(output.closed)
     }
 
     @Test

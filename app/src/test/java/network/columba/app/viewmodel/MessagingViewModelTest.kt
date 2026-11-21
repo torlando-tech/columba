@@ -5,11 +5,16 @@
 
 package network.columba.app.viewmodel
 
+import android.content.ContentResolver
 import android.content.Context
+import android.net.Uri
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import network.columba.app.R
+import network.columba.app.audio.Codec2RawAudioCodec
+import network.columba.app.audio.Codec2Session
+import network.columba.app.audio.Codec2SessionFactory
 import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.audio.MicrophoneAdmissionArbiter
 import network.columba.app.audio.VoiceMessageRecorder
@@ -59,6 +64,7 @@ import io.mockk.slot
 
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
@@ -89,6 +95,8 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.io.OutputStream
 import network.columba.app.data.repository.Message as DataMessage
 
 /**
@@ -3482,6 +3490,274 @@ class MessagingViewModelTest {
             // Assert: Initial state is empty set
             assertEquals(emptySet<String>(), viewModel.loadedImageIds.value)
         }
+
+    @Test
+    fun `saveVoice writes original inline Opus bytes to destination`() =
+        runViewModelTest {
+            coEvery { conversationRepository.getMessageById("test-id") } returns
+                createMessageEntity(fieldsJson = """{"7":[16,"4f676753"]}""")
+            val output = ByteArrayOutputStream()
+            val uri = mockk<Uri>()
+            val resolver = mockk<ContentResolver>()
+            val context = mockk<Context>()
+            every { context.contentResolver } returns resolver
+            every { resolver.openOutputStream(uri) } returns output
+
+            assertTrue(viewModel.saveVoice(context, "test-id", uri))
+
+            assertArrayEquals(byteArrayOf(0x4f, 0x67, 0x67, 0x53), output.toByteArray())
+            verify(exactly = 1) { resolver.openOutputStream(uri) }
+        }
+
+    @Test
+    fun `saveVoice writes original app-private Opus file bytes and closes destination`() =
+        runViewModelTest {
+            val bytes = byteArrayOf(0x4f, 0x67, 0x67, 0x53, 0, 0xff.toByte())
+            val file =
+                java.io.File(applicationContext.filesDir, "attachments/export-voice/7_audio").apply {
+                    parentFile!!.mkdirs()
+                    writeBytes(bytes)
+                }
+            coEvery { conversationRepository.getMessageById("test-id") } returns
+                createMessageEntity(
+                    fieldsJson = """{"7":[16,{"_file_ref":${org.json.JSONObject.quote(file.absolutePath)}}]}""",
+                )
+            val output =
+                object : ByteArrayOutputStream() {
+                    var closed = false
+
+                    override fun close() {
+                        closed = true
+                        super.close()
+                    }
+                }
+            val uri = mockk<Uri>()
+
+            assertTrue(viewModel.saveVoice(voiceExportContext(uri, output), "test-id", uri))
+
+            assertArrayEquals(bytes, output.toByteArray())
+            assertTrue(output.closed)
+        }
+
+    @Test
+    fun `saveVoice decodes Codec2 frames directly into a PCM WAV destination`() =
+        runViewModelTest {
+            coEvery { conversationRepository.getMessageById("test-id") } returns
+                createMessageEntity(fieldsJson = """{"7":[4,"01020304"]}""")
+            val session = VoiceExportCodec2Session()
+            viewModel.voiceExportCodec = Codec2RawAudioCodec(Codec2SessionFactory { session })
+            val output = ByteArrayOutputStream()
+            val uri = mockk<Uri>()
+
+            assertTrue(viewModel.saveVoice(voiceExportContext(uri, output), "test-id", uri))
+
+            val wave = output.toByteArray()
+            assertEquals(684, wave.size)
+            assertArrayEquals(
+                "52494646a402000057415645666d74201000000001000100401f0000803e0000020010006461746180020000".hexToBytes(),
+                wave.copyOfRange(0, 44),
+            )
+            // First frame is -32768, second is 0x1234; PCM samples are little-endian.
+            assertArrayEquals(ByteArray(320) { if (it % 2 == 0) 0 else 0x80.toByte() }, wave.copyOfRange(44, 364))
+            assertArrayEquals(ByteArray(320) { if (it % 2 == 0) 0x34 else 0x12 }, wave.copyOfRange(364, 684))
+            assertTrue(session.closed)
+        }
+
+    @Test
+    fun `saveVoice returns false for missing message without opening destination`() =
+        runViewModelTest {
+            val context = mockk<Context>()
+
+            assertFalse(viewModel.saveVoice(context, "missing-id", mockk()))
+
+            verify(exactly = 0) { context.contentResolver }
+        }
+
+    @Test
+    fun `saveVoice rejects absent empty malformed and unsupported audio before opening destination`() =
+        runViewModelTest {
+            val context = mockk<Context>()
+            val uri = mockk<Uri>()
+            val invalidFields =
+                listOf(
+                    null,
+                    "{}",
+                    """{"7":[16,null]}""",
+                    """{"7":[16,""]}""",
+                    """{"7":[16,"xyz"]}""",
+                    """{"7":[999,"4f676753"]}""",
+                )
+            for (fields in invalidFields) {
+                coEvery { conversationRepository.getMessageById("test-id") } returns createMessageEntity(fieldsJson = fields)
+
+                assertFalse("Unexpectedly exported $fields", viewModel.saveVoice(context, "test-id", uri))
+            }
+
+            verify(exactly = 0) { context.contentResolver }
+        }
+
+    @Test
+    fun `saveVoice rejects missing and empty app-private audio files without opening destination`() =
+        runViewModelTest {
+            val context = mockk<Context>()
+            val uri = mockk<Uri>()
+            val attachments = java.io.File(applicationContext.filesDir, "attachments").apply { mkdirs() }
+            val missing = java.io.File(attachments, "missing-voice")
+            val empty = java.io.File(attachments, "empty-voice").apply { writeBytes(byteArrayOf()) }
+            for (file in listOf(missing, empty)) {
+                coEvery { conversationRepository.getMessageById("test-id") } returns
+                    createMessageEntity(
+                        fieldsJson = """{"7":[16,{"_file_ref":${org.json.JSONObject.quote(file.absolutePath)}}]}""",
+                    )
+
+                assertFalse(viewModel.saveVoice(context, "test-id", uri))
+            }
+
+            verify(exactly = 0) { context.contentResolver }
+        }
+
+    @Test
+    fun `saveVoice returns false when destination stream is unavailable`() =
+        runViewModelTest {
+            coEvery { conversationRepository.getMessageById("test-id") } returns
+                createMessageEntity(fieldsJson = """{"7":[16,"4f676753"]}""")
+            val uri = mockk<Uri>()
+
+            assertFalse(viewModel.saveVoice(voiceExportContext(uri, null), "test-id", uri))
+        }
+
+    @Test
+    fun `saveVoice returns false on buffered destination write failure and closes stream`() =
+        runViewModelTest {
+            coEvery { conversationRepository.getMessageById("test-id") } returns
+                createMessageEntity(fieldsJson = """{"7":[16,"4f676753"]}""")
+            val output = mockk<OutputStream>()
+            every { output.write(any<ByteArray>(), any(), any()) } throws IOException("Document write failed")
+            every { output.flush() } just Runs
+            every { output.close() } just Runs
+            val uri = mockk<Uri>()
+
+            assertFalse(viewModel.saveVoice(voiceExportContext(uri, output), "test-id", uri))
+
+            verify(exactly = 1) { output.close() }
+        }
+
+    @Test
+    fun `saveVoice rejects malformed and over-duration Codec2 before opening destination`() =
+        runViewModelTest {
+            val context = mockk<Context>()
+            val uri = mockk<Uri>()
+            val invalidPayloads = listOf("010203", "0102".repeat(15_001))
+            for (payload in invalidPayloads) {
+                coEvery { conversationRepository.getMessageById("test-id") } returns
+                    createMessageEntity(fieldsJson = """{"7":[4,"$payload"]}""")
+                val session = VoiceExportCodec2Session()
+                viewModel.voiceExportCodec = Codec2RawAudioCodec(Codec2SessionFactory { session })
+
+                assertFalse(viewModel.saveVoice(context, "test-id", uri))
+                assertTrue(session.closed)
+            }
+
+            verify(exactly = 0) { context.contentResolver }
+        }
+
+    @Test
+    fun `saveVoice returns false on Codec2 decoder failure before opening destination`() =
+        runViewModelTest {
+            coEvery { conversationRepository.getMessageById("test-id") } returns
+                createMessageEntity(fieldsJson = """{"7":[4,"0102"]}""")
+            val context = mockk<Context>()
+            val session = VoiceExportCodec2Session(decodeResult = 0)
+            viewModel.voiceExportCodec = Codec2RawAudioCodec(Codec2SessionFactory { session })
+
+            assertFalse(viewModel.saveVoice(context, "test-id", mockk()))
+
+            assertTrue(session.closed)
+            verify(exactly = 0) { context.contentResolver }
+        }
+
+    @Test
+    fun `saveVoice reports unavailable native decoder without opening destination`() =
+        runViewModelTest {
+            coEvery { conversationRepository.getMessageById("test-id") } returns
+                createMessageEntity(fieldsJson = """{"7":[4,"0102"]}""")
+            val context = mockk<Context>()
+            viewModel.voiceExportCodec = Codec2RawAudioCodec(Codec2SessionFactory {
+                throw UnsatisfiedLinkError("Codec2 is not available on this device")
+            })
+
+            assertFalse(viewModel.saveVoice(context, "test-id", mockk()))
+            verify(exactly = 0) { context.contentResolver }
+        }
+
+    @Test
+    fun `saveVoice propagates repository cancellation without opening destination`() =
+        runViewModelTest {
+            val cancellation = CancellationException("Export canceled")
+            coEvery { conversationRepository.getMessageById("test-id") } throws cancellation
+            val context = mockk<Context>()
+            var thrown: CancellationException? = null
+
+            try {
+                viewModel.saveVoice(context, "test-id", mockk())
+            } catch (e: CancellationException) {
+                thrown = e
+            }
+
+            assertEquals("Export canceled", thrown?.message)
+            verify(exactly = 0) { context.contentResolver }
+        }
+
+    @Test
+    fun `saveVoice propagates destination cancellation and closes stream`() =
+        runViewModelTest {
+            coEvery { conversationRepository.getMessageById("test-id") } returns
+                createMessageEntity(fieldsJson = """{"7":[16,"4f676753"]}""")
+            val cancellation = CancellationException("Document export canceled")
+            val output = mockk<OutputStream>()
+            every { output.write(any<ByteArray>(), any(), any()) } throws cancellation
+            every { output.flush() } just Runs
+            every { output.close() } just Runs
+            val uri = mockk<Uri>()
+            var thrown: CancellationException? = null
+
+            try {
+                viewModel.saveVoice(voiceExportContext(uri, output), "test-id", uri)
+            } catch (e: CancellationException) {
+                thrown = e
+            }
+
+            assertEquals("Document export canceled", thrown?.message)
+            verify(exactly = 1) { output.close() }
+        }
+
+    private fun voiceExportContext(uri: Uri, output: OutputStream?): Context {
+        val resolver = mockk<ContentResolver>()
+        every { resolver.openOutputStream(uri) } returns output
+        return mockk<Context>().also { context ->
+            every { context.contentResolver } returns resolver
+        }
+    }
+
+    private class VoiceExportCodec2Session(
+        private val decodeResult: Int = 160,
+    ) : Codec2Session {
+        override val samplesPerFrame = 160
+        override val bytesPerFrame = 2
+        var closed = false
+            private set
+
+        override fun encode(pcm: ShortArray, output: ByteArray): Int = error("Export must not encode audio")
+
+        override fun decode(encoded: ByteArray, output: ShortArray): Int {
+            output.fill(if (encoded[0] == 1.toByte()) Short.MIN_VALUE else 0x1234.toShort())
+            return decodeResult
+        }
+
+        override fun close() {
+            closed = true
+        }
+    }
 
     // ========== saveReceivedFileAttachment Tests ==========
 
@@ -7069,4 +7345,251 @@ class MessagingViewModelTest {
             // Before loading any conversation
             assertNull(viewModel.announceInfo.value)
         }
+
+    @Test
+    fun `resendVoiceMessage creates a fresh copy preserving Opus and Codec2 wire payloads`() =
+        runViewModelTest {
+            for ((mode, hex) in listOf(16 to "4f676753", 4 to "01020304")) {
+                val original = voiceCopySource("""{"7":[$mode,"$hex"]}""", id = "voice-$mode")
+                stubVoiceCopyIdentity()
+                coEvery { conversationRepository.getMessageById(original.id) } returns original
+                val saved = CompletableDeferred<DataMessage>()
+                val receipt = voiceCopyReceipt(mode)
+                coEvery {
+                    rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                } coAnswers {
+                    assertArrayEquals(testPeerHash.hexToBytes(), firstArg<ByteArray>())
+                    assertEquals(" ", secondArg<String>())
+                    val audio = arg<Map<Int, Any>>(11).getValue(7) as List<*>
+                    assertEquals(mode, audio[0])
+                    assertArrayEquals(hex.hexToBytes(), audio[1] as ByteArray)
+                    Result.success(receipt)
+                }
+                coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } coAnswers {
+                    saved.complete(thirdArg())
+                    Unit
+                }
+
+                viewModel.resendVoiceMessage(original.id)
+                val copy = saved.await()
+                advanceUntilIdle()
+
+                assertEquals(receipt.messageHash.toHex(), copy.id)
+                assertTrue(copy.id != original.id)
+                assertEquals("pending", copy.status)
+                assertEquals(" ", copy.content)
+                val persistedAudio = org.json.JSONObject(copy.fieldsJson).getJSONArray("7")
+                assertEquals(mode, persistedAudio.getInt(0))
+                assertEquals(hex, persistedAudio.getString(1))
+                assertFalse(viewModel.isSending.value)
+            }
+            coVerify(exactly = 0) { conversationRepository.updateMessageId(any(), any()) }
+            coVerify(exactly = 0) { conversationRepository.updateMessageStatus(any(), any()) }
+            coVerify(exactly = 0) { conversationRepository.deleteMessage(any(), any()) }
+        }
+
+    @Test
+    fun `resendVoiceMessage preserves file backed audio mixed attachments and reply thread`() =
+        runViewModelTest {
+            val attachments = java.io.File(applicationContext.filesDir, "attachments").apply { mkdirs() }
+            val voice = java.io.File(attachments, "voice-copy.ogg").apply { writeBytes("OggS".encodeToByteArray()) }
+            val fields = """{"7":[16,{"_file_ref":"${voice.absolutePath}"}],"6":"89504e470d0a1a0a","5":[{"filename":"note.txt","data":"4869","size":2}]}"""
+            val thread = ByteArray(16) { 7 }
+            val original = voiceCopySource(fields).copy(content = "caption", replyToMessageId = "root", threadId = thread)
+            stubVoiceCopyIdentity()
+            coEvery { conversationRepository.getMessageById(original.id) } returns original
+            coEvery { conversationRepository.getMessageById("root") } returns
+                original.copy(id = "root", content = "quoted root")
+            val saved = CompletableDeferred<DataMessage>()
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } coAnswers {
+                assertEquals("caption", secondArg<String>())
+                assertArrayEquals("89504e470d0a1a0a".hexToBytes(), arg<ByteArray>(5))
+                assertEquals("png", arg<String>(6))
+                val files = arg<List<Pair<String, ByteArray>>>(7)
+                assertEquals("note.txt", files.single().first)
+                assertArrayEquals("Hi".encodeToByteArray(), files.single().second)
+                assertEquals("root", arg<String>(8))
+                assertEquals("quoted root", arg<String>(9))
+                val audio = arg<Map<Int, Any>>(11).getValue(7) as List<*>
+                assertEquals(16, audio[0])
+                assertArrayEquals("OggS".encodeToByteArray(), audio[1] as ByteArray)
+                assertArrayEquals(thread, arg<ByteArray>(12))
+                Result.success(voiceCopyReceipt())
+            }
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } coAnswers {
+                saved.complete(thirdArg())
+                Unit
+            }
+
+            viewModel.resendVoiceMessage(original.id)
+            val copy = saved.await()
+            advanceUntilIdle()
+
+            assertEquals("root", copy.replyToMessageId)
+            assertArrayEquals(thread, copy.threadId)
+            assertEquals("caption", copy.content)
+            coVerify(exactly = 0) { conversationRepository.updateMessageId(any(), any()) }
+        }
+
+    @Test
+    fun `resendVoiceMessage leaves matching draft attachments and reply intact on success and failure`() =
+        runViewModelTest {
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            stubVoiceCopyIdentity()
+            val original = voiceCopySource("""{"7":[16,"4f676753"]}""").copy(content = "caption", replyToMessageId = "root")
+            coEvery { conversationRepository.getMessageById(original.id) } returns original
+            coEvery { conversationRepository.getMessageById("root") } returns original.copy(id = "root")
+            coEvery { conversationRepository.saveDraft(any(), any(), any()) } just Runs
+            coEvery { conversationRepository.getReplyPreview("root", any()) } returns
+                ReplyPreview("root", "Peer", "quoted", false, false, null)
+            viewModel.setReplyTo("root")
+            viewModel.onDraftTextChanged("caption")
+            val image = byteArrayOf(1, 2, 3)
+            viewModel.selectImage(image, "png")
+            val file = FileAttachment("draft.txt", byteArrayOf(4, 5), "text/plain", 2)
+            viewModel.addFileAttachment(file)
+            val recordingFile = java.io.File.createTempFile("voice_draft", ".ogg", applicationContext.cacheDir)
+            val recording = RecordedAudio(recordingFile, durationMillis = 1_000L, sizeBytes = 0L)
+            val recorder = viewModel.javaClass.getDeclaredField("voiceMessageRecorder").let {
+                it.isAccessible = true
+                it.get(viewModel) as VoiceMessageRecorder
+            }
+            @Suppress("UNCHECKED_CAST")
+            val recorderState = VoiceMessageRecorder::class.java.getDeclaredField("_state").let {
+                it.isAccessible = true
+                it.get(recorder) as MutableStateFlow<VoiceMessageRecordingState>
+            }
+            recorderState.value = VoiceMessageRecordingState(
+                selectedRecording = recording,
+                selectedFormat = VoiceMessageFormat.OPUS_MEDIUM,
+            )
+            advanceUntilIdle()
+            val pendingReply = viewModel.pendingReplyTo.value
+            val composerEvents = mutableListOf<ComposerSendResult>()
+            val collection = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.composerSendResult.collect { composerEvents.add(it) }
+            }
+
+            for (success in listOf(true, false)) {
+                val saved = CompletableDeferred<DataMessage>()
+                coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } coAnswers {
+                    saved.complete(thirdArg())
+                    Unit
+                }
+                coEvery {
+                    rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                } returns if (success) Result.success(voiceCopyReceipt()) else Result.failure(IOException("offline"))
+
+                viewModel.resendVoiceMessage(original.id)
+                val copy = saved.await()
+                advanceUntilIdle()
+
+                assertEquals(if (success) "pending" else "failed", copy.status)
+                assertTrue(copy.id != original.id)
+                assertArrayEquals(image, viewModel.selectedImageData.value)
+                assertEquals(listOf(file), viewModel.selectedFileAttachments.value)
+                assertEquals(pendingReply, viewModel.pendingReplyTo.value)
+                assertEquals(recording, viewModel.voiceRecordingState.value.selectedRecording)
+                assertTrue(recordingFile.exists())
+                assertTrue(composerEvents.isEmpty())
+            }
+            coVerify(exactly = 0) { conversationRepository.clearDraft(any(), any()) }
+            coVerify(exactly = 0) { conversationRepository.updateMessageId(any(), any()) }
+            collection.cancel()
+        }
+
+    @Test
+    fun `resendVoiceMessage refuses missing payload and identity mismatch without changing original`() =
+        runViewModelTest {
+            val original = voiceCopySource("""{"7":[16,{"_file_ref":"/not/available.ogg"}]}""")
+            coEvery { conversationRepository.getMessageById(original.id) } returns original
+            val errors = kotlinx.coroutines.channels.Channel<UiMessage>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.fileAttachmentError.collect { errors.send(it) }
+            }
+
+            viewModel.resendVoiceMessage(original.id)
+            assertEquals(UiMessage.Text(R.string.message_voice_resend_failed), errors.receive())
+            advanceUntilIdle()
+            coEvery { conversationRepository.getMessageById(original.id) } returns
+                original.copy(fieldsJson = """{"7":[16,"4f676753"]}""")
+            // The fixture defaults to no active identity.
+            viewModel.resendVoiceMessage(original.id)
+            assertEquals(UiMessage.Text(R.string.message_voice_resend_failed), errors.receive())
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            }
+            coVerify(exactly = 0) { conversationRepository.saveMessage(any(), any(), any(), any()) }
+            coVerify(exactly = 0) { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) }
+            assertFalse(viewModel.isSending.value)
+        }
+
+    @Test
+    fun `resendVoiceMessage submits only one copy while transport is suspended`() =
+        runViewModelTest {
+            val original = voiceCopySource("""{"7":[16,"4f676753"]}""")
+            stubVoiceCopyIdentity()
+            coEvery { conversationRepository.getMessageById(original.id) } returns original
+            val entered = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val saved = CompletableDeferred<DataMessage>()
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } coAnswers {
+                entered.complete(Unit)
+                release.await()
+                Result.success(voiceCopyReceipt())
+            }
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } coAnswers {
+                saved.complete(thirdArg())
+                Unit
+            }
+
+            viewModel.resendVoiceMessage(original.id)
+            entered.await()
+            assertTrue(viewModel.isSending.value)
+            viewModel.resendVoiceMessage(original.id)
+            release.complete(Unit)
+            saved.await()
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            }
+            assertFalse(viewModel.isSending.value)
+        }
+
+    private fun voiceCopySource(fieldsJson: String, id: String = "voice-copy-source") =
+        MessageEntity(
+            id = id,
+            conversationHash = testPeerHash,
+            identityHash = "identity-hash",
+            content = " ",
+            timestamp = 1_000L,
+            isFromMe = true,
+            status = "delivered",
+            fieldsJson = fieldsJson,
+        )
+
+    private fun voiceCopyReceipt(value: Int = 42) =
+        MessageReceipt(
+            messageHash = ByteArray(32) { value.toByte() },
+            timestamp = 3_000L,
+            destinationHash = testPeerHash.hexToBytes(),
+        )
+
+    private fun stubVoiceCopyIdentity() {
+        val activeIdentity = mockk<network.columba.app.data.db.entity.LocalIdentityEntity>()
+        every { activeIdentity.identityHash } returns "identity-hash"
+        every { activeIdentity.iconName } returns null
+        every { activeIdentity.iconForegroundColor } returns null
+        every { activeIdentity.iconBackgroundColor } returns null
+        coEvery { identityRepository.getActiveIdentitySync() } returns activeIdentity
+        coEvery { rnsCore.getNextHopInterfaceName(any()) } returns null
+    }
 }

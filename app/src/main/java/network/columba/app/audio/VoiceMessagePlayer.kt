@@ -197,7 +197,9 @@ internal class VoiceMessagePlayer(
                             val bytes = source.readBytes()
                             File.createTempFile("voice_preview_", ".wav", appContext.cacheDir).also {
                                 unownedFile = it
-                                codec2Codec.writeWave(codec2Codec.decode(bytes, mode), it)
+                                it.outputStream().buffered().use { output ->
+                                    codec2Codec.writeWave(codec2Codec.decode(bytes, mode), output)
+                                }
                             }
                         }
                     currentCoroutineContext().ensureActive()
@@ -246,7 +248,9 @@ internal class VoiceMessagePlayer(
                                 unownedFile = it
                                 if (isCodec2) {
                                     val mode = checkNotNull(attachment.mode.codec2Bitrate())
-                                    codec2Codec.writeWave(codec2Codec.decode(bytes, mode), it)
+                                    it.outputStream().buffered().use { output ->
+                                        codec2Codec.writeWave(codec2Codec.decode(bytes, mode), output)
+                                    }
                                 } else {
                                     it.writeBytes(bytes)
                                 }

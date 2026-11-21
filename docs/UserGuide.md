@@ -105,6 +105,13 @@ If not:
 * Message is **stored securely**
 * Delivered automatically when the recipient becomes available
 
+### Saving and re-sending voice messages
+
+Long-press a sent voice message to open the message menu, then choose:
+
+* **Download** — opens Android's save dialog. Opus recordings are saved as `.ogg`, and Codec2 recordings as playable `.wav` files.
+* **Re-send** — asks for confirmation, then immediately sends a new copy to the same conversation and thread, leaving the original message and your current draft unchanged. Re-send is unavailable while the original message is pending or another send is in progress.
+
 ### Sender verification warnings
 
 * **Yellow: Sender identity unknown** means Columba does not yet have the sender's public key. This can happen with genuine first-contact messages; it does not mean a signature check failed.
@@ -115,9 +122,7 @@ For newly received unknown-key messages, Columba retains the original signed mes
 
 Learning a key alone never marks a message verified. Older messages without retained signed evidence cannot be rechecked automatically. Open message details to see the recorded verification result.
 
-Messages received while only the service is running retain sender keys and icons for restoration after restart. The background Reticulum service posts the message notification itself whenever the app process is closed, frozen, or not running yet, so notifications also arrive right after a phone reboot. A message the service could not post (notification permission denied, or the app has not run this build yet) is shown when the app next starts, and temporary database read failures are retried automatically.
-
-The service starts automatically after a reboot once Columba has been set up at least once. Switch it off in **Settings → Advanced → Start on boot**. Using **Stop** always keeps the node stopped, including across reboots, until you start it again.
+Messages received while only the service is running retain sender keys and icons for restoration after restart. Message notifications catch up when the app starts, and temporary database read failures are retried automatically.
 
 ---
 

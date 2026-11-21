@@ -171,6 +171,10 @@
     <string name="message_voice_bubble_title">Voice message</string>
     <string name="message_voice_progress">%1$s of %2$s</string>
     <string name="message_voice_error">Unable to play voice message</string>
+    <string name="message_voice_resend_failed">Unable to re-send voice message</string>
+    <string name="message_voice_download">Download</string>
+    <string name="message_voice_resend">Re-send</string>
+    <string name="message_voice_resend_confirm_body">Send a copy of this voice message to the same chat? The original message stays unchanged.</string>
 
     <!-- Locate on Map -->
     <string name="locate_on_map">Locate on Map</string>

@@ -1,8 +1,11 @@
 package network.columba.app.rns.host.persistence
 
+import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import network.columba.app.data.db.entity.PeerActivityType
@@ -26,6 +29,13 @@ class PeerActivityCollector(
     private val notifier: ServiceMessageNotifier,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
+    private companion object {
+        private const val TAG = "PeerActivityCollector"
+
+        /** How often point-to-point sends are re-checked against their proof deadline. */
+        private const val PROOF_SWEEP_INTERVAL_MS = 30_000L
+    }
+
     @Volatile
     private var collectionJob: Job? = null
 
@@ -34,22 +44,7 @@ class PeerActivityCollector(
         collectionJob?.takeIf { it.isActive }?.let { return it }
         return scope.launch(start = CoroutineStart.UNDISPATCHED) {
             supervisorScope {
-                launch(start = CoroutineStart.UNDISPATCHED) {
-                    backend.lxmf.observeMessages().collect { message ->
-                        val result = persistence.persistReceivedMessage(message)
-                        if (result is ReceivedMessagePersist.Inserted) {
-                            // Only a message this pass actually stored may notify; a replay
-                            // (Duplicate) must never re-notify.
-                            notifier.notifyReceivedMessage(result)
-                        }
-                        persistence.persistIncomingMessageActivity(
-                            messageHash = message.messageHash,
-                            sourceHash = message.sourceHash.toHex(),
-                            deliveryMethod = message.deliveryMethod,
-                            receivedAt = now(),
-                        )
-                    }
-                }
+                launch(start = CoroutineStart.UNDISPATCHED) { collectIncomingMessages() }
                 launch(start = CoroutineStart.UNDISPATCHED) {
                     backend.core.observeAnnounces().collect(::persistAnnounceEvent)
                 }
@@ -92,6 +87,7 @@ class PeerActivityCollector(
                         }
                     }
                 }
+                launch(start = CoroutineStart.UNDISPATCHED) { sweepExpiredProofs() }
                 launch(start = CoroutineStart.UNDISPATCHED) {
                     backend.core.observeLinks().collect { event ->
                         if (event is LinkEvent.Established) {
@@ -105,6 +101,41 @@ class PeerActivityCollector(
                 }
             }
         }.also { collectionJob = it }
+    }
+
+    private suspend fun collectIncomingMessages() {
+        backend.lxmf.observeMessages().collect { message ->
+            val result = persistence.persistReceivedMessage(message)
+            if (result is ReceivedMessagePersist.Inserted) {
+                // Only a message this pass actually stored may notify; a replay
+                // (Duplicate) must never re-notify.
+                notifier.notifyReceivedMessage(result)
+            }
+            persistence.persistIncomingMessageActivity(
+                messageHash = message.messageHash,
+                sourceHash = message.sourceHash.toHex(),
+                deliveryMethod = message.deliveryMethod,
+                receivedAt = now(),
+            )
+        }
+    }
+
+    /**
+     * #875: fail point-to-point sends whose proof never arrived. The service owns
+     * the row for the app's whole lifetime, so this heals rows even after the UI
+     * process is gone.
+     */
+    private suspend fun sweepExpiredProofs() {
+        while (true) {
+            delay(PROOF_SWEEP_INTERVAL_MS)
+            try {
+                persistence.failExpiredOutboundProofs(now())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Proof deadline sweep failed", e)
+            }
+        }
     }
 
     private suspend fun persistAnnounceEvent(announce: AnnounceEvent) {

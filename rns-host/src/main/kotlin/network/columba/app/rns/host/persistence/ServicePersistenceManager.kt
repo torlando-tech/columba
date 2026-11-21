@@ -17,6 +17,7 @@ import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.util.HashUtils
 import network.columba.app.data.util.TextSanitizer
 import network.columba.app.data.model.InterfaceType
+import network.columba.app.rns.api.model.DeliveryStatus
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.util.ThreadFieldCodec
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
@@ -46,9 +47,31 @@ class ServicePersistenceManager(
     private val settingsAccessor: ServiceSettingsAccessor,
     startDeliveryReconciliation: Boolean = true,
 ) {
+    /**
+     * Message id -> start of the send attempt in flight. Service-process local;
+     * pruned by [failExpiredOutboundProofs].
+     */
+    private val attemptStartedAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     companion object {
         private const val TAG = "ServicePersistenceManager"
         private const val ANNOUNCE_TTL_MS = 30L * 24 * 60 * 60 * 1000 // 30 days
+
+        /**
+         * Delivery-proof deadlines for point-to-point sends (#875).
+         *
+         * An opportunistic send has no retry: its only completion signal is the
+         * recipient's proof, which a torn-down transport socket can drop. Without
+         * a deadline the row stays `pending` forever and the bubble is never
+         * retryable. A direct send waits on a link and may legitimately take
+         * minutes for large attachments. Propagated sends are exempt — the relay
+         * hand-off owns their terminal state.
+         */
+        private const val OPPORTUNISTIC_PROOF_TIMEOUT_MS = 60_000L
+        private const val DIRECT_PROOF_TIMEOUT_MS = 300_000L
+        private const val PROOF_TIMEOUT_ERROR = "No delivery proof received"
+        private const val DELIVERY_METHOD_OPPORTUNISTIC = "opportunistic"
+        private const val DELIVERY_METHOD_DIRECT = "direct"
     }
 
     /**
@@ -674,9 +697,55 @@ class ServicePersistenceManager(
         receivedAt: Long = System.currentTimeMillis(),
     ): Boolean = pendingDeliveryPersistence.persistProof(update, receivedAt)
 
+    /**
+     * Fail point-to-point sends that outlived their delivery-proof deadline (#875).
+     *
+     * Only rows still waiting for a proof (`pending`/`sent`) are touched, so a
+     * proof that lands late or a relay hand-off (`retrying_propagated`/
+     * `propagated`) always wins the race. Returns the number of rows failed.
+     */
+    suspend fun failExpiredOutboundProofs(now: Long = System.currentTimeMillis()): Int {
+        val rows = messageDao.getUnprovenOutboundRows(now - OPPORTUNISTIC_PROOF_TIMEOUT_MS)
+        // Drop attempt timestamps for rows that no longer wait (delivered, failed
+        // or re-keyed) so the map stays as small as the in-flight set.
+        val waitingIds = rows.mapTo(HashSet()) { it.id }
+        attemptStartedAt.keys.retainAll(waitingIds)
+
+        val expired =
+            rows.mapNotNull { row ->
+                val deadlineMs =
+                    when (row.deliveryMethod) {
+                        DELIVERY_METHOD_OPPORTUNISTIC -> OPPORTUNISTIC_PROOF_TIMEOUT_MS
+                        DELIVERY_METHOD_DIRECT -> DIRECT_PROOF_TIMEOUT_MS
+                        else -> return@mapNotNull null
+                    }
+                // A relay-failover retry re-keys the row but copies the original
+                // timestamp, so the deadline must run from the attempt in flight.
+                val attemptStart = attemptStartedAt[row.id]?.takeIf { it > row.timestamp } ?: row.timestamp
+                row.takeIf { now - attemptStart >= deadlineMs }
+            }
+
+        var failed = 0
+        for (row in expired) {
+            if (messageDao.failOutboundWithoutProof(row.id, row.identityHash, PROOF_TIMEOUT_ERROR) > 0) {
+                failed++
+                attemptStartedAt.remove(row.id)
+                Log.w(TAG, "Message ${row.id.take(16)}... failed: no delivery proof within its deadline")
+            }
+        }
+        return failed
+    }
+
     /** Persist protocol lifecycle state in the service process, independent of UI ownership. */
-    suspend fun persistDeliveryStatus(update: DeliveryStatusUpdate): Boolean =
-        pendingDeliveryPersistence.persistStatus(update)
+    suspend fun persistDeliveryStatus(update: DeliveryStatusUpdate): Boolean {
+        if (update.status == DeliveryStatus.PENDING) {
+            // PENDING is emitted at the start of every send attempt, including a
+            // relay-failover retry that re-keys the row, so it dates the attempt
+            // the proof watchdog should measure.
+            attemptStartedAt[update.messageHash] = System.currentTimeMillis()
+        }
+        return pendingDeliveryPersistence.persistStatus(update)
+    }
 
     /** Reconcile the durable inbox after startup, Room invalidation, or a new event. */
     @androidx.annotation.VisibleForTesting

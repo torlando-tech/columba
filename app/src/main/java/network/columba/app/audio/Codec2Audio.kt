@@ -102,33 +102,31 @@ internal class Codec2RawAudioCodec(
             DecodedCodec2Audio(samples)
         }
 
-    fun writeWave(decoded: DecodedCodec2Audio, output: File) {
+    fun writeWave(decoded: DecodedCodec2Audio, output: OutputStream) {
         val pcmBytes = decoded.samples.size * Short.SIZE_BYTES
-        output.outputStream().buffered().use { wave ->
-            wave.write("RIFF".encodeToByteArray())
-            wave.writeIntLe(36 + pcmBytes)
-            wave.write("WAVEfmt ".encodeToByteArray())
-            wave.writeIntLe(16)
-            wave.writeShortLe(1)
-            wave.writeShortLe(1)
-            wave.writeIntLe(decoded.sampleRateHz)
-            wave.writeIntLe(decoded.sampleRateHz * Short.SIZE_BYTES)
-            wave.writeShortLe(Short.SIZE_BYTES)
-            wave.writeShortLe(16)
-            wave.write("data".encodeToByteArray())
-            wave.writeIntLe(pcmBytes)
-            val buffer = ByteArray(PCM_WRITE_BUFFER_BYTES)
-            var sampleOffset = 0
-            while (sampleOffset < decoded.samples.size) {
-                val sampleCount = minOf(buffer.size / Short.SIZE_BYTES, decoded.samples.size - sampleOffset)
-                repeat(sampleCount) { index ->
-                    val sample = decoded.samples[sampleOffset + index].toInt()
-                    buffer[index * 2] = sample.toByte()
-                    buffer[index * 2 + 1] = (sample ushr 8).toByte()
-                }
-                wave.write(buffer, 0, sampleCount * Short.SIZE_BYTES)
-                sampleOffset += sampleCount
+        output.write("RIFF".encodeToByteArray())
+        output.writeIntLe(36 + pcmBytes)
+        output.write("WAVEfmt ".encodeToByteArray())
+        output.writeIntLe(16)
+        output.writeShortLe(1)
+        output.writeShortLe(1)
+        output.writeIntLe(decoded.sampleRateHz)
+        output.writeIntLe(decoded.sampleRateHz * Short.SIZE_BYTES)
+        output.writeShortLe(Short.SIZE_BYTES)
+        output.writeShortLe(16)
+        output.write("data".encodeToByteArray())
+        output.writeIntLe(pcmBytes)
+        val buffer = ByteArray(PCM_WRITE_BUFFER_BYTES)
+        var sampleOffset = 0
+        while (sampleOffset < decoded.samples.size) {
+            val sampleCount = minOf(buffer.size / Short.SIZE_BYTES, decoded.samples.size - sampleOffset)
+            repeat(sampleCount) { index ->
+                val sample = decoded.samples[sampleOffset + index].toInt()
+                buffer[index * 2] = sample.toByte()
+                buffer[index * 2 + 1] = (sample ushr 8).toByte()
             }
+            output.write(buffer, 0, sampleCount * Short.SIZE_BYTES)
+            sampleOffset += sampleCount
         }
     }
 

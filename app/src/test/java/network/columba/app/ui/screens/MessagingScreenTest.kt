@@ -1,7 +1,12 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import android.app.Activity
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.assert
@@ -10,7 +15,10 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -22,6 +30,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.withKeyDown
@@ -37,6 +46,9 @@ import network.columba.app.service.SyncProgress
 import network.columba.app.test.MessagingTestFixtures
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.test.waitForCondition
+import network.columba.app.ui.model.AudioAttachmentMode
+import network.columba.app.ui.model.AudioAttachmentPayloadRef
+import network.columba.app.ui.model.AudioAttachmentUi
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
 import network.columba.app.ui.model.ReplyPreviewUi
@@ -49,6 +61,8 @@ import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.MessagingViewModel
 import network.columba.app.viewmodel.ComposerSendResult
 import io.mockk.Runs
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -66,6 +80,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowToast
 import org.robolectric.annotation.Config
 
 /**
@@ -1300,6 +1315,268 @@ class MessagingScreenTest {
         composeTestRule.onNodeWithText("✓").assertDoesNotExist()
         composeTestRule.onNodeWithText("✓✓").assertDoesNotExist()
         composeTestRule.onNodeWithText("!").assertDoesNotExist()
+    }
+
+    // ========== Voice Action Menu Tests ==========
+
+    @Test
+    fun sentVoiceDownload_opusLaunchesAudioDocumentWithOggFilename() {
+        val activity = showSentVoiceMessage(AudioAttachmentMode.AM_OPUS_OGG)
+        openSentVoiceMenu()
+
+        composeTestRule.onNodeWithContentDescription("Download").assertIsDisplayed().performClick()
+
+        val started = requireNotNull(shadowOf(activity).nextStartedActivityForResult)
+        assertEquals(Intent.ACTION_CREATE_DOCUMENT, started.intent.action)
+        assertEquals("audio/*", started.intent.type)
+        assertEquals("voice_abcdef01.ogg", started.intent.getStringExtra(Intent.EXTRA_TITLE))
+    }
+
+    @Test
+    fun sentVoiceDownload_codec2LaunchesAudioDocumentWithWavFilename() {
+        val activity = showSentVoiceMessage(AudioAttachmentMode.AM_CODEC2_1200)
+        openSentVoiceMenu()
+
+        composeTestRule.onNodeWithContentDescription("Download").performClick()
+
+        val started = requireNotNull(shadowOf(activity).nextStartedActivityForResult)
+        assertEquals(Intent.ACTION_CREATE_DOCUMENT, started.intent.action)
+        assertEquals("audio/*", started.intent.type)
+        assertEquals("voice_abcdef01.wav", started.intent.getStringExtra(Intent.EXTRA_TITLE))
+    }
+
+    @Test
+    fun sentVoiceDownload_cancelDoesNotSaveOrShowSaveFeedback() {
+        coEvery { mockViewModel.saveVoice(any(), any(), any()) } returns true
+        val activity = showSentVoiceMessage(AudioAttachmentMode.AM_OPUS_OGG)
+        openSentVoiceMenu()
+        composeTestRule.onNodeWithContentDescription("Download").performClick()
+        val started = requireNotNull(shadowOf(activity).nextStartedActivityForResult)
+
+        composeTestRule.runOnIdle {
+            shadowOf(activity).callOnActivityResult(started.requestCode, Activity.RESULT_CANCELED, null)
+        }
+        composeTestRule.waitForIdle()
+
+        coVerify(exactly = 0) { mockViewModel.saveVoice(any(), any(), any()) }
+        assertEquals(null, ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test
+    fun sentVoiceDownload_documentResultSavesSelectedMessageAndShowsSuccess() {
+        coEvery { mockViewModel.saveVoice(any(), any(), any()) } returns true
+        val activity = showSentVoiceMessage(AudioAttachmentMode.AM_OPUS_OGG)
+        val destination = Uri.parse("content://documents/voice-export.ogg")
+        openSentVoiceMenu()
+        composeTestRule.onNodeWithContentDescription("Download").performClick()
+        val started = requireNotNull(shadowOf(activity).nextStartedActivityForResult)
+
+        composeTestRule.runOnIdle {
+            shadowOf(activity).callOnActivityResult(
+                started.requestCode,
+                Activity.RESULT_OK,
+                Intent().setData(destination),
+            )
+        }
+        composeTestRule.waitForCondition(timeoutMillis = 5_000) {
+            ShadowToast.getTextOfLatestToast() == "File saved"
+        }
+
+        coVerify(exactly = 1) { mockViewModel.saveVoice(any(), "abcdef0123456789", destination) }
+        coVerify(exactly = 1) { mockViewModel.saveVoice(any(), any(), any()) }
+        assertEquals("File saved", ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test
+    fun sentVoiceDownload_failedSaveShowsFailureFeedback() {
+        coEvery { mockViewModel.saveVoice(any(), any(), any()) } returns false
+        val activity = showSentVoiceMessage(AudioAttachmentMode.AM_CODEC2_1200)
+        val destination = Uri.parse("content://documents/voice-export.wav")
+        openSentVoiceMenu()
+        composeTestRule.onNodeWithContentDescription("Download").performClick()
+        val started = requireNotNull(shadowOf(activity).nextStartedActivityForResult)
+
+        composeTestRule.runOnIdle {
+            shadowOf(activity).callOnActivityResult(
+                started.requestCode,
+                Activity.RESULT_OK,
+                Intent().setData(destination),
+            )
+        }
+        composeTestRule.waitForCondition(timeoutMillis = 5_000) {
+            ShadowToast.getTextOfLatestToast() == "Failed to save file"
+        }
+
+        coVerify(exactly = 1) { mockViewModel.saveVoice(any(), "abcdef0123456789", destination) }
+        coVerify(exactly = 1) { mockViewModel.saveVoice(any(), any(), any()) }
+        assertEquals("Failed to save file", ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test
+    fun sentVoiceDownload_missingDocumentPickerShowsFallback() {
+        val application = RuntimeEnvironment.getApplication() as Application
+        val shadowApplication = shadowOf(application)
+        shadowApplication.checkActivities(true)
+        coEvery { mockViewModel.saveVoice(any(), any(), any()) } returns true
+        showSentVoiceMessage(AudioAttachmentMode.AM_OPUS_OGG)
+        openSentVoiceMenu()
+
+        composeTestRule.onNodeWithContentDescription("Download").performClick()
+        composeTestRule.waitForIdle()
+
+        assertEquals("No file manager app found on this device", ShadowToast.getTextOfLatestToast())
+        coVerify(exactly = 0) { mockViewModel.saveVoice(any(), any(), any()) }
+    }
+
+    @Test
+    fun sentVoiceResend_requiresConfirmationBeforeSubmitting() {
+        every { mockViewModel.resendVoiceMessage(any()) } just Runs
+        showSentVoiceMessage(AudioAttachmentMode.AM_OPUS_OGG)
+        openSentVoiceMenu()
+
+        composeTestRule.onNodeWithContentDescription("Re-send").assertIsDisplayed().performClick()
+        composeTestRule.waitForIdle()
+        verify(exactly = 0) { mockViewModel.resendVoiceMessage(any()) }
+
+        composeTestRule
+            .onNodeWithText(
+                "Send a copy of this voice message to the same chat? The original message stays unchanged.",
+            )
+            .assertIsDisplayed()
+        composeTestRule
+            .onNode(hasText("Re-send") and hasClickAction())
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        verify(exactly = 1) { mockViewModel.resendVoiceMessage("abcdef0123456789") }
+        verify(exactly = 1) { mockViewModel.resendVoiceMessage(any()) }
+        verify(exactly = 1) { mockViewModel.exitReactionMode() }
+    }
+
+    @Test
+    fun sentVoiceResend_cancelDoesNotSubmit() {
+        every { mockViewModel.resendVoiceMessage(any()) } just Runs
+        showSentVoiceMessage(AudioAttachmentMode.AM_OPUS_OGG)
+        openSentVoiceMenu()
+
+        composeTestRule.onNodeWithContentDescription("Re-send").assertIsDisplayed().performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.waitForIdle()
+
+        verify(exactly = 0) { mockViewModel.resendVoiceMessage(any()) }
+        verify(exactly = 1) { mockViewModel.exitReactionMode() }
+    }
+
+    @Test
+    fun sentVoiceResend_hiddenWhileSendIsInProgress() {
+        every { mockViewModel.resendVoiceMessage(any()) } just Runs
+        every { mockViewModel.isSending } returns MutableStateFlow(true)
+        showSentVoiceMessage(AudioAttachmentMode.AM_OPUS_OGG)
+        openSentVoiceMenu()
+
+        composeTestRule.onNodeWithContentDescription("Download").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Re-send").assertDoesNotExist()
+        verify(exactly = 0) { mockViewModel.resendVoiceMessage(any()) }
+    }
+
+    @Test
+    fun pendingVoiceResend_hiddenUntilSettled() {
+        every { mockViewModel.resendVoiceMessage(any()) } just Runs
+        showSentVoiceMessage(AudioAttachmentMode.AM_OPUS_OGG, status = "pending")
+        openSentVoiceMenu()
+
+        composeTestRule.onNodeWithContentDescription("Download").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Re-send").assertDoesNotExist()
+        verify(exactly = 0) { mockViewModel.resendVoiceMessage(any()) }
+    }
+
+    @Test
+    fun sentVoiceMenu_hidesActionsWhenPayloadIsUnavailable() {
+        every { mockViewModel.resendVoiceMessage(any()) } just Runs
+        showSentVoiceMessage(AudioAttachmentMode.AM_OPUS_OGG, payloadAvailable = false)
+        openSentVoiceMenu()
+
+        composeTestRule.onNodeWithContentDescription("Download").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Re-send").assertDoesNotExist()
+        verify(exactly = 0) { mockViewModel.resendVoiceMessage(any()) }
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h640dp")
+    fun sentVoiceMenu_actionsRemainReachableOnNarrowScreen() {
+        every { mockViewModel.resendVoiceMessage(any()) } just Runs
+        showSentVoiceMessage(AudioAttachmentMode.AM_CODEC2_1200)
+        openSentVoiceMenu()
+
+        composeTestRule.onNodeWithContentDescription("Download").assertExists().performScrollTo()
+        composeTestRule
+            .onNodeWithContentDescription("Re-send")
+            .assertExists()
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("Cancel").assertIsDisplayed()
+    }
+
+    private fun openSentVoiceMenu() {
+        composeTestRule.onNodeWithText("Voice message").performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+    }
+
+    private fun showSentVoiceMessage(
+        mode: AudioAttachmentMode,
+        status: String = "delivered",
+        payloadAvailable: Boolean = true,
+    ): ComponentActivity {
+        val message =
+            MessagingTestFixtures.createSentMessage(
+                id = "abcdef0123456789",
+                content = "",
+                status = status,
+            ).copy(
+                audioAttachment =
+                    AudioAttachmentUi(
+                        mode = mode,
+                        payloadRef = AudioAttachmentPayloadRef.InlineHex("4f676753"),
+                        isPlayable = !mode.isCodec2,
+                    ),
+            )
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(message)))
+        coEvery { mockViewModel.isVoicePayloadAvailable(any()) } returns payloadAvailable
+        // Long-press overlay: the mock records the request into a flow the screen observes.
+        val reactionFlow = MutableStateFlow<MessagingViewModel.ReactionModeState?>(null)
+        every { mockViewModel.reactionModeState } returns reactionFlow
+        every {
+            mockViewModel.enterReactionMode(any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } answers {
+            reactionFlow.value =
+                MessagingViewModel.ReactionModeState(
+                    firstArg(),
+                    secondArg(),
+                    thirdArg(),
+                    arg(3),
+                    arg(4),
+                    arg(5),
+                    arg(6),
+                    arg(7),
+                    arg(8),
+                )
+        }
+        every { mockViewModel.exitReactionMode() } answers { reactionFlow.value = null }
+        lateinit var activity: ComponentActivity
+        composeTestRule.setContent {
+            activity = requireNotNull(LocalActivityResultRegistryOwner.current) as ComponentActivity
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.awaitMessageRows()
+        return activity
     }
 
     // ========== Message Input Validation Tests ==========

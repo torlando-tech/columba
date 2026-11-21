@@ -105,6 +105,13 @@ If not:
 * Message is **stored securely**
 * Delivered automatically when the recipient becomes available
 
+### Saving and re-sending voice messages
+
+Long-press a sent voice message to open the message menu, then choose:
+
+* **Download** — opens Android's save dialog. Opus recordings are saved as `.ogg`, and Codec2 recordings as playable `.wav` files.
+* **Re-send** — asks for confirmation, then immediately sends a new copy to the same conversation and thread, leaving the original message and your current draft unchanged. Re-send is unavailable while the original message is pending or another send is in progress.
+
 ### Sender verification warnings
 
 * **Yellow: Sender identity unknown** means Columba does not yet have the sender's public key. This can happen with genuine first-contact messages; it does not mean a signature check failed.

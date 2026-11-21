@@ -135,7 +135,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -244,6 +246,7 @@ import network.columba.app.audio.VoiceMessageMetadata
 import network.columba.app.audio.VoiceMessagePlayerState
 import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.ui.model.AudioAttachmentUi
+import network.columba.app.ui.model.AudioAttachmentMode
 import network.columba.app.navigation.ConversationNavigation
 import network.columba.app.ui.model.ThreadHeaderUi
 import network.columba.app.ui.model.ThreadHookUi
@@ -821,6 +824,22 @@ fun MessagingScreen(
                 }
             }
             pendingImageSave = null
+        }
+
+    var pendingVoiceSave by rememberSaveable { mutableStateOf<String?>(null) }
+    val voiceSaveLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.CreateDocument("audio/*"),
+        ) { uri ->
+            val messageId = pendingVoiceSave
+            pendingVoiceSave = null
+            if (uri != null && messageId != null) {
+                scope.launch {
+                    val saved = viewModel.saveVoice(context, messageId, uri)
+                    val result = if (saved) R.string.messaging_file_saved else R.string.messaging_file_save_failed
+                    Toast.makeText(context, context.getString(result), Toast.LENGTH_SHORT).show()
+                }
+            }
         }
 
     // Clipboard for copy functionality
@@ -1836,6 +1855,7 @@ fun MessagingScreen(
             key(state.instanceId) {
                 var showFullEmojiPicker by remember { mutableStateOf(false) }
                 var showDeleteConfirmation by remember { mutableStateOf(false) }
+                var showResendConfirmation by remember { mutableStateOf(false) }
 
                 // Delete confirmation dialog
                 if (showDeleteConfirmation) {
@@ -1883,6 +1903,39 @@ fun MessagingScreen(
                     )
                 }
 
+                // Re-send confirmation dialog (sent voice messages only)
+                if (showResendConfirmation) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = {
+                            showResendConfirmation = false
+                            viewModel.exitReactionMode()
+                        },
+                        title = { Text(stringResource(R.string.message_voice_resend)) },
+                        text = { Text(stringResource(R.string.message_voice_resend_confirm_body)) },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    showResendConfirmation = false
+                                    viewModel.resendVoiceMessage(state.messageId)
+                                    viewModel.exitReactionMode()
+                                },
+                            ) {
+                                Text(stringResource(R.string.message_voice_resend))
+                            }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    showResendConfirmation = false
+                                    viewModel.exitReactionMode()
+                                },
+                            ) {
+                                Text(stringResource(R.string.cancel))
+                            }
+                        },
+                    )
+                }
+
                 // Capture the selected message's text once when the overlay opens. Keyed on
                 // messageId so a later paging refresh that momentarily drops the row from the
                 // snapshot window can't make the "Select text" button vanish mid-overlay.
@@ -1893,6 +1946,53 @@ fun MessagingScreen(
                             ?.content
                             ?.takeIf { it.isNotBlank() }
                     }
+
+                // Voice actions for the long-press menu: sent voice messages only.
+                // Re-send additionally requires an idle sender and a settled status;
+                // unavailable actions are hidden, not disabled.
+                val overlayVoiceMessage =
+                    remember(state.messageId) {
+                        pagingItems.itemSnapshotList.find { it?.id == state.messageId }
+                    }
+                val overlayVoiceAttachment =
+                    overlayVoiceMessage
+                        ?.takeIf { it.isFromMe }
+                        ?.audioAttachment
+                        ?.takeIf { it.mode != AudioAttachmentMode.UNSUPPORTED && it.payloadRef != null }
+                // A payload reference can outlive its file or be empty/malformed, so
+                // confirm the recording actually loads before offering actions that
+                // would fail. Hidden until the probe answers.
+                var voicePayloadAvailable by remember(state.messageId) {
+                    mutableStateOf<Boolean?>(null)
+                }
+                LaunchedEffect(state.messageId, overlayVoiceAttachment) {
+                    voicePayloadAvailable =
+                        overlayVoiceAttachment != null &&
+                            viewModel.isVoicePayloadAvailable(state.messageId)
+                }
+                val voiceDownloadAction: (() -> Unit)? =
+                    overlayVoiceAttachment
+                        ?.takeIf { voicePayloadAvailable == true }
+                        ?.let { audio ->
+                            {
+                                pendingVoiceSave = state.messageId
+                                val extension = if (audio.mode.isCodec2) "wav" else "ogg"
+                                if (!voiceSaveLauncher.launchSafely("voice_${state.messageId.take(8)}.$extension")) {
+                                    pendingVoiceSave = null
+                                    context.showNoFileManagerToast()
+                                }
+                            }
+                        }
+                val voiceResendAction: (() -> Unit)? =
+                    overlayVoiceMessage
+                        ?.takeIf { voicePayloadAvailable == true }
+                        ?.takeIf { it.isFromMe }
+                        ?.takeIf { !isSending }
+                        ?.takeIf {
+                            it.status == "sent" || it.status == "delivered" || it.status == "failed"
+                        }
+                        ?.audioAttachment
+                        ?.let { { showResendConfirmation = true } }
 
                 ReactionModeOverlay(
                     messageId = state.messageId,
@@ -1931,6 +2031,8 @@ fun MessagingScreen(
                         } else {
                             null
                         },
+                    onVoiceDownload = voiceDownloadAction,
+                    onVoiceResend = voiceResendAction,
                     onDelete = { showDeleteConfirmation = true },
                     onThreadFromHere =
                         if (threadsEnabled && activeThread == null) {
@@ -2344,8 +2446,21 @@ fun MessagingScreen(
     }
 }
 
+/**
+ * Best-effort snapshot of a message bubble for the reaction overlay (COLUMBA-20).
+ * The recorded layer can be empty in headless rendering; when capture fails the
+ * overlay falls back to rendering the message text, so return null instead of
+ * letting the failure escape the long-press handler.
+ */
+private suspend fun captureBubbleSnapshot(graphicsLayer: GraphicsLayer): ImageBitmap? =
+    try {
+        graphicsLayer.toImageBitmap()
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+
 @Suppress("UnusedParameter") // Params kept for API consistency; actions handled by overlay
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun MessageBubble(
     message: network.columba.app.ui.model.MessageUi,
@@ -2376,7 +2491,7 @@ fun MessageBubble(
         messageId: String,
         isFromMe: Boolean,
         isFailed: Boolean,
-        bitmap: androidx.compose.ui.graphics.ImageBitmap,
+        bitmap: androidx.compose.ui.graphics.ImageBitmap?,
         x: Float,
         y: Float,
         width: Int,
@@ -2516,7 +2631,7 @@ fun MessageBubble(
                             onLongClick = {
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 scope.launch {
-                                    val bitmap = graphicsLayer.toImageBitmap()
+                                    val bitmap = captureBubbleSnapshot(graphicsLayer)
                                     val capturedHeight =
                                         min(bubbleHeight, OVERLAY_MAX_CAPTURE_HEIGHT_PX)
                                     onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, capturedHeight)
@@ -2643,7 +2758,7 @@ fun MessageBubble(
                                 onLongClick = {
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                     scope.launch {
-                                        val bitmap = graphicsLayer.toImageBitmap()
+                                        val bitmap = captureBubbleSnapshot(graphicsLayer)
                                         val capturedHeight =
                                             min(bubbleHeight, OVERLAY_MAX_CAPTURE_HEIGHT_PX)
                                         onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, capturedHeight)

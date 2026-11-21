@@ -33,9 +33,12 @@ import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
 import network.columba.app.ui.model.CodecProfile
+import network.columba.app.audio.Codec2RawAudioCodec
+import network.columba.app.audio.codec2Bitrate
 import network.columba.app.audio.VoiceMessageRecorder
 import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.audio.MicrophoneAdmissionArbiter
+import network.columba.app.ui.model.AudioAttachmentMode
 import network.columba.app.ui.model.AudioAttachmentLoader
 import network.columba.app.ui.model.DecodedImageResult
 import network.columba.app.ui.model.ImageCache
@@ -815,6 +818,7 @@ class MessagingViewModel
         private val sendInProgress = AtomicBoolean(false)
         private val voiceRecorderOperationLock = Any()
         internal var attachmentIoDispatcher: CoroutineDispatcher = Dispatchers.IO
+        internal var voiceExportCodec: Codec2RawAudioCodec = Codec2RawAudioCodec()
         private var voiceRecordingLease: MicrophoneAdmissionArbiter.Lease? = null
         private var voiceRecordingStartJob: Job? = null
         @Volatile private var voiceRecorderCleanupThread: Thread? = null
@@ -2076,13 +2080,9 @@ class MessagingViewModel
         }
 
         /**
-         * The send + bookkeeping core, shared by the composer path ([sendMessage]) and the
-         * propagation-failover retry (see [inFlightPropagationSends]).
-         *
-         * Crucially it does NOT read the composer: every payload element (content, image, file
-         * attachments, voice bytes, reply target) is passed in. This lets the failover retry
-         * re-drive the *exact* send that failed against the newly-selected relay, even if the
-         * user has since edited the composer.
+         * The send + bookkeeping core for composer sends and fresh voice-message copies.
+         * Every payload element is passed explicitly; only composer sends clear drafts
+         * and selected attachments on completion.
          */
         @Suppress("LongMethod", "LongParameterList")
         private suspend fun executeLxmfSend(
@@ -2099,13 +2099,15 @@ class MessagingViewModel
             threadId: ByteArray? = null,
             threadRootSend: Boolean = false,
             threadRootHex: String? = null,
-        ) {
-            val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes) ?: return
-            val destHashBytes = validateDestinationHash(destinationHash) ?: return
+            clearComposer: Boolean = true,
+        ): Boolean {
+            val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes)
+            val destHashBytes = validateDestinationHash(destinationHash)
+            if (sanitized == null || destHashBytes == null) return false
             val identity =
                 loadIdentityIfNeeded() ?: run {
                     Log.e(TAG, "Failed to load source identity")
-                    return
+                    return false
                 }
 
             val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
@@ -2172,8 +2174,8 @@ class MessagingViewModel
                     iconAppearance = iconAppearance,
                 )
 
-            result
-                .onSuccess { receipt ->
+            return result.fold(
+                onSuccess = { receipt ->
                     // Track any send that has a propagation phase that can fail, awaiting its
                     // terminal delivery status so a `FAILED` (relay never stored the deferred
                     // message) can mark the relay unreachable and re-drive this exact payload on
@@ -2220,24 +2222,21 @@ class MessagingViewModel
                             voiceBytes,
                             voiceMode,
                             threadId = threadId,
+                            clearComposer = clearComposer,
                         )
-                    if (persisted) {
-                        clearSubmittedDraft(destinationHash, submittedText, replyToId, threadId)
-                        if (threadRootSend) {
-                            // Clear only the root this send carried: a concurrent
-                            // "Thread from here" (or a thread switch) owns the
-                            // pending root now, and wiping it would strip the root
-                            // off that thread's first message.
-                            if (ownsPendingRoot(threadId, threadRootHex)) {
-                                _pendingThreadRoot.value = null
-                                rememberTarget()
-                            }
-                        }
-                    }
-                    composerSendResults.send(
-                        ComposerSendResult(destinationHash, submittedText, persisted, threadId?.toHex()),
+                    finalizeComposerSend(
+                        clearComposer = clearComposer,
+                        persisted = persisted,
+                        destinationHash = destinationHash,
+                        submittedText = submittedText,
+                        replyToId = replyToId,
+                        threadId = threadId,
+                        threadRootSend = threadRootSend,
+                        threadRootHex = threadRootHex,
                     )
-                }.onFailure { error ->
+                    persisted
+                },
+                onFailure = { error ->
                     val persisted =
                         handleSendFailure(
                             error = error,
@@ -2252,12 +2251,58 @@ class MessagingViewModel
                             voiceMode = voiceMode,
                             voiceRecording = voiceRecording,
                             threadId = threadId,
+                            clearComposer = clearComposer,
                         )
-                    if (persisted) clearSubmittedDraft(destinationHash, submittedText, replyToId, threadId)
-                    composerSendResults.send(
-                        ComposerSendResult(destinationHash, submittedText, persisted, threadId?.toHex()),
+                    // Failed sends keep a carried thread root pending: the composer
+                    // draft survives (when persisted), so a retry from the composer
+                    // still needs it.
+                    finalizeComposerSend(
+                        clearComposer = clearComposer,
+                        persisted = persisted,
+                        destinationHash = destinationHash,
+                        submittedText = submittedText,
+                        replyToId = replyToId,
+                        threadId = threadId,
+                        threadRootSend = false,
+                        threadRootHex = null,
                     )
+                    false
+                },
+            )
+        }
+
+        /**
+         * Finish a composer send: clear the submitted draft (and a carried thread
+         * root) and emit the completion result. Voice re-sends pass
+         * [clearComposer] = false and keep all composer state untouched.
+         */
+        private suspend fun finalizeComposerSend(
+            clearComposer: Boolean,
+            persisted: Boolean,
+            destinationHash: String,
+            submittedText: String,
+            replyToId: String?,
+            threadId: ByteArray?,
+            threadRootSend: Boolean,
+            threadRootHex: String?,
+        ) {
+            if (!clearComposer) return
+            if (persisted) {
+                clearSubmittedDraft(destinationHash, submittedText, replyToId, threadId)
+                if (threadRootSend) {
+                    // Clear only the root this send carried: a concurrent
+                    // "Thread from here" (or a thread switch) owns the
+                    // pending root now, and wiping it would strip the root
+                    // off that thread's first message.
+                    if (ownsPendingRoot(threadId, threadRootHex)) {
+                        _pendingThreadRoot.value = null
+                        rememberTarget()
+                    }
                 }
+            }
+            composerSendResults.send(
+                ComposerSendResult(destinationHash, submittedText, persisted, threadId?.toHex()),
+            )
         }
 
         @Suppress("LongParameterList") // Refactoring to data class would add unnecessary complexity
@@ -2274,6 +2319,7 @@ class MessagingViewModel
             voiceBytes: ByteArray? = null,
             voiceMode: Int? = null,
             threadId: ByteArray? = null,
+            clearComposer: Boolean = true,
         ): Boolean {
             Log.d(TAG, "Message sent successfully${if (replyToMessageId != null) " (reply to ${replyToMessageId.take(16)})" else ""}")
             var attachmentFieldsPersisted = true
@@ -2351,7 +2397,7 @@ class MessagingViewModel
                 )
             val persisted = saveMessageToDatabase(actualDestHash, currentPeerName, message)
             val composerCanClear = persisted && attachmentFieldsPersisted
-            if (composerCanClear) {
+            if (composerCanClear && clearComposer) {
                 clearSubmittedAttachments(imageData, fileAttachments, voiceRecording)
             }
             return composerCanClear
@@ -2371,6 +2417,7 @@ class MessagingViewModel
             voiceMode: Int? = null,
             voiceRecording: tech.torlando.lxst.recording.RecordedAudio? = null,
             threadId: ByteArray? = null,
+            clearComposer: Boolean = true,
         ): Boolean {
             Log.e(TAG, "Failed to send message: ${error.message}", error)
             val now = System.currentTimeMillis()
@@ -2425,7 +2472,7 @@ class MessagingViewModel
             val hasRetryableAttachmentPayload =
                 (imageData == null && fileAttachments.isEmpty() && voiceBytes == null) || fieldsJson != null
             val composerCanClear = persisted && hasRetryableVoicePayload && hasRetryableAttachmentPayload
-            if (composerCanClear) {
+            if (composerCanClear && clearComposer) {
                 clearSubmittedAttachments(imageData, fileAttachments, voiceRecording)
             }
             return composerCanClear
@@ -2854,6 +2901,88 @@ class MessagingViewModel
                 false
             }
         }
+
+        suspend fun saveVoice(
+            context: Context,
+            messageId: String,
+            destinationUri: Uri,
+        ): Boolean =
+            withContext(attachmentIoDispatcher) {
+                try {
+                    val message = conversationRepository.getMessageById(messageId)
+                    if (message == null) {
+                        Log.e(TAG, "Message not found: $messageId")
+                        return@withContext false
+                    }
+                    val audio = parseAudioAttachment(message.fieldsJson)
+                    if (audio == null || audio.mode == AudioAttachmentMode.UNSUPPORTED) {
+                        Log.e(TAG, "Missing or unsupported voice attachment for message $messageId")
+                        return@withContext false
+                    }
+                    val bytes = audioAttachmentLoader.loadBytes(audio)
+                    if (bytes == null || bytes.isEmpty()) {
+                        Log.e(TAG, "Could not load voice data for message $messageId")
+                        return@withContext false
+                    }
+                    // Decode before opening the document so malformed audio cannot truncate it.
+                    val decoded =
+                        if (audio.mode == AudioAttachmentMode.AM_OPUS_OGG) {
+                            null
+                        } else {
+                            val bitrate = audio.mode.codec2Bitrate()
+                            if (bitrate == null) {
+                                Log.e(TAG, "Unsupported voice mode for message $messageId")
+                                return@withContext false
+                            }
+                            voiceExportCodec.decode(bytes, bitrate)
+                        }
+                    val output = context.contentResolver.openOutputStream(destinationUri)
+                    if (output == null) {
+                        Log.e(TAG, "Could not open voice output stream for $destinationUri")
+                        return@withContext false
+                    }
+                    output.buffered().use { stream ->
+                        if (decoded == null) {
+                            stream.write(bytes)
+                        } else {
+                            voiceExportCodec.writeWave(decoded, stream)
+                        }
+                    }
+                    Log.d(TAG, "Saved voice attachment for message $messageId to $destinationUri")
+                    true
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to save voice attachment for message $messageId", e)
+                    false
+                } catch (e: LinkageError) {
+                    Log.e(TAG, "Voice decoder is unavailable for message $messageId", e)
+                    false
+                }
+            }
+
+        /**
+         * True when the stored voice payload for [messageId] can actually be loaded.
+         * A payload reference can outlive its file or be empty/malformed, so the
+         * message menu must not offer voice actions it cannot complete.
+         */
+        suspend fun isVoicePayloadAvailable(messageId: String): Boolean =
+            withContext(attachmentIoDispatcher) {
+                try {
+                    val audio =
+                        conversationRepository
+                            .getMessageById(messageId)
+                            ?.let { parseAudioAttachment(it.fieldsJson) }
+                            ?.takeIf { it.mode != AudioAttachmentMode.UNSUPPORTED }
+                    val bytes = audio?.let { audioAttachmentLoader.loadBytes(it) }
+                    bytes != null && bytes.isNotEmpty()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to probe voice payload for message $messageId", e)
+                    false
+                }
+            }
 
         /**
          * Get a FileProvider URI for an image attachment.
@@ -3908,6 +4037,62 @@ class MessagingViewModel
                     null
                 },
             )
+        }
+
+        fun resendVoiceMessage(messageId: String) {
+            if (!sendInProgress.compareAndSet(false, true)) return
+            _isSending.value = true
+            viewModelScope.launch {
+                try {
+                    val message = checkNotNull(conversationRepository.getMessageById(messageId)) {
+                        "Voice message not found"
+                    }
+                    require(message.isFromMe) { "Cannot re-send a received voice message" }
+                    require(message.status == "sent" || message.status == "delivered" || message.status == "failed") {
+                        "Voice message is still in flight"
+                    }
+                    val replyToId = message.replyToMessageId
+                    val threadId = message.threadId?.takeIf { it.isNotEmpty() }
+                    val audio = checkNotNull(parseAudioAttachment(message.fieldsJson)) { "Voice attachment is missing" }
+                    require(audio.mode != AudioAttachmentMode.UNSUPPORTED) { "Unsupported voice attachment" }
+                    val voiceBytes = checkNotNull(audioAttachmentLoader.loadBytes(audio)) { "Voice payload is unavailable" }
+                    require(voiceBytes.isNotEmpty()) { "Voice payload is empty" }
+                    val (hasImage, imageData) = reconstructImageForRetry(message.fieldsJson)
+                    require(!hasImage || imageData != null) { "Image payload is unavailable" }
+                    val files = checkNotNull(
+                        withContext(attachmentIoDispatcher) { reconstructFileAttachments(message.fieldsJson) },
+                    ) { "File payload is unavailable" }
+                    val totalBytes = voiceBytes.size.toLong() + (imageData?.size?.toLong() ?: 0L) +
+                        files.sumOf { it.sizeBytes.toLong() }
+                    require(totalBytes <= MAX_ATTACHMENT_TOTAL_BYTES) { "Attachment payload is too large" }
+                    require(identityRepository.getActiveIdentitySync()?.identityHash == message.identityHash) {
+                        "The voice message belongs to another identity"
+                    }
+                    val sent = executeLxmfSend(
+                        destinationHash = message.conversationHash,
+                        content = message.content,
+                        submittedText = message.content,
+                        imageData = imageData,
+                        imageFormat = imageData?.let(::sniffImageFormat),
+                        fileAttachments = files,
+                        replyToId = replyToId,
+                        voiceBytes = voiceBytes,
+                        voiceMode = audio.mode.wireValue,
+                        voiceRecording = null,
+                        threadId = threadId,
+                        clearComposer = false,
+                    )
+                    if (!sent) _fileAttachmentError.emit(UiMessage.Text(R.string.message_voice_resend_failed))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to re-send voice message $messageId", e)
+                    _fileAttachmentError.emit(UiMessage.Text(R.string.message_voice_resend_failed))
+                } finally {
+                    _isSending.value = false
+                    sendInProgress.set(false)
+                }
+            }
         }
 
         /**

@@ -2,11 +2,13 @@ package network.columba.app.ui.screens
 
 import android.app.Application
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -16,10 +18,12 @@ import network.columba.app.test.MessagingTestFixtures
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.audio.VoiceMessagePlayerState
 import network.columba.app.ui.model.AudioAttachmentMode
+import network.columba.app.ui.model.AudioAttachmentPayloadRef
 import network.columba.app.ui.model.AudioAttachmentUi
 import network.columba.app.ui.model.MessageRenderer
 import network.columba.app.ui.model.MessageUi
 import network.columba.app.ui.theme.ColumbaTheme
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -44,17 +48,9 @@ class MessageBubbleTest {
     val composeTestRule get() = composeRule
 
     @Test
-    fun `audio attachment renders playable voice bubble`() {
-        var toggled = false
-        val message =
-            MessagingTestFixtures.createSentMessage().copy(
-                content = "",
-                audioAttachment =
-                    AudioAttachmentUi(
-                        mode = AudioAttachmentMode.AM_OPUS_OGG,
-                        isPlayable = true,
-                    ),
-            )
+    fun `sent voice bubble renders playback without inline action buttons`() {
+        var toggles = 0
+        val message = createVoiceMessage()
         composeTestRule.setContent {
             val clipboardManager = LocalClipboardManager.current
             MessageBubble(
@@ -62,13 +58,54 @@ class MessageBubbleTest {
                 isFromMe = true,
                 clipboardManager = clipboardManager,
                 voicePlayerState = VoiceMessagePlayerState(durationMs = 3_000),
-                onVoiceToggle = { toggled = true },
+                onVoiceToggle = { toggles++ },
             )
         }
 
         composeTestRule.onNodeWithText("Voice message").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Download").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Re-send").assertDoesNotExist()
         composeTestRule.onNodeWithContentDescription("Play voice message").performClick()
-        assertTrue(toggled)
+        assertEquals(1, toggles)
+    }
+
+    @Test
+    fun `loading and playback failure keep the voice bubble visible`() {
+        val playerState = mutableStateOf(VoiceMessagePlayerState(loading = true))
+        composeTestRule.setContent {
+            MessageBubble(
+                message = createVoiceMessage(),
+                isFromMe = true,
+                clipboardManager = LocalClipboardManager.current,
+                voicePlayerState = playerState.value,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Loading voice message").assertIsDisplayed()
+        composeTestRule.runOnIdle {
+            playerState.value = VoiceMessagePlayerState(error = "decoder failed")
+        }
+        composeTestRule.onNodeWithText("Voice message unavailable").assertIsDisplayed()
+    }
+
+    @Test
+    fun `received voice messages retain playback without action buttons`() {
+        var toggles = 0
+        composeTestRule.setContent {
+            MessageBubble(
+                message = createVoiceMessage(isFromMe = false, status = "received"),
+                isFromMe = false,
+                clipboardManager = LocalClipboardManager.current,
+                voicePlayerState = VoiceMessagePlayerState(durationMs = 3_000),
+                onVoiceToggle = { toggles++ },
+            )
+        }
+
+        composeTestRule.onNodeWithText("Voice message").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Download").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Re-send").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Play voice message").performClick()
+        assertEquals(1, toggles)
     }
 
     @Test
@@ -468,6 +505,24 @@ class MessageBubbleTest {
     }
 
     // ========== Helper Functions ==========
+
+    private fun createVoiceMessage(
+        status: String = "sent",
+        isFromMe: Boolean = true,
+        mode: AudioAttachmentMode = AudioAttachmentMode.AM_OPUS_OGG,
+        payloadRef: AudioAttachmentPayloadRef? = AudioAttachmentPayloadRef.InlineHex("4f676753"),
+    ): MessageUi =
+        MessagingTestFixtures.createSentMessage().copy(
+            content = "",
+            isFromMe = isFromMe,
+            status = status,
+            audioAttachment =
+                AudioAttachmentUi(
+                    mode = mode,
+                    payloadRef = payloadRef,
+                    isPlayable = mode != AudioAttachmentMode.UNSUPPORTED && payloadRef != null,
+                ),
+        )
 
     private fun createTextMessage(
         content: String,

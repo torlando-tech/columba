@@ -2101,8 +2101,9 @@ class MessagingViewModel
             threadRootHex: String? = null,
             clearComposer: Boolean = true,
         ): Boolean {
-            val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes) ?: return false
-            val destHashBytes = validateDestinationHash(destinationHash) ?: return false
+            val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes)
+            val destHashBytes = validateDestinationHash(destinationHash)
+            if (sanitized == null || destHashBytes == null) return false
             val identity =
                 loadIdentityIfNeeded() ?: run {
                     Log.e(TAG, "Failed to load source identity")
@@ -2223,24 +2224,16 @@ class MessagingViewModel
                             threadId = threadId,
                             clearComposer = clearComposer,
                         )
-                    if (persisted && clearComposer) {
-                        clearSubmittedDraft(destinationHash, submittedText, replyToId, threadId)
-                        if (threadRootSend) {
-                            // Clear only the root this send carried: a concurrent
-                            // "Thread from here" (or a thread switch) owns the
-                            // pending root now, and wiping it would strip the root
-                            // off that thread's first message.
-                            if (ownsPendingRoot(threadId, threadRootHex)) {
-                                _pendingThreadRoot.value = null
-                                rememberTarget()
-                            }
-                        }
-                    }
-                    if (clearComposer) {
-                        composerSendResults.send(
-                            ComposerSendResult(destinationHash, submittedText, persisted, threadId?.toHex()),
-                        )
-                    }
+                    finalizeComposerSend(
+                        clearComposer = clearComposer,
+                        persisted = persisted,
+                        destinationHash = destinationHash,
+                        submittedText = submittedText,
+                        replyToId = replyToId,
+                        threadId = threadId,
+                        threadRootSend = threadRootSend,
+                        threadRootHex = threadRootHex,
+                    )
                     persisted
                 },
                 onFailure = { error ->
@@ -2260,14 +2253,55 @@ class MessagingViewModel
                             threadId = threadId,
                             clearComposer = clearComposer,
                         )
-                    if (clearComposer) {
-                        if (persisted) clearSubmittedDraft(destinationHash, submittedText, replyToId, threadId)
-                        composerSendResults.send(
-                            ComposerSendResult(destinationHash, submittedText, persisted, threadId?.toHex()),
-                        )
-                    }
+                    // Failed sends keep a carried thread root pending: the composer
+                    // draft survives (when persisted), so a retry from the composer
+                    // still needs it.
+                    finalizeComposerSend(
+                        clearComposer = clearComposer,
+                        persisted = persisted,
+                        destinationHash = destinationHash,
+                        submittedText = submittedText,
+                        replyToId = replyToId,
+                        threadId = threadId,
+                        threadRootSend = false,
+                        threadRootHex = null,
+                    )
                     false
                 },
+            )
+        }
+
+        /**
+         * Finish a composer send: clear the submitted draft (and a carried thread
+         * root) and emit the completion result. Voice re-sends pass
+         * [clearComposer] = false and keep all composer state untouched.
+         */
+        private suspend fun finalizeComposerSend(
+            clearComposer: Boolean,
+            persisted: Boolean,
+            destinationHash: String,
+            submittedText: String,
+            replyToId: String?,
+            threadId: ByteArray?,
+            threadRootSend: Boolean,
+            threadRootHex: String?,
+        ) {
+            if (!clearComposer) return
+            if (persisted) {
+                clearSubmittedDraft(destinationHash, submittedText, replyToId, threadId)
+                if (threadRootSend) {
+                    // Clear only the root this send carried: a concurrent
+                    // "Thread from here" (or a thread switch) owns the
+                    // pending root now, and wiping it would strip the root
+                    // off that thread's first message.
+                    if (ownsPendingRoot(threadId, threadRootHex)) {
+                        _pendingThreadRoot.value = null
+                        rememberTarget()
+                    }
+                }
+            }
+            composerSendResults.send(
+                ComposerSendResult(destinationHash, submittedText, persisted, threadId?.toHex()),
             )
         }
 

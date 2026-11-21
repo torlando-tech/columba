@@ -6,7 +6,7 @@ dependencies {
     compileOnly("io.gitlab.arturbosch.detekt:detekt-api:1.23.8")
     // kotlin-compiler-embeddable needs coroutines at runtime; the uiTextDump
     // JavaExec classpath is compileClasspath, so it must be declared here.
-    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
 
     testImplementation("io.gitlab.arturbosch.detekt:detekt-test:1.23.8")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")

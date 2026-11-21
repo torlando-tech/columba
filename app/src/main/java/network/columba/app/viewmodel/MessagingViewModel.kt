@@ -2962,6 +2962,29 @@ class MessagingViewModel
             }
 
         /**
+         * True when the stored voice payload for [messageId] can actually be loaded.
+         * A payload reference can outlive its file or be empty/malformed, so the
+         * message menu must not offer voice actions it cannot complete.
+         */
+        suspend fun isVoicePayloadAvailable(messageId: String): Boolean =
+            withContext(attachmentIoDispatcher) {
+                try {
+                    val audio =
+                        conversationRepository
+                            .getMessageById(messageId)
+                            ?.let { parseAudioAttachment(it.fieldsJson) }
+                            ?.takeIf { it.mode != AudioAttachmentMode.UNSUPPORTED }
+                    val bytes = audio?.let { audioAttachmentLoader.loadBytes(it) }
+                    bytes != null && bytes.isNotEmpty()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to probe voice payload for message $messageId", e)
+                    false
+                }
+            }
+
+        /**
          * Get a FileProvider URI for an image attachment.
          *
          * Creates a temporary file in the attachments directory and returns a content URI

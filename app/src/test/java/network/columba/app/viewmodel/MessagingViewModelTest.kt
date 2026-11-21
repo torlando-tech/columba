@@ -3617,6 +3617,40 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `isVoicePayloadAvailable reports true for loadable payloads`() =
+        runViewModelTest {
+            coEvery { conversationRepository.getMessageById("test-id") } returns
+                createMessageEntity(fieldsJson = """{"7":[16,"4f676753"]}""")
+
+            assertTrue(viewModel.isVoicePayloadAvailable("test-id"))
+        }
+
+    @Test
+    fun `isVoicePayloadAvailable reports false for missing unloadable and unsupported payloads`() =
+        runViewModelTest {
+            coEvery { conversationRepository.getMessageById("missing-id") } returns null
+            val attachments = java.io.File(applicationContext.filesDir, "attachments").apply { mkdirs() }
+            val empty = java.io.File(attachments, "empty-voice").apply { writeBytes(byteArrayOf()) }
+
+            assertFalse(viewModel.isVoicePayloadAvailable("missing-id"))
+            val invalidFields =
+                listOf(
+                    null,
+                    "{}",
+                    """{"7":[16,""]}""",
+                    """{"7":[16,"xyz"]}""",
+                    """{"7":[999,"4f676753"]}""",
+                    """{"7":[16,{"_file_ref":${org.json.JSONObject.quote(empty.absolutePath)}}]}""",
+                )
+            for (fields in invalidFields) {
+                coEvery { conversationRepository.getMessageById("test-id") } returns
+                    createMessageEntity(fieldsJson = fields)
+
+                assertFalse("Unexpectedly available $fields", viewModel.isVoicePayloadAvailable("test-id"))
+            }
+        }
+
+    @Test
     fun `saveVoice returns false when destination stream is unavailable`() =
         runViewModelTest {
             coEvery { conversationRepository.getMessageById("test-id") } returns

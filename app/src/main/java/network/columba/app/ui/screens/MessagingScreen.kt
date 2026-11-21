@@ -1948,17 +1948,31 @@ fun MessagingScreen(
                     }
 
                 // Voice actions for the long-press menu: sent voice messages only.
-                // Re-send additionally requires an idle sender, a settled status, and
-                // a loadable payload; unavailable actions are hidden, not disabled.
+                // Re-send additionally requires an idle sender and a settled status;
+                // unavailable actions are hidden, not disabled.
                 val overlayVoiceMessage =
                     remember(state.messageId) {
                         pagingItems.itemSnapshotList.find { it?.id == state.messageId }
                     }
-                val voiceDownloadAction: (() -> Unit)? =
+                val overlayVoiceAttachment =
                     overlayVoiceMessage
                         ?.takeIf { it.isFromMe }
                         ?.audioAttachment
                         ?.takeIf { it.mode != AudioAttachmentMode.UNSUPPORTED && it.payloadRef != null }
+                // A payload reference can outlive its file or be empty/malformed, so
+                // confirm the recording actually loads before offering actions that
+                // would fail. Hidden until the probe answers.
+                var voicePayloadAvailable by remember(state.messageId) {
+                    mutableStateOf<Boolean?>(null)
+                }
+                LaunchedEffect(state.messageId, overlayVoiceAttachment) {
+                    voicePayloadAvailable =
+                        overlayVoiceAttachment != null &&
+                            viewModel.isVoicePayloadAvailable(state.messageId)
+                }
+                val voiceDownloadAction: (() -> Unit)? =
+                    overlayVoiceAttachment
+                        ?.takeIf { voicePayloadAvailable == true }
                         ?.let { audio ->
                             {
                                 pendingVoiceSave = state.messageId
@@ -1971,13 +1985,13 @@ fun MessagingScreen(
                         }
                 val voiceResendAction: (() -> Unit)? =
                     overlayVoiceMessage
+                        ?.takeIf { voicePayloadAvailable == true }
                         ?.takeIf { it.isFromMe }
                         ?.takeIf { !isSending }
                         ?.takeIf {
                             it.status == "sent" || it.status == "delivered" || it.status == "failed"
                         }
                         ?.audioAttachment
-                        ?.takeIf { it.mode != AudioAttachmentMode.UNSUPPORTED && it.payloadRef != null }
                         ?.let { { showResendConfirmation = true } }
 
                 ReactionModeOverlay(

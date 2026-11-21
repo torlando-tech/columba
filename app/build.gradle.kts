@@ -561,6 +561,11 @@ dependencies {
     implementation(libs.lifecycle.process)
     implementation(libs.compose.activity)
     implementation("androidx.core:core-splashscreen:1.0.1")
+    // Compose BOM pins androidx.graphics:graphics-path 1.0.1, whose native
+    // libandroidx.graphics.path.so is NDK r25c-built and 4 KB-aligned
+    // (PT_LOAD p_align 0x1000). 1.1.0 ships the same library built with r27
+    // and 16 KB-aligned, as required by Play for 64-bit devices.
+    implementation("androidx.graphics:graphics-path:1.1.0")
 
     // Compose
     implementation(platform(libs.compose.bom))

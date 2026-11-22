@@ -17,7 +17,7 @@ moved into the Gradle build script).
 
 | Package | Ref | Pinned to | Notes |
 |---|---|---|---|
-| `rns` (Reticulum) | `git+https://github.com/torlando-tech/Reticulum` | **`9aa9d29e1ee0eaa58e6d810c42a29b348c8168ed`** | Branch `columba-android-minimal-1.6.0`, based exactly on upstream RNS 1.6.0 (`cb1260891d1b6da8f6e9b21542c4f0cc0725cac4`). Only Android AutoInterface teardown/hot-reload fixes and packet-local RSSI/SNR/Q snapshots before the asynchronous receive queue are carried. `RNS/Stamps.py` and `RNS/Resource.py` remain identical to upstream 1.6.0; no external stamper, Link RPC shim, socket or ratchet patches. RNode TX-power divergence is handled by `columba_rnode_interface.validateRadioState()` in this repo instead of a fork patch. |
+| `rns` (Reticulum) | `git+https://github.com/torlando-tech/Reticulum` | **`a18592ca4bd1b7995c4d56ddec2447e83e1779fb`** | Branch `columba-android-minimal-1.6.1`, based exactly on upstream RNS 1.6.1 (`cff4d03f`). Only Android AutoInterface teardown/hot-reload fixes and packet-local RSSI/SNR/Q snapshots before the asynchronous receive queue are carried. `RNS/Stamps.py` and `RNS/Resource.py` remain identical to upstream 1.6.1; no external stamper, Link RPC shim, socket or ratchet patches. RNode TX-power divergence is handled by `columba_rnode_interface.validateRadioState()` in this repo instead of a fork patch. |
 | `lxmf` (LXMF) | `git+https://github.com/torlando-tech/LXMF` | **`09cd6be4324345ed07964e9f6e5372308f6d6883`** | LXMF 1.3.0 with `receiving_interface` and `receiving_hops` on opportunistic delivery, plus mutex-protected SQLite compatibility. `LXStamper.py` is unchanged upstream and delegates generation and cancellation to `RNS.Stamps`. |
 | `ble-reticulum` | `git+https://github.com/torlando-tech/ble-reticulum.git` | **`63557acfe5c923dcdafeb7bc37508bf835f16514`** (SHA ✓) | Provides `BLEInterface` + `bluetooth_driver` that the bundled `ble_modules/` adapters subclass. SHA is the `v0.2.3` release tag (main tip, 2026-10-03); builds as `ble-reticulum-0.2.3`. Carries the `BLEPeerInterface.ifac_size` fix (#45: RNS 1.5.2 reads `interface.ifac_size` on every inbound packet, and the spawned BLE peer interface previously did not inherit it, so every inbound packet raised `AttributeError` and no peer announce was ever ingested) plus the BLE data-path fixes: `BLEPeerInterface.announce_rate_grace`/`_penalty` for the RNS stats RPC (#47), same-address duplicate-identity normalization so a fixed-MAC peer reconnecting via the other BLE mode is not misread as Android MAC rotation (#48), and the scanner-wedge health check that disambiguates a quiet RF room from a genuinely wedged adapter via the adapter's own `Powered` state, without a false "reboot required" (#49). Behavior-only change: no `Interface` callback signature or inbound-path attribute contract changes. |
 | `cryptography` | PyPI | `>=42.0.0` | Range, not pinned — Chaquopy resolves a native wheel for the target ABI. Acceptable: it's a well-tested transitive dep, not a protocol-correctness surface. |
@@ -38,9 +38,15 @@ fork. Missing RSSI/SNR stays absent, while valid zero values are preserved.
 
 ### Upstream Android stamping
 
-LXMF 1.3.0 uses RNS 1.6.0's stock `RNS.Stamps.generate_stamp` dispatcher,
-including fractional costs. On Android it selects the upstream persistent
-fork/Manager/mmap worker path without semaphore-backed Event/Queue objects.
+LXMF 1.3.0 uses RNS 1.6.1's stock `RNS.Stamps.generate_stamp` dispatcher,
+including fractional costs. RNS 1.6.1 enables network stamp emission by
+default (`STAMP_DESTINATIONS`/`STAMP_PRS`) at `DESTINATION_VALUE` 25.0 and
+`PR_VALUE` 15.8; the generated stamps are persisted under the storage path and
+reused, but the first announce per destination costs real CPU time on-device.
+New optional `[stamps]` keys `max_workers` and `worker_niceness` bound that
+work; both default to off/upstream behaviour. On Android it selects the
+upstream persistent fork/Manager/mmap worker path without semaphore-backed
+Event/Queue objects.
 There is no Kotlin stamper injection, external-generator registry, replacement
 dispatcher, or native hook. The packaged environment has no multiprocessing
 stub.

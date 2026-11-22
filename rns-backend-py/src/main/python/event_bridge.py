@@ -501,6 +501,30 @@ def reset_reticulum_for_restart():
                     RNS.LOG_DEBUG,
                 )
 
+    # RNS 1.6.1 emits network stamps by default, so announces and path
+    # requests are queued on Transport.stamp_queues and drained by a
+    # class-level worker thread. Those entries hold Destination objects
+    # from the previous run; a stop mid-stamp leaves them queued, and the
+    # next run's worker would emit announces for the dead instance. Drop
+    # the queued jobs (the queue object itself is reused) and forget a
+    # worker that has already exited, so ensure_stamper() starts a new one.
+    # hasattr-guarded: 1.6.0 had the queue but never populated it.
+    stamp_queues = getattr(transport, "stamp_queues", None)
+    if stamp_queues is not None:
+        try:
+            with stamp_queues._cond:
+                for queue in stamp_queues._queues:
+                    queue.clear()
+        except Exception as e:  # noqa: BLE001 — best-effort
+            RNS.log(
+                f"event_bridge: couldn't clear Transport.stamp_queues: {e}",
+                RNS.LOG_DEBUG,
+            )
+
+    stamper_thread = getattr(transport, "stamper_thread", None)
+    if stamper_thread is not None and not stamper_thread.is_alive():
+        transport.stamper_thread = None
+
     import gc
 
     gc.collect()

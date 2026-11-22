@@ -62,6 +62,11 @@ def _run_real_aspect_tests():
         announce_rate_average = 0
         announce_rate_consecutive = 0
         gravity = None
+        # RNS 1.6.1 reads these unconditionally on the _inbound path
+        # (Transport.interface_to_shared_instance / is_local_client_interface).
+        parent_interface = None
+        is_local_shared_instance = False
+        is_connected_to_shared_instance = False
 
         def get_hash(self):
             return b"fake-interface-hash"

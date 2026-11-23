@@ -23,7 +23,7 @@ desugarJdkLibs = "2.1.5"
 # JitPack-published libraries (formerly git submodules)
 reticulumKt = "v0.0.24"
 lxmfKt = "v0.0.15"
-lxstKt = "v0.1.3"
+lxstKt = "125cc7ed580fe9bebc9a7612f4eee2a75bcf47e8" # headset call routing (issue #1167); move to v0.1.4 once tagged
 
 [libraries]
 # JitPack-published Reticulum/LXMF/LXST stack (migrated from git submodules)

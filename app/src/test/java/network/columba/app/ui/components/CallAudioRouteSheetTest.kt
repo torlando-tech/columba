@@ -2,8 +2,11 @@ package network.columba.app.ui.components
 
 import android.app.Application
 import android.media.AudioDeviceInfo
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
@@ -11,6 +14,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import network.columba.app.R
 import network.columba.app.rns.api.model.CallAudioRoute
@@ -108,6 +113,22 @@ class CallAudioRouteSheetTest {
         composeTestRule.onNodeWithTag("callAudioRoute-42").performClick()
 
         assertEquals(42, selectedDeviceId)
+    }
+
+    @Test
+    fun `last row stays reachable in a short window`() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                Box(modifier = Modifier.height(80.dp)) {
+                    CallAudioRouteSheetContent(
+                        routes = listOf(earpiece, speaker, headset),
+                        onRouteSelected = {},
+                    )
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithTag("callAudioRoute-42").performScrollTo().assertIsDisplayed()
     }
 
     @Test

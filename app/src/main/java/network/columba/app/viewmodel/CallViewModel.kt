@@ -13,8 +13,10 @@ import network.columba.app.rns.api.model.CallAudioRoute
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.ui.model.CodecProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -63,6 +65,7 @@ class CallViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "CallViewModel"
+            private const val AUDIO_ROUTE_REFRESH_INTERVAL_MS = 2_000L
         }
 
         // Serializes mute IPC calls to prevent race conditions (e.g. PTT release vs toggle off)
@@ -79,8 +82,9 @@ class CallViewModel
         val activeProfileCode: StateFlow<Int?> = telephony.activeProfileCode
         val callMode: StateFlow<String?> = telephony.callMode
 
-        // Selectable call-audio outputs (in-call picker). Snapshots refreshed when
-        // the picker opens and after a selection; cleared when the call ends.
+        // Selectable call-audio outputs (in-call picker). Refreshed when the
+        // picker opens, after a selection, and every 2 s while active so a
+        // headset connected mid-call updates the call-screen label; cleared at end.
         private val _audioRoutes = MutableStateFlow<List<CallAudioRoute>>(emptyList())
         val audioRoutes: StateFlow<List<CallAudioRoute>> = _audioRoutes.asStateFlow()
 
@@ -99,6 +103,10 @@ class CallViewModel
         // Track duration timer job to prevent multiple concurrent timers
         private var durationTimerJob: kotlinx.coroutines.Job? = null
 
+        // Keeps the current-output label current when headsets connect or
+        // disconnect outside the picker.
+        private var audioRouteRefreshJob: kotlinx.coroutines.Job? = null
+
         init {
             // Track call duration when active
             viewModelScope.launch {
@@ -107,10 +115,12 @@ class CallViewModel
                         is CallState.Active -> {
                             startDurationTimer()
                             refreshAudioRoutes()
+                            startAudioRouteRefresh()
                         }
                         is CallState.Ended, CallState.Idle -> {
                             durationTimerJob?.cancel()
                             durationTimerJob = null
+                            stopAudioRouteRefresh()
                             _callDuration.value = 0L
                             _isConnecting.value = false
                             _audioRoutes.value = emptyList()
@@ -326,12 +336,31 @@ class CallViewModel
          * so a headset connected mid-call shows up in the list.
          */
         fun refreshAudioRoutes() {
-            viewModelScope.launch {
-                telephony
-                    .getCallAudioRoutes()
-                    .onSuccess { _audioRoutes.value = it }
-                    .onFailure { Log.w(TAG, "Failed to load call audio routes: ${it.message}") }
-            }
+            viewModelScope.launch { loadAudioRoutes() }
+        }
+
+        private suspend fun loadAudioRoutes() {
+            telephony
+                .getCallAudioRoutes()
+                .onSuccess { _audioRoutes.value = it }
+                .onFailure { Log.w(TAG, "Failed to load call audio routes: ${it.message}") }
+        }
+
+        /** Poll the platform route list while a call is active (headset hot-plug). */
+        private fun startAudioRouteRefresh() {
+            if (audioRouteRefreshJob?.isActive == true) return
+            audioRouteRefreshJob =
+                viewModelScope.launch {
+                    while (isActive) {
+                        delay(AUDIO_ROUTE_REFRESH_INTERVAL_MS)
+                        loadAudioRoutes()
+                    }
+                }
+        }
+
+        private fun stopAudioRouteRefresh() {
+            audioRouteRefreshJob?.cancel()
+            audioRouteRefreshJob = null
         }
 
         /**
@@ -340,11 +369,16 @@ class CallViewModel
          */
         fun selectAudioRoute(deviceId: Int) {
             viewModelScope.launch {
-                telephony.selectCallAudioRoute(deviceId)
-                telephony
-                    .getCallAudioRoutes()
-                    .onSuccess { _audioRoutes.value = it }
-                    .onFailure { Log.w(TAG, "Failed to reload call audio routes: ${it.message}") }
+                try {
+                    telephony.selectCallAudioRoute(deviceId)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Service died between the tap and the IPC call; keep the
+                    // screen alive and leave the label on the last known route.
+                    Log.w(TAG, "Failed to select call audio route: ${e.message}")
+                }
+                loadAudioRoutes()
             }
         }
 

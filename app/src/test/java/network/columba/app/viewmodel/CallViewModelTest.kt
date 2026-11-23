@@ -648,4 +648,17 @@ class CallViewModelTest {
             coVerify(exactly = 0) { mockTelephony.setPttActiveLocally(any()) }
             coVerify(exactly = 0) { mockTelephony.setPttActive(any()) }
         }
+
+    @Test
+    fun `selectAudioRoute survives a lost backend`() =
+        runTest {
+            coEvery { mockTelephony.selectCallAudioRoute(any()) } throws
+                RnsException(RnsError.BackendNotReady)
+
+            viewModel.selectAudioRoute(42)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { mockTelephony.selectCallAudioRoute(42) }
+            coVerify(exactly = 1) { mockTelephony.getCallAudioRoutes() }
+        }
 }

@@ -880,6 +880,7 @@ class ColumbaApplication : Application() {
         }
     }
 
+    @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.TIRAMISU)
     private fun observeCompanionPresence(
         companionDeviceManager: android.companion.CompanionDeviceManager,
         association: android.companion.AssociationInfo,

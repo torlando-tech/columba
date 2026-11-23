@@ -23,6 +23,7 @@ import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.BatteryProfile
+import network.columba.app.rns.api.model.CallAudioRoute
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.ConversationLinkResult
 import network.columba.app.rns.api.model.DeliveryMethod
@@ -324,6 +325,8 @@ class BoundRnsBackendTest {
         override suspend fun declineCall() {}
         override suspend fun setCallMuted(muted: Boolean) {}
         override suspend fun setCallSpeaker(speakerOn: Boolean) {}
+        override suspend fun getCallAudioRoutes(): Result<List<CallAudioRoute>> = Result.success(emptyList())
+        override suspend fun selectCallAudioRoute(deviceId: Int) {}
         var switchCallProfileCount = 0
         override suspend fun switchCallProfile(profileCode: Int) { switchCallProfileCount++ }
         var cycleCallModeCount = 0

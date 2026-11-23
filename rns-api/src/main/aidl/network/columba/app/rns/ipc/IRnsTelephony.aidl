@@ -19,6 +19,7 @@ import network.columba.app.rns.ipc.callback.IRnsCallStateCallback;
 import network.columba.app.rns.ipc.callback.IRnsNullableIntEventCallback;
 import network.columba.app.rns.ipc.callback.IRnsNullableStringEventCallback;
 import network.columba.app.rns.ipc.callback.IRnsResultCallback;
+import network.columba.app.rns.ipc.callback.IRnsStringListCallback;
 
 oneway interface IRnsTelephony {
     // ==================== Call control (IPC actions) ====================
@@ -32,6 +33,14 @@ oneway interface IRnsTelephony {
     void declineCall(in IRnsResultCallback cb);
     void setCallMuted(boolean muted, in IRnsResultCallback cb);
     void setCallSpeaker(boolean speakerOn, in IRnsResultCallback cb);
+
+    // Selectable call-audio output devices (in-call audio picker). Each list
+    // entry carries id, AudioDeviceInfo type, active flag and product name;
+    // see CallAudioRouteCodec in :rns-ipc for the wire format.
+    void getCallAudioRoutes(in IRnsStringListCallback cb);
+    // Route call audio to a device id from getCallAudioRoutes. Holds until the
+    // call ends, the speaker toggle is used, or the device disconnects.
+    void selectCallAudioRoute(int deviceId, in IRnsResultCallback cb);
 
     // Switch the LXST audio profile to profileCode and signal it to the remote
     // peer (LXST Profile Negotiation). No-op unless a call is established.

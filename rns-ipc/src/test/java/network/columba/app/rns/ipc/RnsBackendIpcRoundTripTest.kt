@@ -26,6 +26,7 @@ import network.columba.app.rns.api.RnsTelemetry
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.api.model.AnnounceEvent
+import network.columba.app.rns.api.model.CallAudioRoute
 import network.columba.app.rns.api.model.ConversationLinkResult
 import network.columba.app.rns.api.model.DeliveryMethod
 import network.columba.app.rns.api.model.DeliveryStatus
@@ -356,6 +357,25 @@ class RnsBackendIpcRoundTripTest {
     }
 
     @Test
+    fun `call audio routes round-trip device fields and selection through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+
+        fake.telephony.audioRoutes =
+            listOf(
+                CallAudioRoute(deviceId = 2, type = 2, name = "Speaker", isActive = false),
+                CallAudioRoute(deviceId = 42, type = 8, name = "Galaxy Buds Pro", isActive = true),
+            )
+        val routes = client.telephony.getCallAudioRoutes().getOrThrow()
+        assertEquals(fake.telephony.audioRoutes, routes)
+
+        client.telephony.selectCallAudioRoute(42)
+        advanceUntilIdle()
+
+        assertEquals(listOf(42), fake.telephony.selectedAudioDeviceIds)
+    }
+
+    @Test
     fun `activeProfileCode observable round-trips ids and null through the stub`() = runTest {
         val (client, _) = buildClientAndServer()
         advanceUntilIdle()
@@ -614,6 +634,15 @@ private class FakeRnsTelephony : RnsTelephony {
     override suspend fun declineCall() { declineCount++ }
     override suspend fun setCallMuted(muted: Boolean) { _isMuted.value = muted }
     override suspend fun setCallSpeaker(speakerOn: Boolean) { _isSpeakerOn.value = speakerOn }
+    var audioRoutes: List<CallAudioRoute> = emptyList()
+    val selectedAudioDeviceIds = mutableListOf<Int>()
+
+    override suspend fun getCallAudioRoutes(): Result<List<CallAudioRoute>> = Result.success(audioRoutes)
+
+    override suspend fun selectCallAudioRoute(deviceId: Int) {
+        selectedAudioDeviceIds.add(deviceId)
+        audioRoutes = audioRoutes.map { it.copy(isActive = it.deviceId == deviceId) }
+    }
     var switchCallProfileCount = 0
     var lastSwitchedProfileCode: Int? = null
 

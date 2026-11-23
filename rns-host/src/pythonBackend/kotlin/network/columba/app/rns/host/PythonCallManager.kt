@@ -27,6 +27,7 @@ import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import tech.torlando.lxst.audio.Signalling
 import tech.torlando.lxst.core.AudioDevice
 import tech.torlando.lxst.core.AudioPacketHandler
+import tech.torlando.lxst.core.CallAudioDevice
 import tech.torlando.lxst.core.CallController
 import tech.torlando.lxst.core.CallCoordinator
 import tech.torlando.lxst.core.PacketRouter
@@ -365,6 +366,12 @@ class PythonCallManager(
     override fun setSpeaker(enabled: Boolean) {
         audioBridge.setSpeakerphoneOn(enabled)
     }
+
+    override fun availableCallAudioDevices(): List<CallAudioDevice> = audioBridge.availableCallAudioDevices()
+
+    override fun selectCallAudioDevice(deviceId: Int): Boolean = audioBridge.selectCallAudioDevice(deviceId)
+
+    override fun currentCallAudioDeviceId(): Int? = audioBridge.currentCallAudioDeviceId()
 
     /**
      * Switch to the LXST audio profile [profileCode] and signal it to the

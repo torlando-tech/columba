@@ -3147,6 +3147,11 @@
     <string name="call_mute">Mute</string>
     <string name="call_earpiece">Earpiece</string>
     <string name="call_speaker">Speaker</string>
+    <string name="call_audio_title">Audio output</string>
+    <string name="call_audio_subtitle">Choose where call audio plays</string>
+    <string name="call_audio_control">Audio</string>
+    <string name="call_audio_control_content_description">Choose audio output</string>
+    <string name="call_audio_unknown_device">Audio device</string>
     <string name="call_hold_to_talk">Hold to talk</string>
     <string name="call_talking">TALKING</string>
     <string name="call_hold_talk_multiline">HOLD\nTO TALK</string>

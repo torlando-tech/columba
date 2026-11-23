@@ -13,9 +13,11 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsTelephony
+import network.columba.app.rns.api.model.CallAudioRoute
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.VoiceCallState
 import network.columba.app.rns.ipc.BundleKeys
+import network.columba.app.rns.ipc.CallAudioRouteCodec
 import network.columba.app.rns.ipc.IRnsTelephony
 import network.columba.app.rns.ipc.callback.IRnsBoolEventCallback
 import network.columba.app.rns.ipc.callback.IRnsCallStateCallback
@@ -219,6 +221,15 @@ internal class ClientRnsTelephony(
 
     override suspend fun setCallSpeaker(speakerOn: Boolean) {
         awaitResult { cb -> remote.setCallSpeaker(speakerOn, cb) }
+    }
+
+    override suspend fun getCallAudioRoutes(): Result<List<CallAudioRoute>> =
+        runCatching {
+            CallAudioRouteCodec.decode(awaitStringList { cb -> remote.getCallAudioRoutes(cb) })
+        }
+
+    override suspend fun selectCallAudioRoute(deviceId: Int) {
+        awaitResult { cb -> remote.selectCallAudioRoute(deviceId, cb) }
     }
 
     override suspend fun switchCallProfile(profileCode: Int) {

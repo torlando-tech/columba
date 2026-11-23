@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -58,7 +57,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import network.columba.app.R
 import network.columba.app.call.PttMediaSessionManager
+import network.columba.app.ui.components.CallAudioRouteSheet
 import network.columba.app.ui.components.CallProfileSheet
+import network.columba.app.ui.components.callAudioRouteIcon
+import network.columba.app.ui.components.callAudioRouteLabel
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.viewmodel.CallViewModel
 import network.columba.app.rns.api.model.CallState
@@ -84,7 +86,7 @@ fun VoiceCallScreen(
     val context = LocalContext.current
     val callState by viewModel.callState.collectAsStateWithLifecycle()
     val isMuted by viewModel.isMuted.collectAsStateWithLifecycle()
-    val isSpeakerOn by viewModel.isSpeakerOn.collectAsStateWithLifecycle()
+    val audioRoutes by viewModel.audioRoutes.collectAsStateWithLifecycle()
     val isPttActive by viewModel.isPttActive.collectAsStateWithLifecycle()
     val callDuration by viewModel.callDuration.collectAsStateWithLifecycle()
     val peerName by viewModel.peerName.collectAsStateWithLifecycle()
@@ -100,6 +102,12 @@ fun VoiceCallScreen(
     // to switch. Nothing else on the call screen is blocked by it beyond the
     // M3 modal scrim, and it closes as soon as the call leaves Active.
     var showProfileSheet by remember { mutableStateOf(false) }
+
+    // Audio-output picker: opens a sheet of the platform's selectable call
+    // audio devices (earpiece, speaker, Bluetooth, wired...). The current
+    // route labels the button, so the user sees where audio actually plays.
+    var showAudioSheet by remember { mutableStateOf(false) }
+    val activeAudioRoute = audioRoutes.firstOrNull { it.isActive }
 
     // Half duplex (the PTT transport mode). The PTT hold button and the
     // Bluetooth-headset PTT capture are active only in HDX; in FDX the call is
@@ -199,7 +207,10 @@ fun VoiceCallScreen(
     // stops being active (peer hung up, declined, ...) so the sheet does not
     // linger over the post-call state while the screen navigates away.
     LaunchedEffect(callState) {
-        if (callState !is CallState.Active) showProfileSheet = false
+        if (callState !is CallState.Active) {
+            showProfileSheet = false
+            showAudioSheet = false
+        }
     }
 
     // Full-screen call UI
@@ -351,14 +362,22 @@ fun VoiceCallScreen(
                         testTag = "modeCycleButton",
                     )
 
-                    // Speaker button
+                    // Audio output control: opens a device picker instead of
+                    // toggling earpiece/speaker, so Bluetooth, wired and (on
+                    // Android 14+) hearing-aid/LE-audio routes are choosable.
+                    // The label follows the active route; tapping refreshes the
+                    // snapshot so a headset connected mid-call appears.
                     CallControlButton(
-                        icon = if (isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeDown,
-                        label = if (isSpeakerOn) stringResource(R.string.call_earpiece) else stringResource(R.string.call_speaker),
-                        isActive = isSpeakerOn,
-                        onClick = { viewModel.toggleSpeaker() },
+                        icon = activeAudioRoute?.let { callAudioRouteIcon(it.type) } ?: Icons.Default.VolumeUp,
+                        label = activeAudioRoute?.let { callAudioRouteLabel(it) } ?: stringResource(R.string.call_audio_control),
+                        contentDescription = stringResource(R.string.call_audio_control_content_description),
+                        isActive = activeAudioRoute != null,
+                        onClick = {
+                            viewModel.refreshAudioRoutes()
+                            showAudioSheet = true
+                        },
                         enabled = callState is CallState.Active,
-                        testTag = "speakerButton",
+                        testTag = "audioRouteButton",
                     )
 
                     // LXST audio profile control (Profile Negotiation).
@@ -409,6 +428,17 @@ fun VoiceCallScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+
+        if (showAudioSheet) {
+            CallAudioRouteSheet(
+                routes = audioRoutes,
+                onRouteSelected = { deviceId ->
+                    showAudioSheet = false
+                    viewModel.selectAudioRoute(deviceId)
+                },
+                onDismiss = { showAudioSheet = false },
+            )
         }
 
         if (showProfileSheet) {

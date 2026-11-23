@@ -9,6 +9,7 @@ import network.columba.app.audio.CallMicrophoneAdmissionCoordinator
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsTelephony
+import network.columba.app.rns.api.model.CallAudioRoute
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.ui.model.CodecProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -78,6 +79,11 @@ class CallViewModel
         val activeProfileCode: StateFlow<Int?> = telephony.activeProfileCode
         val callMode: StateFlow<String?> = telephony.callMode
 
+        // Selectable call-audio outputs (in-call picker). Snapshots refreshed when
+        // the picker opens and after a selection; cleared when the call ends.
+        private val _audioRoutes = MutableStateFlow<List<CallAudioRoute>>(emptyList())
+        val audioRoutes: StateFlow<List<CallAudioRoute>> = _audioRoutes.asStateFlow()
+
         // Call duration (updated every second during active call)
         private val _callDuration = MutableStateFlow(0L)
         val callDuration: StateFlow<Long> = _callDuration.asStateFlow()
@@ -100,12 +106,14 @@ class CallViewModel
                     when (state) {
                         is CallState.Active -> {
                             startDurationTimer()
+                            refreshAudioRoutes()
                         }
                         is CallState.Ended, CallState.Idle -> {
                             durationTimerJob?.cancel()
                             durationTimerJob = null
                             _callDuration.value = 0L
                             _isConnecting.value = false
+                            _audioRoutes.value = emptyList()
                         }
                         is CallState.Connecting -> {
                             _isConnecting.value = true
@@ -314,13 +322,29 @@ class CallViewModel
         }
 
         /**
-         * Toggle speaker/earpiece.
+         * Reload the selectable call-audio outputs. Called when the picker opens
+         * so a headset connected mid-call shows up in the list.
          */
-        fun toggleSpeaker() {
-            val newSpeaker = !telephony.isSpeakerOn.value
+        fun refreshAudioRoutes() {
             viewModelScope.launch {
-                telephony.setSpeakerLocally(newSpeaker)
-                telephony.setCallSpeaker(newSpeaker)
+                telephony
+                    .getCallAudioRoutes()
+                    .onSuccess { _audioRoutes.value = it }
+                    .onFailure { Log.w(TAG, "Failed to load call audio routes: ${it.message}") }
+            }
+        }
+
+        /**
+         * Route call audio to [deviceId] and refresh the picker so the new
+         * device shows as active.
+         */
+        fun selectAudioRoute(deviceId: Int) {
+            viewModelScope.launch {
+                telephony.selectCallAudioRoute(deviceId)
+                telephony
+                    .getCallAudioRoutes()
+                    .onSuccess { _audioRoutes.value = it }
+                    .onFailure { Log.w(TAG, "Failed to reload call audio routes: ${it.message}") }
             }
         }
 

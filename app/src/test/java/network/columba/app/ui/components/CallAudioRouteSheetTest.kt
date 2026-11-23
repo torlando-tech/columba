@@ -3,6 +3,7 @@ package network.columba.app.ui.components
 import android.app.Application
 import android.media.AudioDeviceInfo
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
@@ -107,6 +108,18 @@ class CallAudioRouteSheetTest {
         composeTestRule.onNodeWithTag("callAudioRoute-42").performClick()
 
         assertEquals(42, selectedDeviceId)
+    }
+
+    @Test
+    fun `call control label uses the device type rather than a long product name`() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                Text(callAudioRouteShortLabel(headset))
+            }
+        }
+
+        composeTestRule.onNodeWithText(resText(R.string.call_audio_bluetooth)).assertExists()
+        composeTestRule.onNodeWithText("Galaxy Buds Pro").assertDoesNotExist()
     }
 
     @Test

@@ -164,6 +164,31 @@ internal fun callAudioRouteLabel(route: CallAudioRoute): String =
             route.name.ifBlank { stringResource(R.string.call_audio_unknown_device) }
     }
 
+/**
+ * Type-based label for the call-screen control, where a long product name
+ * ("Galaxy Buds Pro") would crowd the neighbouring buttons. The sheet keeps
+ * the full [callAudioRouteLabel]; Android's own dialers likewise show
+ * "Bluetooth" on the call screen and device names in the picker.
+ */
+@Composable
+internal fun callAudioRouteShortLabel(route: CallAudioRoute): String =
+    when (route.type) {
+        AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> stringResource(R.string.call_earpiece)
+        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> stringResource(R.string.call_speaker)
+        AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+        AudioDeviceInfo.TYPE_BLE_HEADSET,
+        AudioDeviceInfo.TYPE_BLE_SPEAKER,
+        -> stringResource(R.string.call_audio_bluetooth)
+        AudioDeviceInfo.TYPE_HEARING_AID -> stringResource(R.string.call_audio_hearing_aid)
+        AudioDeviceInfo.TYPE_WIRED_HEADSET,
+        AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+        -> stringResource(R.string.call_audio_wired)
+        AudioDeviceInfo.TYPE_USB_HEADSET,
+        AudioDeviceInfo.TYPE_USB_DEVICE,
+        -> stringResource(R.string.call_audio_usb)
+        else -> callAudioRouteLabel(route)
+    }
+
 internal fun callAudioRouteIcon(type: Int): ImageVector =
     when (type) {
         AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> Icons.Default.PhoneInTalk

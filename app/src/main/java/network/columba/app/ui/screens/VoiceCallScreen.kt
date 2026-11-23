@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
@@ -51,6 +52,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -60,7 +62,7 @@ import network.columba.app.call.PttMediaSessionManager
 import network.columba.app.ui.components.CallAudioRouteSheet
 import network.columba.app.ui.components.CallProfileSheet
 import network.columba.app.ui.components.callAudioRouteIcon
-import network.columba.app.ui.components.callAudioRouteLabel
+import network.columba.app.ui.components.callAudioRouteShortLabel
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.viewmodel.CallViewModel
 import network.columba.app.rns.api.model.CallState
@@ -369,7 +371,7 @@ fun VoiceCallScreen(
                     // snapshot so a headset connected mid-call appears.
                     CallControlButton(
                         icon = activeAudioRoute?.let { callAudioRouteIcon(it.type) } ?: Icons.Default.VolumeUp,
-                        label = activeAudioRoute?.let { callAudioRouteLabel(it) } ?: stringResource(R.string.call_audio_control),
+                        label = activeAudioRoute?.let { callAudioRouteShortLabel(it) } ?: stringResource(R.string.call_audio_control),
                         contentDescription = stringResource(R.string.call_audio_control_content_description),
                         isActive = activeAudioRoute != null,
                         onClick = {
@@ -589,6 +591,12 @@ private fun CallControlButton(
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 },
+            // Keep one long device name from widening the control and pushing
+            // its neighbours off the row.
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 64.dp),
         )
     }
 }

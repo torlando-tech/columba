@@ -3152,6 +3152,10 @@
     <string name="call_audio_control">Audio</string>
     <string name="call_audio_control_content_description">Choose audio output</string>
     <string name="call_audio_unknown_device">Audio device</string>
+    <string name="call_audio_bluetooth">Bluetooth</string>
+    <string name="call_audio_wired">Headset</string>
+    <string name="call_audio_usb">USB</string>
+    <string name="call_audio_hearing_aid">Hearing aid</string>
     <string name="call_hold_to_talk">Hold to talk</string>
     <string name="call_talking">TALKING</string>
     <string name="call_hold_talk_multiline">HOLD\nTO TALK</string>

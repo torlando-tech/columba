@@ -177,6 +177,30 @@ def get_rnode_bridge():
     return _rnode_bridge
 
 
+def reconnect_rnode_interfaces():
+    """Re-arm every live Columba RNode interface after a presence/UI trigger.
+
+    The Python interface owns a reconnect supervisor that can be parked in a
+    backoff after a radio left BLE range for hours. `restart_reconnect()` clears
+    the pairing/hardware latches and wakes it; it is a no-op for online
+    interfaces so a presence event cannot tear down a working link.
+    Returns the number of interfaces re-armed (useful in logs/tests).
+    """
+    rearmed = 0
+    for interface in list(RNS.Transport.interfaces):
+        if type(interface).__name__ != "ColumbaRNodeInterface":
+            continue
+        restart = getattr(interface, "restart_reconnect", None)
+        if restart is None:
+            continue
+        try:
+            restart()
+            rearmed += 1
+        except Exception as e:  # noqa: BLE001
+            RNS.log(f"Failed to re-arm RNode interface {interface}: {e}", RNS.LOG_ERROR)
+    return rearmed
+
+
 def deploy_bundled_interfaces(storage_path):
     """Materialise bundled custom-interface .py files into RNS's configdir
     `interfaces/` (and `interfaces/drivers/`) before `Reticulum()` is built.

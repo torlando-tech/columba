@@ -93,6 +93,87 @@ class KotlinRNodeBridgeOnlineStatusTest {
     }
 
     @Test
+    fun `connectAuto arms a pending GATT instead of failing a direct connect`() {
+        val device = mockk<BluetoothDevice>()
+        val gatt = mockk<BluetoothGatt>()
+        val armed = CountDownLatch(1)
+        every { device.name } returns "RNode E517"
+        every { device.address } returns "9C:13:9E:A0:80:11"
+        every { device.bondState } returns BluetoothDevice.BOND_BONDED
+        every {
+            device.connectGatt(mockContext, true, any(), BluetoothDevice.TRANSPORT_LE)
+        } answers {
+            armed.countDown()
+            gatt
+        }
+        every { gatt.disconnect() } just Runs
+        every { gatt.close() } just Runs
+        every { mockBluetoothAdapter.bondedDevices } returns setOf(device)
+        val bridge = KotlinRNodeBridge(mockContext)
+
+        assertFalse(bridge.connectAuto("RNode E517", "ble"))
+        assertTrue("autoConnect should be armed while the GATT is pending", bridge.isConnecting())
+        assertTrue("connectGatt(autoConnect=true) must be called", armed.await(2, TimeUnit.SECONDS))
+
+        bridge.disconnect()
+        assertFalse(bridge.isConnecting())
+        verify(exactly = 1) {
+            device.connectGatt(mockContext, true, any(), BluetoothDevice.TRANSPORT_LE)
+        }
+    }
+
+    @Test
+    fun `transient descriptor auth failure on a bonded radio does not latch pairing`() {
+        val device = mockk<BluetoothDevice>()
+        val gatt = mockk<BluetoothGatt>()
+        every { device.bondState } returns BluetoothDevice.BOND_BONDED
+        every { device.name } returns "RNode E517"
+        every { gatt.device } returns device
+        every { gatt.disconnect() } just Runs
+        every { gatt.close() } just Runs
+        val descriptor = mockk<android.bluetooth.BluetoothGattDescriptor>()
+        every { descriptor.uuid } returns UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+        val bridge = KotlinRNodeBridge(mockContext)
+        bridge.replaceBleGattOwner(gatt)
+        val callback = bridgeField(bridge, "gattCallback") as BluetoothGattCallback
+
+        callback.onDescriptorWrite(
+            gatt,
+            descriptor,
+            BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION,
+        )
+
+        assertFalse(
+            "bonded radios can still encrypt on the next attempt; latching pairing stranded them",
+            bridge.getLastConnectionFailure() == "pairing_required",
+        )
+        assertTrue(bridgeField(bridge, "bleSetupFailed") as Boolean)
+
+        bridge.disconnect()
+    }
+
+    @Test
+    fun `descriptor auth failure after a real bond loss still reports pairing`() {
+        val device = mockk<BluetoothDevice>()
+        val gatt = mockk<BluetoothGatt>()
+        every { device.bondState } returns BluetoothDevice.BOND_NONE
+        every { device.name } returns "RNode E517"
+        every { gatt.device } returns device
+        every { gatt.disconnect() } just Runs
+        every { gatt.close() } just Runs
+        val descriptor = mockk<android.bluetooth.BluetoothGattDescriptor>()
+        every { descriptor.uuid } returns UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+        val bridge = KotlinRNodeBridge(mockContext)
+        bridge.replaceBleGattOwner(gatt)
+        val callback = bridgeField(bridge, "gattCallback") as BluetoothGattCallback
+
+        callback.onDescriptorWrite(gatt, descriptor, BluetoothGatt.GATT_SUCCESS)
+
+        assertEquals("pairing_required", bridge.getLastConnectionFailure())
+        bridge.disconnect()
+    }
+
+    @Test
     fun `runtime BLE connect rejects a bond lost during GATT setup`() {
         val device = mockk<BluetoothDevice>()
         val gatt = mockk<BluetoothGatt>()

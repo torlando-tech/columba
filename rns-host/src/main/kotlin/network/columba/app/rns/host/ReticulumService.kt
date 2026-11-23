@@ -560,10 +560,17 @@ class ReticulumService : Service() {
             interfaces
                 .mapNotNull { it as? Map<*, *> }
                 .filter { row ->
-                    val type = row["type"]?.toString().orEmpty()
-                    val name = row["name"]?.toString().orEmpty()
-                    type.contains("RNode", ignoreCase = true) ||
-                        name.contains("RNode", ignoreCase = true)
+                    val isRnode = row["is_rnode"] as? Boolean
+                    if (isRnode != null) {
+                        isRnode
+                    } else {
+                        // Older backends do not emit is_rnode; keep the name/type
+                        // fallback for those debug rows.
+                        val type = row["type"]?.toString().orEmpty()
+                        val name = row["name"]?.toString().orEmpty()
+                        type.contains("RNode", ignoreCase = true) ||
+                            name.contains("RNode", ignoreCase = true)
+                    }
                 }
         if (rnodes.isEmpty()) {
             // Configured-but-not-live (e.g. the Kotlin backend failed to

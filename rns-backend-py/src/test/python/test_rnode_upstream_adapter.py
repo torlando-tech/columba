@@ -196,6 +196,7 @@ class RNodeUpstreamAdapterTests(unittest.TestCase):
         iface.reconnect_lock = threading.Lock()
         iface._reconnect_thread = None
         iface._reconnect_wakeup = threading.Event()
+        iface._auto_pending_seen = False
         return iface
 
     def _open_ble(self, iface, bridge):
@@ -366,6 +367,30 @@ class RNodeUpstreamAdapterTests(unittest.TestCase):
                 self.assertTrue(iface.online)
                 self.assertIsNotNone(iface.serial)
                 configure.assert_called_once()
+        finally:
+            if previous is not None:
+                sys.modules["event_bridge"] = previous
+            else:
+                sys.modules.pop("event_bridge", None)
+
+    def test_failed_pending_auto_connect_returns_no_progress_for_backoff(self):
+        bridge = _FakeBridge(connected=False)
+        bridge._auto_connect_script = ["pending"]
+        iface = self._new_interface()
+
+        previous = sys.modules.get("event_bridge")
+        sys.modules["event_bridge"] = self._fake_event_bridge(bridge)
+        try:
+            self.assertTrue(iface._reconnect_once())
+            self.assertEqual(1, bridge.auto_connect_calls)
+
+            # The GATT stack reported a failure without a connection. The
+            # next supervisor iteration must return no-progress so it waits
+            # the exponential backoff instead of re-arming immediately.
+            bridge._connecting = False
+            bridge._connected = False
+            self.assertFalse(iface._reconnect_once())
+            self.assertEqual(1, bridge.auto_connect_calls)
         finally:
             if previous is not None:
                 sys.modules["event_bridge"] = previous

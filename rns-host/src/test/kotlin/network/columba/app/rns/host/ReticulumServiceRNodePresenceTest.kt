@@ -21,7 +21,12 @@ class ReticulumServiceRNodePresenceTest {
     fun offlineRNodeTriggersReconnect() {
         val interfaces =
             listOf(
-                mapOf("type" to "ColumbaRNodeInterface", "name" to "RNode", "online" to false),
+                mapOf(
+                    "type" to "ColumbaRNodeInterface",
+                    "name" to "RNode",
+                    "is_rnode" to true,
+                    "online" to false,
+                ),
             )
         assertTrue(service.shouldReconnectRNode(interfaces))
     }
@@ -30,7 +35,12 @@ class ReticulumServiceRNodePresenceTest {
     fun onlineRNodeSkipsReconnect() {
         val interfaces =
             listOf(
-                mapOf("type" to "ColumbaRNodeInterface", "name" to "RNode", "online" to true),
+                mapOf(
+                    "type" to "ColumbaRNodeInterface",
+                    "name" to "LoRa",
+                    "is_rnode" to true,
+                    "online" to true,
+                ),
             )
         assertFalse(service.shouldReconnectRNode(interfaces))
     }
@@ -49,8 +59,18 @@ class ReticulumServiceRNodePresenceTest {
     fun oneOfflineRNodeAmongOnlineOnesTriggers() {
         val interfaces =
             listOf(
-                mapOf("type" to "ColumbaRNodeInterface", "name" to "BLE", "online" to true),
-                mapOf("type" to "RNodeInterface", "name" to "USB", "online" to false),
+                mapOf(
+                    "type" to "ColumbaRNodeInterface",
+                    "name" to "BLE",
+                    "is_rnode" to true,
+                    "online" to true,
+                ),
+                mapOf(
+                    "type" to "RNodeInterface",
+                    "name" to "USB",
+                    "is_rnode" to true,
+                    "online" to false,
+                ),
             )
         assertTrue(service.shouldReconnectRNode(interfaces))
     }

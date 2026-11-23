@@ -628,6 +628,7 @@ class PythonRnsTransportAdmin(
                     linkedMapOf<String, Any>(
                         "name" to uiName,
                         "type" to uiType,
+                        "is_rnode" to pyClassName.endsWith("RNodeInterface"),
                         "online" to (iface["online"]?.toJava(Boolean::class.javaObjectType) ?: false),
                         "parent_name" to (parentName ?: ""),
                         "can_send" to (iface["OUT"]?.toJava(Boolean::class.javaObjectType) ?: false),

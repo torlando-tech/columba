@@ -248,6 +248,12 @@ class KotlinRNodeBridge(
     @Volatile
     private var autoConnectDeviceName: String? = null
 
+    // Generation of the autoConnect attempt. Cancelling, replacing, or
+    // invalidating the transport bumps it so a coroutine that had not yet
+    // called createBleGatt() cannot publish a GATT after cancellation, and a
+    // stale coroutine cannot clear a newer attempt's pending state.
+    private var autoConnectAttemptId = 0L
+
     @Volatile
     private var bleRssi: Int = -100 // Current RSSI (-100 = unknown)
 
@@ -577,7 +583,7 @@ class KotlinRNodeBridge(
      * [connect] path.
      */
     @Synchronized
-    @Suppress("ReturnCount")
+    @Suppress("ReturnCount", "CyclomaticComplexMethod")
     fun connectAuto(
         deviceName: String,
         mode: String,
@@ -630,10 +636,13 @@ class KotlinRNodeBridge(
                 return false
             }
 
-        synchronized(transportOwnerLock) {
-            if (autoConnectDeviceName != null) return false
-            autoConnectDeviceName = deviceName
-        }
+        val attemptId =
+            synchronized(transportOwnerLock) {
+                if (autoConnectDeviceName != null) return false
+                autoConnectAttemptId++
+                autoConnectDeviceName = deviceName
+                autoConnectAttemptId
+            }
         Log.i(TAG, "Arming BLE autoConnect for $deviceName")
 
         scope.launch {
@@ -645,13 +654,14 @@ class KotlinRNodeBridge(
                         admissionEpoch = admissionEpoch,
                         autoConnect = true,
                         timeoutMs = BLE_AUTO_CONNECT_TIMEOUT_MS,
+                        autoConnectAttemptId = attemptId,
                     )
                 if (!connected) {
                     Log.i(TAG, "BLE autoConnect attempt ended for $deviceName")
                 }
             } finally {
                 synchronized(transportOwnerLock) {
-                    if (autoConnectDeviceName == deviceName) {
+                    if (autoConnectDeviceName == deviceName && autoConnectAttemptId == attemptId) {
                         autoConnectDeviceName = null
                     }
                 }
@@ -888,9 +898,14 @@ class KotlinRNodeBridge(
         device: BluetoothDevice,
         admissionEpoch: Long,
         autoConnect: Boolean,
+        attemptId: Long? = null,
     ): BluetoothGatt? =
         synchronized(transportOwnerLock) {
             if (!isTransportAdmissionCurrentLocked(admissionEpoch)) {
+                return@synchronized null
+            }
+            if (attemptId != null && attemptId != autoConnectAttemptId) {
+                // The attempt was cancelled before it reached the GATT stack.
                 return@synchronized null
             }
             device.connectGatt(context, autoConnect, gattCallback, BluetoothDevice.TRANSPORT_LE).also {
@@ -912,6 +927,7 @@ class KotlinRNodeBridge(
                     return
                 }
                 autoConnectDeviceName = null
+                autoConnectAttemptId++
                 val gatt = bluetoothGatt
                 bluetoothGatt = null
                 resetBleAttemptStateLocked()
@@ -973,6 +989,7 @@ class KotlinRNodeBridge(
         admissionEpoch: Long,
         autoConnect: Boolean = false,
         timeoutMs: Long = BLE_CONNECT_TIMEOUT_MS,
+        autoConnectAttemptId: Long? = null,
     ): Boolean {
         var ownedGatt: BluetoothGatt? = null
         return try {
@@ -986,7 +1003,8 @@ class KotlinRNodeBridge(
 
             // Connect GATT and publish the new owner atomically with attempt-state reset.
             Log.d(TAG, "Connecting GATT to ${device.address}... (autoConnect=$autoConnect)")
-            val attemptGatt = createBleGatt(device, admissionEpoch, autoConnect) ?: return false
+            val attemptGatt =
+                createBleGatt(device, admissionEpoch, autoConnect, autoConnectAttemptId) ?: return false
             ownedGatt = attemptGatt
 
             // Wait for connection and service discovery
@@ -1371,6 +1389,7 @@ class KotlinRNodeBridge(
                 classicReadSocket = null
                 bluetoothGatt = null
                 autoConnectDeviceName = null
+                autoConnectAttemptId++
                 connectionMode = null
                 connectedDeviceName = null
                 resetBleAttemptStateLocked()

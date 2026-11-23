@@ -156,6 +156,11 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
         # first open_port() fails).
         self._reconnect_thread = None
         self._reconnect_wakeup = threading.Event()
+        # True once an armed BLE autoConnect has been observed pending. If the
+        # next poll finds it no longer pending and still disconnected, the
+        # attempt failed asynchronously and the supervisor must apply its
+        # backoff before arming the next GATT.
+        self._auto_pending_seen = False
 
         # Upstream's own connections (able / pyjnius) must never be built here:
         # `allow_bluetooth` would construct AndroidBluetoothManager -> autoclass.
@@ -351,6 +356,7 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
             return False
 
         if bridge.isConnected():
+            self._auto_pending_seen = False
             already = None
             try:
                 already = bridge.getConnectedDeviceName()
@@ -370,13 +376,21 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
 
         if self.connection_mode == self.MODE_BLE and hasattr(bridge, "connectAuto"):
             # A pending autoConnect is already armed in the GATT stack; polling is
-            # all we should do until it succeeds or times out.
+            # all we should do until it succeeds, times out, or fails.
             if hasattr(bridge, "isConnecting") and bridge.isConnecting():
+                self._auto_pending_seen = True
                 return True
+            if self._auto_pending_seen:
+                # The attempt completed asynchronously without connecting. Let
+                # the supervisor's exponential backoff pace the next GATT.
+                self._auto_pending_seen = False
+                self.status_reason = self._bridge_failure(bridge)
+                return False
             self.status_reason = None
             if bridge.connectAuto(self.target_device_name, "ble"):
                 return True
             if hasattr(bridge, "isConnecting") and bridge.isConnecting():
+                self._auto_pending_seen = True
                 return True
             self.status_reason = self._bridge_failure(bridge)
             return False

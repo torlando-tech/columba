@@ -12,35 +12,49 @@ import org.junit.Test
  * The failure mode it guards: after a hot-reload/teardown race, a spawned BLE
  * peer interface outlives its parent and shows up in the UI as an "online"
  * peer underneath an interface that is not running.
+ *
+ * Membership is by Python object identity, so the ids here are the only signal:
+ * names never enter the decision, which is what keeps a replacement parent that
+ * reuses the same `[[section]]` name from adopting the old parent's children.
  */
 class OrphanedSubInterfaceTest {
     @Test
-    fun `sub-interface whose parent is live is kept`() {
+    fun `sub-interface whose parent object is live is kept`() {
         assertFalse(
             isOrphanedSubInterface(
-                parentName = "Bluetooth LE",
-                liveInterfaceNames = setOf("Bluetooth LE", "RNode E517 BLE"),
+                parentId = 42L,
+                liveInterfaceIds = setOf(7L, 42L),
             ),
         )
     }
 
     @Test
-    fun `sub-interface whose parent is gone is orphaned`() {
+    fun `sub-interface whose parent object is gone is orphaned`() {
         assertTrue(
             isOrphanedSubInterface(
-                parentName = "Bluetooth LE",
-                liveInterfaceNames = setOf("RNode E517 BLE"),
+                parentId = 42L,
+                liveInterfaceIds = setOf(7L),
             ),
         )
+    }
+
+    @Test
+    fun `replacement parent with the same name does not keep old children`() {
+        // Old parent object id 42 was detached; a replacement interface with the
+        // same configured name got a new identity. The child still points at 42,
+        // so it must be treated as orphaned even though the name matches.
+        val oldParentId = 42L
+        val replacementParentId = 43L
+        assertTrue(isOrphanedSubInterface(parentId = oldParentId, liveInterfaceIds = setOf(replacementParentId)))
     }
 
     @Test
     fun `top-level interface is never orphaned`() {
-        assertFalse(isOrphanedSubInterface(parentName = null, liveInterfaceNames = emptySet()))
+        assertFalse(isOrphanedSubInterface(parentId = null, liveInterfaceIds = emptySet()))
         assertFalse(
             isOrphanedSubInterface(
-                parentName = null,
-                liveInterfaceNames = setOf("RNode E517 BLE", "Bluetooth LE"),
+                parentId = null,
+                liveInterfaceIds = setOf(7L, 42L),
             ),
         )
     }

@@ -116,6 +116,20 @@ class DebugViewModel
         private var cachedIdentity: network.columba.app.rns.api.model.Identity? = null
         private var cachedDestination: network.columba.app.rns.api.model.Destination? = null
 
+        /**
+         * Serialises this process's reads/writes of [SettingsRepository.KEY_IS_USER_SHUTDOWN]
+         * against [shutdownRequestEpoch], so an in-flight fetch cannot heal away a Stop
+         * request that landed while it was running.
+         */
+        private val shutdownFlagLock = Any()
+
+        /**
+         * Incremented on every user Stop request. A fetch only clears the shutdown flag if
+         * it started and finished at the same epoch — otherwise the `true` it sees is the
+         * user's fresh Stop, not the cross-process stale value the heal exists for.
+         */
+        private var shutdownRequestEpoch = 0L
+
         private val _debugInfo = MutableStateFlow(DebugInfo())
         val debugInfo: StateFlow<DebugInfo> = _debugInfo.asStateFlow()
 
@@ -300,20 +314,36 @@ class DebugViewModel
          * value — which is exactly how the Reticulum Status card used to freeze on
          * "Loading…" while the service was READY (the flag suppressed every fetch).
          * Clear it here so boot autostart and the service's own shutdown gate read truth.
+         *
+         * Runs on [ioDispatcher] and only writes when no Stop request arrived after
+         * [observedEpoch]: a fetch that was already in flight when the user pressed Stop
+         * must not erase the `true` that Stop just persisted (which would let boot
+         * autostart revive the service after a reboot).
          */
-        private fun clearStaleUserShutdownFlag() {
-            val prefs =
-                context.getSharedPreferences(SettingsRepository.PREFS_NAME_LOCAL, android.content.Context.MODE_PRIVATE)
-            if (!prefs.getBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, false)) return
-            prefs
-                .edit()
-                .putBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, false)
-                .commit()
-            Log.i(TAG, "Cleared stale user-shutdown flag — service answered getDebugInfo()")
+        private suspend fun clearStaleUserShutdownFlag(observedEpoch: Long) {
+            withContext(ioDispatcher) {
+                synchronized(shutdownFlagLock) {
+                    if (shutdownRequestEpoch != observedEpoch) return@synchronized
+                    val prefs =
+                        context.getSharedPreferences(
+                            SettingsRepository.PREFS_NAME_LOCAL,
+                            android.content.Context.MODE_PRIVATE,
+                        )
+                    if (!prefs.getBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, false)) return@synchronized
+                    prefs
+                        .edit()
+                        .putBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, false)
+                        .commit()
+                    Log.i(TAG, "Cleared stale user-shutdown flag — service answered getDebugInfo()")
+                }
+            }
         }
 
         private fun fetchDebugInfo() {
             viewModelScope.launch {
+                // Read before the fetch starts: if the user hits Stop while it is in
+                // flight, the epoch moves and the success path must not heal the flag.
+                val observedShutdownEpoch = synchronized(shutdownFlagLock) { shutdownRequestEpoch }
                 try {
                     // Never gate the fetch on the persisted shutdown flag: a live service
                     // always answers, and a stopped one throws into the catch below. The
@@ -372,7 +402,7 @@ class DebugViewModel
                             lastLockRefreshAgeSeconds = (pythonDebugInfo["last_lock_refresh_age_seconds"] as? Number)?.toLong() ?: -1,
                             failedInterfaceCount = (pythonDebugInfo["failed_interface_count"] as? Number)?.toInt() ?: 0,
                         )
-                    clearStaleUserShutdownFlag()
+                    clearStaleUserShutdownFlag(observedShutdownEpoch)
                 } catch (e: Exception) {
                     if (isServiceShutdown() || isUserShutdownRequested()) {
                         _debugInfo.value = DebugInfo(isLoading = false)
@@ -580,12 +610,21 @@ class DebugViewModel
                 try {
                     Log.i(TAG, "User requested service shutdown")
 
-                    // Set shutdown flag so restart mechanisms (onDestroy, START_STICKY) stay stopped
-                    context
-                        .getSharedPreferences(SettingsRepository.PREFS_NAME_LOCAL, android.content.Context.MODE_PRIVATE)
-                        .edit()
-                        .putBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, true)
-                        .commit()
+                    // Set shutdown flag so restart mechanisms (onDestroy, START_STICKY) stay stopped.
+                    // Bumped under the same lock the heal uses, so an in-flight fetch that
+                    // started earlier cannot clear this request.
+                    withContext(ioDispatcher) {
+                        synchronized(shutdownFlagLock) {
+                            shutdownRequestEpoch++
+                            context
+                                .getSharedPreferences(
+                                    SettingsRepository.PREFS_NAME_LOCAL,
+                                    android.content.Context.MODE_PRIVATE,
+                                ).edit()
+                                .putBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, true)
+                                .commit()
+                        }
+                    }
 
                     // Clear UI immediately so status card shows clean shutdown state
                     // (don't wait for onServiceDisconnected which has a race window)

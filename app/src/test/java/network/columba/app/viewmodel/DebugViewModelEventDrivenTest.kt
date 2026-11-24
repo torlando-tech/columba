@@ -491,6 +491,40 @@ class DebugViewModelEventDrivenTest {
         }
 
     @Test
+    fun `stop pressed while fetch is in flight keeps the shutdown flag`() =
+        runTest(testDispatcher) {
+            // Given - a fetch parked inside getDebugInfo()
+            val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+            every { mockPrefs.getBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, false) } returns false
+            coEvery { mockRnsTransportAdmin.getDebugInfo() } coAnswers {
+                gate.await()
+                mapOf(
+                    "initialized" to true,
+                    "interfaces" to emptyList<Map<String, Any>>(),
+                )
+            }
+
+            val viewModel = buildViewModel()
+            advanceUntilIdle()
+
+            // When - the user presses Stop, then the in-flight fetch completes
+            viewModel.shutdownService()
+            advanceUntilIdle()
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            // Then - the fetch still delivered live state, but must not heal away
+            // the fresh Stop request: boot autostart and START_STICKY read this flag.
+            val info = viewModel.debugInfo.value
+            assertTrue("the in-flight fetch still delivers live state", info.initialized)
+            assertFalse("the fetch must not be gated by the flag", info.isLoading)
+            verify(exactly = 0) {
+                mockPrefsEditor.putBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, false)
+            }
+            verify { mockPrefsEditor.putBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, true) }
+        }
+
+    @Test
     fun `fetch failure with user shutdown request shows clean shutdown state`() =
         runTest(testDispatcher) {
             // Given - service is gone and the user asked for it to stay down

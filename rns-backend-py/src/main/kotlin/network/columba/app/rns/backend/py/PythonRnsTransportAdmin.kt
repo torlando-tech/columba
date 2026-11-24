@@ -572,6 +572,15 @@ class PythonRnsTransportAdmin(
         } ?: 0
 
     /**
+     * Identity of a live Python interface object (`id()`), so [collectInterfaces] tests
+     * `Transport.interfaces` membership the way Python's own `in` does — by object, not
+     * by configured `name`. A replacement interface reusing the same `[[section]]` name
+     * is a different object and must not keep the old parent's spawned children alive.
+     */
+    private fun pythonObjectId(obj: PyObject): Long? =
+        runCatching { runtime.python.builtins.callAttr("id", obj).toLong() }.getOrNull()
+
+    /**
      * Enumerate `RNS.Transport.interfaces` into the same per-interface shape
      * `NativeRnsBackendImpl.getDebugInfo()` emits, plus the optional Python
      * runtime status reason and live RNode battery: `{name, type, online,
@@ -584,22 +593,22 @@ class PythonRnsTransportAdmin(
      * interface can't blank the whole list.
      *
      * Spawned sub-interfaces (AutoDiscovery peer interfaces, BLE peer interfaces)
-     * whose parent is no longer in `RNS.Transport.interfaces` are detached and
-     * omitted: a sub-interface can only move traffic through its parent's
-     * driver/fragmenters, so with the parent gone it is dead weight that the UI
-     * would otherwise render as an "online" peer underneath an interface that is
-     * not running (the disabled-Bluetooth-LE-with-online-peers ghost state).
-     * Detaching on enumeration is also the self-heal for a detach race that leaves
-     * the children behind when their parent is torn down.
+     * whose parent object is no longer in `RNS.Transport.interfaces` (checked by
+     * Python object identity, not by the configured name a replacement parent could
+     * reuse) are detached and torn down, then omitted: a sub-interface can only
+     * move traffic through its parent's driver/fragmenters, so with the parent gone
+     * it is dead weight that the UI would otherwise render as an "online" peer
+     * underneath an interface that is not running (the disabled-Bluetooth-LE-with-
+     * online-peers ghost state). Doing this on enumeration is also the self-heal for
+     * a detach race that leaves the children behind when their parent is torn down.
      */
     private fun collectInterfaces(): List<Map<String, Any>> =
         runCatching {
             val interfaces = transport()["interfaces"] ?: return emptyList()
             val snapshot = runtime.python.builtins.callAttr("list", interfaces).asList()
-            val liveNames =
+            val liveIds =
                 snapshot
-                    .mapNotNull { runCatching { it["name"]?.toString() }.getOrNull() }
-                    .filter { it.isNotBlank() && it != "None" }
+                    .mapNotNull { runCatching { pythonObjectId(it) }.getOrNull() }
                     .toSet()
             snapshot.mapNotNull { iface ->
                 runCatching {
@@ -626,16 +635,23 @@ class PythonRnsTransportAdmin(
                     // names. Map them to human-meaningful labels here so the
                     // UI doesn't need its own special-case branch.
                     val (uiName, uiType) = labelLocalInterface(iface, pyClassName, rawName)
-                    val parentName = runCatching {
-                        iface["parent_interface"]
-                            ?.takeIf { it.toString() != "None" }
-                            ?.get("name")?.toString()
+                    val parentObj = runCatching {
+                        iface["parent_interface"]?.takeIf { it.toString() != "None" }
                     }.getOrNull()
-                    if (isOrphanedSubInterface(parentName, liveNames)) {
+                    val parentName = runCatching { parentObj?.get("name")?.toString() }.getOrNull()
+                    val parentId = runCatching { parentObj?.let { pythonObjectId(it) } }.getOrNull()
+                    if (isOrphanedSubInterface(parentId, liveIds)) {
+                        // Mirror the upstream AutoInterface parent teardown: detach()
+                        // stops traffic and, for classes whose detach() deregisters
+                        // (BLEPeerInterface), removes the child from Transport.interfaces;
+                        // teardown() is what deregisters AutoInterfacePeer children and is
+                        // safe only after detach() (it panics otherwise).
                         val detached = runCatching { iface.callAttr("detach") }.isSuccess
+                        val tornDown = runCatching { iface.callAttr("teardown") }.isSuccess
                         Log.w(
                             TAG,
-                            "getDebugInfo: orphaned sub-interface $rawName (parent '$parentName' not live) — detached=$detached",
+                            "getDebugInfo: orphaned sub-interface $rawName (parent '$parentName' " +
+                                "not live) — detached=$detached tornDown=$tornDown",
                         )
                         return@mapNotNull null
                     }
@@ -741,15 +757,15 @@ internal fun interfaceStatsFromSnapshot(
 }
 
 /**
- * True when [parentName] identifies a spawned sub-interface whose parent is not in
- * [liveInterfaceNames] — i.e. the child is live but the interface that owns its
- * driver is gone, so it can neither send nor receive. Such rows are detached by
- * `collectInterfaces()` instead of being surfaced to the UI as online peers.
+ * True when [parentId] is not one of [liveInterfaceIds] — the child is live but the
+ * interface object that owns its driver is gone, so it can neither send nor receive.
+ * Such rows are detached and torn down by `collectInterfaces()` instead of being
+ * surfaced to the UI as online peers.
  */
 internal fun isOrphanedSubInterface(
-    parentName: String?,
-    liveInterfaceNames: Set<String>,
-): Boolean = parentName != null && parentName !in liveInterfaceNames
+    parentId: Long?,
+    liveInterfaceIds: Set<Long>,
+): Boolean = parentId != null && parentId !in liveInterfaceIds
 
 internal fun formatSharedInstanceAccessConfig(isHosting: Boolean, rpcKey: ByteArray?): String? {
     if (!isHosting || rpcKey == null || rpcKey.isEmpty()) return null

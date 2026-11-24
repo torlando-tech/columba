@@ -6,12 +6,14 @@ import kotlinx.coroutines.CoroutineScope
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.ipc.BundleKeys
+import network.columba.app.rns.ipc.CallAudioRouteCodec
 import network.columba.app.rns.ipc.IRnsTelephony
 import network.columba.app.rns.ipc.callback.IRnsBoolEventCallback
 import network.columba.app.rns.ipc.callback.IRnsCallStateCallback
 import network.columba.app.rns.ipc.callback.IRnsNullableIntEventCallback
 import network.columba.app.rns.ipc.callback.IRnsNullableStringEventCallback
 import network.columba.app.rns.ipc.callback.IRnsResultCallback
+import network.columba.app.rns.ipc.callback.IRnsStringListCallback
 
 /**
  * Host-side adapter that bridges `oneway` [IRnsTelephony] AIDL calls onto
@@ -109,6 +111,16 @@ internal class ServerRnsTelephony(
 
     override fun setCallSpeaker(speakerOn: Boolean, cb: IRnsResultCallback) = dispatch(cb, scope) {
         impl.setCallSpeaker(speakerOn)
+        Bundle.EMPTY
+    }
+
+    override fun getCallAudioRoutes(cb: IRnsStringListCallback) =
+        dispatchStringList(cb, scope) {
+            CallAudioRouteCodec.encode(impl.getCallAudioRoutes().getOrThrow())
+        }
+
+    override fun selectCallAudioRoute(deviceId: Int, cb: IRnsResultCallback) = dispatch(cb, scope) {
+        impl.selectCallAudioRoute(deviceId)
         Bundle.EMPTY
     }
 

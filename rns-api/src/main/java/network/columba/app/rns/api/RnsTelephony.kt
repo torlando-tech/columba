@@ -1,6 +1,7 @@
 package network.columba.app.rns.api
 
 import kotlinx.coroutines.flow.StateFlow
+import network.columba.app.rns.api.model.CallAudioRoute
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.VoiceCallState
 
@@ -76,6 +77,29 @@ interface RnsTelephony {
      * @param speakerOn true for speaker, false for earpiece
      */
     suspend fun setCallSpeaker(speakerOn: Boolean)
+
+    /**
+     * Output devices selectable for the current call (in-call audio picker).
+     *
+     * Android 12+ lists the platform's selectable communication devices —
+     * builtin earpiece/speaker, Bluetooth SCO/LE, hearing aids, wired and USB
+     * headsets. Output-only devices (e.g. wired headphones without a mic) are
+     * not selectable and so do not appear; automatic routing still reaches
+     * them. Below Android 12 only earpiece and speaker are returned.
+     *
+     * The list is a snapshot taken when the picker opens; [isActive] marks the
+     * device call audio is routed to at that moment.
+     */
+    suspend fun getCallAudioRoutes(): Result<List<CallAudioRoute>>
+
+    /**
+     * Route call audio to [deviceId] from [getCallAudioRoutes].
+     *
+     * The choice holds until the call ends, the speaker toggle is used, or the
+     * device disconnects; playback streams are restarted so the change applies
+     * to a live call.
+     */
+    suspend fun selectCallAudioRoute(deviceId: Int)
 
     /**
      * One-shot snapshot of the current call state. UI consumers should

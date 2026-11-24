@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsTelephony
+import network.columba.app.rns.api.model.CallAudioRoute
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.VoiceCallState
 
@@ -46,6 +47,13 @@ internal class BoundRnsTelephony(
 
     override suspend fun setCallSpeaker(speakerOn: Boolean) {
         awaitBound().telephony.setCallSpeaker(speakerOn)
+    }
+
+    override suspend fun getCallAudioRoutes(): Result<List<CallAudioRoute>> =
+        awaitBound().telephony.getCallAudioRoutes()
+
+    override suspend fun selectCallAudioRoute(deviceId: Int) {
+        awaitBound().telephony.selectCallAudioRoute(deviceId)
     }
 
     override suspend fun switchCallProfile(profileCode: Int) {

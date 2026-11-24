@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import network.columba.app.rns.api.RnsTelephony
+import network.columba.app.rns.api.model.CallAudioRoute
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.VoiceCallState
 import network.columba.app.rns.api.util.PeriodicStateObserver
@@ -238,6 +239,27 @@ class PythonRnsTelephony(
             callCoordinator.setSpeaker(speakerOn)
         } catch (e: Exception) {
             Log.w(TAG, "Ignored error setting speaker=$speakerOn: $e")
+        }
+    }
+
+    override suspend fun getCallAudioRoutes(): Result<List<CallAudioRoute>> =
+        runCatching {
+            val currentId = callCoordinator.currentCallAudioDeviceId()
+            callCoordinator.availableCallAudioDevices().map { device ->
+                CallAudioRoute(
+                    deviceId = device.id,
+                    type = device.type,
+                    name = device.name,
+                    isActive = device.id == currentId,
+                )
+            }
+        }
+
+    override suspend fun selectCallAudioRoute(deviceId: Int) {
+        try {
+            callCoordinator.selectCallAudioDevice(deviceId)
+        } catch (e: Exception) {
+            Log.w(TAG, "Ignored error selecting call audio device $deviceId: $e")
         }
     }
 

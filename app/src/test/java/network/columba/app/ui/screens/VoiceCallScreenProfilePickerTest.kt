@@ -84,6 +84,8 @@ class VoiceCallScreenProfilePickerTest {
         every { telephony.callMode } returns MutableStateFlow<String?>(null)
         every { telephony.hasActiveCall() } returns true
         coEvery { telephony.switchCallProfile(any()) } answers { }
+        coEvery { telephony.getCallAudioRoutes() } returns Result.success(emptyList())
+        coEvery { telephony.selectCallAudioRoute(any()) } answers { }
 
         contactRepository = mockk()
         announceRepository = mockk()

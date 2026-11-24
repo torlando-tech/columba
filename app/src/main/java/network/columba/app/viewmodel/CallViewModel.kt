@@ -9,11 +9,14 @@ import network.columba.app.audio.CallMicrophoneAdmissionCoordinator
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsTelephony
+import network.columba.app.rns.api.model.CallAudioRoute
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.ui.model.CodecProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -62,6 +65,7 @@ class CallViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "CallViewModel"
+            private const val AUDIO_ROUTE_REFRESH_INTERVAL_MS = 2_000L
         }
 
         // Serializes mute IPC calls to prevent race conditions (e.g. PTT release vs toggle off)
@@ -78,6 +82,12 @@ class CallViewModel
         val activeProfileCode: StateFlow<Int?> = telephony.activeProfileCode
         val callMode: StateFlow<String?> = telephony.callMode
 
+        // Selectable call-audio outputs (in-call picker). Refreshed when the
+        // picker opens, after a selection, and every 2 s while active so a
+        // headset connected mid-call updates the call-screen label; cleared at end.
+        private val _audioRoutes = MutableStateFlow<List<CallAudioRoute>>(emptyList())
+        val audioRoutes: StateFlow<List<CallAudioRoute>> = _audioRoutes.asStateFlow()
+
         // Call duration (updated every second during active call)
         private val _callDuration = MutableStateFlow(0L)
         val callDuration: StateFlow<Long> = _callDuration.asStateFlow()
@@ -93,6 +103,10 @@ class CallViewModel
         // Track duration timer job to prevent multiple concurrent timers
         private var durationTimerJob: kotlinx.coroutines.Job? = null
 
+        // Keeps the current-output label current when headsets connect or
+        // disconnect outside the picker.
+        private var audioRouteRefreshJob: kotlinx.coroutines.Job? = null
+
         init {
             // Track call duration when active
             viewModelScope.launch {
@@ -100,12 +114,16 @@ class CallViewModel
                     when (state) {
                         is CallState.Active -> {
                             startDurationTimer()
+                            refreshAudioRoutes()
+                            startAudioRouteRefresh()
                         }
                         is CallState.Ended, CallState.Idle -> {
                             durationTimerJob?.cancel()
                             durationTimerJob = null
+                            stopAudioRouteRefresh()
                             _callDuration.value = 0L
                             _isConnecting.value = false
+                            _audioRoutes.value = emptyList()
                         }
                         is CallState.Connecting -> {
                             _isConnecting.value = true
@@ -314,13 +332,53 @@ class CallViewModel
         }
 
         /**
-         * Toggle speaker/earpiece.
+         * Reload the selectable call-audio outputs. Called when the picker opens
+         * so a headset connected mid-call shows up in the list.
          */
-        fun toggleSpeaker() {
-            val newSpeaker = !telephony.isSpeakerOn.value
+        fun refreshAudioRoutes() {
+            viewModelScope.launch { loadAudioRoutes() }
+        }
+
+        private suspend fun loadAudioRoutes() {
+            telephony
+                .getCallAudioRoutes()
+                .onSuccess { _audioRoutes.value = it }
+                .onFailure { Log.w(TAG, "Failed to load call audio routes: ${it.message}") }
+        }
+
+        /** Poll the platform route list while a call is active (headset hot-plug). */
+        private fun startAudioRouteRefresh() {
+            if (audioRouteRefreshJob?.isActive == true) return
+            audioRouteRefreshJob =
+                viewModelScope.launch {
+                    while (isActive) {
+                        delay(AUDIO_ROUTE_REFRESH_INTERVAL_MS)
+                        loadAudioRoutes()
+                    }
+                }
+        }
+
+        private fun stopAudioRouteRefresh() {
+            audioRouteRefreshJob?.cancel()
+            audioRouteRefreshJob = null
+        }
+
+        /**
+         * Route call audio to [deviceId] and refresh the picker so the new
+         * device shows as active.
+         */
+        fun selectAudioRoute(deviceId: Int) {
             viewModelScope.launch {
-                telephony.setSpeakerLocally(newSpeaker)
-                telephony.setCallSpeaker(newSpeaker)
+                try {
+                    telephony.selectCallAudioRoute(deviceId)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Service died between the tap and the IPC call; keep the
+                    // screen alive and leave the label on the last known route.
+                    Log.w(TAG, "Failed to select call audio route: ${e.message}")
+                }
+                loadAudioRoutes()
             }
         }
 

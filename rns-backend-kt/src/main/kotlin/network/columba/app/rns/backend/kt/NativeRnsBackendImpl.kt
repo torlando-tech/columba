@@ -23,6 +23,7 @@ import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.BatteryProfile
+import network.columba.app.rns.api.model.CallAudioRoute
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.ConversationLinkResult
 import network.columba.app.rns.api.model.DeliveryMethod
@@ -2229,6 +2230,31 @@ class NativeRnsBackendImpl(
                 callManager?.setSpeaker(speakerOn)
             } catch (e: Exception) {
                 Log.w(TAG, "Ignored error setting speaker=$speakerOn: $e")
+            }
+        }
+    }
+
+    override suspend fun getCallAudioRoutes(): Result<List<CallAudioRoute>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val currentId = callCoordinator.currentCallAudioDeviceId()
+                callCoordinator.availableCallAudioDevices().map { device ->
+                    CallAudioRoute(
+                        deviceId = device.id,
+                        type = device.type,
+                        name = device.name,
+                        isActive = device.id == currentId,
+                    )
+                }
+            }
+        }
+
+    override suspend fun selectCallAudioRoute(deviceId: Int) {
+        withContext(Dispatchers.IO) {
+            try {
+                callCoordinator.selectCallAudioDevice(deviceId)
+            } catch (e: Exception) {
+                Log.w(TAG, "Ignored error selecting call audio device $deviceId: $e")
             }
         }
     }

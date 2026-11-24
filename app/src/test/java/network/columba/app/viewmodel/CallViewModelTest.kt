@@ -142,6 +142,8 @@ class CallViewModelTest {
         coEvery { mockTelephony.declineCall() } answers { }
         coEvery { mockTelephony.setCallMuted(any()) } answers { }
         coEvery { mockTelephony.setCallSpeaker(any()) } answers { }
+        coEvery { mockTelephony.getCallAudioRoutes() } returns Result.success(emptyList())
+        coEvery { mockTelephony.selectCallAudioRoute(any()) } answers { }
         coEvery { mockTelephony.switchCallProfile(any()) } answers { }
         coEvery { mockTelephony.cycleCallMode() } answers { }
         coEvery { mockTelephony.setPttActive(any()) } answers { }
@@ -342,18 +344,6 @@ class CallViewModelTest {
             assertTrue(mutedSlot.isCaptured)
             // Should toggle from false to true
             assertEquals(true, mutedSlot.captured)
-        }
-
-    @Test
-    fun `toggleSpeaker captures correct speaker value`() =
-        runTest {
-            // Initial state is speaker off (from isSpeakerOnFlow = false)
-            viewModel.toggleSpeaker()
-            testDispatcher.scheduler.advanceUntilIdle()
-
-            assertTrue(speakerSlot.isCaptured)
-            // Should toggle from false to true
-            assertEquals(true, speakerSlot.captured)
         }
 
     // ========== LXST Profile Switching Tests ==========
@@ -657,5 +647,18 @@ class CallViewModelTest {
 
             coVerify(exactly = 0) { mockTelephony.setPttActiveLocally(any()) }
             coVerify(exactly = 0) { mockTelephony.setPttActive(any()) }
+        }
+
+    @Test
+    fun `selectAudioRoute survives a lost backend`() =
+        runTest {
+            coEvery { mockTelephony.selectCallAudioRoute(any()) } throws
+                RnsException(RnsError.BackendNotReady)
+
+            viewModel.selectAudioRoute(42)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { mockTelephony.selectCallAudioRoute(42) }
+            coVerify(exactly = 1) { mockTelephony.getCallAudioRoutes() }
         }
 }

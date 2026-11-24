@@ -563,7 +563,7 @@ class DiscoveredInterfacesScreenTest {
     }
 
     @Test
-    fun `DiscoverySettingsCard slider shows Off when autoconnect is zero`() {
+    fun `DiscoverySettingsCard slider shows zero when autoconnect is disabled`() {
         composeTestRule.setContent {
             DiscoverySettingsCard(
                 isRuntimeEnabled = true,
@@ -573,7 +573,11 @@ class DiscoveredInterfacesScreenTest {
         }
 
         composeTestRule.onNodeWithText("Auto-connect limit").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Off").assertIsDisplayed()
+        composeTestRule.onNodeWithText("0").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Discovery is active but auto-connect is disabled. Useful for debugging.",
+            ).assertIsDisplayed()
     }
 
     @Test

@@ -15,8 +15,10 @@ import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -55,6 +57,9 @@ class DebugViewModelEventDrivenTest {
 
     @Suppress("NoRelaxedMocks") // Android Context with many system service methods
     private val mockContext: android.content.Context = mockk(relaxed = true)
+
+    private lateinit var mockPrefs: android.content.SharedPreferences
+    private lateinit var mockPrefsEditor: android.content.SharedPreferences.Editor
 
     private lateinit var mockRnsCore: RnsCore
     private lateinit var mockRnsLxmf: RnsLxmf
@@ -98,6 +103,14 @@ class DebugViewModelEventDrivenTest {
 
         // Setup debugInfoFlow
         every { mockRnsTransportAdmin.debugInfoFlow } returns debugInfoFlow
+
+        // Prefs: default "not shut down"; individual tests flip is_user_shutdown
+        mockPrefs = mockk<android.content.SharedPreferences>(relaxed = true)
+        mockPrefsEditor = mockk<android.content.SharedPreferences.Editor>(relaxed = true)
+        every { mockContext.getSharedPreferences(any(), any()) } returns mockPrefs
+        every { mockPrefs.getBoolean(any(), any()) } returns false
+        every { mockPrefs.edit() } returns mockPrefsEditor
+        every { mockPrefsEditor.putBoolean(any(), any()) } returns mockPrefsEditor
 
         // Setup networkStatus
         every { mockRnsCore.networkStatus } returns MutableStateFlow(NetworkStatus.READY)
@@ -448,5 +461,48 @@ class DebugViewModelEventDrivenTest {
             // Then - state should reflect the debug info (not reset)
             // Note: Due to viewModelScope, state updates may be async
             assertTrue("ViewModel should be created successfully", viewModel.debugInfo != null)
+        }
+
+    // ========== Stale user-shutdown flag tests ==========
+
+    @Test
+    fun `stale user-shutdown flag does not suppress fetch while service is READY`() =
+        runTest(testDispatcher) {
+            // Given - the persisted flag says the user shut down, but the service
+            // answers getDebugInfo(): the flag was resurrected by the UI process's
+            // stale SharedPreferences cache after the service cleared it.
+            every { mockPrefs.getBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, false) } returns true
+            coEvery { mockRnsTransportAdmin.getDebugInfo() } returns
+                mapOf(
+                    "initialized" to true,
+                    "interfaces" to emptyList<Map<String, Any>>(),
+                )
+
+            val viewModel = buildViewModel()
+            advanceUntilIdle()
+
+            // Then - the live state reaches the UI instead of freezing on "Loading…"
+            val info = viewModel.debugInfo.value
+            assertFalse("fetch must not be gated by the stale flag", info.isLoading)
+            assertTrue("initialized must reflect the service's answer", info.initialized)
+            coVerify { mockRnsTransportAdmin.getDebugInfo() }
+            // And the stale flag is healed so boot autostart isn't suppressed by it.
+            verify { mockPrefsEditor.putBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, false) }
+        }
+
+    @Test
+    fun `fetch failure with user shutdown request shows clean shutdown state`() =
+        runTest(testDispatcher) {
+            // Given - service is gone and the user asked for it to stay down
+            every { mockPrefs.getBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, false) } returns true
+            coEvery { mockRnsTransportAdmin.getDebugInfo() } throws RuntimeException("service is down")
+
+            val viewModel = buildViewModel()
+            advanceUntilIdle()
+
+            // Then - no spinner and no error banner; it is a deliberate shutdown
+            val info = viewModel.debugInfo.value
+            assertFalse("clean shutdown must stop the loading state", info.isLoading)
+            assertNull("clean shutdown must not surface a service error", info.error)
         }
 }

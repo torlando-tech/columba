@@ -582,11 +582,26 @@ class PythonRnsTransportAdmin(
      * `iface.name` and what the UI keys its online-status and battery overlays on
      * (`InterfaceEntity.name`). Per-interface reads are wrapped so one malformed
      * interface can't blank the whole list.
+     *
+     * Spawned sub-interfaces (AutoDiscovery peer interfaces, BLE peer interfaces)
+     * whose parent is no longer in `RNS.Transport.interfaces` are detached and
+     * omitted: a sub-interface can only move traffic through its parent's
+     * driver/fragmenters, so with the parent gone it is dead weight that the UI
+     * would otherwise render as an "online" peer underneath an interface that is
+     * not running (the disabled-Bluetooth-LE-with-online-peers ghost state).
+     * Detaching on enumeration is also the self-heal for a detach race that leaves
+     * the children behind when their parent is torn down.
      */
     private fun collectInterfaces(): List<Map<String, Any>> =
         runCatching {
             val interfaces = transport()["interfaces"] ?: return emptyList()
-            runtime.python.builtins.callAttr("list", interfaces).asList().mapNotNull { iface ->
+            val snapshot = runtime.python.builtins.callAttr("list", interfaces).asList()
+            val liveNames =
+                snapshot
+                    .mapNotNull { runCatching { it["name"]?.toString() }.getOrNull() }
+                    .filter { it.isNotBlank() && it != "None" }
+                    .toSet()
+            snapshot.mapNotNull { iface ->
                 runCatching {
                     // `interface.name` is the configured name — the RNS config
                     // `[[section]]` header — which is what the UI matches against
@@ -616,6 +631,14 @@ class PythonRnsTransportAdmin(
                             ?.takeIf { it.toString() != "None" }
                             ?.get("name")?.toString()
                     }.getOrNull()
+                    if (isOrphanedSubInterface(parentName, liveNames)) {
+                        val detached = runCatching { iface.callAttr("detach") }.isSuccess
+                        Log.w(
+                            TAG,
+                            "getDebugInfo: orphaned sub-interface $rawName (parent '$parentName' not live) — detached=$detached",
+                        )
+                        return@mapNotNull null
+                    }
                     val statusReason = runCatching {
                         iface["status_reason"]
                             ?.takeIf { it.toString() != "None" }
@@ -716,6 +739,17 @@ internal fun interfaceStatsFromSnapshot(
         "txb" to ((match["tx_bytes"] as? Number)?.toLong() ?: 0L),
     )
 }
+
+/**
+ * True when [parentName] identifies a spawned sub-interface whose parent is not in
+ * [liveInterfaceNames] — i.e. the child is live but the interface that owns its
+ * driver is gone, so it can neither send nor receive. Such rows are detached by
+ * `collectInterfaces()` instead of being surfaced to the UI as online peers.
+ */
+internal fun isOrphanedSubInterface(
+    parentName: String?,
+    liveInterfaceNames: Set<String>,
+): Boolean = parentName != null && parentName !in liveInterfaceNames
 
 internal fun formatSharedInstanceAccessConfig(isHosting: Boolean, rpcKey: ByteArray?): String? {
     if (!isHosting || rpcKey == null || rpcKey.isEmpty()) return null

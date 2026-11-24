@@ -271,6 +271,10 @@ fun MapScreen(
     val showPermissionSheet =
         !state.hasLocationPermission &&
             !permissionSheetDismissed
+    // Explicit taps on permission-gated map actions must show the disclosure first.
+    // This path is separate from the automatic first-run sheet, which the user may
+    // have already dismissed (issue: Play prominent-disclosure review).
+    var showActionPermissionSheet by remember { mutableStateOf(false) }
     var showShareLocationSheet by remember { mutableStateOf(false) }
     var selectedMarker by remember { mutableStateOf<ContactMarker?>(null) }
     var selectedInterface by remember { mutableStateOf<InterfaceMarker?>(null) }
@@ -1417,10 +1421,8 @@ fun MapScreen(
             SmallFloatingActionButton(
                 onClick = {
                     if (!state.hasLocationPermission) {
-                        // Request permission directly when user explicitly clicks My Location
-                        permissionLauncher.launch(
-                            LocationPermissionManager.getRequiredPermissions().toTypedArray(),
-                        )
+                        // Show the prominent disclosure before the system permission request.
+                        showActionPermissionSheet = true
                     } else {
                         state.userLocation?.let { location ->
                             mapLibreMap?.let { map ->
@@ -1453,9 +1455,8 @@ fun MapScreen(
                     SmallFloatingActionButton(
                         onClick = {
                             if (!LocationPermissionManager.hasPermission(context)) {
-                                permissionLauncher.launch(
-                                    LocationPermissionManager.getRequiredPermissions().toTypedArray(),
-                                )
+                                // Show the prominent disclosure before the system permission request.
+                                showActionPermissionSheet = true
                             } else {
                                 viewModel.sendTelemetryNow()
                             }
@@ -1579,13 +1580,17 @@ fun MapScreen(
     }
 
     // Permission bottom sheet (foreground location)
-    if (showPermissionSheet) {
+    if (showPermissionSheet || showActionPermissionSheet) {
         LocationPermissionBottomSheet(
             onDismiss = {
-                onPermissionSheetDismissed()
-                viewModel.dismissLocationPermissionSheet()
+                showActionPermissionSheet = false
+                if (showPermissionSheet) {
+                    onPermissionSheetDismissed()
+                    viewModel.dismissLocationPermissionSheet()
+                }
             },
             onRequestPermissions = {
+                showActionPermissionSheet = false
                 onPermissionSheetDismissed()
                 viewModel.dismissLocationPermissionSheet()
                 permissionLauncher.launch(

@@ -24,7 +24,7 @@ import org.robolectric.annotation.Config
  * Tests:
  * - Title and icon display
  * - Rationale text display
- * - Button callbacks (Enable Location, Not Now)
+ * - Button callbacks (primary action, Not Now)
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -38,6 +38,9 @@ class LocationPermissionBottomSheetTest {
 
     val composeTestRule get() = composeRule
 
+    private fun string(resId: Int): String =
+        ApplicationProvider.getApplicationContext<Application>().getString(resId)
+
     // ========== Display Tests ==========
 
     @Test
@@ -50,7 +53,7 @@ class LocationPermissionBottomSheetTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Location Permission").assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_title)).assertIsDisplayed()
     }
 
     @Test
@@ -65,7 +68,7 @@ class LocationPermissionBottomSheetTest {
 
         // The default rationale from LocationPermissionManager.getPermissionRationale()
         // Just check that some text is displayed (exact text may vary)
-        composeTestRule.onNodeWithText("Enable Location").assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_enable_location)).assertIsDisplayed()
     }
 
     @Test
@@ -94,7 +97,7 @@ class LocationPermissionBottomSheetTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Enable Location").assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_enable_location)).assertIsDisplayed()
     }
 
     @Test
@@ -121,7 +124,7 @@ class LocationPermissionBottomSheetTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Not Now").assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_not_now)).assertIsDisplayed()
     }
 
     // ========== Callback Tests ==========
@@ -138,7 +141,7 @@ class LocationPermissionBottomSheetTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Enable Location").performClick()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_enable_location)).performClick()
 
         assertTrue(callbackInvoked)
     }
@@ -155,7 +158,7 @@ class LocationPermissionBottomSheetTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Not Now").performClick()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_not_now)).performClick()
 
         assertTrue(dismissCalled)
     }

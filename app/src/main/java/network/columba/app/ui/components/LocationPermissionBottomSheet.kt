@@ -38,6 +38,7 @@ import network.columba.app.util.LocationPermissionManager
  * @param onRequestPermissions Callback when user grants permission request
  * @param sheetState The state of the bottom sheet
  * @param rationale Optional custom rationale string resource (defaults to LocationPermissionManager rationale)
+ * @param title Optional custom title string resource (defaults to the general location disclosure title)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +47,7 @@ fun LocationPermissionBottomSheet(
     onRequestPermissions: () -> Unit,
     sheetState: SheetState,
     @StringRes rationale: Int = LocationPermissionManager.getPermissionRationale(),
+    @StringRes title: Int = R.string.loc_perm_title,
     primaryActionLabel: String? = null,
 ) {
     ModalBottomSheet(
@@ -73,7 +75,7 @@ fun LocationPermissionBottomSheet(
                     modifier = Modifier.padding(end = 12.dp),
                 )
                 Text(
-                    text = stringResource(R.string.loc_perm_title),
+                    text = stringResource(title),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                 )

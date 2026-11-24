@@ -22,17 +22,21 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +49,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import network.columba.app.BuildConfig
 import network.columba.app.R
+import network.columba.app.ui.components.BlePermissionBottomSheet
 import network.columba.app.ui.screens.onboarding.pages.CompletePage
 import network.columba.app.ui.screens.onboarding.pages.ConnectivityPage
 import network.columba.app.ui.screens.onboarding.pages.CrashReportingPage
@@ -64,6 +69,7 @@ import kotlinx.coroutines.launch
  * @param onOnboardingComplete Callback when onboarding finishes. Parameter indicates whether to
  *                             navigate to RNode wizard (true if LoRa Radio was selected).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OnboardingPagerScreen(
     onOnboardingComplete: (navigateToRNodeWizard: Boolean) -> Unit,
@@ -75,6 +81,8 @@ fun OnboardingPagerScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
+    var showBlePermissionSheet by remember { mutableStateOf(false) }
+    val blePermissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Ordered pages for this flavor. The crash-reporting opt-in page is only present when
     // crash reporting is available (sentry flavor). Navigation below is relative
@@ -210,9 +218,10 @@ fun OnboardingPagerScreen(
                                     if (interfaceType == OnboardingInterfaceType.BLE &&
                                         !state.selectedInterfaces.contains(OnboardingInterfaceType.BLE)
                                     ) {
-                                        // Request BLE permissions first - toggle happens in callback
-                                        val permissions = getBlePermissions()
-                                        blePermissionsLauncher.launch(permissions)
+                                        // Request BLE permissions after the disclosure. On Android 11
+                                        // and older this also explains the Location permission
+                                        // required to scan for Bluetooth devices.
+                                        showBlePermissionSheet = true
                                     } else {
                                         // For other interfaces or disabling BLE, toggle immediately
                                         viewModel.toggleInterface(interfaceType)
@@ -289,6 +298,17 @@ fun OnboardingPagerScreen(
                 )
             }
         }
+    }
+
+    if (showBlePermissionSheet) {
+        BlePermissionBottomSheet(
+            onDismiss = { showBlePermissionSheet = false },
+            onRequestPermissions = {
+                showBlePermissionSheet = false
+                blePermissionsLauncher.launch(getBlePermissions())
+            },
+            sheetState = blePermissionSheetState,
+        )
     }
 }
 

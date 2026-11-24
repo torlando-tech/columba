@@ -179,6 +179,7 @@ fun PreciseLocationPermissionPrompt(
             },
             sheetState = sheetState,
             rationale = LocationPermissionManager.getPreciseLocationRationale(),
+            title = R.string.location_precise_title,
             primaryActionLabel = stringResource(R.string.enable_precise_location),
         )
     }

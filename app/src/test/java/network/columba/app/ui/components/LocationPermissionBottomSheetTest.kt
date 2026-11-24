@@ -3,10 +3,13 @@ package network.columba.app.ui.components
 import android.app.Application
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.Density
 import androidx.test.core.app.ApplicationProvider
 import network.columba.app.R
 import network.columba.app.test.RegisterComponentActivityRule
@@ -161,5 +164,55 @@ class LocationPermissionBottomSheetTest {
         composeTestRule.onNodeWithText(string(R.string.loc_perm_not_now)).performClick()
 
         assertTrue(dismissCalled)
+    }
+
+    // ========== Large Font Tests ==========
+
+    @Test
+    fun `locationPermissionBottomSheet keeps actions visible at large font`() {
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 2f)) {
+                LocationPermissionBottomSheet(
+                    onDismiss = {},
+                    onRequestPermissions = {},
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_not_now)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_enable_location)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `blePermissionBottomSheet keeps actions visible at large font`() {
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 2f)) {
+                BlePermissionBottomSheet(
+                    onDismiss = {},
+                    onRequestPermissions = {},
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText(string(R.string.ble_perm_not_now)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.ble_ctrl_grant_permissions)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `backgroundLocationPermissionBottomSheet keeps actions visible at large font`() {
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 2f)) {
+                BackgroundLocationPermissionBottomSheet(
+                    onDismiss = {},
+                    onRequestPermission = {},
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText(string(R.string.bg_location_not_now)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.bg_location_continue)).assertIsDisplayed()
     }
 }

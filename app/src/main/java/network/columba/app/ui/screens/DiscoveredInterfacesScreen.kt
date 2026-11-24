@@ -519,7 +519,7 @@ internal fun DiscoverySettingsCard(
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                         Text(
-                            text = if (autoconnectCount == 0) stringResource(R.string.iface_off) else "$autoconnectCount",
+                            text = "$autoconnectCount",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,

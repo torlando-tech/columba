@@ -611,19 +611,20 @@ class DebugViewModel
                     Log.i(TAG, "User requested service shutdown")
 
                     // Set shutdown flag so restart mechanisms (onDestroy, START_STICKY) stay stopped.
+                    // Kept synchronous and suspension-free: ACTION_STOP below must fire even if
+                    // the user leaves the screen in the same frame (popping cancels viewModelScope
+                    // at the first suspension point, which would strand the service running).
                     // Bumped under the same lock the heal uses, so an in-flight fetch that
                     // started earlier cannot clear this request.
-                    withContext(ioDispatcher) {
-                        synchronized(shutdownFlagLock) {
-                            shutdownRequestEpoch++
-                            context
-                                .getSharedPreferences(
-                                    SettingsRepository.PREFS_NAME_LOCAL,
-                                    android.content.Context.MODE_PRIVATE,
-                                ).edit()
-                                .putBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, true)
-                                .commit()
-                        }
+                    synchronized(shutdownFlagLock) {
+                        shutdownRequestEpoch++
+                        context
+                            .getSharedPreferences(
+                                SettingsRepository.PREFS_NAME_LOCAL,
+                                android.content.Context.MODE_PRIVATE,
+                            ).edit()
+                            .putBoolean(SettingsRepository.KEY_IS_USER_SHUTDOWN, true)
+                            .commit()
                     }
 
                     // Clear UI immediately so status card shows clean shutdown state

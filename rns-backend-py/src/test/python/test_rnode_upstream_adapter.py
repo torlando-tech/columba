@@ -16,6 +16,7 @@ importable — `run_python_tests.py` installs the exact SHAs from
 
 import importlib.util
 import sys
+import threading
 import types
 import unittest
 from pathlib import Path
@@ -53,6 +54,9 @@ class _FakeBridge:
         self._write_result = write_result
         self._connect_ok = connect_ok
         self._failure_reason = failure_reason
+        self._connecting = False
+        self._auto_connect_script = []
+        self.auto_connect_calls = 0
         self.written = []
         self.rx = b""
 
@@ -68,6 +72,21 @@ class _FakeBridge:
             self._device_name = device_name
         return self._connect_ok
 
+    def connectAuto(self, device_name, mode):
+        self.auto_connect_calls += 1
+        action = self._auto_connect_script.pop(0) if self._auto_connect_script else "connected"
+        if action == "pending":
+            self._connecting = True
+            return False
+        self._connecting = False
+        self._connected = action == "connected"
+        if self._connected:
+            self._device_name = device_name
+        return self._connected
+
+    def isConnecting(self):
+        return self._connecting
+
     def getLastConnectionFailure(self):
         return self._failure_reason
 
@@ -82,6 +101,7 @@ class _FakeBridge:
 
     def disconnect(self):
         self._connected = False
+        self._connecting = False
 
 
 class _FakeUsbBridge:
@@ -160,6 +180,23 @@ class RNodeUpstreamAdapterTests(unittest.TestCase):
         iface._kotlin_bridge = None
         iface._usb_bridge = None
         iface.status_reason = None
+        iface._online = False
+        iface._online_lock = threading.Lock()
+        iface.detached = False
+        iface.hw_errors = []
+        iface.serial = None
+        iface.ble = None
+        iface.tcp = None
+        iface.use_ble = False
+        iface.use_tcp = False
+        iface.enable_framebuffer = False
+        iface.last_imagedata = None
+        iface._logo_requested = False
+        iface.reconnect_w = 4.0
+        iface.reconnect_lock = threading.Lock()
+        iface._reconnect_thread = None
+        iface._reconnect_wakeup = threading.Event()
+        iface._auto_pending_seen = False
         return iface
 
     def _open_ble(self, iface, bridge):
@@ -258,7 +295,7 @@ class RNodeUpstreamAdapterTests(unittest.TestCase):
         connection.close()
         self.assertEqual(0, connection.write(b"abc"))
 
-    def test_pairing_required_is_surfaced_and_reconnect_is_suppressed(self):
+    def test_pairing_required_is_surfaced_and_presence_rearms_reconnect(self):
         # Android reports the broken bond; the UI keys off status_reason ==
         # "pairing_required" to show the warning and the repair action.
         bridge = _FakeBridge(connect_ok=False, failure_reason="pairing_required")
@@ -266,16 +303,99 @@ class RNodeUpstreamAdapterTests(unittest.TestCase):
         self.assertIsNone(self._open_ble(iface, bridge))
         self.assertEqual("pairing_required", iface.status_reason)
 
-        # Retrying a broken bond cannot work: no GATT connect every reconnect_w.
-        with mock.patch.object(self.upstream.RNodeInterface, "reconnect_port") as upstream_reconnect:
-            iface.reconnect_port()
-        upstream_reconnect.assert_not_called()
+        # A broken bond must not strand the interface forever: a presence event
+        # (or the UI's repair/reconnect action) clears both latches and wakes
+        # the supervisor. The supervisor then retries with the long pairing
+        # backoff instead of declaring the interface permanently dead.
+        with mock.patch.object(iface, "_start_reconnect_thread") as start:
+            iface.restart_reconnect()
+        start.assert_called_once()
+        self.assertIsNone(iface.status_reason)
+        self.assertTrue(iface._reconnect_wakeup.is_set())
+        self.assertEqual([], iface.hw_errors)
 
-        # Any other state still goes through upstream's reconnect supervisor.
-        iface.status_reason = None
-        with mock.patch.object(self.upstream.RNodeInterface, "reconnect_port") as upstream_reconnect:
-            iface.reconnect_port()
-        upstream_reconnect.assert_called_once()
+    def test_reconnect_retries_despite_latched_hardware_error(self):
+        # Upstream's supervisor exits forever when configure_device appends a
+        # hardware/validation error. Our supervisor clears that latch per
+        # attempt; this pins the behavior a range drop used to break.
+        bridge = _FakeBridge(connected=True)
+        iface = self._new_interface()
+        iface.hw_errors = [{"error": 1, "description": "modem timeout"}]
+
+        with mock.patch.object(iface, "configure_device") as configure:
+            configure.side_effect = lambda: setattr(iface, "online", True)
+            previous = sys.modules.get("event_bridge")
+            sys.modules["event_bridge"] = self._fake_event_bridge(bridge)
+            try:
+                iface.reconnect_port()
+            finally:
+                if previous is not None:
+                    sys.modules["event_bridge"] = previous
+                else:
+                    sys.modules.pop("event_bridge", None)
+
+        self.assertTrue(iface.online)
+        self.assertEqual([], iface.hw_errors)
+        configure.assert_called_once()
+
+    def test_reconnect_uses_auto_connect_and_polls_pending_gatt(self):
+        bridge = _FakeBridge(connected=False)
+        bridge._auto_connect_script = ["pending"]
+        iface = self._new_interface()
+
+        previous = sys.modules.get("event_bridge")
+        sys.modules["event_bridge"] = self._fake_event_bridge(bridge)
+        try:
+            with mock.patch.object(iface, "configure_device") as configure:
+                configure.side_effect = lambda: setattr(iface, "online", True)
+
+                # First attempt arms a pending autoConnect (one GATT).
+                self.assertTrue(iface._reconnect_once())
+                self.assertEqual(1, bridge.auto_connect_calls)
+                self.assertTrue(bridge.isConnecting())
+                self.assertIsNone(iface.serial)
+
+                # While pending, polling must not stack another GATT.
+                self.assertTrue(iface._reconnect_once())
+                self.assertEqual(1, bridge.auto_connect_calls)
+
+                # The controller reported success between polls: attach and
+                # configure the radio.
+                bridge._connecting = False
+                bridge._connected = True
+                self.assertTrue(iface._reconnect_once())
+                self.assertTrue(iface.online)
+                self.assertIsNotNone(iface.serial)
+                configure.assert_called_once()
+        finally:
+            if previous is not None:
+                sys.modules["event_bridge"] = previous
+            else:
+                sys.modules.pop("event_bridge", None)
+
+    def test_failed_pending_auto_connect_returns_no_progress_for_backoff(self):
+        bridge = _FakeBridge(connected=False)
+        bridge._auto_connect_script = ["pending"]
+        iface = self._new_interface()
+
+        previous = sys.modules.get("event_bridge")
+        sys.modules["event_bridge"] = self._fake_event_bridge(bridge)
+        try:
+            self.assertTrue(iface._reconnect_once())
+            self.assertEqual(1, bridge.auto_connect_calls)
+
+            # The GATT stack reported a failure without a connection. The
+            # next supervisor iteration must return no-progress so it waits
+            # the exponential backoff instead of re-arming immediately.
+            bridge._connecting = False
+            bridge._connected = False
+            self.assertFalse(iface._reconnect_once())
+            self.assertEqual(1, bridge.auto_connect_calls)
+        finally:
+            if previous is not None:
+                sys.modules["event_bridge"] = previous
+            else:
+                sys.modules.pop("event_bridge", None)
 
     def test_successful_connect_clears_the_status_reason(self):
         iface = self._new_interface()

@@ -51,6 +51,13 @@ class ReticulumService : Service() {
         const val ACTION_STOP = "network.columba.app.service.STOP"
         const val ACTION_RESTART_BLE = "network.columba.app.RESTART_BLE"
         const val ACTION_UPDATE_NOTIFICATION = "network.columba.app.service.UPDATE_NOTIFICATION"
+
+        /**
+         * RNode companion device-presence event (the radio came back into BLE
+         * range or reconnected). Handled in-process by the local backend so the
+         * Python reconnect supervisor is re-armed without an AIDL round trip.
+         */
+        const val ACTION_RNODE_PRESENCE = "network.columba.app.service.RNODE_PRESENCE"
         const val EXTRA_NETWORK_STATUS = "network_status"
 
         // Grace window for treating ACTION_STOP as a stale redelivery during an
@@ -395,6 +402,7 @@ class ReticulumService : Service() {
         ).start(serviceScope)
     }
 
+    @Suppress("CyclomaticComplexMethod")
     override fun onStartCommand(
         intent: Intent?,
         flags: Int,
@@ -513,9 +521,63 @@ class ReticulumService : Service() {
                     managers.notificationManager.updateNotification(status)
                 }
             }
+            ACTION_RNODE_PRESENCE -> handleRNodePresence()
         }
 
         return START_STICKY
+    }
+
+    /**
+     * Device-presence events are noisy (BLE appeared + BT connected for the same
+     * reconnect) and fire while the radio may already be online. Re-arm only when
+     * at least one live RNode interface is offline; when no RNode is in the live
+     * set the configured interface may have failed to start, so try anyway.
+     */
+    private fun handleRNodePresence() {
+        serviceScope.launch {
+            val interfaces =
+                runCatching {
+                    rnsBackend.transportAdmin.getDebugInfo()["interfaces"] as? List<*>
+                }.getOrNull()
+
+            if (interfaces != null && !shouldReconnectRNode(interfaces)) {
+                Log.d(TAG, "RNode presence: all live RNode interfaces online; nothing to do")
+                return@launch
+            }
+
+            Log.i(TAG, "RNode presence: re-arming RNode interface")
+            try {
+                rnsBackend.transportAdmin.reconnectRNodeInterface()
+            } catch (e: Exception) {
+                Log.w(TAG, "RNode presence reconnect failed", e)
+            }
+        }
+    }
+
+    @Suppress("ReturnCount")
+    internal fun shouldReconnectRNode(interfaces: List<*>): Boolean {
+        val rnodes =
+            interfaces
+                .mapNotNull { it as? Map<*, *> }
+                .filter { row ->
+                    val isRnode = row["is_rnode"] as? Boolean
+                    if (isRnode != null) {
+                        isRnode
+                    } else {
+                        // Older backends do not emit is_rnode; keep the name/type
+                        // fallback for those debug rows.
+                        val type = row["type"]?.toString().orEmpty()
+                        val name = row["name"]?.toString().orEmpty()
+                        type.contains("RNode", ignoreCase = true) ||
+                            name.contains("RNode", ignoreCase = true)
+                    }
+                }
+        if (rnodes.isEmpty()) {
+            // Configured-but-not-live (e.g. the Kotlin backend failed to
+            // register it) has no online row; do not treat absence as healthy.
+            return true
+        }
+        return rnodes.any { it["online"] != true }
     }
 
     override fun onBind(intent: Intent?): IBinder {

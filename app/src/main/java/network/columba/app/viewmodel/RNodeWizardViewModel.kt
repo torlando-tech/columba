@@ -1525,12 +1525,24 @@ class RNodeWizardViewModel
                             Log.d(TAG, "Association created: ${associationInfo.id}")
 
                             // Start observing device presence so Android binds our
-                            // RNodeCompanionService when the device connects
+                            // RNodeCompanionService when the device connects.
+                            // API 36 replaced the MAC overload with an
+                            // association-id request so presence events survive
+                            // address rotation and work for all association types.
                             try {
-                                companionDeviceManager?.startObservingDevicePresence(
-                                    associationInfo.deviceMacAddress?.toString()
-                                        ?: device.address,
-                                )
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+                                    val request =
+                                        android.companion.ObservingDevicePresenceRequest
+                                            .Builder()
+                                            .setAssociationId(associationInfo.id)
+                                            .build()
+                                    companionDeviceManager?.startObservingDevicePresence(request)
+                                } else {
+                                    companionDeviceManager?.startObservingDevicePresence(
+                                        associationInfo.deviceMacAddress?.toString()
+                                            ?: device.address,
+                                    )
+                                }
                                 Log.d(TAG, "Started observing device presence")
                             } catch (e: Exception) {
                                 Log.w(TAG, "Failed to start observing device presence", e)

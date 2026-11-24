@@ -161,6 +161,10 @@ internal object NativeInterfaceFactory {
 
     val currentInterfaces: Collection<network.reticulum.interfaces.Interface> get() = runningInterfaces.values
 
+    /** True when [name] is registered and its live interface reports online. */
+    fun isRunningAndOnline(name: String): Boolean =
+        runningInterfaces[name]?.online?.value == true
+
     fun addListener(listener: () -> Unit) {
         listeners.add(listener)
     }

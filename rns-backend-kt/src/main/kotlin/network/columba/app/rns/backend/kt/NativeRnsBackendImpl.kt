@@ -1984,6 +1984,7 @@ class NativeRnsBackendImpl(
                 mapOf(
                     "name" to iface.name,
                     "type" to iface.name.substringBefore("[").trim(),
+                    "is_rnode" to iface.discoveryInterfaceType.contains("RNode", ignoreCase = true),
                     "online" to iface.online,
                     "parent_name" to (iface.parentInterface?.name ?: ""),
                     "can_send" to iface.canSend,
@@ -2118,6 +2119,10 @@ class NativeRnsBackendImpl(
             if (config != null) {
                 val rnodeConfigs = config.enabledInterfaces.filterIsInstance<network.columba.app.rns.api.model.InterfaceConfig.RNode>()
                 for (rnode in rnodeConfigs) {
+                    if (NativeInterfaceFactory.isRunningAndOnline(rnode.name)) {
+                        Log.d(TAG, "Skipping online RNode during reconnect: ${rnode.name}")
+                        continue
+                    }
                     Log.i(TAG, "Reconnecting RNode interface: ${rnode.name}")
                     NativeInterfaceFactory.restartInterface(rnode)
                 }

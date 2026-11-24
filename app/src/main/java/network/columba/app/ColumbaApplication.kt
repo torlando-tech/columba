@@ -867,18 +867,7 @@ class ColumbaApplication : Application() {
 
             for (association in associations) {
                 try {
-                    val macAddress = association.deviceMacAddress?.toString()
-                    if (macAddress != null) {
-                        android.util.Log.d(
-                            "ColumbaApplication",
-                            "████ REGISTERING OBSERVER ████ MAC=$macAddress name=${association.displayName}",
-                        )
-                        companionDeviceManager.startObservingDevicePresence(macAddress)
-                        android.util.Log.d(
-                            "ColumbaApplication",
-                            "████ OBSERVER REGISTERED ████ MAC=$macAddress",
-                        )
-                    }
+                    observeCompanionPresence(companionDeviceManager, association)
                 } catch (e: Exception) {
                     android.util.Log.w(
                         "ColumbaApplication",
@@ -888,6 +877,43 @@ class ColumbaApplication : Application() {
             }
         } catch (e: Exception) {
             android.util.Log.w("ColumbaApplication", "Failed to register companion devices: ${e.message}")
+        }
+    }
+
+    @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.TIRAMISU)
+    private fun observeCompanionPresence(
+        companionDeviceManager: android.companion.CompanionDeviceManager,
+        association: android.companion.AssociationInfo,
+    ) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.BAKLAVA) {
+            // API 36 makes association-id observation the supported path; the
+            // String(MAC) overload is deprecated and does not reliably deliver
+            // onDevicePresenceEvent.
+            val request =
+                android.companion.ObservingDevicePresenceRequest
+                    .Builder()
+                    .setAssociationId(association.id)
+                    .build()
+            android.util.Log.d(
+                "ColumbaApplication",
+                "████ REGISTERING OBSERVER ████ id=${association.id} name=${association.displayName}",
+            )
+            companionDeviceManager.startObservingDevicePresence(request)
+            android.util.Log.d(
+                "ColumbaApplication",
+                "████ OBSERVER REGISTERED ████ id=${association.id}",
+            )
+        } else {
+            val macAddress = association.deviceMacAddress?.toString() ?: return
+            android.util.Log.d(
+                "ColumbaApplication",
+                "████ REGISTERING OBSERVER ████ MAC=$macAddress name=${association.displayName}",
+            )
+            companionDeviceManager.startObservingDevicePresence(macAddress)
+            android.util.Log.d(
+                "ColumbaApplication",
+                "████ OBSERVER REGISTERED ████ MAC=$macAddress",
+            )
         }
     }
 

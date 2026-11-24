@@ -129,6 +129,13 @@ class KotlinRNodeBridge(
         private const val BLE_CONNECT_TIMEOUT_MS = 15000L
         private const val BLE_CONNECT_MAX_RETRIES = 3
         private const val BLE_RETRY_DELAY_MS = 1000L
+
+        // Reconnect attempts use connectGatt(autoConnect=true): the controller
+        // keeps the connection pending until the bonded radio is reachable
+        // again, instead of burning a direct-connect timeout every few seconds
+        // while the radio is out of range. The attempt is bounded so a pending
+        // GATT is periodically re-armed by the Python reconnect supervisor.
+        private const val BLE_AUTO_CONNECT_TIMEOUT_MS = 5 * 60_000L
         private const val CONNECTION_RESULT_CONNECTED = "connected"
         private const val CONNECTION_RESULT_FAILED = "failed"
         private const val CONNECTION_FAILURE_PAIRING_REQUIRED = "pairing_required"
@@ -235,6 +242,17 @@ class KotlinRNodeBridge(
 
     @Volatile
     private var lastConnectionFailure: String? = null
+
+    // Non-null while a BLE autoConnect attempt is armed. The Python supervisor
+    // polls isConnecting() instead of starting a second GATT every retry.
+    @Volatile
+    private var autoConnectDeviceName: String? = null
+
+    // Generation of the autoConnect attempt. Cancelling, replacing, or
+    // invalidating the transport bumps it so a coroutine that had not yet
+    // called createBleGatt() cannot publish a GATT after cancellation, and a
+    // stale coroutine cannot clear a newer attempt's pending state.
+    private var autoConnectAttemptId = 0L
 
     @Volatile
     private var bleRssi: Int = -100 // Current RSSI (-100 = unknown)
@@ -538,10 +556,128 @@ class KotlinRNodeBridge(
             }
 
         return when (requestedMode) {
-            RNodeConnectionMode.CLASSIC -> connectClassic(deviceName, adapter, admissionEpoch)
-            RNodeConnectionMode.BLE -> connectBle(deviceName, adapter, admissionEpoch)
+            RNodeConnectionMode.CLASSIC -> {
+                cancelAutoConnectAttempt()
+                connectClassic(deviceName, adapter, admissionEpoch)
+            }
+            RNodeConnectionMode.BLE -> {
+                // A direct connect supersedes any armed autoConnect attempt:
+                // leaving both live makes Android GATT own two connections to
+                // the same radio and split callbacks between them.
+                cancelAutoConnectAttempt()
+                connectBle(deviceName, adapter, admissionEpoch)
+            }
         }
     }
+
+    /**
+     * Arm a pending BLE autoConnect for a reconnect supervisor.
+     *
+     * Returns true only when the bridge is already connected to [deviceName].
+     * A false result with [isConnecting] true means the controller accepted a
+     * pending connection; the caller should poll [isConnected] rather than
+     * calling this again. [BLE_AUTO_CONNECT_TIMEOUT_MS] bounds the pending
+     * window so a stale GATT is eventually re-armed.
+     *
+     * Classic has no autoConnect equivalent; it falls back to the blocking
+     * [connect] path.
+     */
+    @Synchronized
+    @Suppress("ReturnCount", "CyclomaticComplexMethod")
+    fun connectAuto(
+        deviceName: String,
+        mode: String,
+    ): Boolean {
+        lastConnectionFailure = null
+        if (mode.lowercase() !in setOf("ble", "gatt")) {
+            return connect(deviceName, mode)
+        }
+
+        if (isConnected.get()) {
+            return connectedDeviceName == deviceName && connectionMode == RNodeConnectionMode.BLE
+        }
+
+        val adapter =
+            bluetoothAdapter ?: run {
+                Log.e(TAG, "Bluetooth adapter not available")
+                return false
+            }
+        if (!adapter.isEnabled) {
+            Log.e(TAG, "Bluetooth is disabled")
+            return false
+        }
+
+        val device: BluetoothDevice? =
+            try {
+                adapter.bondedDevices.find { it.name == deviceName }
+            } catch (e: SecurityException) {
+                Log.e(TAG, "Missing BLUETOOTH_CONNECT permission", e)
+                null
+            }
+        if (device == null) {
+            markPairingRequired(deviceName, "device is no longer bonded in Android")
+            return false
+        }
+
+        val admissionEpoch =
+            synchronized(transportOwnerLock) {
+                if (autoConnectDeviceName != null) {
+                    // A different radio cannot share the process-wide bridge;
+                    // the same radio already has its pending GATT armed.
+                    return false
+                }
+                if (adapterAdmissionBlocked || bridgeShutdown) {
+                    null
+                } else {
+                    transportAdmissionEpoch
+                }
+            } ?: run {
+                Log.e(TAG, "Bluetooth transport admission is unavailable")
+                return false
+            }
+
+        val attemptId =
+            synchronized(transportOwnerLock) {
+                if (autoConnectDeviceName != null) return false
+                autoConnectAttemptId++
+                autoConnectDeviceName = deviceName
+                autoConnectAttemptId
+            }
+        Log.i(TAG, "Arming BLE autoConnect for $deviceName")
+
+        scope.launch {
+            try {
+                val connected =
+                    attemptBleConnection(
+                        device = device,
+                        deviceName = deviceName,
+                        admissionEpoch = admissionEpoch,
+                        autoConnect = true,
+                        timeoutMs = BLE_AUTO_CONNECT_TIMEOUT_MS,
+                        autoConnectAttemptId = attemptId,
+                    )
+                if (!connected) {
+                    Log.i(TAG, "BLE autoConnect attempt ended for $deviceName")
+                }
+            } finally {
+                synchronized(transportOwnerLock) {
+                    if (autoConnectDeviceName == deviceName && autoConnectAttemptId == attemptId) {
+                        autoConnectDeviceName = null
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    /**
+     * True while a BLE autoConnect is armed and not yet connected. Python's
+     * reconnect supervisor polls this to avoid stacking GATTs.
+     */
+    fun isConnecting(): Boolean =
+        synchronized(transportOwnerLock) {
+            autoConnectDeviceName != null && !isConnected.get()
+        }
 
     /**
      * Connect and return its machine-readable result as one synchronized operation.
@@ -761,15 +897,69 @@ class KotlinRNodeBridge(
     private fun createBleGatt(
         device: BluetoothDevice,
         admissionEpoch: Long,
+        autoConnect: Boolean,
+        attemptId: Long? = null,
     ): BluetoothGatt? =
         synchronized(transportOwnerLock) {
             if (!isTransportAdmissionCurrentLocked(admissionEpoch)) {
                 return@synchronized null
             }
-            device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE).also {
+            if (attemptId != null && attemptId != autoConnectAttemptId) {
+                // The attempt was cancelled before it reached the GATT stack.
+                return@synchronized null
+            }
+            device.connectGatt(context, autoConnect, gattCallback, BluetoothDevice.TRANSPORT_LE).also {
                 replaceBleGattOwner(it)
             }
         }
+
+    /**
+     * Drop any armed autoConnect attempt. Its GATT is closed (and disowned)
+     * before a direct connect or full teardown creates the next transport.
+     */
+    private fun cancelAutoConnectAttempt(expectedDeviceName: String? = null) {
+        val pendingGatt =
+            synchronized(transportOwnerLock) {
+                if (autoConnectDeviceName == null) {
+                    return
+                }
+                if (expectedDeviceName != null && autoConnectDeviceName != expectedDeviceName) {
+                    return
+                }
+                autoConnectDeviceName = null
+                autoConnectAttemptId++
+                val gatt = bluetoothGatt
+                bluetoothGatt = null
+                resetBleAttemptStateLocked()
+                gatt
+            }
+        closeBleGatt(pendingGatt)
+    }
+
+    /**
+     * Cancel the pending autoConnect attempt for [deviceName] on interface
+     * detach. A link already serving a different radio is left untouched.
+     */
+    @Synchronized
+    fun cancelAutoConnect(deviceName: String): Boolean {
+        val pending =
+            synchronized(transportOwnerLock) { autoConnectDeviceName }
+        if (pending == deviceName) {
+            cancelAutoConnectAttempt(deviceName)
+            return true
+        }
+        // The attempt may have completed between Python's last poll and detach.
+        // Close only when this bridge is serving the detaching radio.
+        val connected =
+            synchronized(transportOwnerLock) {
+                isConnected.get() && connectedDeviceName == deviceName
+            }
+        if (!connected) {
+            return false
+        }
+        disconnect()
+        return true
+    }
 
     private fun isCurrentGatt(gatt: BluetoothGatt): Boolean =
         synchronized(transportOwnerLock) { gatt === bluetoothGatt }
@@ -797,24 +987,31 @@ class KotlinRNodeBridge(
         device: BluetoothDevice,
         deviceName: String,
         admissionEpoch: Long,
+        autoConnect: Boolean = false,
+        timeoutMs: Long = BLE_CONNECT_TIMEOUT_MS,
+        autoConnectAttemptId: Long? = null,
     ): Boolean {
         var ownedGatt: BluetoothGatt? = null
         return try {
+            // A new attempt supersedes the previous failure reason; only this
+            // attempt's genuine bond-loss result should latch pairing_required.
+            lastConnectionFailure = null
             if (device.bondState != BluetoothDevice.BOND_BONDED) {
                 markPairingRequired(deviceName, "bond was lost before GATT setup")
                 return false
             }
 
             // Connect GATT and publish the new owner atomically with attempt-state reset.
-            Log.d(TAG, "Connecting GATT to ${device.address}...")
-            val attemptGatt = createBleGatt(device, admissionEpoch) ?: return false
+            Log.d(TAG, "Connecting GATT to ${device.address}... (autoConnect=$autoConnect)")
+            val attemptGatt =
+                createBleGatt(device, admissionEpoch, autoConnect, autoConnectAttemptId) ?: return false
             ownedGatt = attemptGatt
 
             // Wait for connection and service discovery
             val startTime = System.currentTimeMillis()
             while (
                 isBleAttemptActive(attemptGatt) &&
-                (System.currentTimeMillis() - startTime) < BLE_CONNECT_TIMEOUT_MS
+                (System.currentTimeMillis() - startTime) < timeoutMs
             ) {
                 if (device.bondState != BluetoothDevice.BOND_BONDED) {
                     mutateCurrentGatt(attemptGatt) {
@@ -870,7 +1067,6 @@ class KotlinRNodeBridge(
         }
     }
 
-
     /**
      * BLE GATT callback for connection events.
      */
@@ -915,6 +1111,13 @@ class KotlinRNodeBridge(
                             mutateCurrentGatt(gatt) {
                                 bleConnected = false
                                 shouldDisconnect = isConnected.get() && connectionMode == RNodeConnectionMode.BLE
+                                if (!shouldDisconnect) {
+                                    // A GATT that dies before setup completes (for
+                                    // example 133 while out of range) must end the
+                                    // attempt now; otherwise the pending autoConnect
+                                    // waits out the full timeout before re-arming.
+                                    bleSetupFailed = true
+                                }
                             }
                         if (!admitted) {
                             Log.w(TAG, "Ignoring connection-state callback from a stale GATT")
@@ -1033,16 +1236,18 @@ class KotlinRNodeBridge(
                     return
                 }
 
-                val pairingRequired =
-                    status == BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION ||
-                        status == BluetoothGatt.GATT_INSUFFICIENT_ENCRYPTION ||
-                        !bonded
+                // Only a missing bond is a genuine pairing failure. Android also
+                // reports INSUFFICIENT_AUTHENTICATION/ENCRYPTION when a bonded
+                // link has not finished encrypting yet (common on the first GATT
+                // attempt after a radio reboot); latching pairing_required on that
+                // transient status strands the radio offline for good. Fail the
+                // attempt and let the reconnect supervisor re-establish the link.
                 val admitted =
                     mutateCurrentGatt(gatt) {
-                        if (pairingRequired) {
+                        if (!bonded) {
                             markPairingRequired(
                                 gatt.device.name ?: "RNode",
-                                "secured notification setup was rejected",
+                                "secured notification setup was rejected and the bond is gone",
                             )
                         }
                         bleSetupFailed = true
@@ -1183,6 +1388,8 @@ class KotlinRNodeBridge(
                 bluetoothSocket = null
                 classicReadSocket = null
                 bluetoothGatt = null
+                autoConnectDeviceName = null
+                autoConnectAttemptId++
                 connectionMode = null
                 connectedDeviceName = null
                 resetBleAttemptStateLocked()
@@ -1197,14 +1404,18 @@ class KotlinRNodeBridge(
     private fun cleanupBle(expectedGatt: BluetoothGatt? = null) {
         val gattToClose =
             synchronized(transportOwnerLock) {
-                if (expectedGatt != null && bluetoothGatt !== expectedGatt) {
-                    return
-                }
                 val currentGatt = bluetoothGatt
-                bluetoothGatt = null
-                resetBleAttemptStateLocked()
-                readBuffer.clear()
-                currentGatt
+                if (expectedGatt != null && currentGatt !== expectedGatt) {
+                    // The attempt was superseded (direct connect, adapter
+                    // invalidation). Close the abandoned owner; do not touch the
+                    // replacement's attempt state.
+                    expectedGatt
+                } else {
+                    bluetoothGatt = null
+                    resetBleAttemptStateLocked()
+                    readBuffer.clear()
+                    expectedGatt ?: currentGatt
+                }
             }
         closeBleGatt(gattToClose)
     }

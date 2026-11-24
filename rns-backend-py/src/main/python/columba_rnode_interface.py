@@ -14,9 +14,13 @@ both unusable in an embedded Python. Columba already owns byte-level transports 
 Kotlin (`KotlinRNodeBridge` for BLE/Classic, `KotlinUSBBridge` for USB-serial), so
 this module injects them and inherits everything else from upstream.
 
-One method is overridden: `validateRadioState()` adopts the TX power the device
-echoes (firmware clamps/quantises it) instead of failing the interface, so a
-sub-floor power setting still brings the radio online with the achievable value.
+Two lifecycle seams are overridden: `validateRadioState()` adopts the TX power
+the device echoes (firmware clamps/quantises it) instead of failing the interface,
+and `reconnect_port()` owns a supervisor that keeps retrying after upstream would
+park forever on `hw_errors`/`pairing_required`; BLE retries use the bridge's
+`connectAuto()` so a radio that left range for hours reconnects when it returns.
+The RNode companion service's device-presence event calls
+`event_bridge.reconnect_rnode_interfaces()` to re-arm this supervisor.
 
 Deployment (unchanged): `event_bridge` copies this file to
 `<configdir>/interfaces/ColumbaRNodeInterface.py`, and `RnsConfigFile` emits
@@ -112,6 +116,17 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
     # request always gets an explicit timeout (the Kotlin default is the same).
     USB_PERMISSION_TIMEOUT_MS = 30000
 
+    # Reconnect policy. BLE uses KotlinRNodeBridge.connectAuto() (GATT
+    # autoConnect), which waits for the radio to reappear instead of failing a
+    # direct connect every few seconds. The poll interval is only used while a
+    # connect is pending; failures back off so a radio that stays out of range
+    # for hours does not hammer the Android BLE stack. pairing_required is a
+    # genuine bond loss that retrying cannot repair, so it gets a long backoff -
+    # but never a permanent latch.
+    RECONNECT_POLL_S = 1.0
+    RECONNECT_BACKOFF_MAX_S = 30.0
+    PAIRING_RETRY_S = 60.0
+
     def __init__(self, owner, configuration):
         c = Interface.get_config_obj(configuration)
         self.connection_mode = (c["connection_mode"] if "connection_mode" in c else self.MODE_CLASSIC) or self.MODE_CLASSIC
@@ -136,6 +151,16 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
         # so the reconnect loop asks once instead of opening a dialog every retry.
         self._usb_permission_denied = False
         self._usb_permission_next_attempt = 0.0
+        # One supervisor thread per interface; the shared reconnect_lock is the
+        # actual single-runner guard (upstream may also spawn a thread when the
+        # first open_port() fails).
+        self._reconnect_thread = None
+        self._reconnect_wakeup = threading.Event()
+        # True once an armed BLE autoConnect has been observed pending. If the
+        # next poll finds it no longer pending and still disconnected, the
+        # attempt failed asynchronously and the supervisor must apply its
+        # backoff before arming the next GATT.
+        self._auto_pending_seen = False
 
         # Upstream's own connections (able / pyjnius) must never be built here:
         # `allow_bluetooth` would construct AndroidBluetoothManager -> autoclass.
@@ -143,6 +168,13 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
         super().__init__(owner, configuration)
 
         self._display_logo()
+
+        # Upstream only starts its periodic reconnect when the first failure left
+        # hw_errors empty. A transient validation/read error during startup
+        # latches the interface offline forever. Own the supervisor here so the
+        # radio is retried even when upstream's condition was false.
+        if not self.online and not self.detached:
+            self._start_reconnect_thread()
 
     # ---- online state: mirror transitions to the Kotlin bridge ----
 
@@ -253,14 +285,168 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
             close_fn=bridge.disconnect,
         )
 
-    def reconnect_port(self):
-        # A broken bond cannot be repaired by retrying: upstream would attempt a
-        # GATT connect every reconnect_w forever. The UI's repair action opens
-        # the RNode wizard, whose save restarts this interface.
-        if self.status_reason == "pairing_required":
-            RNS.log(f"{self} reconnect suppressed: pairing required", RNS.LOG_WARNING)
+    def _start_reconnect_thread(self):
+        if self.detached or self.online:
             return
-        return super().reconnect_port()
+        if self._reconnect_thread is not None and self._reconnect_thread.is_alive():
+            return
+        self._reconnect_thread = threading.Thread(
+            target=self.reconnect_port,
+            daemon=True,
+            name=f"RNodeReconnect[{self.name}]",
+        )
+        self._reconnect_thread.start()
+
+    def restart_reconnect(self):
+        """Re-arm the supervisor after a device-presence event or a UI action.
+
+        Clears both latches: pairing_required (Android may need to re-encrypt a
+        stale but valid bond) and hw_errors (upstream treats any hardware/validation
+        error as permanent). Wakes a sleeping supervisor instead of waiting for
+        its backoff to expire.
+        """
+        if self.detached or self.online:
+            return
+        self.status_reason = None
+        self.hw_errors.clear()
+        self._reconnect_wakeup.set()
+        self._start_reconnect_thread()
+
+    def _bridge_failure(self, bridge):
+        try:
+            return bridge.getLastConnectionFailure()
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _close_reconnect_transport(self):
+        connections = []
+        if self.serial is not None:
+            connections.append(self.serial)
+        if self.ble is not None and self.ble is not self.serial:
+            connections.append(self.ble)
+        self.serial = None
+        self.ble = None
+        for connection in connections:
+            try:
+                connection.close()
+            except Exception as e:  # noqa: BLE001
+                RNS.log(f"{self} closing stale transport failed: {e}", RNS.LOG_DEBUG)
+
+    def _reconnect_once(self):
+        """One connection attempt. True means it made progress (including a
+        pending BLE autoConnect), so the supervisor should poll again soon."""
+        if self.serial is not None or self.ble is not None:
+            self._close_reconnect_transport()
+
+        if self.connection_mode == self.MODE_USB:
+            self.open_port()
+            if self.serial is not None and self.serial.is_open:
+                self.configure_device()
+                return True
+            return False
+
+        import event_bridge
+
+        bridge = event_bridge.get_rnode_bridge()
+        if bridge is None:
+            RNS.log("ColumbaRNodeInterface: KotlinRNodeBridge unavailable — RNode stays offline", RNS.LOG_ERROR)
+            return False
+        if not self.target_device_name:
+            RNS.log(f"ColumbaRNodeInterface '{self.name}': no target_device_name configured", RNS.LOG_ERROR)
+            return False
+
+        if bridge.isConnected():
+            self._auto_pending_seen = False
+            already = None
+            try:
+                already = bridge.getConnectedDeviceName()
+            except Exception as e:  # noqa: BLE001
+                RNS.log(f"{self} bridge contention check failed (continuing): {e}", RNS.LOG_DEBUG)
+            if already and already != self.target_device_name:
+                RNS.log(
+                    f"ColumbaRNodeInterface: KotlinRNodeBridge already serving '{already}'; "
+                    f"'{self.target_device_name}' stays offline until the other RNode is disabled",
+                    RNS.LOG_ERROR,
+                )
+                return False
+            self.open_port()
+            if self.serial is not None and self.serial.is_open:
+                self.configure_device()
+            return True
+
+        if self.connection_mode == self.MODE_BLE and hasattr(bridge, "connectAuto"):
+            # A pending autoConnect is already armed in the GATT stack; polling is
+            # all we should do until it succeeds, times out, or fails.
+            if hasattr(bridge, "isConnecting") and bridge.isConnecting():
+                self._auto_pending_seen = True
+                return True
+            if self._auto_pending_seen:
+                # The attempt completed asynchronously without connecting. Let
+                # the supervisor's exponential backoff pace the next GATT.
+                self._auto_pending_seen = False
+                self.status_reason = self._bridge_failure(bridge)
+                return False
+            self.status_reason = None
+            if bridge.connectAuto(self.target_device_name, "ble"):
+                return True
+            if hasattr(bridge, "isConnecting") and bridge.isConnecting():
+                self._auto_pending_seen = True
+                return True
+            self.status_reason = self._bridge_failure(bridge)
+            return False
+
+        # Bluetooth Classic has no autoConnect equivalent: retry the blocking SPP
+        # connect with the supervisor's backoff.
+        if not bridge.connect(self.target_device_name, self.connection_mode):
+            self.status_reason = self._bridge_failure(bridge)
+            return False
+        return True
+
+    def reconnect_port(self):
+        if self.detached or self.online:
+            return
+        if self.connection_mode == self.MODE_TCP:
+            return super().reconnect_port()
+
+        if not self.reconnect_lock.acquire(blocking=False):
+            return
+        try:
+            backoff = max(float(self.reconnect_w), self.RECONNECT_POLL_S)
+            while not self.online and not self.detached:
+                # Upstream latches hw_errors permanently: configure_device appends
+                # one and the supervisor loop exits forever. A radio that vanished
+                # or rebooted must keep retrying, so clear the latches per attempt
+                # and rely on the backoff (and pairing backoff) for pacing.
+                self.hw_errors.clear()
+                progressed = False
+                try:
+                    progressed = self._reconnect_once()
+                except Exception as e:  # noqa: BLE001
+                    RNS.log(f"{self} reconnect attempt failed: {e}", RNS.LOG_ERROR)
+                    self.online = False
+                    self._close_reconnect_transport()
+
+                if self.online:
+                    RNS.log(f"Reconnected {self}", RNS.LOG_INFO)
+                    if self.enable_framebuffer and self.last_imagedata is not None:
+                        self._logo_requested = True
+                        self.display_image(self.last_imagedata)
+                        self.enable_external_framebuffer()
+                    break
+                if self.detached:
+                    break
+
+                if self.status_reason == "pairing_required":
+                    wait = self.PAIRING_RETRY_S
+                elif progressed:
+                    wait = self.RECONNECT_POLL_S
+                else:
+                    wait = backoff
+                    backoff = min(backoff * 2.0, self.RECONNECT_BACKOFF_MAX_S)
+                self._reconnect_wakeup.wait(wait)
+                self._reconnect_wakeup.clear()
+        finally:
+            self.reconnect_lock.release()
 
     def detach(self):
         """Detach even when the transport never opened.
@@ -272,13 +458,32 @@ class ColumbaRNodeInterface(AndroidRNodeInterface):
         detach_interface() and disabling the interface fails with "needs a restart
         to apply" instead of detaching. Close whatever bridge exists instead.
         """
+        # An interface can detach while its BLE autoConnect is still pending
+        # (radio absent). Cancel that specific GATT so it cannot establish a
+        # link after the interface is disabled; do not touch another radio's
+        # connection.
+        if self.connection_mode in (self.MODE_BLE, self.MODE_CLASSIC) and self.target_device_name:
+            try:
+                import event_bridge
+
+                bridge = event_bridge.get_rnode_bridge()
+                if bridge is not None and hasattr(bridge, "cancelAutoConnect"):
+                    bridge.cancelAutoConnect(self.target_device_name)
+            except Exception as e:  # noqa: BLE001
+                RNS.log(f"ColumbaRNodeInterface: cancelling pending autoConnect failed: {e}", RNS.LOG_DEBUG)
         try:
             super().detach()
             return
         except Exception as e:  # noqa: BLE001
             RNS.log(f"ColumbaRNodeInterface: detach on an unopened transport ({e})", RNS.LOG_WARNING)
+        finally:
+            # Mark detached before waking a supervisor parked in the reconnect
+            # backoff so it observes the flag immediately, not after the wait.
+            self.detached = True
+            wakeup = getattr(self, "_reconnect_wakeup", None)
+            if wakeup is not None:
+                wakeup.set()
 
-        self.detached = True
         for bridge in (self._usb_bridge, self._kotlin_bridge):
             if bridge is None:
                 continue

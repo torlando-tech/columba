@@ -142,6 +142,10 @@ class DeviceDiscoveryStepTest {
         composeTestRule.onNodeWithText("Heltec V3", substring = true).assertDoesNotExist()
         composeTestRule.onNodeWithText("Current Device").assertDoesNotExist()
         composeTestRule.onNodeWithText("Connection Method").assertDoesNotExist()
+        // The screen raises the Bluetooth prominent-disclosure sheet before scanning. Dismiss it
+        // so the swipe targets the device-discovery content instead of the sheet's dialog root.
+        composeTestRule.onNodeWithText("Not Now").performClick()
+        composeTestRule.waitForIdle()
         composeTestRule.onRoot().performTouchInput { swipeUp() }
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("Enter device manually").assertDoesNotExist()

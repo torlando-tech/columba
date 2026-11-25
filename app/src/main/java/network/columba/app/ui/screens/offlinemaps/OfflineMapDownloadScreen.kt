@@ -54,6 +54,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -76,6 +77,7 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import network.columba.app.R
 import network.columba.app.map.TileDownloadManager
+import network.columba.app.ui.components.LocationPermissionBottomSheet
 import network.columba.app.util.LocationCompat
 import network.columba.app.viewmodel.AddressSearchResult
 import network.columba.app.viewmodel.DownloadProgress
@@ -294,6 +296,7 @@ fun OfflineMapDownloadScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocationSelectionStep(
     hasLocation: Boolean,
@@ -317,6 +320,8 @@ fun LocationSelectionStep(
     val context = LocalContext.current
     var isGettingLocation by remember { mutableStateOf(false) }
     var hasPermission by remember { mutableStateOf(false) }
+    var showPermissionSheet by remember { mutableStateOf(false) }
+    val permissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val permissionLauncher =
         rememberLauncherForActivityResult(
@@ -394,12 +399,9 @@ fun LocationSelectionStep(
             // Use current location button
             FilledTonalButton(
                 onClick = {
-                    permissionLauncher.launch(
-                        arrayOf(
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION,
-                        ),
-                    )
+                    // The Play prominent-disclosure requirement applies to this
+                    // location access too; show it before the system prompt.
+                    showPermissionSheet = true
                 },
                 enabled = !isGettingLocation,
                 modifier = Modifier.fillMaxWidth(),
@@ -655,6 +657,25 @@ fun LocationSelectionStep(
         ) {
             Text(stringResource(R.string.offline_map_download_next))
         }
+    }
+
+    if (showPermissionSheet) {
+        LocationPermissionBottomSheet(
+            onDismiss = { showPermissionSheet = false },
+            onRequestPermissions = {
+                showPermissionSheet = false
+                permissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                    ),
+                )
+            },
+            sheetState = permissionSheetState,
+            rationale = R.string.offline_map_location_rationale,
+            title = R.string.offline_map_location_title,
+            primaryActionLabel = stringResource(R.string.offline_map_download_use_current_location),
+        )
     }
 }
 

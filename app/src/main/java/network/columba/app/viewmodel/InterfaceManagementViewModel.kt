@@ -748,6 +748,13 @@ class InterfaceManagementViewModel
         }
 
         /**
+         * Show the BLE permission disclosure before launching the system request.
+         */
+        fun requestBlePermission() {
+            _state.value = _state.value.copy(showBlePermissionRequest = true)
+        }
+
+        /**
          * Dismiss the BLE permission request.
          */
         fun dismissBlePermissionRequest() {

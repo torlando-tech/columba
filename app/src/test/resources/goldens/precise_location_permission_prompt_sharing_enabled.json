@@ -1,8 +1,8 @@
 [
   "Close sheet",
   "Drag handle",
-  "Location Permission",
-  "Location sharing is set to Precise, but Columba doesn't have precise location access.\n\nWithout it, a shared position is unavailable or only approximate — off by a kilometre or more. Enable precise location for accurate sharing, or set a coarser precision in Location Sharing settings if that's intended.\n",
+  "Precise Location",
+  "Columba collects your precise location to share accurate positions with the contacts or group host you choose.\n\nWithout precise access, shared positions are approximate and can be off by a kilometre or more. You can still use Columba with approximate location.\n\nThe same Location permission also enables the map, distance to contacts, Location Sharing, Group Tracker, and offline-map setup. Each feature explains its use when you enable it.",
   "Not Now",
   "Enable Precise Location",
   "Drag handle"

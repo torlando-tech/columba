@@ -1001,9 +1001,11 @@
     <string name="validation_ble_packet_too_large">BLE packet too large (%1$d bytes, max %2$d)</string>
     <!-- Permission rationales -->
     <string name="camera_permission_rationale">"Columba needs camera access to:\n• Scan QR codes to add contacts\n• Read identity information from QR codes\n\nYour camera is only used for QR code scanning and no photos are stored.\n"</string>
-    <string name="location_permission_rationale">"Columba needs location access to:\n\nShare your location with chosen contacts\nHelp friends find you at events\nCalculate distance to contacts\n\nYou control who can see your location and for how long. Location data is only shared peer-to-peer with contacts you choose. Location data, like all data on Columba, is encrypted end to end, never stored on a central server, and is only readable by the contacts you send it to.\n\nColumba will not and can not share your location with anyone until you actively send it to someone. Your location is always encrypted safely over Reticulum.\n"</string>
-    <string name="location_precise_rationale">"Location sharing is set to Precise, but Columba doesn't have precise location access.\n\nWithout it, a shared position is unavailable or only approximate — off by a kilometre or more. Enable precise location for accurate sharing, or set a coarser precision in Location Sharing settings if that's intended.\n"</string>
-    <string name="location_group_tracker_rationale">Group Tracker shares your location with a group host so everyone can see where each other is.\n\nYour location is encrypted and only readable by the group host you configure.</string>
+    <string name="location_permission_rationale">"Columba collects your device's location (precise or approximate, depending on what you grant) to:\n\n• Show your position on the map\n• Calculate distance and direction to contacts\n• Share your location with contacts you choose, for as long as you choose\n• Power Group Tracker: automatically send your location to the group host you choose, who may share it with your group\n• Choose an area for offline maps\n• Sort nearby interfaces by distance\n\nGroup Tracker and active Location Sharing sessions can also keep sending while the app is closed or not in use. When Group Tracker is on, Columba also receives locations shared by your group. Location is encrypted and sent only to the contacts or group host you choose. It is never stored on a central server. You can stop sharing at any time.\n"</string>
+    <string name="location_precise_rationale">"Columba collects your precise location to share accurate positions with the contacts or group host you choose.\n\nWithout precise access, shared positions are approximate and can be off by a kilometre or more. You can still use Columba with approximate location.\n\nThe same Location permission also enables the map, distance to contacts, Location Sharing, Group Tracker, and offline-map setup. Each feature explains its use when you enable it."</string>
+    <string name="location_group_tracker_rationale">"Group Tracker automatically sends your location to the group host you choose so your group can see where each other is. It can keep sending while the app is closed or not in use, at the interval you set.\n\nWhen Group Tracker is on, Columba also receives locations shared by your group. Your location is encrypted and sent to your group host; that host may share it with your group. You can stop Group Tracker at any time.\n\nThe same Location permission also enables the map, distance to contacts, Location Sharing, and offline-map setup. Each feature explains its use when you enable it."</string>
+    <string name="location_group_tracker_title">How Group Tracker uses your location</string>
+    <string name="location_precise_title">Precise Location</string>
     <!-- FileUtils / ImageUtils -->
     <string name="file_read_could_not_open">Could not open file</string>
     <!-- LocalHotspotManager -->
@@ -1502,15 +1504,16 @@
     </plurals>
     <!-- BackgroundLocationPermissionBottomSheet.kt -->
     <string name="bg_location_title">Background Location</string>
-    <string name="bg_location_body">To share your location with contacts while the app is in the background, Columba needs the \"Allow all the time\" permission.\n\nThis lets Columba continue sending your encrypted location to chosen contacts even when you switch to another app or lock your screen.\n\nOn the next screen, please select \"Allow all the time\".</string>
+    <string name="bg_location_body">"Columba collects location data to enable Group Tracker and active Location Sharing sessions even when the app is closed or not in use.\n\nGroup Tracker automatically sends your location to the group host you choose at the interval you set so your group can see it. Active Location Sharing sessions keep sending to the contacts you chose for the duration you set. You can stop either at any time.\n\nOn the next screen, choose \"Allow all the time\" to enable this. If you don't want background sharing, choose \"While using the app\" or \"Don't allow\"."</string>
     <string name="bg_location_not_now">Not Now</string>
     <string name="bg_location_continue">Continue</string>
     <!-- BlePermissionBottomSheet.kt -->
     <string name="ble_perm_title">Bluetooth Permissions Required</string>
-    <string name="ble_perm_rationale">Columba uses Bluetooth Low Energy (BLE) to communicate with nearby devices in a mesh network.\n\nTo enable this functionality, we need the following permissions:\n\n• Bluetooth Scan: To discover nearby Reticulum peers\n• Bluetooth Connect: To establish connections with peers\n• Bluetooth Advertise: To broadcast your presence to other devices\n\nThese permissions allow Columba to create a decentralized, off-grid communication network.</string>
+    <string name="ble_perm_rationale">Columba uses Bluetooth Low Energy (BLE) to communicate with nearby devices in a mesh network.\n\nTo enable this functionality, we need the following permissions:\n\n• Bluetooth Scan: To discover nearby Reticulum peers\n• Bluetooth Connect: To establish connections with peers\n• Bluetooth Advertise: To broadcast your presence to other devices\n\nThese permissions allow Columba to create a decentralized, off-grid communication network.\n\nOn Android 11 and older, Android also requires the Location permission to scan for Bluetooth devices. Columba uses the permission to discover nearby peers. The same permission also enables the map, distance to contacts, Location Sharing, Group Tracker, and offline-map setup; each feature explains its use before accessing location.</string>
     <string name="ble_perm_not_now">Not Now</string>
     <!-- LocationPermissionBottomSheet.kt -->
-    <string name="loc_perm_title">Location Permission</string>
+    <string name="loc_perm_title">How Columba uses your location</string>
+    <string name="loc_perm_enable_location">Agree and continue</string>
     <string name="loc_perm_not_now">Not Now</string>
     <!-- PermissionDeniedCard.kt -->
     <string name="perm_denied_title">Permissions Required</string>
@@ -1780,7 +1783,6 @@
     <string name="reaction_selected_message">Selected message</string>
     <string name="reaction_select_text">Select text</string>
     <!-- Leftover component-owned defaults -->
-    <string name="loc_perm_enable_location">Enable Location</string>
     <string name="color_picker_title">Pick a Color</string>
     <string name="ifac_card_description">Leave blank unless the remote interface requires an IFAC network name and passphrase. Auto-filled when adding from a discovered interface.</string>
     <!-- MessagingScreen: sync result toasts (shared with ChatsScreen) -->
@@ -2416,6 +2418,7 @@
     <string name="settings_bug_report_copied_browser">Bug report copied to clipboard — browser opened</string>
     <string name="settings_bug_report_copied_no_browser">No browser found — bug report copied to clipboard</string>
     <string name="settings_grant_location_access">Grant Location Access</string>
+    <string name="settings_enable_group_tracker">Enable Group Tracker</string>
     <!-- i18n ticket 16: crash report dialogs -->
     <string name="settings_crash_title">App Crashed</string>
     <string name="settings_crash_message">The app crashed unexpectedly. Would you like to report this issue?</string>
@@ -3072,6 +3075,10 @@
     <string name="offline_map_download_toast_http_disabled_ready">HTTP disabled. Your offline maps are ready.</string>
     <string name="offline_map_download_location_subtitle">Choose the center point for your offline map region.</string>
     <string name="offline_map_download_use_current_location">Use Current Location</string>
+    <string name="offline_map_location_title">Location for Offline Maps</string>
+    <string name="offline_map_location_rationale">Columba uses your location once to center the offline-map download area on your current position. For offline maps, the location is not shared. The same Location permission also enables the map, distance to contacts, Location Sharing, and Group Tracker; each feature explains its use when you enable it.</string>
+    <string name="location_hotspot_title">Location for Wi-Fi Hotspot</string>
+    <string name="location_hotspot_rationale">Android requires the Location permission to create a Wi-Fi hotspot on this device. Columba uses the permission to start the hotspot and does not read or share your location for this feature. The same permission also enables the map, distance to contacts, Location Sharing, Group Tracker, and offline-map setup; each feature explains its use when you enable it.</string>
     <string name="offline_map_download_or_separator">- or -</string>
     <string name="offline_map_download_latitude">Latitude</string>
     <string name="offline_map_download_longitude">Longitude</string>

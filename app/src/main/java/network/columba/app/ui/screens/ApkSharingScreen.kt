@@ -1,5 +1,6 @@
 package network.columba.app.ui.screens
 
+import android.Manifest
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,9 +38,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -50,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import network.columba.app.R
 import network.columba.app.service.LocalHotspotManager
+import network.columba.app.ui.components.LocationPermissionBottomSheet
 import network.columba.app.ui.components.QrCodeImage
 import network.columba.app.viewmodel.ApkSharingViewModel
 import network.columba.app.viewmodel.SharingMode
@@ -72,6 +78,8 @@ fun ApkSharingScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val chooserTitle = stringResource(R.string.settings_share_columba_apk)
+    var showLocationDisclosure by remember { mutableStateOf(false) }
+    val locationPermissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Permission launcher for hotspot permissions
     val permissionLauncher =
@@ -82,6 +90,19 @@ fun ApkSharingScreen(
                 viewModel.onHotspotPermissionGranted()
             }
         }
+
+    // On Android 11-12, hotspot creation requires location permission even though
+    // Columba does not read location for this feature. Disclose that before requesting.
+    val requestHotspotPermissions = {
+        val permissions = viewModel.getRequiredHotspotPermissions()
+        if (permissions.contains(Manifest.permission.ACCESS_FINE_LOCATION) ||
+            permissions.contains(Manifest.permission.ACCESS_COARSE_LOCATION)
+        ) {
+            showLocationDisclosure = true
+        } else {
+            permissionLauncher.launch(permissions)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -126,16 +147,13 @@ fun ApkSharingScreen(
                 needsHotspotPermission = state.needsHotspotPermission,
                 isHotspotStarting = state.isHotspotStarting,
                 onStartHotspot = {
-                    val perms = viewModel.getRequiredHotspotPermissions()
-                    if (perms.isNotEmpty()) {
-                        permissionLauncher.launch(perms)
+                    if (viewModel.getRequiredHotspotPermissions().isNotEmpty()) {
+                        requestHotspotPermissions()
                     } else {
                         viewModel.startHotspotSharing()
                     }
                 },
-                onRequestPermissions = {
-                    permissionLauncher.launch(viewModel.getRequiredHotspotPermissions())
-                },
+                onRequestPermissions = { requestHotspotPermissions() },
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -154,6 +172,20 @@ fun ApkSharingScreen(
 
             Spacer(modifier = Modifier.height(80.dp))
         }
+    }
+
+    if (showLocationDisclosure) {
+        LocationPermissionBottomSheet(
+            onDismiss = { showLocationDisclosure = false },
+            onRequestPermissions = {
+                showLocationDisclosure = false
+                permissionLauncher.launch(viewModel.getRequiredHotspotPermissions())
+            },
+            sheetState = locationPermissionSheetState,
+            rationale = R.string.location_hotspot_rationale,
+            title = R.string.location_hotspot_title,
+            primaryActionLabel = stringResource(R.string.apk_sharing_grant_permission),
+        )
     }
 }
 

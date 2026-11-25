@@ -3,10 +3,13 @@ package network.columba.app.ui.components
 import android.app.Application
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.Density
 import androidx.test.core.app.ApplicationProvider
 import network.columba.app.R
 import network.columba.app.test.RegisterComponentActivityRule
@@ -24,7 +27,7 @@ import org.robolectric.annotation.Config
  * Tests:
  * - Title and icon display
  * - Rationale text display
- * - Button callbacks (Enable Location, Not Now)
+ * - Button callbacks (primary action, Not Now)
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -38,6 +41,9 @@ class LocationPermissionBottomSheetTest {
 
     val composeTestRule get() = composeRule
 
+    private fun string(resId: Int): String =
+        ApplicationProvider.getApplicationContext<Application>().getString(resId)
+
     // ========== Display Tests ==========
 
     @Test
@@ -50,7 +56,7 @@ class LocationPermissionBottomSheetTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Location Permission").assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_title)).assertIsDisplayed()
     }
 
     @Test
@@ -65,7 +71,7 @@ class LocationPermissionBottomSheetTest {
 
         // The default rationale from LocationPermissionManager.getPermissionRationale()
         // Just check that some text is displayed (exact text may vary)
-        composeTestRule.onNodeWithText("Enable Location").assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_enable_location)).assertIsDisplayed()
     }
 
     @Test
@@ -94,7 +100,7 @@ class LocationPermissionBottomSheetTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Enable Location").assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_enable_location)).assertIsDisplayed()
     }
 
     @Test
@@ -121,7 +127,7 @@ class LocationPermissionBottomSheetTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Not Now").assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_not_now)).assertIsDisplayed()
     }
 
     // ========== Callback Tests ==========
@@ -138,7 +144,7 @@ class LocationPermissionBottomSheetTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Enable Location").performClick()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_enable_location)).performClick()
 
         assertTrue(callbackInvoked)
     }
@@ -155,8 +161,58 @@ class LocationPermissionBottomSheetTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Not Now").performClick()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_not_now)).performClick()
 
         assertTrue(dismissCalled)
+    }
+
+    // ========== Large Font Tests ==========
+
+    @Test
+    fun `locationPermissionBottomSheet keeps actions visible at large font`() {
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 2f)) {
+                LocationPermissionBottomSheet(
+                    onDismiss = {},
+                    onRequestPermissions = {},
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_not_now)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.loc_perm_enable_location)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `blePermissionBottomSheet keeps actions visible at large font`() {
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 2f)) {
+                BlePermissionBottomSheet(
+                    onDismiss = {},
+                    onRequestPermissions = {},
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText(string(R.string.ble_perm_not_now)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.ble_ctrl_grant_permissions)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `backgroundLocationPermissionBottomSheet keeps actions visible at large font`() {
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 2f)) {
+                BackgroundLocationPermissionBottomSheet(
+                    onDismiss = {},
+                    onRequestPermission = {},
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText(string(R.string.bg_location_not_now)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(string(R.string.bg_location_continue)).assertIsDisplayed()
     }
 }

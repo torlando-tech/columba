@@ -203,12 +203,13 @@ fun SettingsScreen(
         ) { permissions ->
             val granted = permissions.values.any { it }
             if (granted) {
+                hasForegroundPermission = true
                 // Foreground granted; check if background is also needed
                 if (LocationPermissionManager.hasTelemetryBackgroundPermission(context)) {
                     pendingTelemetryAction?.invoke()
                     pendingTelemetryAction = null
                 } else {
-                    // Show custom bottom sheet before requesting background
+                    // Show the background disclosure before requesting background.
                     showBackgroundLocationSheet = true
                     // pendingTelemetryAction is preserved for the background launcher
                 }
@@ -455,17 +456,11 @@ fun SettingsScreen(
                     isSendingTelemetry = state.isSendingTelemetry,
                     onTelemetryEnabledChange = { enabled ->
                         if (enabled) {
-                            if (LocationPermissionManager.hasTelemetryBackgroundPermission(context)) {
-                                viewModel.setTelemetryCollectorEnabled(true)
-                            } else if (LocationPermissionManager.hasPermission(context)) {
-                                // Foreground location is granted, show background permission sheet.
-                                pendingTelemetryAction = { viewModel.setTelemetryCollectorEnabled(true) }
-                                showBackgroundLocationSheet = true
-                            } else {
-                                // Show permission sheet, then enable after permission granted
-                                pendingTelemetryAction = { viewModel.setTelemetryCollectorEnabled(true) }
-                                showTelemetryPermissionSheet = true
-                            }
+                            // Always show the Group Tracker disclosure before enabling.
+                            // The confirm action routes to the foreground/background
+                            // permission requests only if they are still missing.
+                            pendingTelemetryAction = { viewModel.setTelemetryCollectorEnabled(true) }
+                            showTelemetryPermissionSheet = true
                         } else {
                             // Disabling doesn't need permission
                             viewModel.setTelemetryCollectorEnabled(false)
@@ -820,13 +815,39 @@ fun SettingsScreen(
                 },
                 onRequestPermissions = {
                     showTelemetryPermissionSheet = false
-                    telemetryPermissionLauncher.launch(
-                        LocationPermissionManager.getRequiredPermissions().toTypedArray(),
-                    )
+                    when {
+                        !LocationPermissionManager.hasPermission(context) -> {
+                            telemetryPermissionLauncher.launch(
+                                LocationPermissionManager.getRequiredPermissions().toTypedArray(),
+                            )
+                        }
+
+                        !LocationPermissionManager.hasBackgroundLocationPermission(context) -> {
+                            // The Group Tracker disclosure is the feature disclosure;
+                            // the background sheet supplies the permission-specific
+                            // disclosure and the "Allow all the time" guidance.
+                            showBackgroundLocationSheet = true
+                        }
+
+                        else -> {
+                            pendingTelemetryAction?.invoke()
+                            pendingTelemetryAction = null
+                        }
+                    }
                 },
                 sheetState = telemetryPermissionSheetState,
                 rationale = R.string.location_group_tracker_rationale,
-                primaryActionLabel = stringResource(R.string.settings_grant_location_access),
+                title = R.string.location_group_tracker_title,
+                primaryActionLabel =
+                    stringResource(
+                        if (LocationPermissionManager.hasPermission(context) &&
+                            LocationPermissionManager.hasBackgroundLocationPermission(context)
+                        ) {
+                            R.string.settings_enable_group_tracker
+                        } else {
+                            R.string.settings_grant_location_access
+                        },
+                    ),
             )
         }
     }

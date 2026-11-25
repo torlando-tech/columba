@@ -36,6 +36,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -46,6 +47,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -64,15 +66,19 @@ import network.columba.app.data.model.BluetoothType
 import network.columba.app.data.model.DiscoveredRNode
 import network.columba.app.data.model.DiscoveredUsbDevice
 import network.columba.app.rns.host.ble.util.BlePermissionManager
+import network.columba.app.ui.components.BlePermissionBottomSheet
 import network.columba.app.viewmodel.RNodeConnectionType
 import network.columba.app.viewmodel.RNodeWizardState
 import network.columba.app.viewmodel.RNodeWizardViewModel
 import network.columba.app.viewmodel.UiMessage
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    var showPermissionSheet by remember { mutableStateOf(false) }
+    val permissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Permission launcher
     val permissionLauncher =
@@ -107,24 +113,11 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
     // Auto-start scan when entering this step in Bluetooth mode
     LaunchedEffect(state.connectionType) {
         if (state.connectionType == RNodeConnectionType.BLUETOOTH) {
-            val requiredPermissions =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    arrayOf(
-                        Manifest.permission.BLUETOOTH_SCAN,
-                        Manifest.permission.BLUETOOTH_CONNECT,
-                    )
-                } else {
-                    arrayOf(
-                        Manifest.permission.BLUETOOTH,
-                        Manifest.permission.BLUETOOTH_ADMIN,
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                    )
-                }
-
             if (BlePermissionManager.hasAllPermissions(context)) {
                 viewModel.startDeviceScan()
             } else {
-                permissionLauncher.launch(requiredPermissions)
+                // Show the Bluetooth/location disclosure before the system prompt.
+                showPermissionSheet = true
             }
         }
     }
@@ -200,6 +193,30 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
                 )
             }
         }
+    }
+
+    if (showPermissionSheet) {
+        BlePermissionBottomSheet(
+            onDismiss = { showPermissionSheet = false },
+            onRequestPermissions = {
+                showPermissionSheet = false
+                val permissions =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        arrayOf(
+                            Manifest.permission.BLUETOOTH_SCAN,
+                            Manifest.permission.BLUETOOTH_CONNECT,
+                        )
+                    } else {
+                        arrayOf(
+                            Manifest.permission.BLUETOOTH,
+                            Manifest.permission.BLUETOOTH_ADMIN,
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                        )
+                    }
+                permissionLauncher.launch(permissions)
+            },
+            sheetState = permissionSheetState,
+        )
     }
 }
 

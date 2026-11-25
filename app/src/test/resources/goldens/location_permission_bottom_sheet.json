@@ -1,9 +1,9 @@
 [
   "Close sheet",
   "Drag handle",
-  "Location Permission",
-  "Columba needs location access to:\n\nShare your location with chosen contacts\nHelp friends find you at events\nCalculate distance to contacts\n\nYou control who can see your location and for how long. Location data is only shared peer-to-peer with contacts you choose. Location data, like all data on Columba, is encrypted end to end, never stored on a central server, and is only readable by the contacts you send it to.\n\nColumba will not and can not share your location with anyone until you actively send it to someone. Your location is always encrypted safely over Reticulum.\n",
+  "How Columba uses your location",
+  "Columba collects your device's location (precise or approximate, depending on what you grant) to:\n\n• Show your position on the map\n• Calculate distance and direction to contacts\n• Share your location with contacts you choose, for as long as you choose\n• Power Group Tracker: automatically send your location to the group host you choose, who may share it with your group\n• Choose an area for offline maps\n• Sort nearby interfaces by distance\n\nGroup Tracker and active Location Sharing sessions can also keep sending while the app is closed or not in use. When Group Tracker is on, Columba also receives locations shared by your group. Location is encrypted and sent only to the contacts or group host you choose. It is never stored on a central server. You can stop sharing at any time.\n",
   "Not Now",
-  "Enable Location",
+  "Agree and continue",
   "Drag handle"
 ]

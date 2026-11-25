@@ -405,7 +405,7 @@ fun InterfaceManagementScreen(
                                             },
                                             onRequestPermissions =
                                                 if (iface.isBleInterface()) {
-                                                    { permissionLauncher.launch(BlePermissionManager.getRequiredPermissions().toTypedArray()) }
+                                                    { viewModel.requestBlePermission() }
                                                 } else {
                                                     null
                                                 },

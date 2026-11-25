@@ -2,7 +2,7 @@
   "Close sheet",
   "Drag handle",
   "Background Location",
-  "To share your location with contacts while the app is in the background, Columba needs the \"Allow all the time\" permission.\n\nThis lets Columba continue sending your encrypted location to chosen contacts even when you switch to another app or lock your screen.\n\nOn the next screen, please select \"Allow all the time\".",
+  "Columba collects location data to enable Group Tracker and active Location Sharing sessions even when the app is closed or not in use.\n\nGroup Tracker automatically sends your location to the group host you choose at the interval you set so your group can see it. Active Location Sharing sessions keep sending to the contacts you chose for the duration you set. You can stop either at any time.\n\nOn the next screen, choose \"Allow all the time\" to enable this. If you don't want background sharing, choose \"While using the app\" or \"Don't allow\".",
   "Not Now",
   "Continue",
   "Drag handle"

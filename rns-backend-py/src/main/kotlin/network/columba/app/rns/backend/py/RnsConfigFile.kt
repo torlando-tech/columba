@@ -211,6 +211,7 @@ internal object RnsConfigFile {
                 sb.appendLine("    target_host = ${iface.targetHost}")
                 sb.appendLine("    target_port = ${iface.targetPort}")
                 if (iface.kissFraming) sb.appendLine("    kiss_framing = true")
+                iface.fixedMtu?.let { sb.appendLine("    fixed_mtu = $it") }
                 sb.appendLine("    mode = ${iface.mode}")
                 iface.networkName?.let { sb.appendLine("    network_name = $it") }
                 iface.passphrase?.let { sb.appendLine("    passphrase = $it") }

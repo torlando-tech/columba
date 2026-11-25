@@ -807,6 +807,8 @@
     <string name="tcp_wizard_socks_port">SOCKS5 Proxy Port</string>
     <string name="tcp_wizard_kiss_framing_title">KISS Framing (TNC / Modem)</string>
     <string name="tcp_wizard_kiss_framing_description">Use only when connecting to a software TNC or soundmodem that exposes KISS-over-TCP. Do NOT enable for Reticulum TCPServerInterface or Backbone connections — it disables the internal reliability and recovery mechanisms.</string>
+    <string name="tcp_wizard_fixed_mtu">Fixed MTU (bytes)</string>
+    <string name="tcp_wizard_fixed_mtu_hint">Optional. Leave blank to let Reticulum pick the link MTU, or set the MTU the modem requires (for example 500).</string>
     <string name="flasher_usb_permission_denied">USB permission denied</string>
     <string name="flasher_load_firmware_failed">Failed to load firmware: %1$s</string>
     <string name="tcp_client_save_failed">Failed to save configuration</string>
@@ -990,6 +992,8 @@
     <string name="validation_hostname_invalid">Invalid hostname or IP address</string>
     <string name="validation_port_not_number">Port must be a number</string>
     <string name="validation_port_range">Port must be between %1$d and %2$d</string>
+    <string name="validation_mtu_not_number">MTU must be a number</string>
+    <string name="validation_mtu_range">MTU must be between %1$d and %2$d bytes</string>
     <string name="validation_nickname_empty">Nickname cannot be empty</string>
     <string name="validation_nickname_too_long">Nickname too long (max %1$d characters)</string>
     <string name="validation_interface_name_empty">Interface name cannot be empty</string>

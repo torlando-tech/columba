@@ -18,6 +18,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -254,6 +255,43 @@ class InterfaceModeWiringTest {
         } finally {
             NativeInterfaceFactory.shutdownAll()
         }
+    }
+
+    @Test
+    fun tcpClient_pinnedMtuPinsTheInterfaceHwMtu() {
+        // RNS fixed_mtu: python sets FIXED_MTU + AUTOCONFIGURE_MTU=False and
+        // pins HW_MTU to the configured byte count (TCPInterface.py:110-116).
+        val iface =
+            buildInterface(
+                InterfaceConfig.TCPClient(
+                    name = "tcp-mtu",
+                    enabled = true,
+                    targetHost = "127.0.0.1",
+                    targetPort = 4244,
+                    kissFraming = true,
+                    fixedMtu = 500,
+                    mode = "full",
+                ),
+            ) as network.reticulum.interfaces.tcp.TCPClientInterface
+        assertEquals(500, iface.hwMtu)
+        assertTrue(iface.fixedMtu)
+        assertFalse(iface.autoconfigureMtu)
+    }
+
+    @Test
+    fun tcpClient_absentMtuKeepsAutoconfiguration() {
+        val iface =
+            buildInterface(
+                InterfaceConfig.TCPClient(
+                    name = "tcp-auto-mtu",
+                    enabled = true,
+                    targetHost = "127.0.0.1",
+                    targetPort = 4245,
+                    mode = "full",
+                ),
+            ) as network.reticulum.interfaces.tcp.TCPClientInterface
+        assertFalse(iface.fixedMtu)
+        assertTrue(iface.autoconfigureMtu)
     }
 
     @Test

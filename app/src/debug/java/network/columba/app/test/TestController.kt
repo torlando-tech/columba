@@ -866,6 +866,8 @@ object TestController {
         name: String,
         host: String,
         port: Int,
+        kissFraming: Boolean = false,
+        fixedMtu: Int? = null,
     ) {
         ensureInit(context)
         scope.launch {
@@ -878,14 +880,16 @@ object TestController {
                 enabled = true,
                 targetHost = host,
                 targetPort = port,
-                kissFraming = false,
+                kissFraming = kissFraming,
+                fixedMtu = fixedMtu,
                 mode = "full",
                 networkRestriction = NetworkRestriction.ANY,
             )
             val newId = interfaceRepo!!.insertInterface(cfg)
             applyAndLog(
                 "interface_added",
-                "name=${escape(name)} id=$newId type=TCPClient host=${escape(host)} port=$port",
+                "name=${escape(name)} id=$newId type=TCPClient host=${escape(host)} port=$port " +
+                    "kiss=$kissFraming fixed_mtu=${fixedMtu ?: "auto"}",
             )
         }
     }

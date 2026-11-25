@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.test.TcpClientWizardTestFixtures
@@ -152,6 +153,95 @@ class ReviewConfigureStepTest {
 
         // Then
         composeTestRule.onNodeWithText("Target Port").assertIsDisplayed()
+    }
+
+    // ========== KISS / fixed_mtu Tests ==========
+
+    @Test
+    fun reviewStep_kissDisabled_hidesFixedMtuField() {
+        // Given
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(
+                TcpClientWizardTestFixtures.reviewConfigureState(),
+            )
+
+        // When
+        composeTestRule.setContent {
+            ReviewConfigureStep(viewModel = mockViewModel)
+        }
+
+        // Then - fixed_mtu only applies to KISS-framed modem links
+        composeTestRule.onNodeWithText("Fixed MTU (bytes)").assertDoesNotExist()
+    }
+
+    @Test
+    fun reviewStep_kissEnabled_showsFixedMtuField() {
+        // Given
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(
+                TcpClientWizardTestFixtures.reviewConfigureState(
+                    kissFraming = true,
+                    fixedMtu = "500",
+                ),
+            )
+
+        // When
+        composeTestRule.setContent {
+            ReviewConfigureStep(viewModel = mockViewModel)
+        }
+
+        // Then - the field sits below the fold in the scrollable form
+        composeTestRule.onNodeWithText("Fixed MTU (bytes)").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("500").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun reviewStep_invalidFixedMtu_showsRangeError() {
+        // Given
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(
+                TcpClientWizardTestFixtures.reviewConfigureState(
+                    kissFraming = true,
+                    fixedMtu = "100",
+                ),
+            )
+
+        // When
+        composeTestRule.setContent {
+            ReviewConfigureStep(viewModel = mockViewModel)
+        }
+
+        // Then - RNS would abort interface load for fixed_mtu < 500
+        composeTestRule
+            .onNodeWithText("MTU must be between 500 and 262144 bytes")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun reviewStep_onFixedMtuChange_callsViewModel() {
+        // Given
+        val capturedMtu = slot<String>()
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(
+                TcpClientWizardTestFixtures.reviewConfigureState(kissFraming = true),
+            )
+        every { mockViewModel.updateFixedMtu(capture(capturedMtu)) } just Runs
+
+        composeTestRule.setContent {
+            ReviewConfigureStep(viewModel = mockViewModel)
+        }
+
+        // When
+        composeTestRule.onNodeWithText("Fixed MTU (bytes)").performTextInput("500")
+
+        // Then
+        assertTrue(capturedMtu.isCaptured)
+        assertEquals("500", capturedMtu.captured)
     }
 
     // ========== Input Callback Tests ==========

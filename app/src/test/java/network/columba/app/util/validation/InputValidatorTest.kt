@@ -349,6 +349,33 @@ class InputValidatorTest {
         assertTrue(tooHigh is ValidationResult.Error)
     }
 
+    // ========== MTU VALIDATION TESTS ==========
+
+    @Test
+    fun `validateMtu - 500 bytes is accepted`() {
+        val result = InputValidator.validateMtu("500")
+        assertTrue(result is ValidationResult.Success)
+        assertEquals(500, result.getOrNull())
+    }
+
+    @Test
+    fun `validateMtu - rejects values below the RNS minimum`() {
+        // RNS raises ValueError at interface load for fixed_mtu < 500.
+        assertTrue(InputValidator.validateMtu("499") is ValidationResult.Error)
+        assertTrue(InputValidator.validateMtu("0") is ValidationResult.Error)
+    }
+
+    @Test
+    fun `validateMtu - rejects values above the TCP HW_MTU ceiling`() {
+        assertTrue(InputValidator.validateMtu("262145") is ValidationResult.Error)
+    }
+
+    @Test
+    fun `validateMtu - rejects non-numeric input`() {
+        assertTrue(InputValidator.validateMtu("abc") is ValidationResult.Error)
+        assertTrue(InputValidator.validateMtu("") is ValidationResult.Error)
+    }
+
     // ========== NICKNAME VALIDATION TESTS ==========
 
     @Test

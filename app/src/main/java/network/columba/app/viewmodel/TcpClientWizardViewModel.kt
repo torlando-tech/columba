@@ -59,6 +59,9 @@ data class TcpClientWizardState(
     val interfaceMode: String = InterfaceMode.FULL.value,
     // KISS-over-TCP framing (software TNC / soundmodem endpoints, not Reticulum servers)
     val kissFraming: Boolean = false,
+    // Optional pinned MTU in bytes (RNS fixed_mtu); blank = automatic.
+    // Only persists while [kissFraming] is enabled.
+    val fixedMtu: String = "",
     // SOCKS5 proxy (Tor/Orbot) settings
     val socksProxyEnabled: Boolean = false,
     val socksProxyHost: String = "127.0.0.1",
@@ -84,6 +87,9 @@ class TcpClientWizardViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "TcpClientWizard"
+
+            /** Digits in the maximum accepted MTU (262144) so the field cannot overflow. */
+            private const val MAX_MTU_DIGITS = 6
         }
 
         private val _state = MutableStateFlow(TcpClientWizardState())
@@ -130,6 +136,7 @@ class TcpClientWizardViewModel
                             // when the stored value is unrecognized.
                             interfaceMode = config.mode,
                             kissFraming = config.kissFraming,
+                            fixedMtu = config.fixedMtu?.toString().orEmpty(),
                             socksProxyEnabled = config.socksProxyEnabled,
                             socksProxyHost = config.socksProxyHost,
                             socksProxyPort = config.socksProxyPort.toString(),
@@ -226,6 +233,7 @@ class TcpClientWizardViewModel
                     // Community servers are Reticulum servers; KISS framing
                     // only ever applies to custom modem/TNC endpoints
                     kissFraming = false,
+                    fixedMtu = "",
                     // Auto-enable SOCKS proxy for .onion servers
                     socksProxyEnabled = isOnion,
                 )
@@ -245,6 +253,7 @@ class TcpClientWizardViewModel
                     targetPort = "",
                     bootstrapOnly = false,
                     kissFraming = false,
+                    fixedMtu = "",
                     socksProxyEnabled = false,
                     socksProxyHost = "127.0.0.1",
                     socksProxyPort = "9050",
@@ -267,6 +276,15 @@ class TcpClientWizardViewModel
          */
         fun toggleKissFraming(enabled: Boolean) {
             _state.update { it.copy(kissFraming = enabled) }
+        }
+
+        /**
+         * Update the pinned MTU field (RNS fixed_mtu, bytes). Blank means the
+         * interface auto-configures its MTU. Non-digits are dropped so the
+         * field can only ever produce a parseable value.
+         */
+        fun updateFixedMtu(value: String) {
+            _state.update { it.copy(fixedMtu = value.filter { c -> c.isDigit() }.take(MAX_MTU_DIGITS)) }
         }
 
         /**
@@ -395,30 +413,24 @@ class TcpClientWizardViewModel
                     val interfaceName = currentState.interfaceName.trim().ifEmpty { "TCP Connection" }
                     val isEditing = currentState.editingInterfaceId != null
 
-                    // Check for duplicate interface names before saving
-                    // Exclude current interface when editing
+                    val fixedMtu =
+                        when (val mtuResult = fixedMtuForSave(currentState)) {
+                            is ValidationResult.Success -> mtuResult.value
+                            is ValidationResult.Error ->
+                                return@launch failSave(
+                                    UiMessage.Text(mtuResult.reason.messageResource(), mtuResult.args),
+                                )
+                        }
+
+                    // Duplicate names are rejected before saving; the current
+                    // interface is excluded when editing.
                     val existingInterfaces = interfaceRepository.allInterfaceEntities.first()
                     val existingNames =
                         existingInterfaces
                             .filter { it.id != currentState.editingInterfaceId }
                             .map { it.name }
-                    when (
-                        val uniqueResult =
-                            InputValidator.validateInterfaceNameUniqueness(
-                                interfaceName,
-                                existingNames,
-                            )
-                    ) {
-                        is ValidationResult.Error -> {
-                            _state.update {
-                                it.copy(
-                                    isSaving = false,
-                                    saveError = UiMessage.Text(uniqueResult.reason.messageResource(), uniqueResult.args),
-                                )
-                            }
-                            return@launch
-                        }
-                        is ValidationResult.Success -> { /* Name is unique, continue */ }
+                    duplicateNameError(interfaceName, existingNames)?.let { error ->
+                        return@launch failSave(error)
                     }
 
                     val config =
@@ -428,6 +440,7 @@ class TcpClientWizardViewModel
                             targetHost = currentState.targetHost.trim(),
                             targetPort = currentState.targetPort.toIntOrNull() ?: 4242,
                             kissFraming = currentState.kissFraming,
+                            fixedMtu = fixedMtu,
                             mode = currentState.interfaceMode,
                             networkName = currentState.networkName.trim().ifEmpty { null },
                             passphrase = currentState.passphrase.trim().ifEmpty { null },
@@ -454,16 +467,42 @@ class TcpClientWizardViewModel
                     _state.update { it.copy(isSaving = false, saveSuccess = true) }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to save TCP Client interface", e)
-                    _state.update {
-                        it.copy(
-                            isSaving = false,
-                            saveError =
-                                e.message?.let { UiMessage.Raw(it) }
-                                    ?: UiMessage.Text(R.string.tcp_client_save_failed),
-                        )
-                    }
+                    failSave(
+                        e.message?.let { UiMessage.Raw(it) }
+                            ?: UiMessage.Text(R.string.tcp_client_save_failed),
+                    )
                 }
             }
+        }
+
+        /**
+         * MTU to persist for the current state: null when KISS framing is off
+         * or the field is blank (RNS auto-configures), otherwise the validated
+         * byte count. The pinned MTU only travels with KISS-framed modem links.
+         */
+        private fun fixedMtuForSave(state: TcpClientWizardState): ValidationResult<Int?> =
+            when {
+                !state.kissFraming || state.fixedMtu.isBlank() -> ValidationResult.Success(null)
+                else ->
+                    when (val result = InputValidator.validateMtu(state.fixedMtu)) {
+                        is ValidationResult.Error -> ValidationResult.Error(result.reason, result.args)
+                        is ValidationResult.Success -> ValidationResult.Success(result.value)
+                    }
+            }
+
+        /** Error message for a duplicate interface name, or null when it is free. */
+        private fun duplicateNameError(
+            interfaceName: String,
+            existingNames: List<String>,
+        ): UiMessage? =
+            when (val result = InputValidator.validateInterfaceNameUniqueness(interfaceName, existingNames)) {
+                is ValidationResult.Error -> UiMessage.Text(result.reason.messageResource(), result.args)
+                is ValidationResult.Success -> null
+            }
+
+        /** Surfaces a save error and clears the in-flight state. */
+        private fun failSave(error: UiMessage) {
+            _state.update { it.copy(isSaving = false, saveError = error) }
         }
 
         /**

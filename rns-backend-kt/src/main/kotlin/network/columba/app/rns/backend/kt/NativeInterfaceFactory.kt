@@ -190,12 +190,16 @@ internal object NativeInterfaceFactory {
     /**
      * The subset of an [InterfaceConfig] baked into the running object that a
      * later edit must restart the interface to apply: the mode, plus KISS
-     * framing for TCP clients (it selects the packet codec at construction).
+     * framing and the pinned MTU for TCP clients (both are baked into the
+     * object at construction).
      */
     internal fun configSignatureOf(config: InterfaceConfig): String =
         when (config) {
             is InterfaceConfig.AutoInterface -> config.mode
-            is InterfaceConfig.TCPClient -> config.mode + if (config.kissFraming) "|kiss" else "|raw"
+            is InterfaceConfig.TCPClient ->
+                config.mode +
+                    (if (config.kissFraming) "|kiss" else "|raw") +
+                    "|mtu=" + (config.fixedMtu?.toString() ?: "auto")
             is InterfaceConfig.TCPServer -> config.mode
             is InterfaceConfig.UDP -> config.mode
             is InterfaceConfig.RNode -> config.mode
@@ -502,6 +506,7 @@ internal object NativeInterfaceFactory {
                     targetHost = config.targetHost,
                     targetPort = config.targetPort,
                     useKissFraming = config.kissFraming,
+                    fixedMtuBytes = config.fixedMtu,
                     keepAlive = false, // Disable for mobile battery
                     ifacNetname = config.networkName,
                     ifacNetkey = config.passphrase,

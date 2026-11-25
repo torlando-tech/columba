@@ -267,6 +267,66 @@ class InterfaceRepositoryTest {
         }
 
     @Test
+    fun `enabledInterfaces round-trips a persisted fixed_mtu`() =
+        runTest {
+            val kiss =
+                InterfaceEntity(
+                    id = 1,
+                    name = "KISS TCP",
+                    type = "TCPClient",
+                    enabled = true,
+                    configJson =
+                        InterfaceConfig.TCPClient(
+                            name = "KISS TCP",
+                            targetHost = "10.0.0.1",
+                            targetPort = 8001,
+                            kissFraming = true,
+                            fixedMtu = 500,
+                        ).toJsonString(),
+                    displayOrder = 0,
+                )
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(kiss))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val config = awaitItem().single() as InterfaceConfig.TCPClient
+                assertTrue(config.kissFraming)
+                assertEquals(500, config.fixedMtu)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `enabledInterfaces ignores an out-of-range fixed_mtu`() =
+        runTest {
+            // A hand-edited or corrupted value below RNS's 500-byte minimum
+            // would abort the whole RNS stack at interface load.
+            val badMtu =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Bad MTU TCP",
+                    type = "TCPClient",
+                    enabled = true,
+                    configJson = """{"target_host":"10.0.0.1","target_port":8001,"fixed_mtu":100}""",
+                    displayOrder = 0,
+                )
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(badMtu))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val config = awaitItem().single() as InterfaceConfig.TCPClient
+                assertNull(config.fixedMtu)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
     fun `allInterfaces skips corrupted interfaces`() =
         runTest {
             val corrupted =

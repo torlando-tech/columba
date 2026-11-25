@@ -3,6 +3,7 @@ package network.columba.app.data.config
 import network.columba.app.rns.api.model.InterfaceConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -65,6 +66,21 @@ class ConfigFileParserTest {
     @Test
     fun `absent kiss_framing defaults to false`() {
         assertFalse(tcpConfig("").kissFraming)
+    }
+
+    @Test
+    fun `fixed_mtu from the KISS example parses to fixedMtu`() {
+        assertEquals(500, tcpConfig("                    fixed_mtu = 500").fixedMtu)
+    }
+
+    @Test
+    fun `absent fixed_mtu leaves auto-configuration`() {
+        assertNull(tcpConfig("").fixedMtu)
+    }
+
+    @Test
+    fun `fixed_mtu below the RNS minimum is ignored instead of aborting the stack`() {
+        assertNull(tcpConfig("                    fixed_mtu = 100").fixedMtu)
     }
 
     @Test

@@ -41,6 +41,8 @@ object TcpClientWizardTestFixtures {
         interfaceName: String = selectedServer?.name.orEmpty(),
         targetHost: String = selectedServer?.host.orEmpty(),
         targetPort: String = selectedServer?.port?.toString().orEmpty(),
+        kissFraming: Boolean = false,
+        fixedMtu: String = "",
     ) = TcpClientWizardState(
         currentStep = TcpClientWizardStep.REVIEW_CONFIGURE,
         selectedServer = selectedServer,
@@ -48,6 +50,8 @@ object TcpClientWizardTestFixtures {
         interfaceName = interfaceName,
         targetHost = targetHost,
         targetPort = targetPort,
+        kissFraming = kissFraming,
+        fixedMtu = fixedMtu,
     )
 
     fun customModeReviewState(

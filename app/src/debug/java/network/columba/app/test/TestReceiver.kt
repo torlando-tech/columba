@@ -294,7 +294,14 @@ class TestReceiver : BroadcastReceiver() {
                             "name=$name host=$host port=$port",
                     )
                 } else {
-                    TestController.handleAddTcpClient(app, name, host, port)
+                    TestController.handleAddTcpClient(
+                        app,
+                        name,
+                        host,
+                        port,
+                        kissFraming = intent.getBooleanExtra("kiss_framing", false),
+                        fixedMtu = intent.getStringExtra("fixed_mtu")?.toIntOrNull(),
+                    )
                 }
             }
 

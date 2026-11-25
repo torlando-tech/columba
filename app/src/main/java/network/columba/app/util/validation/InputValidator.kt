@@ -13,9 +13,11 @@ import network.columba.app.util.validation.ValidationConstants.MAX_BLE_PACKET_SI
 import network.columba.app.util.validation.ValidationConstants.MAX_DEVICE_NAME_LENGTH
 import network.columba.app.util.validation.ValidationConstants.MAX_INTERFACE_NAME_LENGTH
 import network.columba.app.util.validation.ValidationConstants.MAX_MESSAGE_LENGTH
+import network.columba.app.util.validation.ValidationConstants.MAX_MTU
 import network.columba.app.util.validation.ValidationConstants.MAX_NICKNAME_LENGTH
 import network.columba.app.util.validation.ValidationConstants.MAX_PORT
 import network.columba.app.util.validation.ValidationConstants.MAX_SEARCH_QUERY_LENGTH
+import network.columba.app.util.validation.ValidationConstants.MIN_MTU
 import network.columba.app.util.validation.ValidationConstants.MIN_PORT
 import network.columba.app.util.validation.ValidationConstants.PUBLIC_KEY_LENGTH
 
@@ -342,6 +344,29 @@ object InputValidator {
                 ValidationResult.Error(InputErrorReason.PORT_NOT_NUMBER)
             parsed !in MIN_PORT..MAX_PORT ->
                 ValidationResult.Error(InputErrorReason.PORT_RANGE, listOf(MIN_PORT, MAX_PORT))
+            else ->
+                ValidationResult.Success(parsed)
+        }
+    }
+
+    /**
+     * Validates a pinned interface MTU (RNS `fixed_mtu`, in bytes).
+     *
+     * RNS aborts interface load for values below `RNS.Reticulum.MTU` (500),
+     * so the lower bound is enforced here. The upper bound is the TCP
+     * interface's default HW_MTU ceiling.
+     *
+     * @param mtu The MTU as a string
+     * @return ValidationResult.Success with the integer MTU, or ValidationResult.Error
+     */
+    fun validateMtu(mtu: String): ValidationResult<Int> {
+        val parsed = mtu.trim().toIntOrNull()
+
+        return when {
+            parsed == null ->
+                ValidationResult.Error(InputErrorReason.MTU_NOT_NUMBER)
+            parsed !in MIN_MTU..MAX_MTU ->
+                ValidationResult.Error(InputErrorReason.MTU_RANGE, listOf(MIN_MTU, MAX_MTU))
             else ->
                 ValidationResult.Success(parsed)
         }

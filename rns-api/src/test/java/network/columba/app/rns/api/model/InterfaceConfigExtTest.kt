@@ -99,6 +99,7 @@ class InterfaceConfigExtTest {
                 targetHost = "10.0.0.1",
                 targetPort = 4242,
                 kissFraming = true,
+                fixedMtu = 500,
                 mode = "full",
                 networkName = "testnet",
                 passphrase = "secret",
@@ -109,6 +110,7 @@ class InterfaceConfigExtTest {
         assertEquals("10.0.0.1", json.getString("target_host"))
         assertEquals(4242, json.getInt("target_port"))
         assertTrue(json.getBoolean("kiss_framing"))
+        assertEquals(500, json.getInt("fixed_mtu"))
         assertEquals("full", json.getString("mode"))
         assertEquals("testnet", json.getString("network_name"))
         assertEquals("secret", json.getString("passphrase"))
@@ -130,6 +132,7 @@ class InterfaceConfigExtTest {
 
         assertFalse(json.has("network_name"))
         assertFalse(json.has("passphrase"))
+        assertFalse("fixed_mtu must be omitted when auto-configuring", json.has("fixed_mtu"))
     }
 
     @Test

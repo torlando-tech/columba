@@ -60,6 +60,27 @@ class RnsConfigFileTest {
     }
 
     @Test
+    fun `TCP KISS interface emits kiss_framing and fixed_mtu`() {
+        val kiss =
+            InterfaceConfig.TCPClient(
+                targetHost = "127.0.0.1",
+                targetPort = 8001,
+                kissFraming = true,
+                fixedMtu = 500,
+            )
+        val out = RnsConfigFile.build(cfg(interfaces = listOf(kiss)))
+        assertTrue(out.contains("kiss_framing = true"))
+        assertTrue(out.contains("fixed_mtu = 500"))
+    }
+
+    @Test
+    fun `TCP client omits fixed_mtu when the MTU is automatic`() {
+        // RNS raises ValueError at interface load for fixed_mtu < 500, so an
+        // unset value must not reach the config file.
+        assertFalse(RnsConfigFile.build(cfg()).contains("fixed_mtu"))
+    }
+
+    @Test
     fun `skipAutoInterface disables AutoInterface but keeps other interfaces`() {
         val out = RnsConfigFile.build(cfg(), joinShareInstance = false, skipAutoInterface = true)
         assertTrue(out.contains("[interfaces]"))

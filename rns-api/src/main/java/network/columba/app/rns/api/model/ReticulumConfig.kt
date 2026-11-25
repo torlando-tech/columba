@@ -373,6 +373,9 @@ sealed class InterfaceConfig : Parcelable {
      * @param targetHost IP address or hostname of the remote server
      * @param targetPort TCP port number of the remote server
      * @param kissFraming Whether to use KISS framing (for connecting to TNCs/modems)
+     * @param fixedMtu Optional pinned link MTU in bytes (RNS `fixed_mtu`). Null
+     *   means the interface auto-configures its MTU; only meaningful for KISS
+     *   modem links that impose a specific frame size.
      * @param mode Interface mode: one of [InterfaceMode.value] — "full", "gateway",
      *   "access_point", "roaming", "boundary", or "internal" (RNS 1.4+)
      * @param networkName Optional IFAC network name for cryptographic authentication
@@ -386,6 +389,7 @@ sealed class InterfaceConfig : Parcelable {
         val targetHost: String,
         val targetPort: Int,
         val kissFraming: Boolean = false,
+        val fixedMtu: Int? = null,
         val mode: String = "full",
         val networkName: String? = null,
         val passphrase: String? = null,
@@ -410,6 +414,7 @@ sealed class InterfaceConfig : Parcelable {
             parcel.writeString(targetHost)
             parcel.writeInt(targetPort)
             parcel.writeInt(if (kissFraming) 1 else 0)
+            parcel.writeNullableInt(fixedMtu)
             parcel.writeString(mode)
             parcel.writeString(networkName)
             parcel.writeString(passphrase)
@@ -653,6 +658,7 @@ sealed class InterfaceConfig : Parcelable {
                             targetHost = parcel.readString().orEmpty(),
                             targetPort = parcel.readInt(),
                             kissFraming = parcel.readInt() != 0,
+                            fixedMtu = parcel.readNullableInt(),
                             mode = parcel.readString().orEmpty(),
                             networkName = parcel.readString(),
                             passphrase = parcel.readString(),

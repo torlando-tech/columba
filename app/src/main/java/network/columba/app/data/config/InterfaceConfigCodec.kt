@@ -240,12 +240,23 @@ object InterfaceConfigCodec {
         if (section.boolean("i2p_tunneled", defaultValue = false)) {
             warnings += "I2P tunneling is not supported; this interface will connect directly"
         }
+        val fixedMtu =
+            section.param("fixed_mtu")?.let { raw ->
+                when (val result = InputValidator.validateMtu(raw)) {
+                    is ValidationResult.Success -> result.value
+                    is ValidationResult.Error -> {
+                        warnings += "Invalid fixed_mtu '$raw'; using automatic MTU"
+                        null
+                    }
+                }
+            }
         return InterfaceConfig.TCPClient(
             name = name,
             enabled = enabled,
             targetHost = validateHost(host, "target_host"),
             targetPort = port,
             kissFraming = section.boolean("kiss_framing", defaultValue = false),
+            fixedMtu = fixedMtu,
             mode = section.mode(warnings),
             networkName = section.ifacNetworkName(),
             passphrase = section.ifacPassphrase(),
@@ -464,6 +475,7 @@ object InterfaceConfigCodec {
                 line("target_host", config.targetHost)
                 line("target_port", config.targetPort.toString())
                 if (config.kissFraming) line("kiss_framing", "yes")
+                config.fixedMtu?.let { line("fixed_mtu", it.toString()) }
                 line("mode", config.mode)
                 config.networkName?.let { line("network_name", it) }
                 config.passphrase?.let { line("passphrase", it) }
@@ -739,6 +751,7 @@ object InterfaceConfigCodec {
             "forward_ip",
             "forward_port",
             "kiss_framing",
+            "fixed_mtu",
             "i2p_tunneled",
             "remote",
             "port",

@@ -29,6 +29,7 @@ fun InterfaceConfig.toJsonString(): String =
                     put("target_host", targetHost)
                     put("target_port", targetPort)
                     put("kiss_framing", kissFraming)
+                    fixedMtu?.let { put("fixed_mtu", it) }
                     put("mode", mode)
                     networkName?.let { put("network_name", it) }
                     passphrase?.let { put("passphrase", it) }

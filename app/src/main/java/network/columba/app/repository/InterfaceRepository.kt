@@ -9,6 +9,7 @@ import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.api.model.toJsonString
 import network.columba.app.util.validation.InputValidator
+import network.columba.app.util.validation.ValidationConstants
 import network.columba.app.util.validation.ValidationResult
 import org.json.JSONException
 import org.json.JSONObject
@@ -247,6 +248,12 @@ class InterfaceRepository
                             targetHost = targetHost,
                             targetPort = targetPort,
                             kissFraming = json.optBoolean("kiss_framing", false),
+                            // Absent/out-of-range fixed_mtu falls back to auto-configuration;
+                            // a value below RNS's minimum would abort RNS startup.
+                            fixedMtu =
+                                json.optInt("fixed_mtu", 0).takeIf {
+                                    it in ValidationConstants.MIN_MTU..ValidationConstants.MAX_MTU
+                                },
                             mode = json.optString("mode", "full"),
                             networkName = json.optString("network_name", "").ifEmpty { null },
                             passphrase = json.optString("passphrase", "").ifEmpty { null },

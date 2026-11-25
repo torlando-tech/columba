@@ -33,6 +33,9 @@ import network.columba.app.ui.components.IfacConfigCard
 import network.columba.app.R
 import network.columba.app.ui.components.InterfaceModeSelector
 import network.columba.app.ui.components.NetworkRestrictionSelector
+import network.columba.app.util.validation.InputValidator
+import network.columba.app.util.validation.ValidationResult
+import network.columba.app.util.validation.messageResource
 import network.columba.app.viewmodel.TcpClientWizardViewModel
 
 /**
@@ -280,29 +283,63 @@ fun ReviewConfigureStep(viewModel: TcpClientWizardViewModel) {
                 ),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        stringResource(R.string.tcp_wizard_kiss_framing_title),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Text(
-                        stringResource(R.string.tcp_wizard_kiss_framing_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.tcp_wizard_kiss_framing_title),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            stringResource(R.string.tcp_wizard_kiss_framing_description),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Switch(
+                        checked = state.kissFraming,
+                        onCheckedChange = { viewModel.toggleKissFraming(it) },
                     )
                 }
-                Spacer(Modifier.width(16.dp))
-                Switch(
-                    checked = state.kissFraming,
-                    onCheckedChange = { viewModel.toggleKissFraming(it) },
-                )
+
+                // RNS fixed_mtu: only meaningful for KISS modem links that
+                // impose a specific frame size.
+                AnimatedVisibility(visible = state.kissFraming) {
+                    // Blank means automatic MTU, so only a typed value can be invalid.
+                    val mtuError =
+                        (InputValidator.validateMtu(state.fixedMtu) as? ValidationResult.Error)
+                            .takeIf { state.fixedMtu.isNotBlank() }
+
+                    @Suppress("SpreadOperator") // stringResource's vararg signature is the platform API shape
+                    val mtuMessage =
+                        mtuError?.let {
+                            stringResource(it.reason.messageResource(), *it.args.toTypedArray())
+                        } ?: stringResource(R.string.tcp_wizard_fixed_mtu_hint)
+                    Column(
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = state.fixedMtu,
+                            onValueChange = { viewModel.updateFixedMtu(it) },
+                            label = { Text(stringResource(R.string.tcp_wizard_fixed_mtu)) },
+                            placeholder = { Text("500") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            isError = mtuError != null,
+                            supportingText = {
+                                Text(mtuMessage, style = MaterialTheme.typography.bodySmall)
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
+                    }
+                }
             }
         }
     }

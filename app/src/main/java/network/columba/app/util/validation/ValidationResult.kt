@@ -29,6 +29,8 @@ enum class InputErrorReason {
     HOSTNAME_INVALID,
     PORT_NOT_NUMBER,
     PORT_RANGE,
+    MTU_NOT_NUMBER,
+    MTU_RANGE,
     NICKNAME_EMPTY,
     NICKNAME_TOO_LONG,
     INTERFACE_NAME_EMPTY,
@@ -64,6 +66,8 @@ fun InputErrorReason.messageResource(): Int =
         InputErrorReason.HOSTNAME_INVALID -> R.string.validation_hostname_invalid
         InputErrorReason.PORT_NOT_NUMBER -> R.string.validation_port_not_number
         InputErrorReason.PORT_RANGE -> R.string.validation_port_range
+        InputErrorReason.MTU_NOT_NUMBER -> R.string.validation_mtu_not_number
+        InputErrorReason.MTU_RANGE -> R.string.validation_mtu_range
         InputErrorReason.NICKNAME_EMPTY -> R.string.validation_nickname_empty
         InputErrorReason.NICKNAME_TOO_LONG -> R.string.validation_nickname_too_long
         InputErrorReason.INTERFACE_NAME_EMPTY -> R.string.validation_interface_name_empty

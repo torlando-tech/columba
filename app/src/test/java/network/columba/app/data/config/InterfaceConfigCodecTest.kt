@@ -447,6 +447,7 @@ class InterfaceConfigCodecTest {
                 targetHost = "node.example.com",
                 targetPort = 4242,
                 kissFraming = true,
+                fixedMtu = 500,
                 mode = "full",
                 networkName = "mesh",
                 passphrase = "secret",
@@ -454,8 +455,33 @@ class InterfaceConfigCodecTest {
 
         val rendered = InterfaceConfigCodec.renderSnippet(config)
         assertNotNull(rendered)
-        val parsed = InterfaceConfigCodec.parseSnippet(rendered!!).interfaces.single().config
-        assertEquals(config, parsed)
+        val parsedInterfaces = InterfaceConfigCodec.parseSnippet(rendered!!).interfaces
+        assertEquals(1, parsedInterfaces.size)
+        assertTrue(
+            "fixed_mtu must be a recognised key, not an ignored setting",
+            parsedInterfaces.single().warnings.isEmpty(),
+        )
+        assertEquals(config, parsedInterfaces.single().config)
+    }
+
+    @Test
+    fun `invalid fixed_mtu is dropped with a warning instead of failing the import`() {
+        val result =
+            InterfaceConfigCodec.parseSnippet(
+                """
+                [[Bad MTU]]
+                  type = TCPClientInterface
+                  enabled = yes
+                  target_host = 127.0.0.1
+                  target_port = 8001
+                  kiss_framing = yes
+                  fixed_mtu = 100
+                """.trimIndent(),
+            )
+
+        val parsed = result.interfaces.single()
+        assertNull((parsed.config as InterfaceConfig.TCPClient).fixedMtu)
+        assertTrue(parsed.warnings.any { it.contains("fixed_mtu") })
     }
 
     @Test

@@ -14,15 +14,41 @@ import org.junit.Test
  * toggle until the app restarts (PR #1226 P1).
  */
 class NativeInterfaceFactorySignatureTest {
-    private fun tcpClient(mode: String, kissFraming: Boolean) =
-        InterfaceConfig.TCPClient(
-            name = "tcp-test",
-            enabled = true,
-            targetHost = "127.0.0.1",
-            targetPort = 4242,
-            mode = mode,
-            kissFraming = kissFraming,
+    private fun tcpClient(
+        mode: String,
+        kissFraming: Boolean,
+        fixedMtu: Int? = null,
+    ) = InterfaceConfig.TCPClient(
+        name = "tcp-test",
+        enabled = true,
+        targetHost = "127.0.0.1",
+        targetPort = 4242,
+        mode = mode,
+        kissFraming = kissFraming,
+        fixedMtu = fixedMtu,
+    )
+
+    @Test
+    fun `pinned MTU edit changes the TCP client signature`() {
+        // fixed_mtu is baked into TCPClientInterface.hwMtu at construction, so
+        // a saved MTU edit must restart the running interface.
+        assertNotEquals(
+            NativeInterfaceFactory.configSignatureOf(tcpClient("full", kissFraming = true, fixedMtu = 500)),
+            NativeInterfaceFactory.configSignatureOf(tcpClient("full", kissFraming = true, fixedMtu = 512)),
         )
+        assertNotEquals(
+            NativeInterfaceFactory.configSignatureOf(tcpClient("full", kissFraming = true)),
+            NativeInterfaceFactory.configSignatureOf(tcpClient("full", kissFraming = true, fixedMtu = 500)),
+        )
+    }
+
+    @Test
+    fun `unchanged pinned MTU yields a stable signature`() {
+        assertEquals(
+            NativeInterfaceFactory.configSignatureOf(tcpClient("full", kissFraming = true, fixedMtu = 500)),
+            NativeInterfaceFactory.configSignatureOf(tcpClient("full", kissFraming = true, fixedMtu = 500)),
+        )
+    }
 
     @Test
     fun `kiss framing flip changes the TCP client signature`() {

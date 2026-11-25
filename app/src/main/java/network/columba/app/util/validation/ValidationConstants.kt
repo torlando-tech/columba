@@ -70,6 +70,18 @@ object ValidationConstants {
     const val MAX_PORT = 65535
 
     /**
+     * Minimum pinned link MTU in bytes. RNS rejects `fixed_mtu` values below
+     * `RNS.Reticulum.MTU` (500 bytes) with a ValueError at interface load.
+     */
+    const val MIN_MTU = 500
+
+    /**
+     * Maximum pinned link MTU in bytes: the TCP interface's default HW_MTU
+     * ceiling (RNS `TCPInterface.HW_MTU`).
+     */
+    const val MAX_MTU = 262_144
+
+    /**
      * Maximum BLE packet size in bytes
      */
     const val MAX_BLE_PACKET_SIZE = 512
@@ -160,6 +172,7 @@ object ValidationConstants {
             "forward_ip",
             "forward_port",
             "kiss_framing",
+            "fixed_mtu",
             // AutoInterface parameters
             "group_id",
             "discovery_scope",

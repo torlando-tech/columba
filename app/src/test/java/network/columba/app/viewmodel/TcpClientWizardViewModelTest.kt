@@ -1141,6 +1141,87 @@ class TcpClientWizardViewModelTest {
         }
 
     @Test
+    fun `saveConfiguration persists fixedMtu for a KISS interface`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            viewModel.selectServer(testServer)
+            viewModel.toggleKissFraming(true)
+            viewModel.updateFixedMtu("500")
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.TCPClient
+            assertEquals(500, savedConfig.fixedMtu)
+        }
+
+    @Test
+    fun `saveConfiguration drops fixedMtu when KISS framing is turned off`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            viewModel.selectServer(testServer)
+            viewModel.toggleKissFraming(true)
+            viewModel.updateFixedMtu("500")
+            viewModel.toggleKissFraming(false)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.TCPClient
+            assertNull(savedConfig.fixedMtu)
+        }
+
+    @Test
+    fun `saveConfiguration rejects a fixedMtu below the Reticulum minimum`() =
+        runTest {
+            viewModel.selectServer(testServer)
+            viewModel.toggleKissFraming(true)
+            viewModel.updateFixedMtu("499")
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { interfaceRepository.insertInterface(any()) }
+            val state = viewModel.state.value
+            assertFalse(state.isSaving)
+            assertNotNull(state.saveError)
+            assertFalse(state.saveSuccess)
+        }
+
+    @Test
+    fun `updateFixedMtu keeps only digits`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.updateFixedMtu("5a0b0")
+                advanceUntilIdle()
+
+                assertEquals("500", awaitItem().fixedMtu)
+            }
+        }
+
+    @Test
+    fun `selectServer clears fixedMtu`() =
+        runTest {
+            viewModel.toggleKissFraming(true)
+            viewModel.updateFixedMtu("500")
+            advanceUntilIdle()
+
+            viewModel.selectServer(testServer)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.fixedMtu.isEmpty())
+        }
+
+    @Test
     fun `enableCustomMode resets kissFraming`() =
         runTest {
             viewModel.state.test {
@@ -1177,6 +1258,7 @@ class TcpClientWizardViewModelTest {
                     targetHost = "tnc.local",
                     targetPort = 8001,
                     kissFraming = true,
+                    fixedMtu = 500,
                     mode = "full",
                 )
 
@@ -1188,6 +1270,7 @@ class TcpClientWizardViewModelTest {
 
                 val state = awaitItem()
                 assertTrue(state.kissFraming)
+                assertEquals("500", state.fixedMtu)
             }
         }
 

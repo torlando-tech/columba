@@ -534,8 +534,9 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
 
             // Callback A has already been received; force A -> B before both mutation boundaries.
             localIdentityDao.setActive(identityB)
-            val reduced = repository.applyDeliveryStatus(duplicateHash, "delivered", identityA)
-            repository.updateMessageSentInterface(duplicateHash, "A Route", requireNotNull(reduced).identityHash)
+            messageDao.applyDeliveryStatus(duplicateHash, identityA, "delivered")
+            val reduced = requireNotNull(messageDao.getOutgoingMessageById(duplicateHash, identityA))
+            repository.updateMessageSentInterface(duplicateHash, "A Route", reduced.identityHash)
 
             assertEquals(identityA, reduced.identityHash)
             assertEquals(peerA, reduced.conversationHash)

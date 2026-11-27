@@ -16,7 +16,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
+import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.Socket
+import java.net.SocketTimeoutException
 import java.net.URL
 
 /**
@@ -177,6 +180,88 @@ class ApkSharingServerTest {
         }
 
     @Test
+    fun `connections beyond the in-flight cap are closed instead of queued`() =
+        runTest {
+            // A fixed thread pool bounds workers, not its queue. With a cap of two,
+            // the third and fourth sockets must be closed by the accept loop rather
+            // than queued behind the busy workers.
+            val capped = ApkSharingServer(maxInFlightConnections = 2)
+            val portDeferred = capped.prepareStart()
+            val job = serverScope.launch { capped.start(apkFile) }
+            val sockets = mutableListOf<Socket>()
+            try {
+                val port = portDeferred.await()
+
+                repeat(4) { sockets += Socket("127.0.0.1", port) }
+
+                sockets.drop(2).forEach { socket ->
+                    assertTrue(
+                        "connection beyond the cap was queued instead of closed",
+                        awaitEof(socket),
+                    )
+                }
+                assertEquals(
+                    "a connection within the cap must stay open",
+                    READ_TIMED_OUT,
+                    readWithin(sockets.first(), 500),
+                )
+            } finally {
+                sockets.forEach { runCatching { it.close() } }
+                capped.stop()
+                job.cancel()
+            }
+        }
+
+    @Test
+    fun `stopping the server closes connections still queued behind busy workers`() =
+        runTest {
+            // Five accepted connections against a four-worker pool: one socket is
+            // still queued in the executor when stop() runs. The pool drops queued
+            // tasks without closing their sockets, so only the shutdown drain in
+            // start()'s finally block releases it — this test fails if that drain
+            // is removed.
+            val capped = ApkSharingServer(maxInFlightConnections = 5)
+            val portDeferred = capped.prepareStart()
+            val job = serverScope.launch { capped.start(apkFile) }
+            val sockets = mutableListOf<Socket>()
+            try {
+                val port = portDeferred.await()
+
+                // Silent clients keep every worker blocked in its request read, so
+                // no socket leaves the in-flight set on its own.
+                repeat(6) { sockets += Socket("127.0.0.1", port) }
+
+                // Once the accept loop refuses a connection it has registered five
+                // in flight, so exactly one of the six must observe EOF and the
+                // other five are all accepted and unfinished.
+                val deadline = System.currentTimeMillis() + 5_000
+                var eofStatuses: List<Boolean>
+                do {
+                    eofStatuses = sockets.map { awaitEof(it, 200) }
+                } while (eofStatuses.none { it } && System.currentTimeMillis() < deadline)
+                assertEquals(
+                    "the cap must refuse exactly one of six connections",
+                    1,
+                    eofStatuses.count { it },
+                )
+
+                capped.stop()
+                job.join()
+
+                sockets.filterIndexed { index, _ -> !eofStatuses[index] }.forEach { socket ->
+                    assertTrue(
+                        "in-flight connection was left open after stop",
+                        awaitEof(socket),
+                    )
+                }
+            } finally {
+                sockets.forEach { runCatching { it.close() } }
+                capped.stop()
+                job.cancel()
+            }
+        }
+
+    @Test
     fun `returns 404 when APK file is deleted after server start`() =
         runTest {
             val (port) = startAndAwaitPort()
@@ -238,4 +323,43 @@ class ApkSharingServerTest {
                 conn.disconnect()
             }
         }
+
+    private companion object {
+        /** Returned by [readWithin] when the socket stayed open without sending. */
+        const val READ_TIMED_OUT = 0
+    }
+
+    /**
+     * Read one byte from [socket], capping the wait at [timeoutMs].
+     * Returns -1 on EOF/close, [READ_TIMED_OUT] when the connection stayed open
+     * without sending anything, and the byte value otherwise.
+     */
+    private fun readWithin(
+        socket: Socket,
+        timeoutMs: Int,
+    ): Int =
+        try {
+            socket.soTimeout = timeoutMs
+            socket.getInputStream().read()
+        } catch (_: SocketTimeoutException) {
+            READ_TIMED_OUT
+        } catch (_: IOException) {
+            -1
+        }
+
+    /** Polls until [socket] observes EOF (the server closed it) or the deadline passes. */
+    private fun awaitEof(
+        socket: Socket,
+        timeoutMs: Long = 5_000,
+    ): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            when (readWithin(socket, 200)) {
+                -1 -> return true
+                READ_TIMED_OUT -> continue
+                else -> return false
+            }
+        }
+        return false
+    }
 }

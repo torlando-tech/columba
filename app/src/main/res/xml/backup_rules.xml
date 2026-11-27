@@ -11,29 +11,35 @@
       hashlist, tunnels, known destinations, identity ratchets,
       destination ratchets for LXMF forward secrecy).
   - SharedPreferences: BACKED UP
-  - Files under files/: BACKED UP (no sensitive state lives here anymore)
+  - Files under files/: BACKED UP, except files/reticulum/
   - Cache: EXCLUDED (Android default)
 
-  The files/reticulum/ exclusion that earlier versions needed is gone:
-  - the in-memory-identity refactor (PR #785) stopped writing delivery
-    identity files,
-  - reticulum-kt v0.0.5 moved RNS routing state to Room,
-  - reticulum-kt v0.0.6 moved LXMF delivery-destination ratchets to Room,
-  - the createIdentityWithName / importIdentityFile / recoverIdentityFile
-    refactor eliminated the last plaintext-file writers.
-
-  Nothing in files/reticulum/ contains user secrets anymore.
+  files/reticulum/ is EXCLUDED even though the in-memory-identity refactor
+  (PR #785) and the createIdentityWithName / importIdentityFile /
+  recoverIdentityFile refactor stopped writing delivery identity files there:
+  the cold-start scrub in ColumbaApplication deliberately SKIPS that cleanup in
+  two states where the on-disk file is still the only copy of an identity key:
+    - the active identity is password-protected (the key cannot be decrypted at
+      startup without a UI prompt), or
+    - the Keystore/DB encryption migration did not fully succeed.
+  An upgraded install in either state keeps plaintext identity_<hash> /
+  identities/<hash> files, and with the file domain included those would be
+  copied into cloud backups and device transfers as usable private keys. RNS
+  routing state restored from the databases is re-derived at runtime, so
+  excluding the directory costs only cached paths - not user data.
 -->
 <data-extraction-rules>
     <cloud-backup>
         <include domain="database" path="." />
         <include domain="sharedpref" path="." />
         <include domain="file" path="." />
+        <exclude domain="file" path="reticulum/" />
     </cloud-backup>
 
     <device-transfer>
         <include domain="database" path="." />
         <include domain="sharedpref" path="." />
         <include domain="file" path="." />
+        <exclude domain="file" path="reticulum/" />
     </device-transfer>
 </data-extraction-rules>

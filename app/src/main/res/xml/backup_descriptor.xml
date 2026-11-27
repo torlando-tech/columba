@@ -2,9 +2,16 @@
 <!--
   Backup configuration for Android 11 and below (legacy format).
   See backup_rules.xml for the Android 12+ equivalent and security policy.
+
+  files/reticulum/ is excluded for the same reason documented there: the
+  cold-start scrub of stale plaintext identity files is skipped while the
+  active identity is password-protected or while the key-encryption migration
+  has not fully succeeded, so an upgraded install can still hold usable private
+  keys on disk. RNS routing state lives in the databases and is re-derived.
 -->
 <full-backup-content>
     <include domain="database" path="." />
     <include domain="sharedpref" path="." />
     <include domain="file" path="." />
+    <exclude domain="file" path="reticulum/" />
 </full-backup-content>
